@@ -1,0 +1,204 @@
+MACCS key 1
+MACCS key 2
+MACCS key 3
+MACCS key 4
+MACCS key 5
+MACCS key 6
+MACCS key 7
+MACCS key 8
+MACCS key 9
+MACCS key 10
+MACCS key 11
+MACCS key 12
+MACCS key 13
+MACCS key 14
+MACCS key 15
+MACCS key 16
+MACCS key 17
+MACCS key 18
+MACCS key 19
+MACCS key 20
+MACCS key 21
+MACCS key 22
+MACCS key 23
+MACCS key 24
+MACCS key 25
+MACCS key 26
+MACCS key 27
+MACCS key 28
+MACCS key 29
+MACCS key 30
+MACCS key 31
+MACCS key 32
+MACCS key 33
+MACCS key 34
+MACCS key 35
+MACCS key 36
+MACCS key 37
+MACCS key 38
+MACCS key 39
+MACCS key 40
+MACCS key 41
+MACCS key 42
+MACCS key 43
+MACCS key 44
+MACCS key 45
+MACCS key 46
+MACCS key 47
+MACCS key 48
+MACCS key 49
+MACCS key 50
+MACCS key 51
+MACCS key 52
+MACCS key 53
+MACCS key 54
+MACCS key 55
+MACCS key 56
+MACCS key 57
+MACCS key 58
+MACCS key 59
+MACCS key 60
+MACCS key 61
+MACCS key 62
+MACCS key 63
+MACCS key 64
+MACCS key 65
+MACCS key 66
+MACCS key 67
+MACCS key 68
+MACCS key 69
+MACCS key 70
+MACCS key 71
+MACCS key 72
+MACCS key 73
+MACCS key 74
+MACCS key 75
+MACCS key 76
+MACCS key 77
+MACCS key 78
+MACCS key 79
+MACCS key 80
+MACCS key 81
+MACCS key 82
+MACCS key 83
+MACCS key 84
+MACCS key 85
+MACCS key 86
+MACCS key 87
+MACCS key 88
+MACCS key 89
+MACCS key 90
+MACCS key 91
+MACCS key 92
+MACCS key 93
+MACCS key 94
+MACCS key 95
+MACCS key 96
+MACCS key 97
+MACCS key 98
+MACCS key 99
+MACCS key 100
+MACCS key 101
+MACCS key 102
+MACCS key 103
+MACCS key 104
+MACCS key 105
+MACCS key 106
+MACCS key 107
+MACCS key 108
+MACCS key 109
+MACCS key 110
+MACCS key 111
+MACCS key 112
+MACCS key 113
+MACCS key 114
+MACCS key 115
+MACCS key 116
+MACCS key 117
+MACCS key 118
+MACCS key 119
+MACCS key 120
+MACCS key 121
+MACCS key 122
+MACCS key 123
+MACCS key 124
+MACCS key 125
+MACCS key 126
+MACCS key 127
+MACCS key 128
+MACCS key 129
+MACCS key 130
+MACCS key 131
+MACCS key 132
+MACCS key 133
+MACCS key 134
+MACCS key 135
+MACCS key 136
+MACCS key 137
+MACCS key 138
+MACCS key 139
+MACCS key 140
+MACCS key 141
+MACCS key 142
+MACCS key 143
+MACCS key 144
+MACCS key 145
+MACCS key 146
+MACCS key 147
+MACCS key 148
+MACCS key 149
+MACCS key 150
+MACCS key 151
+MACCS key 152
+MACCS key 153
+MACCS key 154
+MACCS key 155
+MACCS key 156
+MACCS key 157
+MACCS key 158
+MACCS key 159
+MACCS key 160
+MACCS key 161
+MACCS key 162
+MACCS key 163
+MACCS key 164
+MACCS key 165
+MACCS key 166
+amine, primary
+amine, secondary
+amine, tertiary
+alkane CH
+alkene CH
+aromatic CH
+carbonyl
+hydroxyl (alkyl)
+carboxylic acid
+ester, all
+ether
+peroxide
+nitro
+aromatic hydroxyl
+hydroperoxide
+amide
+nitrate
+organosulfate
+carbonylperoxynitrate
+ketone
+aldehyde
+amide, primary
+amide, secondary
+amide, tertiary
+carbonylperoxyacid
+peroxy nitrate
+ether, aromatic
+ether (alicyclic)
+amine, aromatic
+nitroester
+C=C-C=O in non-aromatic ring
+C=C (non-aromatic)
+nC-OHside-a
+aromatic ring
+non-aromatic ring
+nitrophenol
+carbon number
+oxygen number

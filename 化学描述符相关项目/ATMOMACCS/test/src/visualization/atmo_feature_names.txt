@@ -1,0 +1,38 @@
+amine, primary
+amine, secondary
+amine, tertiary
+alkane CH
+alkene CH
+aromatic CH
+carbonyl
+hydroxyl (alkyl)
+carboxylic acid
+ester, all
+ether
+peroxide
+nitro
+aromatic hydroxyl
+hydroperoxide
+amide
+nitrate
+organosulfate
+carbonylperoxynitrate
+ketone
+aldehyde
+amide, primary
+amide, secondary
+amide, tertiary
+carbonylperoxyacid
+peroxy nitrate
+ether, aromatic
+ether (alicyclic)
+amine, aromatic
+nitroester
+C=C-C=O in non-aromatic ring
+C=C (non-aromatic)
+nC-OHside-a
+aromatic ring
+non-aromatic ring
+nitrophenol
+carbon number
+oxygen number

@@ -1,0 +1,38 @@
+How many primary amines are there?
+How many secondary amines are there?
+How many tertiary amines are there?
+How many alkane CH bonds are there?
+How many alkene CH bonds are there?
+How many aromatic CH bonds are there?
+How many carbonyl groups are there?
+How many hydroxyl groups are there in an alkyl group?
+How many carboxylic acids are there?
+How many ester groups are there?
+How many ether groups are there?
+How many peroxide groups are there?
+How many nitro groups are there?
+How many aromatic hydroxyl groups are there?
+How many hydroperoxide groups are there?
+How many amide groups are there?
+How many nitrate groups are there?
+How many organosulfate groups are there?
+How many carbonylperoxynitrate groups are there?
+How many ketone groups are there?
+How many aldehyde groups are there?
+How many primary amide groups are there?
+How many secondary amide groups are there?
+How many tertiary amide groups are there?
+How many carbonylperoxyacid groups are there?
+How many peroxy nitrate groups are there?
+How many aromatic ether groups are there?
+How many alicyclic ether groups are there?
+How many aromatic amines are there?
+How many nitroesters are there?
+How many non-aromatic rings with C=C-C=O are there?
+How many non-aromatic C=C groups are there?
+How many hydroxyl side chains are there in an alkyl group?
+How many aromatic rings are there?
+How many non-aromatic rings are there?
+How many nitrophenol groups are there?
+How many carbon atoms are there?
+How many oxygen atoms are there?
