@@ -1,0 +1,36 @@
+# YONOD Python dependencies
+#
+# NOTE: torch / torchvision / torchaudio are NOT listed here — install them
+# from the official CUDA 12.1 wheel index FIRST:
+#
+#     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
+#         --index-url https://download.pytorch.org/whl/cu121
+#
+# Then run: pip install -r requirements.txt
+# Finally:  pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
+#
+# (AutoGluon is split out because its dependency tree is heavy; on Python 3.9
+# the `fastai` extra fails due to spacy>=3.10 requirement -- only use
+# [lightgbm,catboost] extras.)
+
+# Chemistry / featurization
+rdkit==2023.9.5
+transformers==4.40.0
+networkx==3.2.1
+torch_geometric==2.5.3
+
+# Machine learning
+scikit-learn==1.4.0
+xgboost==2.0.3
+
+# Data processing
+pandas==2.0.3
+numpy==1.26.4
+
+# Plotting
+matplotlib==3.8.4
+
+# Utilities
+joblib==1.3.2
+pyyaml==6.0.1
+tqdm==4.66.2

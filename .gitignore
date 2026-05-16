@@ -1,0 +1,84 @@
+# ===================== Python =====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# Virtualenv / conda
+.venv/
+venv/
+env/
+.conda/
+
+# Pyright / mypy / pytest caches
+.mypy_cache/
+.pytest_cache/
+.pyright/
+
+# ===================== Jupyter =====================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===================== YONOD runtime artifacts =====================
+# Runtime caches (auto-regenerated on first run)
+cache/
+
+# Pipeline outputs (regenerate by re-running run_yield_prediction.py)
+results/
+!results/.gitkeep
+
+# AutoGluon dumps trained models here if save_path is provided
+AutogluonModels/
+
+# Logs
+*.log
+
+# ===================== Large model weights =====================
+# WEIGHTS/MolMetaLM-base/  is ~500 MB -- download separately, see README.
+# WEIGHTS/FISD/            is ~19 MB  -- bundled with the repo, leave it in.
+WEIGHTS/MolMetaLM-base/
+
+# Generic large weight file types (any leftover checkpoint outside WEIGHTS/FISD/)
+*.safetensors
+*.pt
+*.ckpt
+
+# ===================== Datasets =====================
+# Reaction CSV is bundled with the repo (public source).
+# If you swap in proprietary data, add the filename here to exclude it.
+
+# ===================== Third-party project sources =====================
+# These upstream repos are kept locally for reference but not redistributed
+# (the original 化学描述符相关项目/FISD/ has its own .git heritage that confuses
+# git; the runtime-needed FISD weights are duplicated to WEIGHTS/FISD/).
+# Cite upstream projects in README.md instead of vendoring their source here.
+化学描述符相关项目/
+
+# ===================== Secrets =====================
+.env
+.env.*
+*.token
+*.key
+hf_token
+.cache/huggingface/
+
+# ===================== Editors / OS =====================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code agent metadata (if you keep this in a separate tooling repo)
+.claude/
+
+# ===================== Misc =====================
+*.bak
+*.swp
+*.tmp
+~$*
