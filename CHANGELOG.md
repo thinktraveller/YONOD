@@ -14,6 +14,12 @@
 
 ### Fixed
 
+**yonod.py：以 Python 交互脚本替代 yonod.bat**
+- **动机**：`yonod.bat` 经三轮修复后仍因 cmd.exe 变量展开时序、括号解析、编码等问题频繁报错；根本原因是 cmd.exe 脚本语言本身的解析缺陷无法通过修补彻底消除
+- **替代方案**：新建 `yonod.py`，使用标准 Python `input()` 完成全部 8 步交互，构建参数列表后直接调用 `run_yonod.main()`（不经过 shell），无需 conda activate 命令、无编码问题、无特殊字符限制
+- **等效功能**：CSV 路径（自动去引号）→ 标签列 → SMILES 列 → 数值辅助列 → 输出目录 → 任务名称 → 描述符选择 → 模型选择；执行前打印等效命令预览，按 Enter 确认后运行
+- **用法**：在激活 conda 环境后执行 `python yonod.py`，或在 IDE / Jupyter 终端中运行
+
 **yonod.bat 变量拼接失效修复（三次修复）**
 - **根本原因**：`if` 块内使用 `set CMD=%CMD% ...` 拼接命令时，cmd.exe 在**解析阶段**（parse time）即展开 `%CMD%`，导致多行 `if (...) set CMD=...` 块内的变量值为空，产生 `'PUT_DIR' 不是内部或外部命令`、`'CMDSMILES_COLS' 不是内部或外部命令` 等运行时错误
 - **修复**：在文件头加 `setlocal enabledelayedexpansion`，将 `if` 块内所有 `%CMD%` 改为 `!CMD!`（延迟展开，在执行阶段取值）；同时将多行 `if (...) { set }` 改为单行 `if ... set`（去除括号），彻底消除括号解析歧义
