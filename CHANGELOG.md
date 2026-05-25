@@ -14,6 +14,18 @@
 
 ### Added
 
+**通用化子包 yonod_yield/universal/（第5步，14.6.3）**
+- `yonod_yield/universal/report.py`：通用报告生成器（§14.5 完整实现）
+  - `rank_combinations(metrics_df)`：加权排名函数，公式 R²×0.5 + (1−RMSE/max)×0.3 + (1−MAE/max)×0.2；前三名自动生成中文推荐理由；列名兼容 run_yonod.py（`descriptor`/`r2_mean`）和 rank_combinations 直接调用（`desc_name`/`r2`）两种格式
+  - `generate_report(metrics_df, task_info, out_dir)`：输出自包含 HTML，含 5 个段落：任务信息头 / 描述符×模型结果矩阵（R²颜色渐变，浅蓝→深绿）/ §14.5.2 固定指标解释 / 加权排名推荐（前三名+折叠完整排名）/ 散点图画廊（扫描 scatter_*.png 内嵌 base64）
+- `test_report.py`：5 个验证用例（排名顺序 / 推荐理由非空 / HTML 含指标解释文字 / HTML 嵌入任务名 / 全 NaN 安全处理），全部通过
+- `run_yonod.py`（更新）：grid 评估完成后自动调用 `generate_report()`，输出 `results/<task>/report.html`；报告失败不阻断主流程
+
+**已验证的关键行为（供后续步骤参考）**：
+- mock 4 行 metrics_df 排名：morgan×rf（R²=0.87）正确排第1，score=0.759
+- HTML 报告文件含所有§14.5.2 固定文字和权重参数（0.5 / 0.3 / 0.2）
+- 全链路冒烟测试（200 行酰胺缩合，morgan×rf）：`metrics_summary.csv` + `report.html` 均正常生成
+
 **通用化子包 yonod_yield/universal/（第4步，14.6.3）**
 - `yonod.bat`：Windows 双击交互式向导（按 §14.4.3 模板实现）
   - 7 步引导：CSV 路径 → 标签列 → SMILES 列（可选） → 数值辅助列（可选） → 任务名称（可选） → 描述符选择（可选） → 模型选择（可选）

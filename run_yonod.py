@@ -423,6 +423,25 @@ def main() -> int:
     if rows:
         csv_out = _save_metrics(rows, out_dir, args.append)
         print(f"\n[save] 指标已保存: {csv_out}")
+
+        # ── 4. 生成 HTML 报告 ──────────────────────────────────────────────────
+        try:
+            from yonod_yield.universal.report import generate_report
+            task_info = {
+                "task_name":     task_name,
+                "csv_path":      args.csv,
+                "n_samples":     rows[0].get("n_samples", "—") if rows else "—",
+                "smiles_cols":   smiles_cols,
+                "numeric_cols":  numeric_cols or "（无）",
+                "label_col":     label_col,
+                "n_combinations":len(rows),
+            }
+            report_path = generate_report(
+                pd.DataFrame(rows), task_info, out_dir
+            )
+            print(f"[report] HTML 报告已生成: {report_path}")
+        except Exception as exc:
+            print(f"[warn] HTML 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
     else:
         print("\n[warn] 无有效结果，metrics_summary.csv 未写入", file=sys.stderr)
 
