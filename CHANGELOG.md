@@ -14,6 +14,14 @@
 
 ### Added
 
+**通用化子包 yonod_yield/universal/（第4步，14.6.3）**
+- `yonod.bat`：Windows 双击交互式向导（按 §14.4.3 模板实现）
+  - 7 步引导：CSV 路径 → 标签列 → SMILES 列（可选） → 数值辅助列（可选） → 任务名称（可选） → 描述符选择（可选） → 模型选择（可选）
+  - 拖拽支持：自动去除路径首尾引号
+  - 命令预览：执行前打印完整 `python run_yonod.py ...` 命令供用户核对，按任意键确认
+  - conda 环境激活：`call conda activate yonod-yield`，失败时报错暂停
+  - 已知局限（见 §14.4.3）：列名含 `&`/`|`/`>`/`<` 特殊字符时不适用，建议改用命令行直接传参
+
 **通用化子包 yonod_yield/universal/（第3步，14.6.3）**
 - `run_yonod.py`：通用化 CLI 入口（267 行），完整实现 csv_loader → feature_builder → 模型评估 → metrics_summary.csv 的 pipeline
   - 全 §14.3.1 CLI 参数：`--csv`、`--label-col`、`--smiles-cols`、`--numeric-cols`、`--task-name`、`--descriptors`、`--models`、`--smiles-threshold`、`--output-dir`、`--cv`、`--nrows`、`--append`、`--heartbeat`、`--svm-subsample` 等
