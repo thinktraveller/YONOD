@@ -12,6 +12,14 @@
 > 当前开发分支的修改，下次发布时会归并到具体版本号。
 > **发布标签建议**：`v1.2.0`（Track B 新增 + 数据集整理 + 通用化规划，属 MINOR 增量）。
 
+### Fixed
+
+**yonod.bat 乱码与交互失效修复**
+- **根本原因**：bat 文件原以 UTF-8 写入，但 `cmd.exe` 默认按系统 ANSI 代码页（GBK/CP936）解析 bat 文件源文本，导致中文字符乱码；同时 `chcp 65001 + set /p` 在 Windows 上有已知 bug（提示字符串乱码、无法接收输入）
+- **修复**：使用 PowerShell `[System.IO.File]::WriteAllText()` 以 GBK（CP936）编码写入 bat 文件，去掉 `chcp 65001` 改为依赖系统默认代码页；`set /p` 提示字符串直接写在行末（不加双引号包裹），规避 `cmd.exe` 的引号兼容性问题
+- **新增步骤 [5/8]**：增加输出目录输入步骤，留空走默认路径；`OUTPUT_DIR` 非空时以带引号方式传入 `--output-dir "%OUTPUT_DIR%"`，支持含空格和中文的路径
+- **验证**：`run_yonod.py --output-dir "results/测试输出目录"` 正常输出 metrics_summary.csv + report.html
+
 ### Added
 
 **通用化子包 yonod_yield/universal/（第5步，14.6.3）**
