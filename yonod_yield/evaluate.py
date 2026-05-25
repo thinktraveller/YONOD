@@ -8,27 +8,32 @@ This module provides:
 
   * ``MODEL_REGISTRY`` / ``DESCRIPTOR_REGISTRY``  -- name -> class
   * ``build_model(name, **kw)`` / ``build_descriptor(name, **kw)``
-  * ``evaluate_one(descriptor, model, df, cv)`` -- runs one (desc, model)
-    combination end-to-end and returns a row dict suitable for assembly
-    into ``results/metrics_summary.csv``.
+  * ``evaluate_one(descriptor, model, smiles, y, cv)`` -- runs one
+    (desc, model) combination end-to-end on a SMILES list + label vector
+    and returns a row dict suitable for assembly into the metrics CSV.
 
 The main script (``run_yield_prediction.py``) loops over the cartesian
 product of selected descriptors and models, calling ``evaluate_one``.
+
+v1.1+ contract: a dataset is a SMILES list + a float label vector.
+Use ``features.dataset.load_dataset(csv_path)`` to obtain both from any
+2-column CSV. The legacy reaction-level featurizer
+(``features.reaction_featurizer.ReactionFeaturizer``) remains available
+for amide-style 6-molecule features but is no longer the default.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Type
+from typing import Any, Dict, List, Optional, Sequence, Type
 
 import numpy as np
-import pandas as pd
 
 from .descriptors.atmomaccs import ATMOMACCSDescriptor
 from .descriptors.base import BaseDescriptor
 from .descriptors.fisd import FISDDescriptor
 from .descriptors.molmetalm import MolMetaLMDescriptor
 from .descriptors.morgan import MorganDescriptor
-from .features.reaction_featurizer import ReactionFeaturizer
+from .features.dataset import MoleculeFeaturizer
 from .models.autogluon_model import AutoGluonYieldModel
 from .models.rf_model import RFYieldModel
 from .models.svm_model import SVMYieldModel
@@ -69,27 +74,43 @@ def build_model(name: str, **kwargs: Any) -> Any:
 def evaluate_one(
     descriptor_name: str,
     model_name: str,
-    df: pd.DataFrame,
+    smiles: Sequence[str],
+    y: np.ndarray,
     cv: int = 5,
-    descriptor_kwargs: Dict[str, Any] | None = None,
-    model_kwargs: Dict[str, Any] | None = None,
+    descriptor_kwargs: Optional[Dict[str, Any]] = None,
+    model_kwargs: Optional[Dict[str, Any]] = None,
     return_predictions: bool = False,
 ) -> Dict[str, Any]:
-    """Featurize ``df`` with one descriptor, evaluate one model under K-fold CV.
+    """Featurize ``smiles`` with one descriptor, train one model with K-fold CV.
 
-    Returns a flat dict suitable for appending as a row to
-    ``results/metrics_summary.csv``. By default the large ``oof_pred`` /
-    ``oof_y_true`` ndarrays are stripped; pass ``return_predictions=True`` to
-    keep them (used by ``run_yield_prediction.py`` for scatter plots).
+    Args:
+        descriptor_name: key in ``DESCRIPTOR_REGISTRY``.
+        model_name:      key in ``MODEL_REGISTRY``.
+        smiles:          list/sequence of SMILES strings.
+        y:               float ndarray of labels, len(smiles) == len(y).
+        cv:              K-fold splits.
+        descriptor_kwargs / model_kwargs: forwarded to constructors.
+        return_predictions: if True keep ``oof_pred`` / ``oof_y_true`` in the
+            returned dict (used by the main script for scatter plots).
+
+    Returns:
+        Flat dict suitable for appending as a row to ``metrics_summary.csv``.
     """
+    smiles_list: List[str] = list(smiles)
+    y_arr = np.asarray(y, dtype=np.float64)
+    if len(smiles_list) != len(y_arr):
+        raise ValueError(
+            f"smiles ({len(smiles_list)}) and y ({len(y_arr)}) length mismatch"
+        )
+
     descriptor = build_descriptor(descriptor_name, **(descriptor_kwargs or {}))
     model = build_model(model_name, **(model_kwargs or {}))
 
-    featurizer = ReactionFeaturizer(descriptor)
-    X, mask = featurizer.transform(df)
-    y = df["yield"].to_numpy()[mask]
+    featurizer = MoleculeFeaturizer(descriptor)
+    X, mask = featurizer.transform(smiles_list)
+    y_used = y_arr[mask]
 
-    metrics = model.cross_validate(X, y, cv=cv)
+    metrics = model.cross_validate(X, y_used, cv=cv)
     if not return_predictions:
         metrics.pop("oof_pred", None)
         metrics.pop("oof_y_true", None)
@@ -100,7 +121,7 @@ def evaluate_one(
         "n_samples": int(mask.sum()),
         "n_total": int(len(mask)),
         "coverage": float(mask.sum() / max(len(mask), 1)),
-        "feature_dim": int(X.shape[1]),
+        "feature_dim": int(X.shape[1]) if X.size else 0,
         "cv": cv,
     }
     row.update(metrics)

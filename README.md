@@ -1,7 +1,10 @@
-# YONOD — 酰胺缩合反应产率预测
+# YONOD — 有机合成反应预测平台
 
 > **Y**our **O**ne-stop **N**otebook **O**f **D**escriptors
-> 比较 4 类分子描述符 × 4 种机器学习算法在酰胺键形成反应产率预测任务上的表现。
+> 以 SMILES 为统一输入，比较 4 类分子描述符 × 4 种机器学习算法在多类有机合成任务上的表现。
+>
+> **Track A**：酰胺缩合反应**产率**预测（47015 条）
+> **Track B**：镍催化不对称交叉偶联**对映选择性 ΔΔG** 预测（6590 条）
 
 [![Python](https://img.shields.io/badge/Python-3.9-blue.svg)](https://www.python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-12.1-green.svg)](https://developer.nvidia.com/cuda-12-1-0-download-archive)
@@ -11,8 +14,11 @@
 
 ## 项目简介
 
-本项目对 **47015 条酰胺缩合反应**（amide bond formation / peptide coupling）的产率数据，
-系统比较了以下 16 种 **描述符 × 模型** 组合，使用 5 折交叉验证：
+本项目以 **SMILES 字符串作为统一输入**，对不同有机合成场景系统比较多种描述符与 ML 模型的组合，所有任务均使用 5 折交叉验证。
+
+### Track A — 酰胺缩合产率预测
+
+47015 条酰胺缩合反应，比较 **16 种（4 × 4）** 描述符 × 模型组合：
 
 |                | XGBoost | Random Forest | SVM (RBF) | AutoGluon |
 |---|---|---|---|---|
@@ -21,31 +27,47 @@
 | **FISD (GNN embedding)** | ✓ | ✓ | ✓ | ✓ |
 | **MolMetaLM (Llama embedding)** | ✓ | ✓ | ✓ | ✓ |
 
-**反应级特征**：6 个分子（2 个底物 + 4 个试剂）的描述符向量拼接，
-总维度 = 6 × 单分子描述符维度（Morgan → 6144，MolMetaLM → 4608，ATMOMACCS → 996，FISD → 300）。
+反应级特征：6 个分子（2 底物 + 4 试剂）描述符拼接，总维度 = 6 × 单分子维度。
+
+### Track B — 镍催化对映选择性预测
+
+6590 条 Ni 催化不对称交叉偶联反应，预测 **ΔΔG（kcal/mol）**，比较 **8 种（2 × 4）** 组合：
+
+|                | XGBoost | Random Forest | SVM (RBF) | AutoGluon |
+|---|---|---|---|---|
+| **Morgan ECFP4**   | ✓ | ✓ | ✓ | ✓ |
+| **ATMOMACCS (MACCS)** | ✓ | ✓ | ✓ | ✓ |
+
+反应级特征：配体 SMILES + 产物底物 SMILES 描述符拼接，再附加温度标量（共 2×单分子维度 + 1 维）。
 
 详细设计文档见 [YONOD项目构建计划书.md](YONOD项目构建计划书.md)；
 迁移到云端/Linux/GitHub 的指南见 [MIGRATION.md](MIGRATION.md)。
 
 ---
 
-## 主要结果（5 折 CV，R²）
+## 主要结果
 
-> 阶段 A 实测（12 组，2026-05-15）。RF 列尚在跑，全 16 组结果会同步到 `results/report.html`。
+### Track A — 酰胺缩合产率（R²，5 折 CV）
 
 | Descriptor | XGB | RF | SVM | AutoGluon |
 |---|---|---|---|---|
-| Morgan ECFP4 | 0.732 | _running_ | 0.703 | **0.874** |
-| ATMOMACCS    | 0.740 | _running_ | 0.685 | **0.866** |
-| FISD         | 0.771 | _running_ | 0.635 | **0.861** |
-| MolMetaLM    | 0.696 | _running_ | 0.581 | 0.700 |
+| Morgan ECFP4 | 0.732 | — | 0.703 | **0.874** |
+| ATMOMACCS    | 0.740 | — | 0.685 | **0.866** |
+| FISD         | 0.771 | — | 0.635 | **0.861** |
+| MolMetaLM    | 0.696 | — | 0.581 | 0.700 |
 
-**关键发现**：
-- AutoGluon 在 3/4 描述符上取得最高 R²，是冠军模型；
-- FISD（QM9 上预训练的 GCN 嵌入）在 XGB 列最优（0.771），跨域迁移效果显著；
-- MolMetaLM 嵌入未经 fine-tune，表现弱于手工指纹，是后续优化方向。
+**关键发现**：AutoGluon 在 3/4 描述符上最优；FISD 在 XGB 列最优（0.771），跨域迁移有效；MolMetaLM 未经 fine-tune 效果偏弱。
 
-完整指标 + 散点图见 [results/report.html](results/report.html)（运行后生成）。
+### Track B — 镍催化对映选择性（R²，5 折 CV）
+
+| Descriptor | XGB | RF | SVM | AutoGluon |
+|---|---|---|---|---|
+| Morgan ECFP4 | 0.827 | **0.835** | 0.787 | — |
+| ATMOMACCS    | 0.799 | 0.816 | 0.779 | — |
+
+附加指标（ee MAE）：Morgan × RF = **6.94%**，Morgan × XGB = 7.29%。AutoGluon 因特征矩阵含 NaN（AutoGluon 内部模型限制）未能完成，待修复。
+
+完整指标 + 散点图见运行后生成的 `results/report.html` 和 `results/ecc_results/metrics_summary.csv`。
 
 ---
 
@@ -78,19 +100,24 @@ Windows 用户离线安装 PyTorch（无网环境）参见 [YONOD项目构建计
 
 | 资产 | 是否随仓库提供 | 默认放置路径 | 获取方式 |
 |---|---|---|---|
-| 数据集 `酰胺缩合反应数据集.csv` | ✅ 仓库已含（公开数据） | `数据集/` | 直接 `git clone` 即获得，详见 [数据集来源](#数据集来源) |
+| 数据集 `酰胺缩合数据集.csv` | ✅ 仓库已含（公开数据） | `数据集/` | 直接 `git clone` 即获得，详见 [数据集来源](#数据集来源) |
+| ECC 数据集 `镍催化偶联数据集/Raw_Dataset.csv` | ✅ 仓库已含 | `数据集/镍催化偶联数据集/` | 直接 `git clone` 即获得，详见 [ECC 数据集](#ecc-数据集) |
 | FISD 模型权重（3 个 .pth） | ✅ 仓库已含 | `WEIGHTS/FISD/` | 直接 `git clone` 即获得，详见 [FISD 权重](#fisd-权重) |
 | MolMetaLM 权重 (~500 MB) | ❌ 需单独下载 | `WEIGHTS/MolMetaLM-base/` | 详见 [MolMetaLM 权重](#molmetalm-权重) |
 
-### 跑一次小烟测
+### 烟测
 
 ```bash
+# Track A（酰胺缩合产率）
 python test_run_yield.py
+
+# Track B（镍催化对映选择性）
+python run_ecc_prediction.py --desc morgan --model xgb --nrows 500
 ```
 
-预期：30 秒内完成，输出 `[PASS]`，并在 `results/` 下产生 `metrics_summary.csv`（1 行）和 `scatter_morgan_xgb.png`。
+Track A 烟测预期：30 秒内完成，输出 `[PASS]`，`results/` 下产生 `metrics_summary.csv`（1 行）和 `scatter_morgan_xgb.png`。
 
-### 跑完整 4×4 grid
+### Track A 完整 4×4 grid
 
 ```bash
 python run_yield_prediction.py \
@@ -100,6 +127,14 @@ python run_yield_prediction.py \
 ```
 
 GPU 单卡 + 16 核 CPU + 32 GB RAM 上预计 30~60 分钟。完成后查看 `results/report.html`。
+
+### Track B 完整 2×4 grid
+
+```bash
+python run_ecc_prediction.py --desc morgan atmomaccs --model xgb rf svm autogluon
+```
+
+预计 30~60 分钟（主要耗时在 RF）。结果见 `results/ecc_results/metrics_summary.csv`。
 
 **本地 Windows 慢机用户**：建议分两阶段跑，详见 [MIGRATION.md §一](MIGRATION.md)。
 
@@ -130,6 +165,26 @@ GPU 单卡 + 16 核 CPU + 32 GB RAM 上预计 30~60 分钟。完成后查看 `re
 | `yield` | float [0, 1] | 实验产率（回归目标） |
 
 注：`*_id` 列名虽叫 `id`，但内容已是 SMILES 字符串；含 `,` 的为盐型/复合物，代码会自动转 `.`。
+
+### ECC 数据集
+
+`数据集/镍催化偶联数据集/Raw_Dataset.csv` 来自公开论文：
+
+> *AI-Driven Development of Nickel-Catalyzed Enantioselective Cross-Coupling Reactions*
+
+数据集 schema（核心列）：
+
+| 列名 | 类型 | 说明 |
+|---|---|---|
+| `Ligand_SMILES` | str | 催化剂配体 SMILES |
+| `Product_SMILES` | str | 产物底物 SMILES |
+| `Temperature` | float (°C) | 反应温度 |
+| `△△G (Kcal/mol)` | float | **回归目标**，两对映体过渡态自由能差 |
+| `ee (%)` | float | 对映体过量值（与 ΔΔG 等价，`ee = tanh(ΔΔG/2RT)×100`） |
+
+使用该数据集时请引用原论文（见 `数据集/镍催化偶联数据集/文献/`）。
+
+---
 
 ### MolMetaLM 权重
 
@@ -212,41 +267,63 @@ WEIGHTS/FISD/
 YONOD/
 ├── README.md                       # 本文件
 ├── MIGRATION.md                    # 云端/Linux/GitHub 迁移指南
+├── CHANGELOG.md                    # 版本变更记录
 ├── YONOD项目构建计划书.md          # 完整设计文档（含决策记录、Q&A）
 ├── requirements.txt                # Python 依赖（不含 torch / autogluon，见快速开始）
 ├── .gitignore
 ├── LICENSE
 │
 ├── yonod_yield/                    # 主代码包
-│   ├── descriptors/                # 4 个描述符（base / morgan / atmomaccs / fisd / molmetalm）
-│   ├── features/                   # 反应级特征组装 + 试剂缓存
+│   ├── descriptors/                # 描述符实现（base / morgan / atmomaccs / fisd / molmetalm）
+│   ├── features/
+│   │   ├── dataset.py              # Track A 数据加载（6 列 SMILES + yield）
+│   │   ├── ecc_dataset.py          # Track B 数据加载（配体 + 产物 SMILES + ΔΔG）
+│   │   ├── reaction_featurizer.py  # 反应级特征拼接器
+│   │   └── reagent_cache.py        # 试剂描述符缓存（加速重复计算）
+│   ├── metrics/
+│   │   └── ee_metrics.py           # ΔΔG → ee% 换算（Track B 专用）
 │   ├── models/                     # 4 个 ML 模型适配器（xgb / rf / svm / autogluon）
 │   ├── evaluate.py                 # 注册表 + evaluate_one() 入口
 │   └── plot.py                     # 散点图生成
 │
-├── run_yield_prediction.py         # 主入口：跑 4×4 grid
-├── generate_report.py              # 生成自包含 HTML 报告
-├── test_run_yield.py               # 烟测脚本
+├── run_yield_prediction.py         # Track A 入口：酰胺缩合产率 4×4 grid
+├── run_ecc_prediction.py           # Track B 入口：ECC 对映选择性 2×4 grid
+├── generate_report.py              # 生成自包含 HTML 报告（Track A）
+├── test_run_yield.py               # Track A 烟测脚本
+├── test_ecc_load.py                # Track B 数据加载烟测
 ├── verify_morgan_rf.py             # RF 性能诊断脚本
 │
-├── 数据集/酰胺缩合反应数据集.csv    # 反应数据（公开来源，仓库已含）
+├── 数据集/
+│   ├── 酰胺缩合数据集.csv          # Track A 数据（公开来源，仓库已含）
+│   └── 镍催化偶联数据集/           # Track B 数据
+│       ├── Raw_Dataset.csv         # 主文件（含 SMILES + ΔΔG，6590 条）
+│       ├── 预计算描述符/            # DFT/RDKit 预计算特征（供基线对比）
+│       ├── 文献/                   # 原论文 PDF + Markdown
+│       └── README.md               # 列名说明
+│
 ├── WEIGHTS/
 │   ├── FISD/                       # FISD 3 个预训练 .pth（仓库已含）
 │   └── MolMetaLM-base/             # MolMetaLM 权重（需自行下载）
 ├── 化学描述符相关项目/             # 第三方项目源码（不入库；见 .gitignore）
 ├── cache/                          # 运行时缓存（自动生成）
-└── results/                        # 输出目录（自动生成）
+└── results/
+    ├── metrics_summary.csv         # Track A 汇总指标
+    ├── report.html                 # Track A HTML 报告
+    ├── scatter_*.png               # Track A 散点图
+    └── ecc_results/                # Track B 所有输出
+        ├── metrics_summary.csv
+        └── scatter_*.png
 ```
 
 ---
 
 ## 命令行参数速查
 
-`run_yield_prediction.py` 的常用 CLI 参数：
+### Track A — `run_yield_prediction.py`
 
 | 参数 | 默认 | 用途 |
 |---|---|---|
-| `--csv PATH` | `数据集/酰胺缩合反应数据集.csv` | 数据集路径 |
+| `--csv PATH` | `数据集/酰胺缩合数据集.csv` | 数据集路径 |
 | `--desc {morgan,atmomaccs,fisd,molmetalm}` | 全部 4 个 | 选择描述符（可多选） |
 | `--model {xgb,rf,svm,autogluon}` | 全部 4 个 | 选择模型（可多选） |
 | `--nrows N` | 全量 | 限制读取行数（调试时用 500） |
@@ -256,9 +333,24 @@ YONOD/
 | `--rf-n-estimators N` | 300 | RF 树数 |
 | `--heartbeat SEC` | 30 | 长任务心跳间隔（0=关） |
 | `--log-file PATH` | `results/run_<ts>.log` | 日志文件 |
-| `--append` | False | 合并入已有 metrics_summary.csv |
+| `--append` | False | 追加合并入已有 metrics_summary.csv |
 | `--skip-plots` | False | 跳过散点图生成 |
 | `--skip-report` | False | 跳过最后的 HTML 报告生成 |
+
+### Track B — `run_ecc_prediction.py`
+
+| 参数 | 默认 | 用途 |
+|---|---|---|
+| `--xlsx PATH` | `数据集/镍催化偶联数据集/Raw_Dataset.csv` | ECC 数据集路径 |
+| `--desc {morgan,atmomaccs}` | 全部 2 个 | 选择描述符（可多选） |
+| `--model {xgb,rf,svm,autogluon}` | 全部 4 个 | 选择模型（可多选） |
+| `--nrows N` | 全量 | 限制读取行数（调试时用 500） |
+| `--cv K` | 5 | K 折交叉验证 |
+| `--svm-subsample N` | 4000 | SVM 每折训练子采样 |
+| `--heartbeat SEC` | 30 | 长任务心跳间隔 |
+| `--results-dir PATH` | `results/ecc_results` | 输出目录 |
+| `--append` | False | 追加合并入已有 metrics_summary.csv |
+| `--skip-plots` | False | 跳过散点图生成 |
 
 ---
 
