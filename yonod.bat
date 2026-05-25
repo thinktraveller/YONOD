@@ -1,6 +1,6 @@
 @echo off
 :: 以 GBK 编码保存此文件，cmd.exe 可正常解析中文
-:: 不使用 chcp 65001，避免 set /p 交互失效的已知 bug
+:: set /p 提示字符串中不使用 ( ) < > 等 cmd 特殊字符，避免解析错误
 
 title YONOD 通用化入口
 
@@ -11,35 +11,34 @@ echo   通用化入口向导
 echo =====================================================
 echo.
 
-:: 步骤 1：CSV 路径
-set /p CSV_PATH=[1/8] 请输入数据集 CSV 路径 (可拖拽文件后回车): 
-:: 去掉拖拽时可能带入的首尾引号
+:: 步骤 1：CSV 路径（去掉拖拽时可能带入的首尾引号）
+set /p CSV_PATH=[1/8] 请输入CSV路径，可直接拖拽文件到此窗口后回车: 
 set CSV_PATH=%CSV_PATH:"=%
 
 :: 步骤 2：标签列名（必填）
-set /p LABEL_COL=[2/8] 请输入标签列名 (如 yield、ee、delta_G): 
+set /p LABEL_COL=[2/8] 请输入标签列名，如 yield、ee、delta_G: 
 
 :: 步骤 3：SMILES 列名（可选）
-set /p SMILES_COLS=[3/8] SMILES 列名，多列空格分隔 (留空=自动探测): 
+set /p SMILES_COLS=[3/8] SMILES列名，多列空格分隔，留空则自动探测: 
 
 :: 步骤 4：数值辅助列名（可选）
-set /p NUMERIC_COLS=[4/8] 数值辅助列名，多列空格分隔 (无则留空): 
+set /p NUMERIC_COLS=[4/8] 数值辅助列名，多列空格分隔，无则留空: 
 
 :: 步骤 5：输出目录（可选）
-set /p OUTPUT_DIR=[5/8] 输出目录路径 (留空=results/<任务名>建模报告): 
+set /p OUTPUT_DIR=[5/8] 输出目录路径，留空则使用默认路径: 
 
 :: 步骤 6：任务名称（可选）
-set /p TASK_NAME=[6/8] 任务名称，用于报告标题 (留空=CSV 文件名): 
+set /p TASK_NAME=[6/8] 任务名称用于报告标题，留空则用CSV文件名: 
 
 :: 步骤 7：描述符选择（可选）
 echo [7/8] 可用描述符: morgan  maccs  fisd  molmetalm
-set /p DESCS=        多选空格分隔，留空=全选: 
+set /p DESCS=       多选空格分隔，留空=全选: 
 
 :: 步骤 8：模型选择（可选）
 echo [8/8] 可用模型: xgb  rf  svm  autogluon
-set /p MODELS=        多选空格分隔，留空=全选: 
+set /p MODELS=       多选空格分隔，留空=全选: 
 
-:: 拼接命令：CSV 路径和标签列用引号包裹，支持含空格和中文的路径/列名
+:: 拼接命令
 set CMD=python run_yonod.py --csv "%CSV_PATH%" --label-col "%LABEL_COL%"
 
 if not "%SMILES_COLS%"=="" (

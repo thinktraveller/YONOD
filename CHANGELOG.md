@@ -14,9 +14,12 @@
 
 ### Fixed
 
-**yonod.bat 乱码与交互失效修复**
+**yonod.bat 乱码与交互失效修复（二次修复）**
+- **二次修复**：`set /p` 提示字符串中的 `( )` 被 cmd.exe 解析为**代码块分隔符**（括号内文字被当作命令执行），`< >` 被解析为**重定向符**，导致 `'3' 不是内部或外部命令` 等运行时错误；修复方法：从全部 8 条 `set /p` 提示字符串中彻底去除 `() <>`，改用逗号和中文标点替代，验证无 BAD 字符
+
+**yonod.bat 乱码与交互失效修复（首次修复）**
 - **根本原因**：bat 文件原以 UTF-8 写入，但 `cmd.exe` 默认按系统 ANSI 代码页（GBK/CP936）解析 bat 文件源文本，导致中文字符乱码；同时 `chcp 65001 + set /p` 在 Windows 上有已知 bug（提示字符串乱码、无法接收输入）
-- **修复**：使用 PowerShell `[System.IO.File]::WriteAllText()` 以 GBK（CP936）编码写入 bat 文件，去掉 `chcp 65001` 改为依赖系统默认代码页；`set /p` 提示字符串直接写在行末（不加双引号包裹），规避 `cmd.exe` 的引号兼容性问题
+- **修复**：使用 PowerShell `[System.IO.File]::WriteAllText()` 以 GBK（CP936）编码写入 bat 文件，去掉 `chcp 65001` 改为依赖系统默认代码页
 - **新增步骤 [5/8]**：增加输出目录输入步骤，留空走默认路径；`OUTPUT_DIR` 非空时以带引号方式传入 `--output-dir "%OUTPUT_DIR%"`，支持含空格和中文的路径
 - **验证**：`run_yonod.py --output-dir "results/测试输出目录"` 正常输出 metrics_summary.csv + report.html
 
