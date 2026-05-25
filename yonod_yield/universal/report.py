@@ -95,7 +95,10 @@ def rank_combinations(metrics_df: pd.DataFrame) -> pd.DataFrame:
             parts.append(f"综合评分 {row['score']:.3f} 排名靠前")
         df.at[i, "reason"] = "；".join(parts)
 
-    return df[["rank", "desc_name", "model_name", "r2", "rmse", "mae", "score", "reason"]]
+    out_cols = ["rank", "desc_name", "model_name", "r2", "rmse", "mae", "score", "reason"]
+    if "train_time_s" in df.columns:
+        out_cols.insert(out_cols.index("reason"), "train_time_s")
+    return df[out_cols]
 
 
 # ─────────────────────────────── HTML 辅助 ──────────────────────────────────── #
@@ -110,6 +113,16 @@ def _fmt(v: Any, digits: int = 4) -> str:
     if isinstance(v, float):
         return f"{v:.{digits}f}"
     return _esc(str(v))
+
+
+def _fmt_time(v: Any) -> str:
+    """将秒数格式化为人类可读字符串，如 '3.2s' 或 '1m 23s'。"""
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return "—"
+    s = float(v)
+    if s < 60:
+        return f"{s:.1f}s"
+    return f"{int(s)//60}m {int(s)%60}s"
 
 
 def _color_r2(r2: float) -> str:
@@ -258,10 +271,13 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
     if ranked.empty:
         return "<section><h2>3 · 推荐组合</h2><p>无有效结果。</p></section>"
 
+    has_time = "train_time_s" in ranked.columns
+
     rows_html = ""
     for _, r in ranked.head(3).iterrows():
         medal = ["🥇", "🥈", "🥉"][int(r["rank"]) - 1]
         reason_text = _esc(r["reason"]) if r["reason"] else "综合指标较优"
+        time_cell = f"<td>{_fmt_time(r['train_time_s'])}</td>" if has_time else ""
         rows_html += (
             f"<tr>"
             f"<td>{medal}</td>"
@@ -271,6 +287,7 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
             f"<td>{_fmt(r['rmse'], 4)}</td>"
             f"<td>{_fmt(r['mae'], 4)}</td>"
             f"<td>{_fmt(r['score'], 3)}</td>"
+            f"{time_cell}"
             f"<td style='text-align:left'>{reason_text}</td>"
             f"</tr>\n"
         )
@@ -278,6 +295,7 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
     # 完整排名（可折叠）
     all_rows = ""
     for _, r in ranked.iterrows():
+        time_cell = f"<td>{_fmt_time(r['train_time_s'])}</td>" if has_time else ""
         all_rows += (
             f"<tr>"
             f"<td>{int(r['rank'])}</td>"
@@ -287,22 +305,26 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
             f"<td>{_fmt(r['rmse'], 4)}</td>"
             f"<td>{_fmt(r['mae'], 4)}</td>"
             f"<td>{_fmt(r['score'], 3)}</td>"
+            f"{time_cell}"
             f"</tr>\n"
         )
+
+    time_th       = "<th>用时</th>" if has_time else ""
+    time_th_small = "<th>用时</th>" if has_time else ""
 
     return f"""
 <section>
 <h2>3 · 推荐组合（加权排名前三）</h2>
 <table class="rank-tbl">
 <thead><tr><th>名次</th><th>描述符</th><th>模型</th>
-<th>R²</th><th>RMSE</th><th>MAE</th><th>综合分</th><th>推荐理由</th></tr></thead>
+<th>R²</th><th>RMSE</th><th>MAE</th><th>综合分</th>{time_th}<th>推荐理由</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table>
 <details style="margin-top:12px">
   <summary style="cursor:pointer;color:#2563eb">展开完整排名</summary>
   <table style="margin-top:8px">
   <thead><tr><th>名次</th><th>描述符</th><th>模型</th>
-  <th>R²</th><th>RMSE</th><th>MAE</th><th>综合分</th></tr></thead>
+  <th>R²</th><th>RMSE</th><th>MAE</th><th>综合分</th>{time_th_small}</tr></thead>
   <tbody>{all_rows}</tbody>
   </table>
 </details>
