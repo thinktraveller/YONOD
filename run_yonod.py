@@ -63,11 +63,11 @@ _CSV_COLUMNS = [
 # ─────────────────────────────────────── 日志 ──────────────────────────────── #
 
 class _Tee:
-    """同时写入 stdout 和日志文件，每行前缀时间戳。"""
+    """同时写入真实流和日志文件，每行前缀时间戳。"""
 
-    def __init__(self, fh: TextIO) -> None:
+    def __init__(self, fh: TextIO, real_stream: TextIO) -> None:
         self.fh = fh
-        self._real_stdout = sys.__stdout__
+        self._real = real_stream
         self._bol = True  # beginning of line
 
     def write(self, data: str) -> int:
@@ -82,13 +82,13 @@ class _Tee:
             if ch == "\n":
                 self._bol = True
         out = "".join(chunks)
-        self._real_stdout.write(out)
+        self._real.write(out)
         self.fh.write(out)
         self.fh.flush()
         return len(data)
 
     def flush(self) -> None:
-        self._real_stdout.flush()
+        self._real.flush()
         self.fh.flush()
 
 
@@ -309,7 +309,8 @@ def main() -> int:
     )
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "w", encoding="utf-8", buffering=1)
-    sys.stdout = _Tee(log_fh)
+    sys.stdout = _Tee(log_fh, sys.__stdout__)
+    sys.stderr = _Tee(log_fh, sys.__stderr__)
 
     print(f"[init] 任务：{task_name}")
     print(f"[init] CSV：{args.csv}  nrows={args.nrows or 'all'}")
@@ -354,11 +355,20 @@ def main() -> int:
         )
         y = df[label_col].values[mask].astype(np.float64)
 
+        n_valid = int(mask.sum())
         print(
-            f"[desc] {desc_name}: n_valid={mask.sum()}  "
+            f"[desc] {desc_name}: n_valid={n_valid}  "
             f"X_smiles.shape={X_smiles.shape}"
             + (f"  X_numeric.shape={X_numeric.shape}" if X_numeric is not None else "")
         )
+
+        if n_valid < args.cv:
+            print(
+                f"[skip] {desc_name}: 有效样本数 {n_valid} < cv={args.cv}，"
+                f"跳过全部模型。请增加数据量或用 --cv 减小折数。"
+            )
+            done += len(args.models)
+            continue
 
         for model_name in args.models:
             done += 1
@@ -396,9 +406,9 @@ def main() -> int:
                 "model":         model_name,
                 "n_smiles_cols": len(smiles_cols),
                 "n_numeric_cols":len(numeric_cols),
-                "n_samples":     int(mask.sum()),
+                "n_samples":     n_valid,
                 "n_total":       int(len(mask)),
-                "coverage":      float(mask.sum() / max(len(mask), 1)),
+                "coverage":      float(n_valid / max(len(mask), 1)),
                 "feature_dim":   int(X_smiles.shape[1]) + (X_numeric.shape[1] if X_numeric is not None else 0),
                 "cv":            args.cv,
             }

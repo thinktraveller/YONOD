@@ -14,6 +14,15 @@
 
 ### Fixed
 
+**run_yonod.py：有效样本不足时静默失败修复 + stderr 日志捕获**
+- **根本原因 1（静默失败）**：当 `n_valid < cv`（如测试集 10 行中仅 4 行 SMILES 全列有效，而默认 `--cv 5`），`model.cross_validate` / `KFold` 抛出异常（`n_splits=5 cannot be greater than the number of samples`），被 `except` 块捕获后打印到 `sys.stderr`；由于 `_Tee` 未接管 `stderr`，错误消息不写入 `.log` 文件，日志中看不到任何报错，造成"运行完成但无结果"的假象
+- **根本原因 2（stderr 不入日志）**：`_Tee` 原构造函数硬编码 `sys.__stdout__` 作为透传流，未对 `stderr` 做镜像；所有 `file=sys.stderr` 的警告/错误均不写入 `.log`
+- **修复 1**：在每个描述符的模型循环前增加显式守卫：`if n_valid < args.cv`，打印人类可读的跳过原因（`有效样本数 X < cv=Y，跳过全部模型。请增加数据量或用 --cv 减小折数。`）并 `continue`，避免无意义的异常
+- **修复 2**：`_Tee` 改为接收 `real_stream` 参数（而非硬编码 `__stdout__`）；`main()` 中同时重定向 `sys.stdout` 和 `sys.stderr`，所有输出（含警告/错误）均写入 `.log`
+- **附带**：将循环内重复调用的 `mask.sum()` 提前为局部变量 `n_valid`，避免多次求和
+
+
+
 **yonod.py + feature_builder.py：逗号分隔阴阳离子 SMILES 规范化**
 - **背景**：部分试剂以逗号区分阴阳离子（如 `CCN=C=NCCCN(C)C,Cl`），而 RDKit 的合法片段分隔符为 `.`；原逻辑直接调用 `Chem.MolFromSmiles()` 导致验证误报无效、描述符计算时静默丢行
 - **yonod.py**：新增 `_normalize_smiles(smi)` 辅助函数（`smi.replace(",", ".")`），在 `_validate_smiles` 中对每个值规范化后再调用 `Chem.MolFromSmiles()`，逗号分隔的离子对不再触发误报
