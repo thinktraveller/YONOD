@@ -16,7 +16,9 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parent
-RESULTS = ROOT / "results"
+# v1.1: default results path is dataset-named.
+DEFAULT_CSV_STEM = "酰胺缩合反应数据集"
+RESULTS = ROOT / "results" / f"{DEFAULT_CSV_STEM}建模报告"
 
 
 def main() -> int:

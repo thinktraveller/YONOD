@@ -1,0 +1,101 @@
+# 更新日志
+
+本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/)。
+
+格式：每个版本下分 `Added` / `Changed` / `Fixed` / `Removed` / `Deprecated` / `Security` 六类（按需出现）。
+发布标签由 `git tag vX.Y.Z` 创建后 push。
+
+---
+
+## [Unreleased]
+
+> 当前开发分支的修改，下次发布时会归并到具体版本号。
+> **发布标签建议**：`v1.2.0`（Track B 新增 + 数据集整理 + 通用化规划，属 MINOR 增量）。
+
+### Added
+
+**Track B：Ni 催化不对称偶联 ΔΔG 预测**
+- `run_ecc_prediction.py`：ECC 专用入口，4×4 grid（2 描述符 × 4 模型），支持 `--append`、`--svm-subsample`、`--heartbeat` 等 9 个 CLI 旋钮；输出到 `results/ecc_results/`
+- `yonod_yield/features/ecc_dataset.py`：ECC 数据加载器（读取 `Raw_Dataset.csv`，提取 Ligand_SMILES / Product_SMILES / Temperature / ΔΔG，过滤无效 SMILES）
+- `yonod_yield/metrics/ee_metrics.py`：`ddG_to_ee()` 转换函数及 `ee_mae()` 指标（ΔΔG → 对映体过量 ee%，R=0.001987 kcal/(mol·K)）
+- `yonod_yield/metrics/__init__.py`：新指标子包
+- `test_ecc_load.py`：ECC 数据加载与特征构建烟测
+
+**数据集整理**
+- `数据集/镍催化偶联数据集/`：从 Enantioselective-Cross-Coupling-Prediction 提取整理（6590 条 `Raw_Dataset.csv` + 5 个预计算描述符 CSV + 文献 PDF/MD + 数据集说明 `README.md`）
+- `数据集/GraphRXN数据集/`：从 `GraphRXN-master` 批量提取并转换，共 142 个 CSV，含四个子集：
+  - `BuchwaldHartwig/`：Dreher & Doyle HTE 数据 3955 条（原始 xlsx 转 CSV，16 个分折文件 + 合并原始文件）
+  - `SuzukiMiyaura/`：aap9112 Science 2019 数据集 5760 条（16 列，含 SMILES）
+  - `Denmark/`：相转移催化 10-CV 预分割（40 个 CSV）
+  - `InHouse/`：实验室内部 HTE 1558 条，按底物分 4 组，各 5-CV 分割
+  - `Stat/`：GraphRXN 与基线方法的 R² 性能对比表（4 个 CSV）
+- `数据集/酰胺缩合数据集.csv`：原数据集文件重命名（内容不变，47015 条）
+
+**文档**
+- `CHANGELOG.md`（本文件）
+- `YONOD项目构建计划书.md` 新增 §11–§14：
+  - §11 ECC 数据集调研记录（数据规模、列说明、与 Track A 的架构共性）
+  - §12 ECC-Track 扩展实施计划（文件清单、特征构建方式、ee% 换算公式）
+  - §13 通用化重构方案分析（对 5 条设计方案的逐条评价与改进建议）
+  - §14 通用化重构确认方案与实施计划（数值列归一化量化分析、CLI 参数规范、BAT 向导设计、文件新增清单）
+
+### Changed
+
+**管线通用化（v1.1.0 范围，随本版本一同发布）**
+- 数据集读取契约改为通用 2 列 schema：第 1 列 SMILES、第 2 列浮点标签；其余列忽略。原 9 列酰胺反应级特征改为可选 legacy 路径。
+- 反应级 6 分子拼接（`ReactionFeaturizer`）从默认 pipeline 移除；新默认 `MoleculeFeaturizer`：单分子 SMILES → 描述符向量。
+- 输出目录从 `results/` 改为 `results/<数据集 stem>建模报告/`，多数据集横向对比时互不覆盖。
+- HTML 报告标题与术语改为通用版本：标题用数据集名，"产率" → "标签 / target"，"反应" 字样在通用语境中删除。
+
+**文件级修改**
+- `README.md`：增加双轨道（Track A / Track B）说明，ECC 实验结果表，GraphRXN 参考项说明，更新仓库目录树
+- `yonod_yield/evaluate.py`：新增可选 `ee_mae` 字段，向后兼容现有 Track A 调用
+- `yonod_yield/plot.py`：散点图标签适配通用 target 名称
+- `generate_report.py`：报告模板术语通用化
+- `run_yield_prediction.py`：CLI 旋钮与输出路径更新
+
+### Fixed
+- `run_ecc_prediction.py`：补充 `--append` 参数定义，修复 `unrecognized arguments: --append` 运行时错误
+
+### Removed
+- `数据集/酰胺缩合反应数据集.csv`：已重命名为 `数据集/酰胺缩合数据集.csv`（内容不变）
+
+### Deprecated
+- `ReactionFeaturizer` + `reagent_cache.py`：仍保留可调用，但不在 `evaluate.py` 的注册表中；后续版本可能完全移除或抽到 `legacy/` 子包。
+
+---
+
+## [1.0.0] — 2026-05-16
+
+首个公开发布，**酰胺缩合反应产率预测专题**。
+
+### Added
+- 4 类分子描述符
+  - `MorganDescriptor`（RDKit ECFP4，1024 bit）
+  - `ATMOMACCSDescriptor`（RDKit MACCS keys，166 维）
+  - `FISDDescriptor`（QM9 预训练双 GCN + TwoInOne MLP，50 维，权重已 inline 至 `WEIGHTS/FISD/`）
+  - `MolMetaLMDescriptor`（HuggingFace Llama base，768 维，attention-masked mean-pool）
+- 4 类机器学习适配器
+  - `XGBYieldModel`（GPU `tree_method='hist'`，5 折 CV）
+  - `RFYieldModel`（sklearn 300 棵树，5 折 CV）
+  - `SVMYieldModel`（RBF SVR + 自动 PCA，子采样训练以应对 O(n²) 复杂度）
+  - `AutoGluonYieldModel`（80/20 holdout + bagging+stacking）
+- `ReactionFeaturizer`：6 个分子（2 底物 + 4 试剂）描述符向量拼接
+- `reagent_cache.py`：试剂 SMILES 去重 + 描述符预计算缓存（`(无)` → 零向量、`,` → `.` 多片段预处理）
+- 主入口 `run_yield_prediction.py`：4×4 grid 自动执行 + 心跳 + 文件日志 + `--append` 合并 + 7 个 CLI 旋钮
+- 报告生成器 `generate_report.py`：自包含 HTML（base64 内嵌 PNG），含术语解释、推荐表、热力图、散点画廊
+- 诊断工具 `verify_morgan_rf.py`：单独验证 RF 在高维特征上的耗时
+- 烟测脚本 `test_run_yield.py`
+- 文档：`README.md`、`MIGRATION.md`（云端/Linux/GitHub 迁移指南）、`YONOD项目构建计划书.md`（含设计决策与 13 条 Q&A）
+- 协议：CC BY-NC 4.0
+- `.gitignore` + `requirements.txt`
+
+### Notes
+- 数据集：47015 条酰胺缩合反应（公开来源），R²（5 折 CV）实测范围 0.58~0.87；冠军组合 Morgan × AutoGluon (R²=0.874)。
+- 仓库初始大小约 40 MB（含数据 CSV + FISD 3 个 `.pth`）；MolMetaLM 权重 500 MB 需从 HuggingFace 单独下载。
+- 已在 Windows 11 + Python 3.9 + CUDA 12.1 + torch 2.1.2 上跑通；云端 Linux 部署指南见 `MIGRATION.md`。
+
+---
+
+[Unreleased]: https://github.com/thinktraveller/YONOD/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/thinktraveller/YONOD/releases/tag/v1.0.0

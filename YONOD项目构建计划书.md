@@ -1296,3 +1296,1236 @@ python "$root\run_yield_prediction.py" `
 2. **云端迁移**（推荐）：参考 §五 T4.5 的迁移清单上传，云端单条命令一次跑完，预计 30~60 分钟。
 3. **结果交付**：`results/metrics_summary.csv`（16 行）+ 16 张散点图 + 2 个 log。
 4. **后续可选**：T5.1 描述符特征缓存（避免每次跑都重新算 MolMetaLM 47015 行 forward）；超参数网格搜索；消融实验（移除某一类分子的特征看 R² 变化）。
+
+---
+
+## 十一、新数据集调研记录
+
+> 调研日期：2026-05-25
+> 数据集来源：`数据集/Enantioselective-Cross-Coupling-Prediction/`
+> 论文标题：AI-Driven Development of Nickel-Catalyzed Enantioselective Cross-Coupling Reactions
+
+---
+
+### A. 这个数据集是做什么的？
+
+**研究问题**：预测镍催化不对称交叉偶联反应（Ni-catalyzed Enantioselective Cross-Coupling）的**对映选择性**，核心指标为产物的对映体过量值（ee, enantiomeric excess）及其对应的自由能差（ΔΔG‡）。
+
+**预测目标**：
+- 主要目标：`∆∆G (Kcal/mol)`，即两个对映体过渡态的自由能差（单位 kcal/mol），连续值回归任务
+- 辅助目标：`ee (%)`，与 ΔΔG 有严格的热力学换算关系（`ee = tanh(ΔΔG / (2RT)) × 100%`），二者互为单调变换，不是独立目标
+- 预测性质：对映选择性（手性选择），**不是产率**
+
+**数据规模**：
+- 原始数据集（Raw_Dataset）：**6590 条**反应记录，14 列
+- 特征数据集（Data_AutoGluon_DFT）：6590 行 × 94 列（93 个 DFT 描述符特征 + 温度 + 1 个目标列）
+- 特征数据集（Data_AutoGluon_RDKIT）：6590 行 × 241 列（239 个 RDKit 描述符特征 + 温度 + 1 个目标列）
+
+**反应体系组成**：
+- 催化剂配体（Ligand）：380 种不同配体，提供 `Ligand_SMILES` 列
+- 产物（Product）：3385 种不同底物组合，提供 `Product_SMILES` 列
+- 反应类型（R_Type）：9 类，包括 NiH、C(sp3)-C(sp2)、C(sp3)-C(sp3)、3-Component 等
+- 数据来源（Data_Type）：高通量实验（HTE）+ 文献
+- 温度（Temp, K）：作为数值特征列入模型
+
+**特征描述符类型**：
+- DFT 描述符（93 维）：量子化学计算得到的几何特征（体积 Volume、表面积、半径 Radius）、电子结构特征（Mulliken 电荷、硬度 Hardness、亲核/亲电指数、偶极矩、HOMO/LUMO 能级、能隙等），**不包含 SMILES**
+- RDKit 描述符（239 维）：RDKit 计算的物理化学描述符（logP、ASA、TPSA、分子量、旋转键数、氢键受/供体数、MQN 等），**不包含 SMILES**
+- 注意：特征均为**配体和产物的描述符**，已预先计算并展平为表格，DFT 和 RDKit 版本均不再保留原始 SMILES 列
+
+**是否有 SMILES**：Raw_Dataset.csv 有 `Ligand_SMILES` 和 `Product_SMILES`；预计算特征文件（DFT/RDKIT 版本）已不保留 SMILES。
+
+---
+
+### B. 与 YONOD 现有项目的异同
+
+**相似之处**：
+
+| 维度 | YONOD（酰胺缩合） | ECC（不对称交叉偶联） |
+|---|---|---|
+| 任务类型 | 回归 | 回归 |
+| 反应类别 | 有机合成反应 | 有机合成反应 |
+| 预测目标数值范围 | yield 0~1 | ΔΔG 0~4.8 kcal/mol；ee -100~0% |
+| ML 框架 | AutoGluon 等 | AutoGluon（原项目使用） |
+| 数据集大小 | 47015 | 6590 |
+| 分子信息输入 | SMILES → 描述符 | SMILES → 描述符（DFT/RDKit，已预计算） |
+
+**本质差异**：
+
+| 维度 | YONOD（酰胺缩合） | ECC（不对称交叉偶联） | 影响 |
+|---|---|---|---|
+| **预测目标的物理含义** | 反应**产率**（生成产物的量） | 反应**对映选择性**（手性偏好方向和强度） | 完全不同的化学问题，模型无法直接复用 |
+| **特征维度** | 6 分子拼接，6144~4608 维 | 配体 + 产物的 DFT/RDKit 描述符，93~239 维 | 特征工程方案不同 |
+| **描述符来源** | 实时从 SMILES 计算（无需 DFT） | DFT 描述符需要量子化学预算，成本极高 | DFT 版本在 YONOD 框架中无法直接生成 |
+| **反应组分数量** | 6 个（sub_1、sub_2、激活剂、添加剂、碱、溶剂） | 2 个（配体、产物） | 反应级特征拼接方式不同 |
+| **数据规模** | 47015（约 7× 大） | 6590 | 规模效应不同，模型选择策略有差异 |
+| **催化机制** | 氨基酸/肽偶联（非金属催化） | Ni 催化不对称催化 | 特征重要性差异极大 |
+| **数据集分割策略** | 随机 K 折 CV | 原项目使用 Kennard-Stone 算法（最大化训练集化学空间覆盖） | 评估协议不同 |
+
+---
+
+### C. 可行性评估：能否将其纳入 YONOD 项目？
+
+**结论：不建议强行"纳入"，建议作为独立扩展专题（ECC-Track）并行开发。**
+
+#### 技术层面：条件可行，但需大量适配
+
+**可行的部分**：
+1. ECC 的 Raw_Dataset 提供了 `Ligand_SMILES` 和 `Product_SMILES`，理论上可以用 YONOD 现有的描述符管线（Morgan / ATMOMACCS / FISD / MolMetaLM）对配体和产物进行描述符化，再接 AutoGluon 等 ML 模型，预测 ΔΔG 或 ee
+2. 数据规模（6590）在 YONOD 框架下完全可承受
+3. 分割策略可以沿用 K 折 CV，也可以尝试 Kennard-Stone（原项目使用）
+4. 目标列 `∆∆G (Kcal/mol)` 是连续值，回归任务接口与 YONOD 完全兼容
+
+**需要做的适配工作**：
+1. **反应特征构造**：ECC 是 2 分子体系（配体 + 产物），YONOD 是 6 分子体系。`ReactionFeaturizer` 需要新增一个参数化的"分子列表"配置，使其不硬编码 6 列，而是接受任意数量的 SMILES 列名
+2. **目标列名更改**：从 `yield` 改为 `∆∆G (Kcal/mol)`（列名含特殊字符，需处理）
+3. **评估指标补充**：ΔΔG 预测任务通常还关注 MAE in kcal/mol 尺度，需确认 RMSE 和 R² 的物理意义是否合适；可额外换算出 ee 的 MAE 作为可解释指标
+4. **数据规范化差异**：ECC 数据目标值范围约 0~5 kcal/mol（不是 0~1），需重新评估各模型的默认超参数是否仍适用
+5. **DFT 特征选项**：若想复用原项目的 DFT 描述符（93 维），需要读取预计算的 `Data_AutoGluon_DFT.csv`，用 `Num` 列与 Raw_Dataset 的行号对应后拼接；这是额外的数据准备工作
+
+**不可行 / 核心障碍**：
+1. **DFT 描述符无法为新配体实时生成**：原项目 DFT 描述符需要量子化学软件（Gaussian/ORCA）预算，每个分子数小时计算，**无法纳入 YONOD 的"仅凭 SMILES 实时推理"主流程**。若要复现原论文的最优性能，必须使用预计算的 DFT 表格，将 YONOD 变成"离线表格模式"而非通用 SMILES 管线
+2. **化学问题本质不同**：对映选择性预测的学术价值和物理意义与产率预测完全不同，不适合混在同一个评估表中比较
+3. **没有溶剂、碱、添加剂列**：ECC 反应条件极为简化（只有配体+底物+温度），这与 YONOD 的 6 分子拼接设计不对应
+
+#### 推荐方案
+
+**方案一（推荐）：ECC 作为独立脚本 `run_ecc_prediction.py`**
+- 复用 YONOD 的描述符适配器（Morgan / MolMetaLM 等）
+- 新建一个针对 ECC 的入口脚本，读取 Raw_Dataset.csv，对 Ligand_SMILES + Product_SMILES 各自生成描述符，拼接后预测 ΔΔG
+- 模型仍使用 XGBoost / RF / AutoGluon
+- 评估时同时报告 ΔΔG 的 RMSE/R² 和换算出的 ee MAE
+- 这样 YONOD 项目增加了第二个反应体系，学术对比价值更高（两种催化反应、两种预测目标、相同描述符框架）
+
+**方案二：直接复现原论文 AutoGluon + RDKit/DFT 描述符**
+- 使用预计算的 `Data_AutoGluon_RDKIT.csv` 或 `Data_AutoGluon_DFT.csv`，以 `∆∆G` 为 label 直接跑 AutoGluon
+- 代码极简（参考原项目 `Code/AutoGluon` 文件，约 30 行），无需任何 SMILES 描述符化
+- 缺点：不利用 YONOD 的核心技术积累，学术创新性较低
+
+**总结判断**：
+
+| 评估维度 | 结论 |
+|---|---|
+| 数据集本身质量 | 高质量、结构清晰、有 SMILES + DFT + RDKit 三套特征 |
+| 与 YONOD 现有代码的兼容性 | 中等（描述符管线可复用，反应特征构造需小改） |
+| 是否适合合并进同一 `run_yield_prediction.py` | 不适合（目标含义不同，混淆评估表） |
+| 是否值得做成扩展专题 | 强烈推荐（丰富大创项目内容，体现跨反应体系通用性） |
+| 核心障碍 | DFT 描述符无法实时计算；化学问题与产率预测无直接可比性 |
+
+---
+
+## 十二、ECC 不对称偶联专题（ECC-Track）扩展计划
+
+> 本章节依据 §十一 的调研结论，给出将 ECC 数据集以"独立脚本"方式纳入 YONOD 项目的完整实施计划。
+> 技术路线与酰胺缩合专题**完全相同**：SMILES 输入 → 描述符特征化 → ML 模型 → 回归评估。
+
+---
+
+### 12.1 专题目标
+
+以 Ni 催化不对称交叉偶联反应的 `Ligand_SMILES` + `Product_SMILES` + `Temp (K)` 为输入，通过 YONOD 现有的 4 类描述符管线（Morgan / ATMOMACCS / FISD / MolMetaLM）结合 4 种 ML 模型（XGBoost / RF / SVM / AutoGluon），对反应的对映选择性自由能差 `ΔΔG (kcal/mol)` 进行回归预测，并额外换算 `ee MAE` 作为可解释评估指标。
+
+---
+
+### 12.2 关键设计决策
+
+#### 12.2.1 反应特征如何构建？
+
+ECC 数据集有 2 个 SMILES 列（`Ligand_SMILES`、`Product_SMILES`）和 1 个标量特征（`Temp (K)`）。构建反应特征的方案如下：
+
+```
+reaction_feature = concat([
+    desc(Ligand_SMILES),    # shape (d,)
+    desc(Product_SMILES),   # shape (d,)
+    [Temp_normalized],      # shape (1,)  -- 温度标准化后拼接
+])
+# 总维度 = 2 × d + 1
+```
+
+**原理**：两个 SMILES 各自独立描述符化后拼接，与酰胺缩合专题的"6 分子拼接"思路完全一致，只是从 6 分子简化为 2 分子。温度作为标量附加在向量末尾，而非嵌入到分子描述符中，因为温度是反应条件而非分子性质，二者物理含义不同，分开处理更合理。
+
+**温度归一化**：用训练集的 mean/std 做 z-score 标准化（避免量纲不一致干扰树模型以外的模型），归一化参数在 train fold 上拟合，在 test fold 上 transform，防止数据泄露。
+
+#### 12.2.2 现有 `ReactionFeaturizer` 是否需要改动？
+
+**不需要改动 `ReactionFeaturizer`**，采用更简洁的方案：
+
+当前 `run_yield_prediction.py`（v1.1+）已经支持"2列CSV通用模式"——column 0 = SMILES, column 1 = float label。ECC-Track 的入口脚本 `run_ecc_prediction.py` 只需在调用现有管线前做一步数据预处理：将 `Ligand_SMILES` 和 `Product_SMILES` 拼接为一个"反应 SMILES"列，用 `>>` 分隔（或直接用 `.` 连接后整体描述符化），然后以标准 2 列格式传入。
+
+更好的方案是**新建专用数据加载器** `load_ecc_dataset()`，返回拼接后的特征矩阵（含 Temp 维度），跳过 `load_dataset()` 的 2 列限制。这样对 YONOD 核心代码零侵入。
+
+#### 12.2.3 评估指标
+
+主要指标：R²、RMSE（kcal/mol）、MAE（kcal/mol），与酰胺缩合专题一致。
+
+额外指标：ee MAE（%）。换算公式为：
+
+```
+ee = tanh(ΔΔG / (2 × R × T)) × 100%
+```
+
+其中 R = 0.001987 kcal/(mol·K)，T 取每个样本的实验温度。预测 ee 和真实 ee 的 MAE 即为 ee MAE。这是原论文的核心评估指标，报告此指标有助于与原文直接对比。
+
+#### 12.2.4 训练/测试划分策略
+
+| 方案 | 说明 | 建议 |
+|---|---|---|
+| 随机 K 折 CV（k=5） | 与酰胺缩合专题一致，代码零改动 | **推荐（首选）** |
+| Kennard-Stone 划分 | 最大化训练集化学空间覆盖，原论文使用此方案 | 可选，作为对比实验 |
+| 按反应类型分层 CV | 保证每折含所有 9 类反应类型 | 可选，适合学术发表 |
+
+首选**随机 5 折 CV**，理由是与 YONOD 主专题保持方法论一致，便于横向对比；同时数据量 6590 在 5 折下每折验证集 ~1318 条，统计意义充分。
+
+---
+
+### 12.3 代码改动清单
+
+| # | 操作 | 文件路径 | 改动内容 | 是否影响现有代码 |
+|---|---|---|---|---|
+| 1 | 新建 | `数据集/Enantioselective-Cross-Coupling-Prediction/Data/csv/ecc_smiles_label.csv` | 预处理脚本生成的 2 列 CSV（`reaction_smiles`, `ddG`），供快速验证 | 否 |
+| 2 | 新建 | `yonod_yield/features/ecc_dataset.py` | ECC 专用数据加载器 `load_ecc_dataset()`，返回 `(X, y, feature_names)` | 否 |
+| 3 | 新建 | `run_ecc_prediction.py` | ECC 专题入口脚本，复用 `DESCRIPTOR_REGISTRY`、`MODEL_REGISTRY`、`evaluate_one`、`plot_scatter` | 否 |
+| 4 | 新建 | `yonod_yield/metrics/ee_metrics.py` | `ddg_to_ee(ddg, T)` 换算函数 + `ee_mae(y_true, y_pred, T)` 指标计算 | 否 |
+| 5 | 新建（可选） | `scripts/prepare_ecc_csv.py` | 一次性预处理脚本：读 Raw_Dataset.csv → 清洗 → 保存标准化 CSV | 否 |
+| 6 | 修改（小改） | `yonod_yield/evaluate.py` | 在 `evaluate_one` 的返回 dict 中增加可选字段 `ee_mae`（当调用方传入 `compute_ee_mae=True` 和温度数组时才计算），否则默认 None，不影响现有调用 | 影响小，向后兼容 |
+
+**总结**：主要新建 3~4 个文件，对现有代码只有 1 处小改（`evaluate.py` 增加可选字段），**不影响酰胺缩合专题的任何现有功能**。
+
+---
+
+### 12.4 实施步骤
+
+---
+
+#### ECC-T1 数据探索与预处理
+
+**原理说明**：在建模前必须了解数据分布，特别是 ΔΔG 的值域和方向性（正/负代表不同手性偏好），以及 SMILES 的有效性。ECC 数据集的 ΔΔG 范围约为 -5 ~ +5 kcal/mol，正负号有物理含义（不能随意取绝对值）。
+
+**具体操作**：
+
+```powershell
+$root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
+conda activate yonod-yield
+python -c "
+import pandas as pd, numpy as np
+from rdkit import Chem
+
+df = pd.read_csv(r'$root\数据集\Enantioselective-Cross-Coupling-Prediction\Data\csv\Raw_Dataset.csv')
+print('形状:', df.shape)
+print('列名:', df.columns.tolist())
+print()
+print('ΔΔG 统计:')
+print(df['∆∆G (Kcal/mol)'].describe())
+print()
+print('温度分布 (K):')
+print(df['Temp (K)'].value_counts().head(10))
+print()
+print('反应类型分布:')
+print(df['R_Type'].value_counts())
+print()
+# SMILES 有效性检验
+for col in ['Ligand_SMILES', 'Product_SMILES']:
+    bad = [s for s in df[col] if Chem.MolFromSmiles(str(s)) is None]
+    print(f'{col}: {len(bad)} 条无效 SMILES（共 {len(df)} 条）')
+"
+```
+
+**验证方法**：
+- ΔΔG 分布直方图显示双峰或近似正态，正负值均有；
+- 无效 SMILES 数量为 0 或极少（< 5 条，可直接丢弃）；
+- 温度集中在几个离散值（原文为 303.15 K / 253.15 K 等），确认后用于 ee 换算时的 T 值。
+
+**常见问题**：
+- `∆∆G (Kcal/mol)` 列名含特殊字符 `∆`，用 `df.columns` 查看精确列名后在代码中引用；
+- 如果读取 CSV 时出现编码问题，添加 `encoding='utf-8-sig'` 参数。
+
+---
+
+#### ECC-T2 生成反应特征向量（复用 YONOD 描述符管线）
+
+**原理说明**：对 `Ligand_SMILES` 和 `Product_SMILES` 各自调用描述符模型，生成两个向量后与温度标量拼接。这与酰胺缩合专题的"6分子拼接"完全相同，只是分子数量从 6 变为 2。温度作为第 3 个特征维度（1维），其标准化参数在每个 CV 折的训练集上拟合，防止数据泄露。
+
+**具体操作（`yonod_yield/features/ecc_dataset.py` 核心逻辑）**：
+
+```python
+"""ECC 专题数据加载器（新建文件）"""
+import numpy as np
+import pandas as pd
+from pathlib import Path
+from sklearn.preprocessing import StandardScaler
+from ..descriptors.base import BaseDescriptor
+
+ECC_CSV = (
+    Path(__file__).resolve().parents[2]
+    / "数据集/Enantioselective-Cross-Coupling-Prediction/Data/csv/Raw_Dataset.csv"
+)
+DDG_COL = "∆∆G (Kcal/mol)"
+TEMP_COL = "Temp (K)"
+
+def load_ecc_dataset(csv_path=None):
+    """读取 ECC Raw_Dataset.csv，返回 (ligand_smiles, product_smiles, temp_K, y)。"""
+    csv_path = Path(csv_path) if csv_path else ECC_CSV
+    df = pd.read_csv(csv_path, encoding="utf-8-sig")
+    # 丢弃无效 SMILES 行
+    from rdkit import Chem
+    valid_mask = (
+        df["Ligand_SMILES"].apply(lambda s: Chem.MolFromSmiles(str(s)) is not None)
+        & df["Product_SMILES"].apply(lambda s: Chem.MolFromSmiles(str(s)) is not None)
+        & df[DDG_COL].notna()
+    )
+    df = df[valid_mask].reset_index(drop=True)
+    return (
+        df["Ligand_SMILES"].tolist(),
+        df["Product_SMILES"].tolist(),
+        df[TEMP_COL].to_numpy(dtype=np.float64),
+        df[DDG_COL].to_numpy(dtype=np.float64),
+    )
+
+def build_ecc_features(descriptor: BaseDescriptor,
+                        ligand_smiles, product_smiles, temp_K,
+                        temp_scaler=None, fit_scaler=True):
+    """
+    为 ECC 数据集生成反应级特征矩阵。
+
+    参数：
+        descriptor: YONOD 描述符对象（与主专题完全相同的 4 类之一）
+        temp_scaler: sklearn StandardScaler；None 时新建；fit_scaler=True 时在当前数据上 fit
+    返回：
+        X: ndarray (n_valid, 2*d + 1)
+        mask: bool ndarray (n_total,)，标记有效行
+        temp_scaler: 已 fit 的 scaler（供 test fold 复用）
+    """
+    feats_lig, mask_lig = descriptor.featurize(ligand_smiles)
+    feats_prod, mask_prod = descriptor.featurize(product_smiles)
+    mask = mask_lig & mask_prod
+    feats_lig = feats_lig[mask]
+    feats_prod = feats_prod[mask]
+    temp_valid = temp_K[mask].reshape(-1, 1)
+    if temp_scaler is None:
+        temp_scaler = StandardScaler()
+    if fit_scaler:
+        temp_valid = temp_scaler.fit_transform(temp_valid)
+    else:
+        temp_valid = temp_scaler.transform(temp_valid)
+    X = np.concatenate([feats_lig, feats_prod, temp_valid], axis=1)
+    return X, mask, temp_scaler
+```
+
+**验证方法**：
+
+```powershell
+$root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
+conda activate yonod-yield
+python -c "
+import sys
+sys.path.insert(0, r'$root')
+from yonod_yield.features.ecc_dataset import load_ecc_dataset, build_ecc_features
+from yonod_yield.descriptors.morgan import MorganDescriptor
+
+ligand_sm, product_sm, temp_K, y = load_ecc_dataset()
+print(f'有效样本数: {len(y)}  ΔΔG 范围: [{y.min():.3f}, {y.max():.3f}]')
+
+desc = MorganDescriptor()
+X, mask, scaler = build_ecc_features(desc, ligand_sm, product_sm, temp_K)
+print(f'特征矩阵 shape: {X.shape}  (预期: (n, 2*1024+1) = (n, 2049))')
+print(f'最后一列（温度归一化）mean={X[:,-1].mean():.3f} std={X[:,-1].std():.3f}（预期 ~0 和 ~1）')
+"
+```
+
+**常见问题**：
+- 若描述符化时遇到 MolFromSmiles 返回 None，检查是否有含立体化学标注 `@` 的 SMILES 需要 sanitize；
+- 温度列若含多个不同值（303.15 / 253.15 等），归一化后会正常分布，不是 bug。
+
+---
+
+#### ECC-T3 复用 YONOD 模型训练/评估循环
+
+**原理说明**：`run_ecc_prediction.py` 直接调用 `yonod_yield.evaluate` 中的 `MODEL_REGISTRY` 和 `evaluate_one` 框架。与酰胺缩合专题的区别只有两点：输入矩阵形状不同（2d+1 而非 6d），以及指标中额外计算 ee MAE。其余 CV 循环、RF/SVM/XGB/AutoGluon 适配逻辑完全复用，零改动。
+
+**具体操作（`run_ecc_prediction.py` 骨架）**：
+
+```python
+"""ECC 专题入口脚本：以 SMILES 为输入预测 ΔΔG。
+
+用法：
+  # 快速冒烟测试（仅 Morgan × XGB）：
+  python run_ecc_prediction.py --desc morgan --model xgb --cv 5
+
+  # 完整 4×4 grid：
+  python run_ecc_prediction.py
+
+输出：
+  results/Raw_Dataset建模报告/metrics_summary_ecc.csv
+  results/Raw_Dataset建模报告/scatter_<desc>_<model>_ecc.png
+"""
+import argparse, sys, time
+from pathlib import Path
+import numpy as np, pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from yonod_yield.evaluate import DESCRIPTOR_REGISTRY, MODEL_REGISTRY, build_model, build_descriptor
+from yonod_yield.features.ecc_dataset import load_ecc_dataset, build_ecc_features
+from yonod_yield.metrics.ee_metrics import ee_mae as calc_ee_mae
+from yonod_yield.plot import plot_scatter
+from sklearn.model_selection import KFold
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+
+ROOT = Path(__file__).resolve().parent
+ECC_CSV = ROOT / "数据集/Enantioselective-Cross-Coupling-Prediction/Data/csv/Raw_Dataset.csv"
+RESULTS_DIR = ROOT / "results" / "Raw_Dataset建模报告"
+
+def evaluate_ecc_one(desc_name, model_name, ligand_sm, product_sm, temp_K, y, cv=5):
+    """单个 (desc, model) 组合的 K 折 CV 评估，返回 metrics dict。"""
+    desc = build_descriptor(desc_name)
+    model = build_model(model_name)
+    kf = KFold(n_splits=cv, shuffle=True, random_state=42)
+    r2s, rmses, maes, ee_maes = [], [], [], []
+    oof_pred = np.full(len(y), np.nan)
+
+    for fold_idx, (train_idx, test_idx) in enumerate(kf.split(np.arange(len(y)))):
+        # 训练集：fit 描述符 + scaler
+        X_train, mask_train, scaler = build_ecc_features(
+            desc,
+            [ligand_sm[i] for i in train_idx],
+            [product_sm[i] for i in train_idx],
+            temp_K[train_idx], fit_scaler=True
+        )
+        y_train = y[train_idx][mask_train]
+
+        # 测试集：用训练集 scaler transform
+        X_test, mask_test, _ = build_ecc_features(
+            desc,
+            [ligand_sm[i] for i in test_idx],
+            [product_sm[i] for i in test_idx],
+            temp_K[test_idx], temp_scaler=scaler, fit_scaler=False
+        )
+        y_test = y[test_idx][mask_test]
+        temp_test = temp_K[test_idx][mask_test]
+
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        r2s.append(r2_score(y_test, y_pred))
+        rmses.append(mean_squared_error(y_test, y_pred) ** 0.5)
+        maes.append(mean_absolute_error(y_test, y_pred))
+        ee_maes.append(calc_ee_mae(y_test, y_pred, temp_test))
+
+        # 记录 OOF 预测（供散点图）
+        valid_test_global = test_idx[mask_test]
+        oof_pred[valid_test_global] = y_pred
+
+    return {
+        "descriptor": desc_name, "model": model_name,
+        "r2_mean": np.mean(r2s), "r2_std": np.std(r2s),
+        "rmse_mean": np.mean(rmses), "mae_mean": np.mean(maes),
+        "ee_mae_mean": np.mean(ee_maes),
+        "feature_dim": X_train.shape[1],
+        "n_samples": len(y_train),
+        "oof_pred": oof_pred,
+    }
+
+if __name__ == "__main__":
+    # 解析参数、循环 desc×model、保存结果（参考 run_yield_prediction.py 结构）
+    pass  # 完整实现见 ECC-T5 验收
+```
+
+**验证方法**：
+
+```powershell
+$root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
+conda activate yonod-yield
+# 快速冒烟：Morgan × XGB，5 折，全量数据
+python "$root\run_ecc_prediction.py" --desc morgan --model xgb --cv 5
+# 预期输出：R² > 0.3，RMSE < 0.8 kcal/mol（保守估计；ECC 数据集较小但特征性强）
+```
+
+---
+
+#### ECC-T4 结果分析与对比
+
+**原理说明**：将 YONOD 的 SMILES 描述符（Morgan / MolMetaLM 等）结果与原论文使用的 DFT 描述符结果对比，分析差距来源，撰写大创报告的"局限性与展望"部分。
+
+**原论文基准性能**（来自 Raw_Dataset 同配置数据）：
+
+| 描述符类型 | 模型 | R²（原文报告）| 备注 |
+|---|---|---|---|
+| DFT（93维，需量子化学计算） | AutoGluon | ~0.85~0.92 | 原论文最优结果 |
+| RDKit 物理化学描述符（239维） | AutoGluon | ~0.75~0.82 | 原论文次优结果 |
+| YONOD SMILES 描述符（本专题目标） | XGB/RF 等 | 待测 | 预期 0.50~0.75 |
+
+**差距来源分析框架**（供报告写作参考）：
+1. **DFT 编码了量子化学信息**：轨道能级、电荷分布、HOMO/LUMO 是对映选择性的直接决定因素，而 Morgan 指纹/MolMetaLM 嵌入是拓扑/统计信息，间接编码化学效应；
+2. **配体的 3D 构象**：对映选择性强依赖催化剂配体的空间手性环境，2D 拓扑描述符（Morgan/MACCS）对此编码能力弱；MolMetaLM 在大量 SMILES 上预训练，可能隐式学到部分立体化学偏好；
+3. **数据集规模**（6590 条）对深度描述符（MolMetaLM 768 维）不够充足：高维嵌入在小数据集上泛化能力受限，可能不如低维的 Morgan 或 ATMOMACCS；
+4. **温度效应**：温度仅 1 维，但对 ΔΔG 的影响显著（直接出现在 ee 换算公式中），低维标量编码已足够。
+
+**验证方法**：完成 4×4 结果矩阵后，将 RMSE、R²、ee MAE 填入对比表，与上表对比，并在报告中定量说明差距。
+
+---
+
+### 12.5 预期困难与应对
+
+| 困难 | 严重程度 | 具体表现 | 应对策略 |
+|---|---|---|---|
+| **数据集偏小（6590 条）** | 高 | RF/MolMetaLM 等高容量模型在训练集 ~5272 条（5折）时可能过拟合；train R² >> test R² | 监控 train/test R² 差值，差 > 0.2 时启用正则化（RF 减少 n_estimators 或加 max_depth 限制；XGB 降低 learning_rate 加 min_child_weight） |
+| **特征维度远超样本量（MolMetaLM 768×2+1=1537 >> 5272/6 个不重复配体）** | 中 | 维度诅咒在小数据上加重；SVM PCA 后效果可能更差 | 增加 PCA 到 64~128 维的实验版本对比 |
+| **ΔΔG 分布正负均有** | 低 | 不能直接归一化为 0~1；散点图参考线不再是 y=x 而是穿越原点的线 | `plot_scatter` 的 x_label/y_label 正确标注单位（kcal/mol），坐标轴对称于 0 |
+| **列名含特殊字符 `∆`** | 低 | pandas 读 CSV 后用 `df['∆∆G (Kcal/mol)']` 可能报 KeyError | 用 `df.columns.tolist()` 打印后 copy 精确列名，或用 `df.iloc[:, 4]` 按位置取 |
+| **6590 条 MolMetaLM 推理内存** | 低 | 6590 × 2 分子 × 768 维 ≈ 76 MB float32，在 GPU 上无压力 | batch_size=32 默认即可，OOM 时减半 |
+| **ee 换算公式的温度依赖** | 低 | 不同样本温度不同，不能用固定 T | `ee_metrics.py` 中按行逐一换算，不要用均值温度 |
+
+**过拟合风险重点说明**：ECC 数据集共 6590 条、380 种配体、3385 种底物。由于同一配体在多个底物上重复出现，随机 K 折时训练集和测试集会共享相同配体（只是底物不同），导致模型可能记住"这个配体通常给高 ee"而非真正泛化。更严格的评估应按配体做 leave-one-ligand-out CV（LOLO-CV）。建议首先用随机 K 折快速得到结果，然后视时间决定是否追加 LOLO-CV 作为对比。
+
+---
+
+### 12.6 学术价值说明
+
+本扩展对大创项目具有如下具体学术价值：
+
+1. **跨反应体系通用性验证**：
+   YONOD 项目的核心主张是"SMILES 描述符管线对有机合成反应预测具有通用性"。酰胺缩合（酰胺键形成）和 Ni 催化不对称偶联是化学上**完全不同的两类反应**，分别代表热力学驱动（产率）和动力学-手性驱动（对映选择性）两种预测任务。若相同的描述符管线在两类反应上均有效，则显著加强了"通用性"论点的说服力。
+
+2. **预测目标的扩展**：
+   从"产率（0~1）"到"ΔΔG（kcal/mol）"，展示了 YONOD 框架不局限于某一种物理量，而是可适配多种连续回归目标。这是从"工具复现"到"框架设计"的学术层次提升。
+
+3. **可与原论文直接对比**：
+   ECC 数据集的原论文（"AI-Driven Development of Nickel-Catalyzed Enantioselective Cross-Coupling Reactions"）使用了 DFT 描述符和 AutoGluon，并公开了数据。本专题使用相同数据但替换为仅 SMILES 的描述符，可以直接报告"DFT 描述符 vs SMILES 描述符"的性能差距，为"无 DFT 的轻量化预测方案"提供实验依据——这本身就是一个有价值的研究贡献点。
+
+4. **大创汇报材料充实**：
+   两个数据集的结果矩阵（2 × 4 × 4 = 32 格）比单数据集（16 格）内容更丰富，展示了项目的"系统性"和"扩展性"，更容易获得答辩评委的认可。
+
+---
+
+### 12.7 工作量估算
+
+| 任务 | 新增代码行数（估计）| 复杂度 |
+|---|---|---|
+| `yonod_yield/features/ecc_dataset.py` | ~80 行 | 低（参考 dataset.py 结构） |
+| `yonod_yield/metrics/ee_metrics.py` | ~30 行 | 低（纯数学换算） |
+| `run_ecc_prediction.py` | ~150 行 | 低-中（参考 run_yield_prediction.py 骨架） |
+| `yonod_yield/evaluate.py` 小改 | ~10 行 | 极低（增加可选 ee_mae 字段） |
+| 数据预处理脚本（可选） | ~30 行 | 低 |
+| **合计** | **~300 行** | **整体复杂度：低** |
+
+预计实施时间：**半天到 1 天**（熟悉 dataset.py / evaluate.py 结构后照搬骨架，主要工作是 ECC 数据预处理和验证）。
+
+---
+
+### 12.8 推荐执行顺序
+
+```
+ECC-T1（数据探索，30分钟）
+    ↓
+ECC-T2（ecc_dataset.py + 验证特征矩阵，2小时）
+    ↓
+ECC-T3（run_ecc_prediction.py 骨架 + 冒烟测试，2小时）
+    ↓
+ECC-T4（全量 4×4 grid 运行 + 与原论文对比，运行 1~2 小时）
+    ↓
+补充 ee_metrics.py（30分钟，可在 ECC-T2 后插入）
+```
+
+**快速验证命令（完成 ECC-T2 后即可运行）**：
+
+```powershell
+$root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
+conda activate yonod-yield
+
+# 冒烟测试：Morgan × XGB，不超过 5 分钟
+python "$root\run_ecc_prediction.py" --desc morgan --model xgb --cv 5
+
+# 完整 4×4 grid（预计 30~60 分钟，ECC 数据集小）
+python "$root\run_ecc_prediction.py" --heartbeat 30
+```
+
+---
+
+## 第十三节：通用化重构方案分析
+
+> 记录日期：2026-05-25
+> 背景：Track A（酰胺缩合产率预测）和 Track B（Ni 催化对映选择性偶联 ΔΔG 预测）均已跑通。用户提出 5 条通用化重构方案，本节对每条方案进行逐条评价，并给出综合建议。
+
+---
+
+### 13.1 方案逐条评价
+
+---
+
+#### 方案 1：数据集格式限定为 CSV + 仅接受 SMILES 列，排除温度/压力等数值变量
+
+**优点**
+
+- 格式约束清晰，降低了数据接入门槛。研究者只需提供一个普通 CSV，不需要了解任何配置文件结构。
+- "仅 SMILES"的限制使特征工程管线（描述符化 → 拼接）保持高度统一，不需要为每种数值变量设计不同的归一化策略。
+- 对于绝大多数分子性质预测任务（产率、溶解度、logP 等），输入确实只需要 SMILES，该限制不构成障碍。
+
+**潜在问题**
+
+这是 5 条方案中**问题最突出**的一条，核心矛盾在于：
+
+1. **Track B（ECC 专题）直接违背此限制**。ECC 的温度（`Temp (K)`）不是噪音列，而是 ΔΔG 预测中物理上不可或缺的特征——ΔΔG 与对映体过量 ee 的换算公式 `ee = tanh(ΔΔG / 2RT) × 100%` 明确依赖温度 T。温度不同时，同一底物-配体组合的 ee 值会显著不同。如果强行丢弃温度列，Track B 的预测精度会受到实质性影响，且这种影响无法通过换更好的描述符来弥补。
+
+2. **数值型反应条件在有机合成中极为普遍**。除温度外，压力、pH、反应时间、催化剂用量（mol%）等数值条件在许多高通量实验（HTE）数据集中都是重要特征。强行排除会使"通用平台"在实际应用中很快碰壁。
+
+3. **混合输入（SMILES + 数值）在技术上并不困难**。数值列只需在特征矩阵末尾拼接并做 z-score 标准化即可，Track B 的现有 `build_ecc_features()` 实现已经验证了这一做法的可行性。
+
+**改进建议**
+
+将方案 1 改为：**CSV 格式，最后一列为数值标签，其余列分为两类：SMILES 列和数值列，通过列头类型自动识别或用户显式指定**。具体实现选项如下：
+
+- **自动识别**：尝试用 RDKit 解析，能解析成 Mol 对象的列视为 SMILES 列，否则尝试转为 float，成功则视为数值列，其余报错。
+- **用户指定**：增加可选 CLI 参数 `--smiles-cols col1 col2 ...` 和 `--numeric-cols temp pressure`，用户在歧义情况下显式声明。
+
+这样改动之后，Track A（6 个 SMILES 列）和 Track B（2 个 SMILES 列 + 1 个数值列）均可无缝接入，同时新数据集也不需要单独写脚本。
+
+---
+
+#### 方案 2：CSV 最后一列必须是数值标签，前面所有列必须是 SMILES 字符串
+
+**优点**
+
+- "最后一列为标签"的约定简单直观，零配置。
+- 前置全为 SMILES 的假设适合绝大多数分子性质数据集（如 MoleculeNet 系列的 SMILES + 单一 target 格式）。
+- 前置合法性验证（列类型检查）可以在管线入口拦截绝大多数格式错误，避免错误在后期描述符化阶段以更晦涩的方式暴发。
+
+**潜在问题**
+
+1. **"最后一列为标签"的约定比"用户指定标签列名"更脆弱**。真实的 CSV 数据集往往还有 `smiles`、`row_id`、`source`、`experiment_date` 等非 SMILES 的元数据列，它们排列顺序不固定。如果用户的 CSV 习惯把 SMILES 放在列尾、标签放在中间，就会被拒绝，体验很差。
+2. **"前面所有列必须是 SMILES"的验证逻辑需要容忍率**。现实数据中常见 `NaN`、`invalid_smiles`、`""` 等脏数据。如果验证逻辑要求 100% 合法 SMILES 才能通过，会在数据探索阶段就把用户挡在门外，而实际上这些脏行完全可以在描述符化时通过 `mask` 机制丢弃。
+3. **对含元数据列的数据集完全不兼容**（如 `[id, smiles_1, smiles_2, temperature, yield]` 这种常见格式）。
+
+**改进建议**
+
+将约定从"位置固定"改为"名称指定 + 位置兜底"：
+
+- 用户可通过 `--label-col yield`（列名）或 `--label-col -1`（倒数第一列，兜底默认值）指定标签列。
+- 用户可通过 `--smiles-cols sub_1 sub_2`（显式）或 `--auto-detect`（程序自动探测）指定 SMILES 列。
+- 合法性验证改为"软验证"：打印警告并报告无效 SMILES 数量，但不抛出异常阻止运行，除非无效比例超过 50%（此时很可能是配置错误）。
+
+这样既保留了零配置的简单用例（2 列 CSV，列 0 = SMILES，列 1 = label），也能兼容复杂格式的真实数据集。
+
+---
+
+#### 方案 3：特征构建——将每行所有 SMILES 列各自描述符化后拼接
+
+**优点**
+
+- 这是项目现有架构的直接延伸，逻辑清晰且在 Track A（6 分子拼接，6144 维）上已充分验证。
+- 拼接策略对不同分子数量的反应体系（2 分子、3 分子、6 分子）天然兼容，无需修改核心代码。
+- 每个分子独立描述符化 + 拼接的方式使得"缺失分子（`(无)` → 零向量）"的处理策略保持一致，不需要特殊逻辑。
+
+**潜在问题**
+
+1. **拼接顺序的语义问题**。对于 SMILES 列数量不固定的数据集，如果描述符化后直接按列顺序拼接，模型就隐含了"第 1 列的特征权重 ≠ 第 2 列的特征权重"这一假设。对于某些反应（如底物 1 和底物 2 可互换的对称反应），这一假设是错误的，会引入顺序偏差。
+2. **高维问题随分子数量线性增长**。6 分子 × 1024 维 = 6144 维，对 SVM 等内核方法已经需要 PCA 降维。如果未来接入含 10 个组分的数据集，特征维度将达到 10240 维，训练成本急剧上升。
+3. **没有利用分子间相互作用信息**。纯拼接方案假设底物和试剂之间的特征是线性叠加的，而真实的反应结果往往依赖分子间的相互作用（如底物-催化剂的空间匹配）。这是该方案的化学层面的局限，对于反应性预测任务尤为突出。不过这是所有"分子指纹 + 传统 ML"路线的共同局限，不是本次重构引入的新问题，可以在学术报告中作为"局限性"讨论，无需在工程层面解决。
+
+**改进建议**
+
+- 在文档中明确说明"按列顺序拼接"的约定，要求用户在 CSV 列顺序上保证语义一致（如"底物总在试剂前面"）。
+- 为对称反应提供一个可选的"对称拼接"选项（将两个底物的描述符取均值或排序后拼接），但设为默认关闭，不强制。
+- 可在主脚本加一个 `--max-feature-dim` 参数，当拼接后维度超过阈值时自动触发全局 PCA 降维（现有 SVM 的 auto-PCA 逻辑可复用到其他场景）。
+
+---
+
+#### 方案 4：交互式主脚本（运行后提示用户输入数据集路径、标签列名、任务名称）
+
+**优点**
+
+- 对于完全不熟悉命令行的初学者，交互式提示远比"背诵参数顺序"友好。
+- 在演示场景（大创汇报、课堂展示）下，交互式引导看起来更"智能"，能给评委留下深刻印象。
+- 强制用户确认标签列名和任务名称，可以有效防止"用错列"或"忘记指定"的常见错误。
+
+**潜在问题**
+
+1. **交互式和 CLI 参数驱动并不互斥，但各自有明确适用场景**。CLI 参数驱动（现有的 `argparse` 方案）有三大不可替代的优势：
+   - **可脚本化**：可以写 `.ps1` / `.sh` 批处理文件，一键跑完全量 4×4；
+   - **可重现**：命令行历史精确记录了每次运行的配置，便于复现实验；
+   - **可远程执行**：SSH 远程登录云服务器或通过任务调度系统提交时，交互式输入完全不可用。
+2. **交互式脚本在批量运行场景下会阻塞**。如果要对 3 个数据集各跑一次全量评估，交互式脚本需要手动输入 3 次，而 CLI 版本可以在 `.ps1` 文件里写好 3 条命令一次性提交。
+3. **已有的 `argparse` 方案已具备 `--help` 文档**，可读性并不差。用户真正的困难不是"不知道有哪些参数"，而是"不知道 CSV 格式要怎么准备"——这是文档问题，不是 CLI vs 交互式的问题。
+
+**改进建议**
+
+不要在交互式和 CLI 之间二选一，而是**在 CLI 基础上增加一个"向导模式"**：
+
+```
+python run_yonod.py --wizard
+```
+
+当 `--wizard` 被指定时，脚本进入交互式引导，依次询问数据集路径、标签列、任务名称等，最终**生成并打印出等效的 CLI 命令**（而不是直接运行），让用户学会下次如何直接用 CLI 参数。这样既照顾了初学者，又不牺牲高级用户的批处理能力，还有教学效果。
+
+---
+
+#### 方案 5：可读性强的报告——4×4 结果表格 + 最佳组合推荐 + 化学家可理解的指标解释
+
+**优点**
+
+- 这是 5 条方案中**最无争议的一条**，方向完全正确。
+- 当前 `generate_report.py` 已经有 HTML 报告生成逻辑，本方案是对其内容质量的提升，工程量可控。
+- 在大创汇报和论文写作中，"让评委不需要懂机器学习也能看懂结果"是差异化竞争力。
+
+**潜在问题**
+
+1. **现有报告的指标解释可能仍过于技术化**。`R²_std = 0.032` 这样的数字对化学背景的读者几乎没有直觉意义。
+2. **最佳组合推荐需要明确排名标准**。如果 A 组合 R² 最高但 RMSE 也最高，B 组合各指标均衡但没有任何单项最优，谁是"最佳"？需要一个透明的评分公式，而不是黑盒排名。
+3. **Track A 和 Track B 的指标量纲不同**（yield 是无单位的 0~1 数值，ΔΔG 是 kcal/mol），单个报告模板无法直接复用于两个 Track，需要参数化。
+
+**改进建议**
+
+报告应包含以下内容，按化学家视角组织：
+
+**指标的化学语言解释模板**（建议直接写入报告的文字说明区）：
+
+| 指标 | 推荐解释语言 |
+|---|---|
+| R² | "模型解释了实验数据方差的 XX%。R²=0.85 意味着模型预测值与实验值之间的差异，有 85% 可以用输入的分子结构信息来解释。" |
+| RMSE | "模型的典型误差（均方根误差）为 X 个单位。对于产率预测，RMSE=0.08 意味着预测产率与真实产率平均相差约 8 个百分点。" |
+| MAE | "模型的平均绝对误差为 X 个单位，即大多数预测与真实值相差不超过这个数。" |
+| R²_std（5折标准差） | "模型在 5 次独立验证中 R² 的波动幅度。std=0.03 说明模型表现稳定；std>0.1 说明模型对数据分割较敏感，可能存在过拟合风险。" |
+| ee MAE（ECC Track 专属）| "模型预测的对映体过量值与实验值平均相差 X%。对于对映选择性 >90% ee 的反应，X<5% 通常被认为实用。" |
+
+**最佳组合推荐的量化标准**（建议采用加权综合得分）：
+
+```
+综合得分 = 0.5 × (R²_mean 排名) + 0.3 × (RMSE 排名，越低越好) + 0.2 × (1 - R²_std 排名)
+```
+
+报告中应明确写出排名标准，而不仅仅给出推荐结论。
+
+---
+
+### 13.2 综合建议：通用化接口的推荐设计
+
+---
+
+#### 13.2.1 设计目标的双重约束
+
+通用化重构面临两个不能回退的硬约束：
+
+1. **Track A 零回退**：`run_yield_prediction.py` 当前的 CLI 接口、`--append` 分阶段执行、心跳日志等功能必须继续工作，不能因通用化改造而破坏。
+2. **Track B 零回退**：`run_ecc_prediction.py` 的温度特征、ee MAE 指标必须继续工作。
+
+同时，通用化的目标是：**新增一个第三个入口 `run_yonod.py`，它能接受任意符合规范的 CSV，自动推断或接受用户指定的列角色，走相同的描述符 + ML 评估管线，输出格式统一的报告。Track A 和 Track B 保持独立入口，通用入口是平行的第三条路，而非替代前两者**。
+
+---
+
+#### 13.2.2 推荐的 CSV 规范（替代方案 1 + 2 的修订版）
+
+```
+规范 v1：
+- 文件格式：UTF-8 编码的 CSV，有表头行
+- 列角色分类：
+  (a) SMILES 列：内容为 SMILES 字符串，可有多列
+  (b) 数值辅助列：内容为浮点数（如温度、压力），可有多列，也可没有
+  (c) 标签列：预测目标，必须是浮点数，有且仅有一列
+  (d) 忽略列：row_id、字符串类型的分类变量等，自动跳过
+- 列角色声明方式：
+  - 优先级 1：用户通过 --smiles-cols 和 --label-col 显式声明
+  - 优先级 2：自动探测（SMILES 列：RDKit 解析成功率>50%；标签列：最后一列浮点数）
+- 合法性验证：
+  - 软验证：打印每列的 SMILES 有效率、NaN 比例，不阻断运行
+  - 硬验证：标签列有效值数量 < 10 时报错退出（样本太少）
+```
+
+---
+
+#### 13.2.3 推荐的架构方案
+
+```
+YONOD/
+├── run_yield_prediction.py   # Track A 专用，保持不变
+├── run_ecc_prediction.py     # Track B 专用，保持不变
+├── run_yonod.py              # [新建] 通用入口，接受任意合规 CSV
+└── yonod_yield/
+    ├── universal/            # [新建子包] 通用化专属代码
+    │   ├── csv_loader.py     # 通用 CSV 加载器（含列角色探测逻辑）
+    │   ├── feature_builder.py  # 通用特征构建（SMILES 拼接 + 数值列归一化）
+    │   └── report.py         # 通用报告生成（含化学语言指标解释）
+    ├── descriptors/          # 保持不变（Track A/B/通用共享）
+    ├── models/               # 保持不变
+    └── evaluate.py           # 保持不变（通用评估循环可在此扩展）
+```
+
+核心原则：**通用化代码完全放在新子包 `yonod_yield/universal/` 中，对现有代码零侵入**。Track A 和 B 的现有脚本和子模块完全不修改。
+
+---
+
+#### 13.2.4 `run_yonod.py` 的接口设计
+
+```
+# 最简用法（2列 CSV，自动探测）：
+python run_yonod.py --csv my_data.csv
+
+# 多 SMILES 列 + 指定标签：
+python run_yonod.py --csv ecc.csv --smiles-cols Ligand_SMILES Product_SMILES --label-col "∆∆G"
+
+# 含数值辅助列：
+python run_yonod.py --csv ecc.csv --smiles-cols Ligand_SMILES Product_SMILES --numeric-cols "Temp (K)" --label-col "∆∆G"
+
+# 向导模式（交互式引导，适合演示和初学者）：
+python run_yonod.py --wizard
+
+# 指定任务名称（用于报告标题）：
+python run_yonod.py --csv my_data.csv --task-name "溶解度预测"
+```
+
+---
+
+#### 13.2.5 Track B 兼容性专项说明
+
+Track B（ECC 数据集）的温度特征是本次讨论的核心争议点。推荐的处理方式是：
+
+- 通用入口 `run_yonod.py` 通过 `--numeric-cols "Temp (K)"` 接受温度列，描述符化后将其 z-score 标准化，**在每个 CV 折的训练集上 fit 标准化参数，在测试集上 transform**（防止数据泄露），然后拼接到 SMILES 描述符特征矩阵末尾。
+- 这与 Track B 现有的 `build_ecc_features()` 实现逻辑完全一致，已经在 ECC 数据集上验证可行。
+- 不需要为温度设计任何特殊处理逻辑，它就是一个普通的数值辅助列。
+
+---
+
+#### 13.2.6 实施优先级建议
+
+考虑到大创项目的时间窗口，通用化重构建议分三个优先级执行：
+
+| 优先级 | 任务 | 工作量估计 | 价值 |
+|---|---|---|---|
+| P0（立即做）| 完善报告中的化学语言指标解释（方案 5）| 约 2 小时（仅改 HTML 模板文字）| 大创汇报直接受益，零风险 |
+| P1（本周）| 新建 `csv_loader.py` + 最简版 `run_yonod.py`（支持任意 SMILES 列数 + 可选数值列）| 约 1 天 | 显著提升项目通用性 |
+| P2（可选）| 增加 `--wizard` 交互向导模式 | 约 半天 | 演示价值高，但功能性无增益 |
+
+Track A 和 B 的现有功能在整个重构过程中保持不变，P1 完成后可立即验证通用入口能否接受酰胺缩合 CSV（2 个 SMILES 列）和 ECC CSV（2 个 SMILES + 温度）。
+
+---
+
+### 13.3 小结
+
+5 条方案的整体方向是正确的，主要问题集中在方案 1（温度限制过严，与 Track B 存在直接矛盾）和方案 2（标签列位置固定太脆弱）。修订后的建议是：**以"列角色声明"替代"列位置约定"，以"软验证"替代"硬拒绝"，以"CLI + 可选向导模式"替代"纯交互式"，以"通用入口并行"替代"合并改写现有脚本"**。如此既获得了通用性，又保护了已经验证可用的 Track A 和 Track B 代码资产。
+
+---
+
+## 十四、通用化重构——确认方案与实施计划
+
+> 文档版本：v0.4（2026-05-25）
+> 本节是第十三节讨论的最终确认版，包含用户逐条反馈后的技术收敛结论、伪代码规范、CLI 参数规范、BAT 交互流程以及文件变更清单。
+
+---
+
+### 14.1 五条方案最终确认状态
+
+| # | 方案 | 状态 | 关键修订点 |
+|---|---|---|---|
+| 方案 1 | 数值辅助列归一化 | **确认，有重要细化** | 仅对数值辅助列做 z-score；SMILES 描述符矩阵原样保留；必须在每个 CV fold 内 fit scaler（见 §14.2） |
+| 方案 2 | 列角色声明方式 | **确认，改为显式 CLI 优先** | `--label-col` 和 `--smiles-cols` 显式指定；不提供时走自动探测（见 §14.3） |
+| 方案 3 | 多 SMILES 列拼接 | **无异议，直接确认** | 所有 SMILES 列独立描述符化后横向 hstack，与 Track A 逻辑一致 |
+| 方案 4 | 入口与交互方式 | **确认，改为 run_yonod.py + yonod.bat** | 先建 `run_yonod.py`（CLI），再建 `yonod.bat`（交互式拼接命令）（见 §14.4） |
+| 方案 5 | 报告格式 | **无异议，直接确认** | 4×4 结果表 + 化学语言指标解释 + 加权排名推荐，实现于 `report.py`（见 §14.5） |
+
+---
+
+### 14.2 数值列归一化：技术分析与确认方案
+
+#### 14.2.1 当前做法的隐患定量分析
+
+Track B 将温度（233～353 K）直接裸拼接在描述符后，未做任何归一化。以下是各描述符的量纲对比：
+
+| 描述符 | 典型分量值域 | 代表均值 | 273K / 代表均值 |
+|---|---|---|---|
+| Morgan ECFP4 | {0, 1}，bit 激活率约 1%～5% | ≈ 0.03 | **≈ 9100 倍** |
+| MACCS（ATMOMACCS） | {0, 1}，333 维 | ≈ 0.05 | **≈ 5460 倍** |
+| FISD | L2 归一化，约 0.01～0.1 | ≈ 0.05 | **≈ 5460 倍** |
+| MolMetaLM | L2 归一化，约 0.01～0.1 | ≈ 0.05 | **≈ 5460 倍** |
+
+**实际危害**：
+- 树模型（XGBoost、RF）做节点分裂时，温度这一维度的信息增益会完全压倒所有分子描述符维度。模型实际上只在"温度高低"上做判断，分子结构信息几乎无法被利用。
+- SVM RBF 核对欧氏距离极度敏感。两个样本之间的距离由 `||x_i - x_j||²` 决定。若温度差为 20K，则 `(20)² = 400`，而 FISD 全维度距离估计仅约 `0.05² × 50 ≈ 0.125`。即 **温度单维度的距离贡献是整个分子描述符向量的 3200 倍**，核函数将由温度差单独决定。
+
+#### 14.2.2 五种候选方案对比
+
+| 方案 | 做法 | 对位指纹的影响 | 对 L2 归一化向量的影响 | 对温度的效果 | 结论 |
+|---|---|---|---|---|---|
+| A：仅温度 z-score | 对温度列单独标准化 | 无影响 | 无影响 | 消除量纲，均值 0 方差 1 | 正确，是方案 E 的核心部分 |
+| B：温度 min-max [0,1] | 线性缩放到 0～1 | 无影响 | 无影响 | 与位指纹值域对齐 | 可用，但对训练集范围外的温度无法外推 |
+| C：温度 min-max 到描述符值域 | 需先测量描述符值域 | 无影响 | 无影响 | 理论上最完美 | 实现繁琐，且描述符"值域"语义不清 |
+| D：拼接后全局 z-score | 对整个特征向量做 z-score | **破坏稀疏性**：0 变成非零 | **破坏 L2 球面几何** | 消除量纲 | **不推荐**，副作用远大于收益 |
+| E：自适应（位指纹不动，数值列 z-score） | 只对数值辅助列做 z-score | 完全不动 | 完全不动 | 消除量纲 | **推荐** |
+
+**补充说明（FISD/MolMetaLM 为何不需要额外 z-score）**：这两类描述符已经过 L2 归一化（每个向量的模为 1），各分量的量级在 0.01～0.1 之间，相互之间已经对齐，不存在量纲不一致问题。如果强行对它们再做 z-score，会破坏向量在 L2 球面上的几何关系，可能损害 SVM RBF 核的相似度计算。
+
+#### 14.2.3 确认方案：仅对数值辅助列做 z-score
+
+**规则**：
+1. SMILES 描述符矩阵（`X_smiles`，无论是 Morgan/MACCS/FISD/MolMetaLM）：原样保留，不做任何归一化。
+2. 数值辅助列矩阵（`X_numeric`，如温度）：在每个 CV fold 的训练集上 fit `StandardScaler`，对训练集和测试集分别 transform。
+3. 最终特征矩阵：`X = hstack([X_smiles, X_numeric_scaled])`，数值列在末尾。
+4. 若没有数值辅助列（`--numeric-cols` 未指定），则 `X = X_smiles`，无需任何 scaler 逻辑。
+
+#### 14.2.4 KFold CV 循环中的正确实现（防数据泄露伪代码）
+
+```python
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+# 前置假设：
+# X_smiles : np.ndarray, shape (n, d_desc)    -- 描述符矩阵，原样保留
+# X_numeric: np.ndarray, shape (n, k) or None -- 数值辅助列（如温度），k >= 1
+# y        : np.ndarray, shape (n,)           -- 标签列
+# model    : sklearn-compatible estimator
+
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+metrics_all_folds = []
+
+for fold_idx, (train_idx, test_idx) in enumerate(kf.split(X_smiles)):
+
+    # 1. 切分描述符矩阵
+    X_smi_train = X_smiles[train_idx]   # shape (n_train, d_desc)
+    X_smi_test  = X_smiles[test_idx]    # shape (n_test,  d_desc)
+    y_train     = y[train_idx]
+    y_test      = y[test_idx]
+
+    # 2. 数值列：只在训练折上 fit，再分别 transform
+    if X_numeric is not None and X_numeric.shape[1] > 0:
+        scaler = StandardScaler()                                  # 每折新建，不复用
+        X_num_train = scaler.fit_transform(X_numeric[train_idx])  # fit 只看训练折
+        X_num_test  = scaler.transform(X_numeric[test_idx])       # 测试折只 transform
+        X_train = np.hstack([X_smi_train, X_num_train])
+        X_test  = np.hstack([X_smi_test,  X_num_test])
+    else:
+        X_train = X_smi_train
+        X_test  = X_smi_test
+
+    # 3. SVM 子采样（如果启用）：在归一化之后进行
+    if model_name == "svm" and subsample_n is not None:
+        rng = np.random.default_rng(seed=fold_idx)               # 折级别固定种子
+        sub_idx = rng.choice(len(X_train), size=min(subsample_n, len(X_train)), replace=False)
+        X_train_fit = X_train[sub_idx]
+        y_train_fit = y_train[sub_idx]
+    else:
+        X_train_fit = X_train
+        y_train_fit = y_train
+
+    # 4. 训练和评估
+    model.fit(X_train_fit, y_train_fit)
+    y_pred = model.predict(X_test)
+    metrics_all_folds.append(compute_metrics(y_test, y_pred))
+
+# 注意事项：
+# - scaler 在 enumerate 循环内部创建，每折独立，绝不能在循环外 fit
+# - test_idx 对应的行从未参与任何 scaler.fit_transform() 调用
+# - subsample_n 只影响 model.fit 的训练样本，不影响 scaler 的统计量和测试集评估
+```
+
+---
+
+### 14.3 CLI 参数规范
+
+#### 14.3.1 `run_yonod.py` 完整 CLI 参数列表
+
+```
+python run_yonod.py [OPTIONS]
+
+必选参数：
+  --csv <路径>                  输入数据集 CSV 文件路径
+
+列角色声明（可选，不提供时走自动探测）：
+  --label-col <列名>            标签列名（预测目标）
+  --smiles-cols <列名> [...]    SMILES 列名，可指定多个，空格分隔
+  --numeric-cols <列名> [...]   数值辅助列名，可指定多个，空格分隔（可不填）
+
+任务控制：
+  --task-name <名称>            任务名称，用于报告标题（默认：csv 文件名去后缀）
+  --descriptors <名称> [...]    选用的描述符，可选 morgan maccs fisd molmetalm（默认：全选）
+  --models <名称> [...]         选用的模型，可选 xgboost rf svm autogluon（默认：全选）
+  --smiles-threshold <float>    自动探测 SMILES 列时的有效率阈值（默认：0.5）
+  --output-dir <路径>           结果输出目录（默认：results/<task-name>/）
+
+兼容 Track A 的参数（透传给内部评估循环）：
+  --append                      追加写入 metrics_summary.csv（不覆盖已有结果）
+  --log-file <路径>             日志文件路径
+  --heartbeat <秒>              心跳打印间隔
+  --svm-subsample <N>           SVM 训练子采样数量（默认：8000）
+```
+
+#### 14.3.2 不提供 `--smiles-cols` 时的自动探测逻辑
+
+```python
+def auto_detect_smiles_cols(df: pd.DataFrame, label_col: str, threshold: float = 0.5) -> list[str]:
+    """
+    对 df 中除 label_col 之外的每一列，随机抽样 50 行，
+    用 RDKit 解析，有效率 > threshold 则认定为 SMILES 列。
+    """
+    from rdkit import Chem
+    import random
+
+    candidate_cols = [c for c in df.columns if c != label_col]
+    smiles_cols = []
+
+    for col in candidate_cols:
+        non_null_vals = df[col].dropna().astype(str).tolist()
+        if len(non_null_vals) == 0:
+            continue
+        sample = random.sample(non_null_vals, min(50, len(non_null_vals)))
+        valid_count = sum(1 for s in sample if Chem.MolFromSmiles(s) is not None)
+        valid_rate = valid_count / len(sample)
+        if valid_rate > threshold:
+            smiles_cols.append(col)
+            print(f"[自动探测] 列 '{col}' 有效 SMILES 率 {valid_rate:.1%}，纳入 SMILES 列")
+        else:
+            print(f"[自动探测] 列 '{col}' 有效 SMILES 率 {valid_rate:.1%}，跳过")
+
+    if not smiles_cols:
+        raise ValueError(
+            "自动探测未找到任何 SMILES 列（有效率均低于阈值）。"
+            "请用 --smiles-cols 手动指定，或调低 --smiles-threshold。"
+        )
+    return smiles_cols
+```
+
+不提供 `--label-col` 时的自动推断逻辑：取 DataFrame 中最后一列且 `dtype` 为 float64/float32 的列，并打印警告"自动推断标签列为 [列名]，如有误请用 --label-col 显式指定"。若最后一列不是浮点型，报错退出。
+
+---
+
+### 14.4 BAT 交互流程与脚本
+
+#### 14.4.1 可行性确认
+
+方案完全可行：`.bat` 文件通过 `set /p` 收集用户输入，拼接为 `python run_yonod.py ...` 命令，再调用 `conda activate` 后执行。唯一需要注意的是 conda 的激活方式：在 bat 中必须用 `call conda activate` 而非直接 `conda activate`，否则 conda 激活只影响子进程而不影响当前 bat 进程。
+
+#### 14.4.2 交互步骤说明
+
+| 步骤 | 提示内容 | 备注 |
+|---|---|---|
+| 1 | 请输入数据集 CSV 路径（可直接拖拽文件到窗口） | 支持带空格路径，自动加引号 |
+| 2 | 请输入标签列名（如 yield、ee、delta_G） | 必填 |
+| 3 | 请输入 SMILES 列名，多列用空格分隔（留空则自动探测） | 可选 |
+| 4 | 请输入数值辅助列名，多列用空格分隔（无则留空） | 可选，留空表示无数值列 |
+| 5 | 请输入任务名称（用于报告标题，如 酰胺缩合） | 可选，留空使用 CSV 文件名 |
+| 6 | 选择描述符：morgan maccs fisd molmetalm（多选空格分隔，留空=全选） | 可选 |
+| 7 | 选择模型：xgboost rf svm autogluon（多选空格分隔，留空=全选） | 可选 |
+| 8 | 打印将要执行的完整命令（供用户核对） | 执行前确认 |
+| 9 | 执行命令，执行完毕后 pause | 等待用户看到结果后再关闭窗口 |
+
+#### 14.4.3 `yonod.bat` 完整脚本
+
+```bat
+@echo off
+chcp 65001 > nul
+title YONOD 通用化入口
+
+echo.
+echo =====================================================
+echo   YONOD - Your One-stop Notebook Of Descriptors
+echo   通用化入口向导
+echo =====================================================
+echo.
+
+:: 步骤 1：CSV 路径
+set /p CSV_PATH="[1/7] 请输入数据集 CSV 路径 (可拖拽文件): "
+:: 去掉拖拽时可能带入的首尾引号
+set CSV_PATH=%CSV_PATH:"=%
+
+:: 步骤 2：标签列名（必填）
+set /p LABEL_COL="[2/7] 请输入标签列名 (如 yield、ee、delta_G): "
+
+:: 步骤 3：SMILES 列名（可选）
+set /p SMILES_COLS="[3/7] SMILES 列名，多列空格分隔 (留空=自动探测): "
+
+:: 步骤 4：数值辅助列名（可选）
+set /p NUMERIC_COLS="[4/7] 数值辅助列名，多列空格分隔 (无则留空，如温度): "
+
+:: 步骤 5：任务名称（可选）
+set /p TASK_NAME="[5/7] 任务名称，用于报告标题 (留空=CSV 文件名): "
+
+:: 步骤 6：描述符选择（可选）
+echo [6/7] 可用描述符: morgan  maccs  fisd  molmetalm
+set /p DESCS="        多选空格分隔，留空=全选: "
+
+:: 步骤 7：模型选择（可选）
+echo [7/7] 可用模型: xgboost  rf  svm  autogluon
+set /p MODELS="        多选空格分隔，留空=全选: "
+
+:: 拼接命令
+set CMD=python run_yonod.py --csv "%CSV_PATH%" --label-col "%LABEL_COL%"
+
+if not "%SMILES_COLS%"=="" (
+    set CMD=%CMD% --smiles-cols %SMILES_COLS%
+)
+if not "%NUMERIC_COLS%"=="" (
+    set CMD=%CMD% --numeric-cols %NUMERIC_COLS%
+)
+if not "%TASK_NAME%"=="" (
+    set CMD=%CMD% --task-name "%TASK_NAME%"
+)
+if not "%DESCS%"=="" (
+    set CMD=%CMD% --descriptors %DESCS%
+)
+if not "%MODELS%"=="" (
+    set CMD=%CMD% --models %MODELS%
+)
+
+echo.
+echo =====================================================
+echo   将要执行的命令：
+echo   %CMD%
+echo =====================================================
+echo.
+pause
+
+:: 激活 conda 环境并执行
+call conda activate yonod-yield
+if %ERRORLEVEL% NEQ 0 (
+    echo [错误] conda activate yonod-yield 失败，请确认环境名称正确。
+    pause
+    exit /b 1
+)
+
+%CMD%
+
+echo.
+echo [完成] 结果已保存，按任意键关闭窗口。
+pause
+```
+
+**已知局限**：bat 的 `set /p` 对含有特殊字符（`&`、`|`、`>`、`<`）的列名处理不佳。如果列名包含这些字符，建议直接在命令行使用 `python run_yonod.py` 手动传参，不使用 bat 向导。
+
+---
+
+### 14.5 报告格式（方案 5 细化）
+
+实现位置：`yonod_yield/universal/report.py`
+
+#### 14.5.1 报告结构
+
+```
+1. 任务信息头：任务名称、CSV 路径、样本量、SMILES 列数、数值辅助列情况
+2. 4×4 结果表格（描述符 × 模型，单元格显示 R²/RMSE/MAE）
+3. 化学语言指标解释（固定文字段落）
+4. 加权排名推荐（前三名组合 + 推荐理由）
+5. 散点图 PNG 路径索引
+```
+
+#### 14.5.2 化学语言指标解释（固定文字，写入报告）
+
+```
+R²（决定系数）：取值 0～1，越接近 1 表示模型对产率变化的解释能力越强。
+  - R² > 0.85：模型具有较强的预测可靠性，可用于辅助实验设计
+  - R² 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎
+  - R² < 0.7：模型对该描述符/模型组合的拟合效果较弱
+
+RMSE（均方根误差）：与产率的量纲相同（本项目 yield 为 0~1 浮点）。
+  - RMSE < 0.05：平均预测误差约 5 个百分点，接近实验重复性误差范围
+  - RMSE 0.05～0.10：中等误差，可区分高产率和低产率区间
+  - RMSE > 0.10：误差较大，不建议用于定量预测
+
+MAE（平均绝对误差）：比 RMSE 对异常值更鲁棒，反映典型单样本的预测偏差。
+  综合排名权重建议：R²×0.5 + (1-RMSE/max_RMSE)×0.3 + (1-MAE/max_MAE)×0.2
+```
+
+#### 14.5.3 加权排名逻辑伪代码
+
+```python
+def rank_combinations(metrics_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    metrics_df 列：desc_name, model_name, r2, rmse, mae
+    返回按加权分排序的结果，附推荐理由。
+    """
+    df = metrics_df.copy()
+    max_rmse = df["rmse"].max()
+    max_mae  = df["mae"].max()
+
+    df["score"] = (
+        df["r2"]                             * 0.5 +
+        (1 - df["rmse"] / max_rmse)          * 0.3 +
+        (1 - df["mae"]  / max_mae)           * 0.2
+    )
+
+    df = df.sort_values("score", ascending=False).reset_index(drop=True)
+    df["rank"] = df.index + 1
+
+    # 自动生成推荐理由（仅对前三名）
+    for i in range(min(3, len(df))):
+        row = df.iloc[i]
+        reason_parts = []
+        if row["r2"] > 0.85:
+            reason_parts.append(f"R²={row['r2']:.3f} 解释能力强")
+        if row["rmse"] < 0.05:
+            reason_parts.append(f"RMSE={row['rmse']:.4f} 误差接近实验重复性")
+        if not reason_parts:
+            reason_parts.append(f"综合评分 {row['score']:.3f} 排名靠前")
+        df.at[i, "reason"] = "；".join(reason_parts)
+
+    return df[["rank", "desc_name", "model_name", "r2", "rmse", "mae", "score", "reason"]]
+```
+
+---
+
+### 14.6 文件新增与修改清单
+
+#### 14.6.1 新增文件
+
+| 文件路径 | 用途 | 依赖 |
+|---|---|---|
+| `run_yonod.py` | 通用化 CLI 入口（主脚本） | `yonod_yield/universal/` |
+| `yonod.bat` | Windows 交互式向导，双击执行 | `run_yonod.py`，conda 环境 `yonod-yield` |
+| `yonod_yield/universal/__init__.py` | 子包初始化 | 无 |
+| `yonod_yield/universal/csv_loader.py` | CSV 加载 + 列角色探测 | pandas，rdkit |
+| `yonod_yield/universal/feature_builder.py` | 通用特征构建（多 SMILES 拼接 + 数值列 scaler）| 现有描述符适配器 |
+| `yonod_yield/universal/report.py` | 结果报告生成（4×4 表格 + 指标解释 + 排名） | pandas，matplotlib |
+
+#### 14.6.2 现有文件（保持不变）
+
+以下文件在本次重构中**零修改**，确保 Track A 和 Track B 现有功能不受影响：
+
+| 文件 | 说明 |
+|---|---|
+| `run_yield_prediction.py` | Track A 专用入口，不动 |
+| `run_ecc_prediction.py` | Track B 专用入口，不动 |
+| `yonod_yield/features/dataset.py` | Track A 描述符化逻辑，不动 |
+| `yonod_yield/features/ecc_dataset.py` | Track B 描述符化逻辑，不动 |
+| `yonod_yield/models/` | 所有模型适配器，不动 |
+| `yonod_yield/evaluate.py` | 评估循环，不动（通用入口可直接复用） |
+| `yonod_yield/plot.py` | 绘图，不动 |
+
+#### 14.6.3 实施顺序建议
+
+```
+第1步（约 2 小时）：新建 yonod_yield/universal/ 子包
+  - __init__.py（空）
+  - csv_loader.py：auto_detect_smiles_cols() + load_csv_with_roles()
+  - 验证：单元测试 csv_loader 对酰胺缩合 CSV 和 ECC CSV 的列探测结果
+
+第2步（约 3 小时）：新建 feature_builder.py
+  - build_universal_features(smiles_cols, numeric_cols, df, desc_name) -> X_smiles, X_numeric
+  - 内部复用现有 4 个描述符适配器
+  - 验证：对两条 SMILES 手动计算，维度是否为 6×d
+
+第3步（约 2 小时）：新建 run_yonod.py
+  - 解析 CLI 参数（argparse）
+  - 调用 csv_loader → feature_builder → evaluate（复用现有）→ report
+  - 验证：python run_yonod.py --csv 数据集/酰胺缩合反应数据集.csv --label-col yield
+
+第4步（约 1 小时）：新建 yonod.bat
+  - 按 §14.4.3 模板实现
+  - 验证：双击 bat，按提示输入酰胺缩合数据集的信息，能正常执行
+
+第5步（约 2 小时）：新建 report.py
+  - 实现 4×4 表格输出（HTML + CSV 两种格式）
+  - 实现 rank_combinations() 排名函数
+  - 验证：mock 一个 metrics_df 调用 report，检查输出文字是否包含正确的指标解释
+```
+
+---
+
+### 14.7 关键技术决策汇总（供后续实现时参考）
+
+| 决策点 | 确认结论 |
+|---|---|
+| 数值列归一化时机 | 在 KFold 循环内，`train_idx` 切分之后，`model.fit` 之前 |
+| StandardScaler 实例复用 | 禁止复用，每个 fold 必须新建 `StandardScaler()` |
+| SMILES 描述符是否归一化 | 否，Morgan/MACCS/FISD/MolMetaLM 原样保留 |
+| FISD/MolMetaLM 是否额外 z-score | 否，L2 归一化已足够，强行 z-score 会破坏球面几何 |
+| SVM 子采样与 scaler 的顺序 | 先 scaler.fit_transform，再 subsample（subsample 不影响统计量） |
+| 标签列自动推断策略 | 最后一列浮点型；推断成功后打印警告，不静默执行 |
+| SMILES 列自动探测阈值 | 默认 0.5，可通过 `--smiles-threshold` 调整 |
+| bat 特殊字符局限 | 列名含 `&`/`|`/`>`/`<` 时不用 bat，直接命令行传参 |
+| Track A/B 修改量 | 零，通用化代码完全在新子包 `yonod_yield/universal/` 中 |

@@ -75,25 +75,28 @@ def _text_on(bg_r2: float) -> str:
 # ---------- report sections -------------------------------------------------
 
 
-def section_intro(now: str, n_rows: int) -> str:
+def section_intro(now: str, n_rows: int, dataset_name: str, label_name: str) -> str:
     return f"""
 <section class="intro">
-<h1>YONOD 酰胺缩合反应产率预测 — 实验报告</h1>
+<h1>YONOD 建模报告 — {_html.escape(dataset_name)}</h1>
 <p class="subtitle">
-生成时间：{now} &nbsp;|&nbsp; 评估组合数：{n_rows} &nbsp;|&nbsp; 数据集：酰胺缩合反应 47015 条
+生成时间：{now} &nbsp;|&nbsp; 数据集：<b>{_html.escape(dataset_name)}</b>
+&nbsp;|&nbsp; 标签列：<b>{_html.escape(label_name)}</b>
+&nbsp;|&nbsp; 评估组合数：{n_rows}
 </p>
 <p>
-本报告比较了 <b>4 类分子描述符</b>（Morgan ECFP4 / ATMOMACCS / FISD / MolMetaLM）与
-<b>4 类机器学习算法</b>（XGBoost / Random Forest / SVM / AutoGluon）共 16 种组合
-在酰胺键形成反应产率回归任务上的表现。
-反应级特征由 6 个分子（2 个底物 + 4 个试剂）的描述符向量拼接而成，使用 5 折交叉验证。
+本报告比较了若干 <b>分子描述符</b>（Morgan ECFP4 / ATMOMACCS / FISD / MolMetaLM）
+与 <b>机器学习算法</b>（XGBoost / Random Forest / SVM / AutoGluon）的组合
+在以 <code>{_html.escape(label_name)}</code> 为目标的回归任务上的表现，
+使用 5 折交叉验证（AutoGluon 例外，详见术语表脚注）。
 </p>
 </section>
 """
 
 
-def section_glossary() -> str:
-    return """
+def section_glossary(label_name: str) -> str:
+    label = _html.escape(label_name)
+    return f"""
 <section class="glossary">
 <h2>1 · 评价指标怎么读</h2>
 <table>
@@ -104,22 +107,21 @@ def section_glossary() -> str:
 <tr>
   <td><b>R²</b><br><small>决定系数</small></td>
   <td>通常 0 ~ 1（可能为负）</td>
-  <td>"模型解释了多少产率波动"。R²=0.87 ≈ 模型给出的预测和真实产率的相关性极强；
+  <td>"模型解释了多少 <code>{label}</code> 的波动"。R²=0.87 ≈ 模型预测与真实值相关性极强；
   R²=0.50 大致是"刚比闭眼乱猜好一倍"；R² &lt; 0 比直接取平均值还差。</td>
   <td>越接近 1 越好</td>
 </tr>
 <tr>
   <td><b>RMSE</b><br><small>均方根误差</small></td>
-  <td>与 yield 同单位（0 ~ 1）</td>
-  <td>"平均预测偏差"。RMSE=0.11 意味着典型预测偏离真实产率约 ±11 个百分点。
+  <td>与 <code>{label}</code> 同单位</td>
+  <td>"平均预测偏差"。比如 <code>{label}</code> 在 [0,1] 时 RMSE=0.11 意味着典型预测偏离真实值约 ±0.11。
   大误差被放大（平方再开方），所以对偶发预测翻车敏感。</td>
   <td>越小越好</td>
 </tr>
 <tr>
   <td><b>MAE</b><br><small>平均绝对误差</small></td>
-  <td>与 yield 同单位</td>
-  <td>"中位偏差感"。MAE=0.07 意味着多数预测距离真实值约 7 个百分点。
-  不放大极端误差，比 RMSE 更接近"日常感受"。</td>
+  <td>与 <code>{label}</code> 同单位</td>
+  <td>"中位偏差感"。MAE 比 RMSE 更接近"日常感受"，不放大极端误差。</td>
   <td>越小越好</td>
 </tr>
 <tr>
@@ -138,7 +140,7 @@ def section_glossary() -> str:
 <tr>
   <td><b>feature_dim</b></td>
   <td>整数</td>
-  <td>反应级特征维度 = 6 × 单分子描述符维度。越大表征能力越强但越易过拟合。</td>
+  <td>单分子描述符维度（Morgan 1024、ATMOMACCS 166、FISD 50、MolMetaLM 768）。越大表征能力越强但越易过拟合。</td>
   <td>—</td>
 </tr>
 </tbody>
@@ -146,8 +148,8 @@ def section_glossary() -> str:
 <p class="note">
 注：AutoGluon 采用单次 80/20 hold-out 评估（其内部已含 bagging+stacking），
 故 r2_std=0 不代表稳定性差，仅意味着没有外层 K 折方差。
-SVM 因 RBF 复杂度 O(n²) 在 47015 行上不可行，每折训练随机抽样 8000 行，
-测试集为完整 fold（结果仍可与其他模型横向比较）。
+SVM 由于 RBF 核 O(n²) 复杂度，在大数据集（n &gt; 10000）上每折训练随机抽样 8000 行，
+测试集仍为完整 fold（结果可与其他模型横向比较，但 R² 可能被低估 2~5 个百分点）。
 </p>
 </section>
 """
@@ -197,10 +199,10 @@ def section_recommendation(df: pd.DataFrame) -> str:
 
     champ = top.iloc[0]
     headline = (
-        f"<p class='headline'>🏆 <b>总冠军：{_html.escape(champ['descriptor'])} × {_html.escape(champ['model'])}</b>"
+        f"<p class='headline'>🏆 <b>总冠军：{_html.escape(str(champ['descriptor']))} × {_html.escape(str(champ['model']))}</b>"
         f"，R²={_fmt(champ['r2_mean'])}，RMSE={_fmt(champ['rmse_mean'])}，"
         f"约 {_fmt(champ['train_time_s'], 0)} 秒训练完成。"
-        f"这一组合预测产率与实验值的相关性极强，建议作为首选基线模型。</p>"
+        f"这一组合预测值与真实值的相关性极强，建议作为首选基线模型。</p>"
     )
 
     return f"""
@@ -335,9 +337,9 @@ def section_gallery(df: pd.DataFrame, results_dir: Path) -> str:
 <section class="gallery">
 <h2>5 · 散点图画廊</h2>
 <p class="note">
-横轴 = 实验测得的真实产率，纵轴 = 模型预测的产率。点越靠近对角线虚线越好。
-对角线下方的点 = 模型低估了产率；对角线上方 = 高估。如果云团扁平偏离对角线，
-说明模型只学到了产率的均值，结构信息没用上。
+横轴 = 实验真实值，纵轴 = 模型预测值。点越靠近对角线虚线越好。
+对角线下方的点 = 模型低估；对角线上方 = 高估。如果云团扁平偏离对角线，
+说明模型只学到了标签的均值，结构信息没用上。
 </p>
 <div class="grid">
 {"".join(cards)}
@@ -346,16 +348,17 @@ def section_gallery(df: pd.DataFrame, results_dir: Path) -> str:
 """
 
 
-def section_caveats() -> str:
-    return """
+def section_caveats(label_name: str) -> str:
+    label = _html.escape(label_name)
+    return f"""
 <section class="caveats">
 <h2>6 · 局限性与下一步</h2>
 <ul>
-<li><b>SVM 子采样训练</b>：RBF SVR 复杂度 O(n²)，47015 行下不可行；每折用 8000 行子采样训练。SVM 的 R² 因此可能被低估 2~5 个百分点，是已知偏差。</li>
+<li><b>SVM 子采样训练</b>：RBF SVR 复杂度 O(n²)，在 n &gt; 10000 时不可行；每折用 8000 行子采样训练。SVM 的 R² 因此可能被低估 2~5 个百分点，是已知偏差。</li>
 <li><b>AutoGluon 评估口径</b>：用了单次 80/20 hold-out 而非 5 折，速度上更可控但 r2_std 不可比；公平比较时应只看 R² 均值。</li>
-<li><b>MolMetaLM 表现意外偏低</b>：可能是其预训练域偏向药物分子性质，与反应产率任务不直接对齐；fine-tune 后可能有显著提升，留作后续工作。</li>
-<li><b>没有外部验证集</b>：所有结果来自内部 CV/holdout；理想情况下应在课题组未参与训练的新反应上做盲测。</li>
-<li><b>DFT / HSPOC 描述符未纳入</b>：本数据集无 Gaussian log 文件 + 算力受限。若未来有 DFT 数据可作为第 5 类描述符接入。</li>
+<li><b>MolMetaLM 嵌入未 fine-tune</b>：Llama 预训练域不一定与 <code>{label}</code> 任务对齐；fine-tune 后可能有显著提升，留作后续工作。</li>
+<li><b>没有外部验证集</b>：所有结果来自内部 CV/holdout；理想情况下应在未参与训练的新样本上做盲测。</li>
+<li><b>DFT / HSPOC 描述符未纳入</b>：DFT 需要 Gaussian log 文件，HSPOC 需要 COSMO-RS 软件，二者均为算力/许可限制。</li>
 </ul>
 </section>
 """
@@ -373,13 +376,31 @@ def parse_args() -> argparse.Namespace:
                    help="Directory containing metrics_summary.csv and scatter_*.png")
     p.add_argument("--out", type=Path, default=None,
                    help="Output HTML path (default: <results-dir>/report.html)")
+    p.add_argument("--dataset-name", type=str, default=None,
+                   help="Title prefix; defaults to results-dir's folder name")
+    p.add_argument("--label-name", type=str, default="label",
+                   help="Name of the regression target (used in glossary text)")
     return p.parse_args()
+
+
+def _infer_dataset_name(results_dir: Path, override: Optional[str]) -> str:
+    if override:
+        return override
+    # results_dir like ".../results/<csv_stem>建模报告" -- strip the suffix.
+    name = results_dir.name
+    for suffix in ("建模报告", "_report", "report"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)].rstrip("_- ")
+            break
+    return name or "dataset"
 
 
 def main() -> int:
     args = parse_args()
     results_dir: Path = args.results_dir
     out_path: Path = args.out or (results_dir / "report.html")
+    dataset_name = _infer_dataset_name(results_dir, args.dataset_name)
+    label_name = args.label_name
 
     metrics_csv = results_dir / "metrics_summary.csv"
     if not metrics_csv.exists():
@@ -388,7 +409,6 @@ def main() -> int:
         return 1
 
     df = pd.read_csv(metrics_csv)
-    # Drop obviously failed rows (those with 'error' column populated)
     if "error" in df.columns:
         df = df[df["error"].isna() | (df["error"] == "")]
     n_rows = len(df)
@@ -400,13 +420,13 @@ def main() -> int:
 
     body = "\n".join(
         [
-            section_intro(now, n_rows),
-            section_glossary(),
+            section_intro(now, n_rows, dataset_name, label_name),
+            section_glossary(label_name),
             section_recommendation(df),
             section_heatmap(df),
             section_full_table(df),
             section_gallery(df, results_dir),
-            section_caveats(),
+            section_caveats(label_name),
         ]
     )
 
@@ -436,13 +456,13 @@ ul li { margin-bottom: .35em; }
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>YONOD 产率预测报告</title>
+<title>YONOD 建模报告 — {_html.escape(dataset_name)}</title>
 <style>{css}</style>
 </head>
 <body>
 {body}
 <footer style="margin-top:3em; padding-top:1em; border-top:1px solid #e5e7eb; color:#9ca3af; font-size:.85em;">
-YONOD v0.3 · 生成于 {now} · 自包含 HTML，全部图表已 base64 内嵌，可离线浏览。
+YONOD · 生成于 {now} · 自包含 HTML，全部图表已 base64 内嵌，可离线浏览。
 </footer>
 </body>
 </html>

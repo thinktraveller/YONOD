@@ -27,15 +27,18 @@ def plot_scatter(
     *,
     figsize: tuple = (5, 5),
     dpi: int = 120,
+    x_label: str = "True label",
+    y_label: str = "Predicted label",
 ) -> Path:
     """Render and save a prediction-vs-truth scatter plot.
 
     Args:
-        y_true: ground-truth yields, shape (n,).
+        y_true: ground-truth labels, shape (n,).
         y_pred: model predictions, shape (n,).
         desc: descriptor name (used in title and filename).
         model: model name (used in title and filename).
         save_dir: directory to save the PNG into; created if missing.
+        x_label / y_label: override axis labels for non-yield targets.
 
     Returns:
         Path to the saved PNG file.
@@ -50,8 +53,7 @@ def plot_scatter(
     ax.scatter(y_true, y_pred, s=10, alpha=0.4, edgecolor="none", color="#3b82f6")
 
     # Axis range follows observed values (incl. any negative predictions) so
-    # outliers stay visible; cropping was rejected because it would hide
-    # negative-prediction samples and mislead the chemist reading the plot.
+    # outliers stay visible.
     lo = min(float(y_true.min()), float(y_pred.min()))
     hi = max(float(y_true.max()), float(y_pred.max()))
     pad = 0.05 * (hi - lo + 1e-9)
@@ -61,8 +63,8 @@ def plot_scatter(
     ax.set_ylim(lims)
     ax.set_aspect("equal", adjustable="box")
 
-    ax.set_xlabel("True yield")
-    ax.set_ylabel("Predicted yield")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     # Use mathtext so R^2 renders as R-squared (not the literal caret).
     ax.set_title(f"{desc} x {model}")
     ax.text(
