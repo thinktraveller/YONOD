@@ -229,9 +229,9 @@ def parse_args() -> argparse.Namespace:
     )
     # 必选
     p.add_argument("--csv", type=Path, required=True, help="输入数据集 CSV 路径")
-    # 列角色（可选，不提供时自动探测）
-    p.add_argument("--label-col", default=None, help="标签列名")
-    p.add_argument("--smiles-cols", nargs="+", default=None, help="SMILES 列名（多列空格分隔）")
+    # 列角色（必须显式指定，不再自动探测）
+    p.add_argument("--label-col", required=True, help="标签列名（必填）")
+    p.add_argument("--smiles-cols", nargs="+", required=True, help="SMILES 列名，多列空格分隔（必填）")
     p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
     # 任务控制
     p.add_argument("--task-name", default=None, help="任务名称（报告标题，默认 CSV 文件名去后缀）")
@@ -243,7 +243,6 @@ def parse_args() -> argparse.Namespace:
         "--models", nargs="+", default=_MODEL_NAMES,
         choices=_MODEL_NAMES, help="选用模型"
     )
-    p.add_argument("--smiles-threshold", type=float, default=0.5, help="SMILES 自动探测有效率阈值")
     p.add_argument("--output-dir", type=Path, default=None, help="结果输出目录")
     p.add_argument("--cv", type=int, default=5, help="K-Fold 的 K 值")
     p.add_argument("--nrows", type=int, default=None, help="仅读取前 N 行（调试用）")
@@ -322,7 +321,6 @@ def main() -> int:
         smiles_cols=args.smiles_cols,
         numeric_cols=args.numeric_cols or [],
         label_col=args.label_col,
-        smiles_threshold=args.smiles_threshold,
         nrows=args.nrows,
     )
     df = dataset.df

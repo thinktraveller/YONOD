@@ -14,6 +14,23 @@
 
 ### Fixed
 
+**yonod.py v2 + run_yonod.py：交互向导重构，列必须显式指定**
+- **yonod.py 重构**：
+  - 加载 CSV 后显示带字母序号（A/B/C…）和数字序号（1/2/3…）的列索引表，用户可通过**列名 / 单字母 / 序号**三种方式指定任意列，每种方式均有正则验证
+  - **标签列**：单列必填，`_RE_LETTER` / `_RE_NUMBER` 解析后回显确认
+  - **SMILES 列**：多列必填（至少一列），空格分隔，自动去重并检查与标签列的重叠
+  - **数值辅助列**：多列可选，同上
+  - **任务名称**：必填，`_RE_TASK = ^[A-Za-z0-9_\-]+$` 强制英文，不通过则循环重新输入
+  - **输出目录**：放在任务名称之后询问；默认值为 `<脚本目录>/result/<task_name>`，自动提示给用户，直接回车接受
+  - **描述符 / 模型**：可选，输入非法值时打印警告并过滤，不中断流程
+  - 执行前打印等效命令预览，按 Enter 确认后调用 `run_yonod.main()`
+- **run_yonod.py 变更**：
+  - `--label-col` 改为 `required=True`（原为 `default=None` 允许自动推断）
+  - `--smiles-cols` 改为 `required=True`（原为 `default=None` 允许自动探测）
+  - 移除 `--smiles-threshold` 参数（自动探测路径已关闭，阈值参数无意义）
+  - `load_csv_with_roles()` 调用移除 `smiles_threshold` 关键字参数
+- **迁移说明**：直接使用 `run_yonod.py` 的命令行调用需补充 `--label-col` 和 `--smiles-cols`，否则 argparse 报错退出
+
 **yonod.py：以 Python 交互脚本替代 yonod.bat**
 - **动机**：`yonod.bat` 经三轮修复后仍因 cmd.exe 变量展开时序、括号解析、编码等问题频繁报错；根本原因是 cmd.exe 脚本语言本身的解析缺陷无法通过修补彻底消除
 - **替代方案**：新建 `yonod.py`，使用标准 Python `input()` 完成全部 8 步交互，构建参数列表后直接调用 `run_yonod.main()`（不经过 shell），无需 conda activate 命令、无编码问题、无特殊字符限制
