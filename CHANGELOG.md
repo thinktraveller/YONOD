@@ -14,6 +14,12 @@
 
 ### Fixed
 
+**yonod.py v3：标签列数值验证 + SMILES 列 RDKit 全量验证**
+- **标签列验证**（`_validate_label`）：用户确认标签列后立即对全量数据执行 `pd.to_numeric(errors='coerce')`；首个原始非空但转换失败的格子报错 `第 N 列（列名：'col'）第 M 行的值 'xxx' 不是数值` 并退出脚本（行号 = CSV 物理行号，表头为第 1 行）
+- **SMILES 列验证**（`_validate_smiles`）：用户确认 SMILES 列后对每列逐行调用 `Chem.MolFromSmiles()`；首个解析失败的格子报错 `第 N 列（列名：'col'）第 M 行的值 'xxx' 不是有效的 SMILES` 并退出脚本；RDKit 未安装时仅打印警告，不中断流程
+- **加载时机调整**：CSV 在路径确认后立即完整加载（不再仅读表头），两次验证复用同一 DataFrame，避免重复 IO
+- **辅助函数** `_col_display(col, columns)`：统一生成 `第 N 列（列名：'col'）` 格式，供两个验证函数共用
+
 **yonod.py v2 + run_yonod.py：交互向导重构，列必须显式指定**
 - **yonod.py 重构**：
   - 加载 CSV 后显示带字母序号（A/B/C…）和数字序号（1/2/3…）的列索引表，用户可通过**列名 / 单字母 / 序号**三种方式指定任意列，每种方式均有正则验证

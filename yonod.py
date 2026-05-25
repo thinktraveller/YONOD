@@ -2,6 +2,7 @@
 
 双击或在终端运行 `python yonod.py`，按提示填写参数后自动调用 run_yonod.main()。
 列可通过列名、字母（A/B/C…）或序号（1/2/3…）三种方式指定。
+指定列后会立即对标签列（数值性）和 SMILES 列（RDKit 可解析性）做全量验证。
 """
 
 from __future__ import annotations
@@ -15,9 +16,9 @@ import pandas as pd
 
 # ── 正则常量 ─────────────────────────────────────────────────────────────────
 
-_RE_LETTER  = re.compile(r'^[A-Za-z]$')          # 单个字母（列代号）
-_RE_NUMBER  = re.compile(r'^\d+$')               # 纯数字（1-based 序号）
-_RE_TASK    = re.compile(r'^[A-Za-z0-9_\-]+$')   # 任务名：仅英文字母/数字/下划线/连字符
+_RE_LETTER = re.compile(r'^[A-Za-z]$')          # 单个字母（列代号）
+_RE_NUMBER = re.compile(r'^\d+$')               # 纯数字（1-based 序号）
+_RE_TASK   = re.compile(r'^[A-Za-z0-9_\-]+$')   # 任务名：仅英文字母/数字/下划线/连字符
 
 
 # ── 基础输入 ─────────────────────────────────────────────────────────────────
@@ -31,7 +32,6 @@ def _input(prompt: str) -> str:
 
 
 def _ask_required(prompt: str) -> str:
-    """循环询问直到用户输入非空内容。"""
     while True:
         val = _input(prompt + ": ")
         if val:
@@ -40,7 +40,6 @@ def _ask_required(prompt: str) -> str:
 
 
 def _ask_optional(prompt: str, default: str = "") -> str:
-    """可选输入；直接回车返回 default。"""
     hint = f" [默认: {default}]" if default else " [留空跳过]"
     val = _input(prompt + hint + ": ")
     return val if val else default
@@ -49,7 +48,6 @@ def _ask_optional(prompt: str, default: str = "") -> str:
 # ── 列解析 ───────────────────────────────────────────────────────────────────
 
 def _show_columns(columns: list) -> None:
-    """打印列名及其字母/序号索引。"""
     print()
     print("  列序号  列名")
     print("  ------  ----")
@@ -61,16 +59,13 @@ def _show_columns(columns: list) -> None:
 
 def _resolve_one(token: str, columns: list) -> str | None:
     """将单个 token 解析为列名。支持：列名 / 字母 A-Z / 1-based 数字。"""
-    # 精确列名匹配
     if token in columns:
         return token
-    # 单字母 → 列索引
     if _RE_LETTER.match(token):
         idx = ord(token.upper()) - ord('A')
         if 0 <= idx < len(columns):
             return columns[idx]
         return None
-    # 纯数字 → 1-based 索引
     if _RE_NUMBER.match(token):
         idx = int(token) - 1
         if 0 <= idx < len(columns):
@@ -80,56 +75,90 @@ def _resolve_one(token: str, columns: list) -> str | None:
 
 
 def _ask_single_col(prompt: str, columns: list, required: bool = True) -> str | None:
-    """询问单列；支持列名/字母/数字。required=True 时不允许留空。"""
     while True:
-        if required:
-            raw = _ask_required(prompt)
-        else:
-            raw = _ask_optional(prompt)
-            if not raw:
-                return None
-
-        token = raw.strip()
-        if not token:
-            if not required:
-                return None
-            print("  [错误] 此项为必填。")
-            continue
-
-        result = _resolve_one(token, columns)
+        raw = _ask_required(prompt) if required else _ask_optional(prompt)
+        if not raw:
+            return None
+        result = _resolve_one(raw.strip(), columns)
         if result is None:
-            print(f"  [错误] 无法识别 '{token}'，请输入列名、字母（如 B）或序号（如 2）。")
+            print(f"  [错误] 无法识别 '{raw}'，请输入列名、字母（如 B）或序号（如 2）。")
             continue
         return result
 
 
 def _ask_multi_cols(prompt: str, columns: list, required: bool = True) -> list:
-    """询问多列（空格分隔）；required=True 时至少需要一列。"""
     while True:
-        if required:
-            raw = _ask_required(prompt + "（空格分隔多列）")
-        else:
-            raw = _ask_optional(prompt + "（空格分隔多列）")
-            if not raw:
-                return []
-
+        raw = _ask_required(prompt + "（空格分隔多列）") if required \
+              else _ask_optional(prompt + "（空格分隔多列）")
+        if not raw:
+            return []
         tokens = raw.split()
-        resolved = []
-        bad = []
+        resolved, bad = [], []
         for t in tokens:
             r = _resolve_one(t, columns)
-            if r is None:
-                bad.append(t)
-            elif r not in resolved:
-                resolved.append(r)
-
+            (bad if r is None else resolved).append(r if r else t)
         if bad:
             print(f"  [错误] 以下标识无法解析：{bad}。请用列名、字母或序号。")
             continue
+        resolved = list(dict.fromkeys(resolved))  # 去重保序
         if required and not resolved:
             print("  [错误] 至少需要指定一列。")
             continue
         return resolved
+
+
+# ── 数据验证 ─────────────────────────────────────────────────────────────────
+
+def _col_display(col: str, columns: list) -> str:
+    """返回 '第N列（列名：col）' 格式的列说明。"""
+    idx = columns.index(col) + 1
+    return f"第 {idx} 列（列名：'{col}'）"
+
+
+def _validate_label(df: pd.DataFrame, label_col: str, columns: list) -> None:
+    """检查标签列所有非空值是否可转换为数值；发现第一个异常行则退出。"""
+    print(f"  [验证] 检查标签列 '{label_col}' 的数值合法性 ...")
+    series = df[label_col]
+    numeric = pd.to_numeric(series, errors="coerce")
+    # 原始非空但转换后为 NaN → 非数值
+    bad_mask = numeric.isna() & series.notna()
+    if bad_mask.any():
+        # idxmax() 返回 DataFrame 原始行索引（0-based），显示时 +2（表头占第1行）
+        raw_idx = int(bad_mask.idxmax())
+        display_row = raw_idx + 2
+        bad_val = series.iloc[raw_idx]
+        col_desc = _col_display(label_col, columns)
+        print(f"\n  [错误] {col_desc} 第 {display_row} 行的值 '{bad_val}' 不是数值。")
+        print("         标签列必须为整数或浮点数，请检查数据后重新运行。")
+        sys.exit(1)
+    print(f"  [验证] 标签列 '{label_col}' 全量数值验证通过（共 {len(df)} 行）。")
+
+
+def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None:
+    """用 RDKit 逐行检查 SMILES 列；发现第一个无效 SMILES 则退出。
+    RDKit 未安装时仅打印警告，不中断流程。
+    """
+    try:
+        from rdkit import Chem
+        from rdkit import RDLogger
+        RDLogger.DisableLog("rdApp.*")
+    except ImportError:
+        print("  [警告] RDKit 未安装，跳过 SMILES 格式验证。")
+        return
+
+    n = len(df)
+    for col in smiles_cols:
+        col_desc = _col_display(col, columns)
+        print(f"  [验证] 检查 SMILES 列 '{col}'（{n} 行）...")
+        for raw_idx, val in enumerate(df[col]):
+            if pd.isna(val):
+                continue
+            if Chem.MolFromSmiles(str(val)) is None:
+                display_row = raw_idx + 2
+                print(f"\n  [错误] {col_desc} 第 {display_row} 行的值 '{val}' 不是有效的 SMILES。")
+                print("         请检查数据（是否有乱码、截断或占位符）后重新运行。")
+                sys.exit(1)
+        print(f"  [验证] SMILES 列 '{col}' 全量验证通过。")
 
 
 # ── 主流程 ───────────────────────────────────────────────────────────────────
@@ -138,7 +167,7 @@ def main() -> None:
     print()
     print("=" * 60)
     print("  YONOD - Your One-stop Notebook Of Descriptors")
-    print("  通用交互向导  v2")
+    print("  通用交互向导  v3")
     print("=" * 60)
     print()
 
@@ -152,18 +181,21 @@ def main() -> None:
             continue
         break
 
-    # 加载 CSV 仅读取表头
-    try:
-        df_head = pd.read_csv(csv_path, encoding="utf-8-sig", nrows=0)
-    except Exception:
+    # 加载完整 CSV（用于后续验证）
+    print("  正在读取 CSV ...")
+    df: pd.DataFrame | None = None
+    for enc in ("utf-8-sig", "gbk"):
         try:
-            df_head = pd.read_csv(csv_path, encoding="gbk", nrows=0)
-        except Exception as exc:
-            print(f"  [错误] 无法读取 CSV：{exc}")
-            sys.exit(1)
+            df = pd.read_csv(csv_path, encoding=enc)
+            break
+        except Exception:
+            continue
+    if df is None:
+        print("  [错误] 无法以 UTF-8 或 GBK 编码读取该 CSV，请检查文件格式。")
+        sys.exit(1)
 
-    columns: list = list(df_head.columns)
-    print(f"  已检测到 {len(columns)} 列：")
+    columns: list = list(df.columns)
+    print(f"  已读取 {len(df)} 行 × {len(columns)} 列")
     _show_columns(columns)
 
     # ── 2. 标签列（单列，必填）──────────────────────────────────────────────
@@ -171,13 +203,13 @@ def main() -> None:
     print("      支持：列名  /  字母（如 B）  /  序号（如 2）")
     label_col = _ask_single_col("  标签列", columns, required=True)
     print(f"  → 标签列确认：'{label_col}'")
+    _validate_label(df, label_col, columns)
     print()
 
     # ── 3. SMILES 列（多列，必填）───────────────────────────────────────────
     print("[3/8] SMILES 列（分子结构列，至少指定一列）")
     print("      支持：列名 / 字母 / 序号，多列用空格分隔")
     smiles_cols = _ask_multi_cols("  SMILES 列", columns, required=True)
-    # 不允许与标签列重叠
     if label_col in smiles_cols:
         smiles_cols.remove(label_col)
         print(f"  [警告] 标签列 '{label_col}' 已从 SMILES 列中移除。")
@@ -185,13 +217,13 @@ def main() -> None:
         print("  [错误] SMILES 列不能全为标签列，请重新运行并指定正确的列。")
         sys.exit(1)
     print(f"  → SMILES 列确认：{smiles_cols}")
+    _validate_smiles(df, smiles_cols, columns)
     print()
 
     # ── 4. 数值辅助列（多列，可选）──────────────────────────────────────────
     print("[4/8] 数值辅助列（温度/压力等，可选）")
     print("      支持：列名 / 字母 / 序号，多列用空格分隔")
     numeric_cols = _ask_multi_cols("  数值辅助列", columns, required=False)
-    # 去除与已使用列的重叠
     bad_numeric = [c for c in numeric_cols if c in smiles_cols or c == label_col]
     if bad_numeric:
         numeric_cols = [c for c in numeric_cols if c not in bad_numeric]
