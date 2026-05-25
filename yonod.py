@@ -134,8 +134,18 @@ def _validate_label(df: pd.DataFrame, label_col: str, columns: list) -> None:
     print(f"  [验证] 标签列 '{label_col}' 全量数值验证通过（共 {len(df)} 行）。")
 
 
+def _normalize_smiles(smi: str) -> str:
+    """将逗号分隔的阴阳离子对规范化为 RDKit 标准的点分隔形式。
+    例：'CCN=C=NCCCN(C)C,Cl' → 'CCN=C=NCCCN(C)C.Cl'
+    """
+    return smi.replace(",", ".")
+
+
 def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None:
     """用 RDKit 逐行检查 SMILES 列；发现第一个无效 SMILES 则退出。
+
+    验证前先将逗号分隔的离子对规范化为点分隔（RDKit 标准），
+    因此 'CCN=C=NCCCN(C)C,Cl' 这类试剂 SMILES 会被正确接受。
     RDKit 未安装时仅打印警告，不中断流程。
     """
     try:
@@ -153,7 +163,8 @@ def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None
         for raw_idx, val in enumerate(df[col]):
             if pd.isna(val):
                 continue
-            if Chem.MolFromSmiles(str(val)) is None:
+            normalized = _normalize_smiles(str(val))
+            if Chem.MolFromSmiles(normalized) is None:
                 display_row = raw_idx + 2
                 print(f"\n  [错误] {col_desc} 第 {display_row} 行的值 '{val}' 不是有效的 SMILES。")
                 print("         请检查数据（是否有乱码、截断或占位符）后重新运行。")
