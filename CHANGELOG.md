@@ -14,6 +14,11 @@
 
 ### Fixed
 
+**yonod.py + feature_builder.py：逗号分隔阴阳离子 SMILES 规范化**
+- **背景**：部分试剂以逗号区分阴阳离子（如 `CCN=C=NCCCN(C)C,Cl`），而 RDKit 的合法片段分隔符为 `.`；原逻辑直接调用 `Chem.MolFromSmiles()` 导致验证误报无效、描述符计算时静默丢行
+- **yonod.py**：新增 `_normalize_smiles(smi)` 辅助函数（`smi.replace(",", ".")`），在 `_validate_smiles` 中对每个值规范化后再调用 `Chem.MolFromSmiles()`，逗号分隔的离子对不再触发误报
+- **feature_builder.py**：在 `build_universal_features` 的 SMILES 列提取循环中，对 `smiles_list` 逐值执行 `s.replace(",", ".")`，确保描述符收到的 SMILES 均为合法格式，逗号分隔的行不再被 `valid_mask` 静默过滤
+
 **yonod.py v3：标签列数值验证 + SMILES 列 RDKit 全量验证**
 - **标签列验证**（`_validate_label`）：用户确认标签列后立即对全量数据执行 `pd.to_numeric(errors='coerce')`；首个原始非空但转换失败的格子报错 `第 N 列（列名：'col'）第 M 行的值 'xxx' 不是数值` 并退出脚本（行号 = CSV 物理行号，表头为第 1 行）
 - **SMILES 列验证**（`_validate_smiles`）：用户确认 SMILES 列后对每列逐行调用 `Chem.MolFromSmiles()`；首个解析失败的格子报错 `第 N 列（列名：'col'）第 M 行的值 'xxx' 不是有效的 SMILES` 并退出脚本；RDKit 未安装时仅打印警告，不中断流程
