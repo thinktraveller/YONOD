@@ -98,7 +98,7 @@ def build_universal_features(
 
     # --- 逐列计算 SMILES 描述符 ---
     col_blocks: list[np.ndarray] = []
-    row_mask = np.ones(n, dtype=bool)  # 任意列失败则行无效
+    row_mask = np.zeros(n, dtype=bool)  # 至少一列有效则行有效（空列用零向量填充）
 
     for col in smiles_cols:
         if col not in df.columns:
@@ -109,7 +109,7 @@ def build_universal_features(
                        for s in df[col].fillna("").tolist()]
         feats, mask = descriptor.featurize(smiles_list)
         col_blocks.append(feats)
-        row_mask &= mask
+        row_mask |= mask  # 任一列有效则保留该行；无效列贡献零向量
 
     # 拼接多列描述符，只保留 valid 行
     X_smiles_full = np.concatenate(col_blocks, axis=1)  # (n, n_cols * d)
