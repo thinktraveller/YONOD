@@ -14,6 +14,11 @@
 
 ### Fixed
 
+**report.py：推荐组合表格加入模型用时列**
+- `rank_combinations()`：若输入 `metrics_df` 含 `train_time_s` 列，将其保留至返回 DataFrame（列位于 `score` 与 `reason` 之间）
+- `_section_ranking()`：前三名推荐表和完整排名表新增「用时」列（`has_time` 条件渲染，不含 `train_time_s` 时自动隐藏，向后兼容）
+- 新增 `_fmt_time()` 辅助函数：秒数 < 60 显示 `3.2s`，≥ 60 显示 `1m 23s`
+
 **feature_builder.py：SMILES 行有效性判断改为「至少一列有效」**
 - **根本原因**：原逻辑对所有 SMILES 列使用**与掩码**（`row_mask &= mask`），导致任意一列为空（如可选试剂列 `additive`/`base` 留空）即将整行标记为无效并丢弃；10 行测试数据中仅 4 行全列填充，其余 6 行被误丢
 - **修复**：改为**或掩码**（`row_mask |= mask`），初始化 `row_mask = np.zeros(n, dtype=bool)`；只要一行中至少有一列含有效 SMILES 即保留该行；空列/无效列已由描述符 `featurize` 返回零向量，拼接结果正确（零向量 = 该试剂无贡献），无需额外处理
