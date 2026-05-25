@@ -14,6 +14,20 @@
 
 ### Added
 
+**通用化子包 yonod_yield/universal/（第3步，14.6.3）**
+- `run_yonod.py`：通用化 CLI 入口（267 行），完整实现 csv_loader → feature_builder → 模型评估 → metrics_summary.csv 的 pipeline
+  - 全 §14.3.1 CLI 参数：`--csv`、`--label-col`、`--smiles-cols`、`--numeric-cols`、`--task-name`、`--descriptors`、`--models`、`--smiles-threshold`、`--output-dir`、`--cv`、`--nrows`、`--append`、`--heartbeat`、`--svm-subsample` 等
+  - 无数值列时直接调用 `model.cross_validate(X_smiles, y)`，复用现有模型适配器接口
+  - 有数值列时执行 `_cv_with_numeric()`：KFold 循环内每折独立 `StandardScaler`（防数据泄露，符合 §14.2 规范）；AutoGluon 使用全局 scaler 并打印警告（已知局限）
+  - 多描述符 × 多模型 grid 自动执行，含心跳线程、时间戳镜像日志
+  - 输出目录：`results/<task-name>建模报告/`，`--append` 支持增量写入
+- 验证（冒烟）：`python run_yonod.py --csv 数据集/酰胺缩合数据集.csv --label-col yield --descriptors morgan --models rf --nrows 200`
+
+**已验证的关键行为（供后续步骤参考）**：
+- SMILES 自动探测：200 行子集中 `sub_1_smiles`/`sub_2_smiles`/`product_smiles`/`base_id`/`solvent_id` 正确纳入（5 列），`activation_id`/`additive_id` 正确排除
+- 特征矩阵：5 SMILES 列 × 1024 Morgan 维 = shape (161, 5120)
+- 指标输出与 `metrics_summary.csv` 写入正常；日志镜像文件自动创建
+
 **通用化子包 yonod_yield/universal/（第2步，14.6.3）**
 - `yonod_yield/universal/feature_builder.py`：通用特征构建器（119 行）
   - `_get_descriptor()`：按需懒加载描述符，避免 torch_geometric / HuggingFace 等重依赖在无关场景预先导入
