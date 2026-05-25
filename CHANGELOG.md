@@ -14,6 +14,32 @@
 
 ### Added
 
+**通用化子包 yonod_yield/universal/（第2步，14.6.3）**
+- `yonod_yield/universal/feature_builder.py`：通用特征构建器（119 行）
+  - `_get_descriptor()`：按需懒加载描述符，避免 torch_geometric / HuggingFace 等重依赖在无关场景预先导入
+  - `build_universal_features(smiles_cols, numeric_cols, df, desc_name)`：主入口，返回 `(X_smiles, X_numeric, valid_mask)`
+    - 多 SMILES 列描述符向量按列拼接，顺序与 `smiles_cols` 一致
+    - 数值辅助列以原始 float32 返回，**不做归一化**（归一化在 KFold 循环内逐折完成，见 §14.2）
+    - 失败行（RDKit 解析失败）通过 `valid_mask` 统一过滤，并打印 stderr 警告
+- `test_feature_builder.py`：5 个验证用例（单 SMILES 列维度 / 双列维度 = 2×d / 数值列形状 / 无效 SMILES 过滤 / 未知描述符名称报错），全部通过
+
+**已验证的关键行为（供后续步骤参考）**：
+- `morgan` 描述符：单 SMILES 列 → shape (n, 1024)；双列 → shape (n, 2048)
+- 数值列不参与归一化，`X_numeric` 原样输出 float32，shape (n, k)；无数值列时返回 `None`
+- 描述符懒加载：`morgan`/`maccs` 不依赖 PyTorch，可独立验证；`fisd`/`molmetalm` 仅在被选用时导入
+
+**通用化子包 yonod_yield/universal/（第1步，14.6.3）**
+- `yonod_yield/universal/__init__.py`：子包初始化
+- `yonod_yield/universal/csv_loader.py`：通用 CSV 加载器（205 行）
+  - `auto_detect_smiles_cols()`：对每列随机抽样 50 行用 RDKit 检测 SMILES 有效率，超过阈值（默认 0.5）则纳入 SMILES 列集合
+  - `load_csv_with_roles()`：主入口，支持显式指定或自动探测 smiles_cols / numeric_cols / label_col；标签列 NaN 行自动过滤；Windows GBK 终端 UTF-8 输出兼容
+  - `LoadedDataset` dataclass：统一返回 df + 列角色元数据
+- `test_csv_loader.py`：5 个验证用例（酰胺缩合自动探测 / 显式指定 / ECC 显式 + 温度辅助列 / ECC 自动探测 / 错误处理），全部通过
+
+**已验证的关键行为（供后续步骤参考）**：
+- 酰胺缩合数据集中 `base_id` / `solvent_id` 存储真实 SMILES，自动探测正确纳入；`activation_id` / `additive_id` 含逗号多片段 SMILES 和 `(无)` 占位符，有效率低于阈值，正确排除
+- ECC 数据集中只有 `Ligand_SMILES` / `Product_SMILES` 通过探测；`Temp (K)` 为 float 列，不被探测为 SMILES，需用户显式声明 `--numeric-cols`
+
 **Track B：Ni 催化不对称偶联 ΔΔG 预测**
 - `run_ecc_prediction.py`：ECC 专用入口，4×4 grid（2 描述符 × 4 模型），支持 `--append`、`--svm-subsample`、`--heartbeat` 等 9 个 CLI 旋钮；输出到 `results/ecc_results/`
 - `yonod_yield/features/ecc_dataset.py`：ECC 数据加载器（读取 `Raw_Dataset.csv`，提取 Ligand_SMILES / Product_SMILES / Temperature / ΔΔG，过滤无效 SMILES）
