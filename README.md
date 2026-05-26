@@ -101,7 +101,7 @@ pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 
 ### 第六步：准备数据集
 
-**酰胺缩合数据集已随仓库提供**（`dataset/amide-coupling.csv`，47015 条，**该数据集的使用遵循 MIT 协议**），克隆后可直接使用。
+**作为示例，酰胺缩合数据集已随仓库提供**（`dataset/amide-coupling.csv`，47015 条，**该数据集的使用遵循 MIT 协议**），克隆后可直接使用。
 
 ```
 YONOD/
@@ -208,28 +208,64 @@ python yonod.py
 
 ### 第八步：完整运行
 
-再次运行 `python yonod.py` 启动向导，第一步改用完整数据集、第七/八步留空全选，即可跑全量 4×4 grid（约 30～60 分钟，建议 GPU）。也可直接用 CLI：
+再次运行 `python yonod.py` 启动向导，使用完整数据集和全量 4×4 建模（约 60 ~ 120 分钟，建议 GPU）。
 
-```bash
-python yonod.py \
-    --csv dataset/amide-coupling.csv \
-    --label-col yield \
-    --smiles-cols sub_1_smiles sub_2_smiles activation_id additive_id base_id solvent_id \
-    --task-name amide-coupling
-```
-
-结果输出到 `results/amide-coupling建模报告/metrics_summary.csv`，HTML 报告见同目录。
+结果输出将默认到 `results/<task-name>/metrics_summary.csv`，HTML 报告见同目录。
 
 > **Windows 用户**：如遇中文路径问题，可将数据集复制到纯英文路径再指定 `--csv`。
-> **离线安装**见 [YONOD项目构建计划书.md §3.3](YONOD项目构建计划书.md)。
 
 ---
 
-## 主要结果
+## 示例结果
 
-### 酰胺缩合产率预测（R²，5 折 CV）
+以下数据均来自 `dataset/test-amide-coupling.csv`（**10 行**）的完整 4×4 冒烟测试，输出目录为 `result/test-7/`。
 
-| Descriptor | XGB | RF | SVM | AutoGluon |
+### 控制台输出（片段）
+
+```
+[init] 任务：smoke-test
+[load] n_rows=10  SMILES列=[7 列]  数值列=无  标签列='yield'
+[grid] 描述符=['morgan', 'maccs', 'fisd', 'molmetalm']  模型=['xgb', 'rf', 'svm', 'autogluon']  cv=5
+
+[desc] 计算描述符: morgan ...
+[desc] morgan: n_valid=10  X_smiles.shape=(10, 7168)
+[eval] 开始: morgan x xgb (1/16)
+[done] morgan x xgb (1/16)  R²=-2.6117  RMSE=0.3660  t=6.3s
+[eval] 开始: morgan x rf (2/16)
+[done] morgan x rf (2/16)  R²=-1.5438  RMSE=0.2926  t=2.2s
+...
+[done] molmetalm x autogluon (16/16)  R²=-285.2306  RMSE=0.2757  t=68.1s
+
+[save] 指标已保存: result/smoke-test/metrics_summary.csv
+[report] HTML 报告已生成: result/smoke-test/report.html
+[done] 全部完成。
+```
+
+### metrics_summary.csv — R²（5 折 CV）
+
+| 描述符 | XGB | RF | SVM | AutoGluon |
+|---|---|---|---|---|
+| morgan    | -2.612 | **-1.544** | -1.789 | -345.17 |
+| maccs     | -2.546 | -2.092 | **-1.930** | -346.30 |
+| fisd      | -6.583 | -2.071 | -3.623 | -377.40 |
+| molmetalm | -4.568 | -1.699 | -2.012 | -285.23 |
+
+> **为什么 R² 全是负值？** 10 行数据做 5 折 CV，每折测试集只有 2 个样本，R² 在此条件下极不稳定，**负值属正常现象，不代表模型有 Bug**。
+> AutoGluon 的 R² 尤其极端（约 -300），是因为它内部使用 holdout 划分，2 个样本的 holdout 结果完全随机。
+
+### report.html — 推荐组合（加权排名前三）
+
+| 名次 | 描述符 | 模型 | R² | RMSE | MAE | 综合分 | 用时 |
+|---|---|---|---|---|---|---|---|
+| 🥇 | morgan    | rf  | -1.544 | 0.2926 | 0.2777 | -0.590 | 2.2s |
+| 🥈 | molmetalm | rf  | -1.698 | 0.2912 | 0.2798 | -0.668 | 2.6s |
+| 🥉 | morgan    | svm | -1.789 | 0.2940 | 0.2807 | -0.715 | 0.1s |
+
+### 全量数据集基线（供参考）
+
+使用全量 47015 条数据集的历史实测结果（R²，5 折 CV）：
+
+| 描述符 | XGB | RF | SVM | AutoGluon |
 |---|---|---|---|---|
 | Morgan ECFP4 | 0.732 | — | 0.703 | **0.874** |
 | ATMOMACCS    | 0.740 | — | 0.685 | **0.866** |
@@ -237,8 +273,6 @@ python yonod.py \
 | MolMetaLM    | 0.696 | — | 0.581 | 0.700 |
 
 **关键发现**：AutoGluon 在 3/4 描述符上最优；FISD 在 XGB 列最优（0.771），跨域迁移有效；MolMetaLM 未经 fine-tune 效果偏弱。
-
-完整指标 + 散点图见运行后生成的 `results/<task-name>/report.html` 和 `results/<task-name>/metrics_summary.csv`。
 
 ---
 
@@ -328,12 +362,9 @@ YONOD/
 
 仓库**不包含**以下文件（体积大或含第三方 LICENSE），需要单独获取：
 
-| 资产 | 是否随仓库提供 | 默认放置路径 | 获取方式 |
-|---|---|---|---|
-| 酰胺缩合数据集 `amide-coupling.csv`（47015 条）| ✅ 仓库已含（MIT） | `dataset/` | 直接 `git clone` 即获得 |
-| 酰胺缩合样本 `test-amide-coupling.csv`（10 条）| ✅ 仓库已含（MIT） | `dataset/` | 直接 `git clone` 即获得 |
-| FISD 模型权重（3 个 .pth） | ✅ 仓库已含 | `WEIGHTS/FISD/` | 直接 `git clone` 即获得 |
-| MolMetaLM 权重 (~500 MB) | ❌ 需单独下载 | `WEIGHTS/MolMetaLM-base/` | 见下方 [MolMetaLM 权重](#molmetalm-权重) |
+| 资产 | 默认放置路径 | 获取方式 |
+|---|---|---|
+| MolMetaLM 权重 (~500 MB) | `WEIGHTS/MolMetaLM-base/` | 见下方 [MolMetaLM 权重](#molmetalm-权重) |
 
 ### 酰胺缩合数据集
 
@@ -428,6 +459,7 @@ WEIGHTS/FISD/
 | AutoGluon 适配器 | [autogluon_model.py](yonod/models/autogluon_model.py) | `autogluon.tabular.TabularPredictor`（medium_quality preset，80/20 holdout） |
 
 **为什么不把上游源码 vendor 进本仓库？**
+
 - 上游各项目（ATMOMACCS / FISD / MolMetaLM）有各自的 LICENSE，逐项重发分布需要审查每份协议；
 - inline 实现反而让代码自包含，`git clone` 后即跑，无需 submodule 操作或单独 clone；
 - 上游 URL 在本文档完整列出，审计者可逐行对照原仓库的对应文件。

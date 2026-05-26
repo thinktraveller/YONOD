@@ -14,6 +14,14 @@
 
 ### Changed
 
+**README.md：「示例结果」改为基于 result/test-7 的真实冒烟测试数据**
+- 原占位表格（历史 R² 数值，部分为空）替换为 `dataset/test-amide-coupling.csv`（10 行）全量 4×4 跑出的真实指标
+- 新增「控制台输出（片段）」：展示 16 个组合的实际 `[done]` 日志行（含 R²、RMSE、用时）
+- 新增「metrics_summary.csv — R²」矩阵：4 描述符 × 4 模型，数值来自 `result/test-7/metrics_summary.csv`
+- 新增说明：R² 全为负值属正常现象（10 行 5 折 CV 每折仅 2 测试样本），AutoGluon 极端负值原因说明
+- 新增「report.html — 推荐组合（加权排名前三）」：引用报告生成的加权排名表（morgan×rf 综合分 -0.590 排第一）
+- 保留「全量数据集基线（供参考）」子节，展示 47015 条历史实测 R²（0.58~0.87），供用户与冒烟结果对比
+
 **README.md：简化文档，去除 Track A/B 区分**
 - 通篇移除"Track A"/"Track B"标签，以酰胺缩合反应为唯一示例贯穿文档
 - 「第六步：准备数据集」数据集目录标注去除 "Track A" 前缀，改为直接描述文件内容
