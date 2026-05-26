@@ -14,6 +14,12 @@
 
 ### Changed
 
+**README.md：ATMOMACCS 小节补充许可证说明**
+- 新增许可证条目：上游 ATMOMACCS 项目采用 CC BY 4.0，提醒用户遵守项目协议及 Zenodo 存档页面上各文件的许可条款
+- 修复引用提示语被截断的问题，补全为完整句子并同时指向 DOI 和 Zenodo 存档
+- License 表 ATMOMACCS 行补充 CC BY 4.0 标注和 Zenodo 链接
+- 修正「算法实现表」标题拼写（改回「算法实现对照表」，与目录一致）
+
 **README.md：补充各数据集与模型的来源标注**
 - 酰胺缩合数据集（`dataset/amide-coupling.csv`）新增引用提示，指向 DOI:10.1039/D5SC03364K
 - FISD 权重小节：新增 GitHub 链接（`KeantChen/FISD/tree/main/model`）、论文 DOI（10.1039/D5SC00451A），获取方式 A 改为"GitHub 直接下载"，原方式 A/B 顺延为 B/C
