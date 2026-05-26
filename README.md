@@ -58,7 +58,7 @@ git clone https://github.com/thinktraveller/YONOD.git
 cd YONOD
 ```
 
-克隆后你会得到代码、FISD 权重（`WEIGHTS/FISD/`）以及酰胺缩合样本数据集（`dataset/amide-coupling.csv`，MIT 协议）。**MolMetaLM 权重需要单独获取**，见 [外部资产说明](#外部资产说明)。
+克隆后你会得到代码和酰胺缩合样本数据集（`dataset/amide-coupling.csv`，MIT 协议）。**FISD 权重和 MolMetaLM 权重需要单独获取**，见 [外部资产说明](#外部资产说明)。
 
 ### 第三步：创建 conda 环境
 
@@ -326,7 +326,7 @@ YONOD/
 │   └── test_report.py                  测试报告生成
 │
 ├── WEIGHTS/                          模型权重目录
-│   ├── FISD/                         ★ 已随仓库提供（约 19 MB，直接可用）
+│   ├── FISD/                         ✗ 需单独获取（约 19 MB，无明确许可证，见外部资产说明）
 │   │   ├── qm_9_mse_model.pth          GCN（MSE 监督），~7.6 MB
 │   │   ├── qm_9_cos_model.pth          GCN（Cosine 监督），~7.6 MB
 │   │   └── qm_9_2in1_model.pth         TwoInOne MLP，~3.5 MB
@@ -364,6 +364,7 @@ YONOD/
 
 | 资产 | 默认放置路径 | 获取方式 |
 |---|---|---|
+| FISD 模型权重（3 个 .pth，~19 MB） | `WEIGHTS/FISD/` | 见下方 [FISD 权重](#fisd-权重) |
 | MolMetaLM 权重 (~500 MB) | `WEIGHTS/MolMetaLM-base/` | 见下方 [MolMetaLM 权重](#molmetalm-权重) |
 
 ### 酰胺缩合数据集
@@ -412,16 +413,20 @@ snapshot_download('wudejian789/MolMetaLM-base', local_dir='WEIGHTS/MolMetaLM-bas
 
 ### FISD 权重
 
-FISD 描述符依赖 3 个在 QM9 上预训练的 GCN 权重文件（合计约 19 MB），**已随仓库一同提供**：
+FISD 描述符依赖 3 个在 QM9 上预训练的 GCN 权重文件（合计约 19 MB）。上游项目未附明确的开源许可证，因此本仓库**不再随 git 分发**这些文件，需单独获取后放置到 `WEIGHTS/FISD/`：
 
 ```
-WEIGHTS/FISD/
+WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 ├── qm_9_mse_model.pth     (~7.6 MB) — MSE 监督的 GCN
 ├── qm_9_cos_model.pth     (~7.6 MB) — Cosine 监督的 GCN
 └── qm_9_2in1_model.pth    (~3.5 MB) — 拼接两路的 TwoInOne MLP
 ```
 
-`git clone` 后即可直接使用，无需额外下载。`fisd.py` 默认从此目录加载，亦支持 `model_dir=` 参数覆盖。
+**获取方式**：
+- **方式 A（本地已有上游源码）**：从 `化学描述符相关项目/FISD/` 中找到同名 `.pth` 文件，复制到 `WEIGHTS/FISD/`。
+- **方式 B（重训练）**：运行上游 FISD 项目中的 `code/MLMS_mse.ipynb`、`MLMS_cos.ipynb`、`MLMS_2IN1.ipynb`，训练完成后将产出的 `.pth` 文件复制到 `WEIGHTS/FISD/`。
+
+`fisd.py` 默认从 `WEIGHTS/FISD/` 加载，亦支持 `model_dir=` 参数覆盖路径。若文件缺失，运行时会报 `FileNotFoundError`。
 
 ### ATMOMACCS 说明
 
@@ -579,7 +584,7 @@ python yonod.py \
 | scikit-learn / PyTorch / PyTorch Geometric | BSD-style |
 | XGBoost / AutoGluon | Apache 2.0 |
 | MolMetaLM 权重 | 见 [上游仓库](https://huggingface.co/wudejian789/MolMetaLM-base) |
-| FISD 预训练权重 | 见上游 FISD 项目（仓库内仅含运行必需的 3 个 `.pth`） |
+| FISD 预训练权重 | 上游 FISD 项目（**无明确许可证**，不随本仓库分发，见 [外部资产说明](#fisd-权重)） |
 | ATMOMACCS 引用 | [J. Chem. Phys. DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548) |
 
 ---
