@@ -14,6 +14,16 @@
 
 ### Changed
 
+**README.md：简化文档，去除 Track A/B 区分**
+- 通篇移除"Track A"/"Track B"标签，以酰胺缩合反应为唯一示例贯穿文档
+- 「第六步：准备数据集」数据集目录标注去除 "Track A" 前缀，改为直接描述文件内容
+- 「第七步：快速验证」完整替换为交互向导步骤示例：展示 8 步向导的每一步提示文本、示例用户输入（以 `>` 标注）及预期程序输出，以 `dataset/test-amide-coupling.csv`（10 行样本）为示范，引导用户用 `B C E F G H` 字母序号选取 SMILES 列，描述符选 `morgan`、模型选 `xgb`，秒级完成冒烟测试
+- 「第八步：完整运行」去除 Track B（镍催化偶联）命令，仅保留酰胺缩合全量 4×4 grid 的 CLI 示例，并补充向导全选提示
+- 「主要结果」删除 Track B 镍催化对映选择性结果表，节标题改为「酰胺缩合产率预测」
+- 「仓库结构与文件说明」：去除 `features/` 说明中的 Track A/B 标注，删除 `dataset/镍催化偶联数据集/` 目录条目，`ee_metrics.py` 说明去除"Track B 专用"字样
+- 「外部资产说明」：资产总表删除 ECC 数据集行，小节标题"Track A 数据集"改为"酰胺缩合数据集"，完整删除"Track B 数据集"小节（schema 表 + 论文引用说明）
+- 「命令行参数速查」：删除 Track B 镍催化示例命令，调试模式示例补全为酰胺缩合的具体参数
+
 **tests/ 移出 git 追踪**
 - `tests/test_csv_loader.py`、`tests/test_feature_builder.py`、`tests/test_report.py` 通过 `git rm --cached` 移出 git 索引；`tests/` 在 `.gitignore` 中已存在，本次使远端历史与声明保持一致
 - 动机：单元测试为本地开发辅助脚本，不属于可分发源码；与 `.gitignore` 注释保持一致（"仅供本地开发使用"）
