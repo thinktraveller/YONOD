@@ -354,6 +354,28 @@ YONOD/
 
 ---
 
+## 常见提示与警告
+
+运行时出现以下提示均属正常，**不影响结果正确性**，可直接忽略。
+
+### AutoGluon 相关
+
+| 提示信息 | 原因 | 是否需要处理 |
+|---|---|---|
+| `[warning] AutoGluon + numeric cols: 使用全局 StandardScaler（非折内归一化）` | AutoGluon 内部使用 holdout 划分，无法嵌入 KFold 循环，数值辅助列（如温度）只能全局 z-score | 已知局限，不影响指标输出；若需严格无泄露评估请不使用 AutoGluon |
+| `Warning: path already exists! This predictor may overwrite an existing predictor!` | 同一次 grid 运行中多个 (描述符 × 模型) 组合复用了同一 temp 目录，后续组合覆盖前面的模型文件 | 无需处理；本项目只取指标，不持久化 AutoGluon 模型 |
+| `pkg_resources is deprecated as an API` | AutoGluon 内部某处仍依赖已废弃的 `pkg_resources`，属 AutoGluon 自身代码问题 | 无需处理；升级 AutoGluon 版本可消除 |
+| `No valid features to train KNeighborsUnif / KNeighborsDist... Skipping` | Morgan / MACCS 指纹是高维稀疏向量，KNN 距离度量在高维空间失效，AutoGluon 自动跳过 KNN 子模型 | 无需处理；AutoGluon 会用其他子模型（GBM / XGB / RF 等）继续训练 |
+| `NeuralNetFastAI failed (ImportError)... Skipping` | 当前环境未安装 `fastai`，AutoGluon 尝试加载失败后跳过该子模型 | 无需处理（见下方说明） |
+
+### 关于 fastai 安装失败
+
+`fastai 1.1.1` 依赖 `spacy`，而 `spacy` 的最新版要求 `thinc >= 8.3.12`（仅支持 Python ≥ 3.10），与本项目的 **Python 3.9** 环境冲突，无法安装。
+
+**建议直接跳过 fastai**：FastAI 只是 AutoGluon 16 个内置子模型之一，其余主力模型（LightGBM、XGBoost、RandomForest、ExtraTrees、CatBoost 等）均正常运行。对分子描述符（高维稀疏指纹）任务，树模型通常优于 FastAI tabular，安装 fastai 不会带来明显的 R² 提升。
+
+---
+
 ## 引用
 
 如需引用本仓库代码，可使用如下 BibTeX（请按需补充作者与年份）：
