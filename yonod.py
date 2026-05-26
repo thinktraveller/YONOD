@@ -138,11 +138,14 @@ def _normalize_smiles(smi: str) -> str:
     """将各类非标准分隔符规范化为 RDKit 标准的点分隔形式。
 
     处理三类情况：
-    - 逗号（',')：阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
+    - 逗号（','）：阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
     - 星号（'*'）：反应步骤分隔符，如 'A.B*C.D*E'（反应 SMILES 格式）
     - 波浪线（'~'）：组分替代表示，如 'CC(=O)O~CC(=O)O~[Pd]'
+    连续分隔符（如 '**' 空步骤）会产生 '..'，一并压缩为单个 '.'。
     """
-    return smi.replace(",", ".").replace("*", ".").replace("~", ".")
+    s = smi.replace(",", ".").replace("*", ".").replace("~", ".")
+    s = re.sub(r'\.{2,}', '.', s)   # '..' / '...' → '.'
+    return s.strip('.')
 
 
 def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None:

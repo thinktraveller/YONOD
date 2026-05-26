@@ -23,6 +23,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from typing import List, Optional, Tuple
 
@@ -104,12 +105,14 @@ def build_universal_features(
         if col not in df.columns:
             raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
         # 规范化为 RDKit 标准点分隔形式（'.'）：
-        #   逗号（','）→ 阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
-        #   星号（'*'）→ 反应步骤分隔符，如反应 SMILES 'A.B*C.D*E'
-        #   波浪线（'~'）→ 组分替代表示，如 'CC(=O)O~[Pd]'
+        #   ','  → 阴阳离子对；'*' → 反应步骤；'~' → 组分替代表示
+        #   连续点（如 '**' 空步骤产生的 '..'）压缩为单个 '.'
+        def _norm(s: str) -> str:
+            s = s.replace(",", ".").replace("*", ".").replace("~", ".")
+            s = re.sub(r'\.{2,}', '.', s)
+            return s.strip('.')
         smiles_list = [
-            s.replace(",", ".").replace("*", ".").replace("~", ".")
-            if isinstance(s, str) else ""
+            _norm(s) if isinstance(s, str) else ""
             for s in df[col].fillna("").tolist()
         ]
         feats, mask = descriptor.featurize(smiles_list)
