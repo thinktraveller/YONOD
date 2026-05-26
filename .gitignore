@@ -41,10 +41,13 @@ result/
 
 # ===================== Large model weights =====================
 # WEIGHTS/MolMetaLM-base/  is ~500 MB -- download separately, see README.
-# WEIGHTS/FISD/            is ~19 MB  -- bundled with the repo, leave it in.
+# WEIGHTS/FISD/            is ~19 MB  -- no explicit license; not redistributed.
+#                          Copy the 3 .pth files from 化学描述符相关项目/FISD/
+#                          or retrain with the upstream notebooks; see README.
 WEIGHTS/MolMetaLM-base/
+WEIGHTS/FISD/
 
-# Generic large weight file types (any leftover checkpoint outside WEIGHTS/FISD/)
+# Generic large weight file types
 *.safetensors
 *.pt
 *.ckpt
@@ -55,7 +58,7 @@ WEIGHTS/MolMetaLM-base/
 dataset/*
 !dataset/amide-coupling.csv
 !dataset/test-amide-coupling.csv
-tests/
+
 
 # ===================== Third-party project sources =====================
 # These upstream repos are kept locally for reference but not redistributed

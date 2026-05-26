@@ -14,6 +14,17 @@
 
 ### Changed
 
+**FISD 权重移出 git 追踪，改为需用户自行获取**
+- **动机**：`WEIGHTS/FISD/` 中的 3 个 `.pth` 文件（`qm_9_mse_model.pth`、`qm_9_cos_model.pth`、`qm_9_2in1_model.pth`）来自上游 FISD 项目，该项目未附任何明确开源许可证；在许可证不明确的情况下，将上游产物作为二进制文件随仓库分发存在法律风险
+- **`.gitignore`**：新增 `WEIGHTS/FISD/` 条目，更新注释说明原因；原"bundled with the repo"注释改为"no explicit license; not redistributed"
+- **`git rm --cached`**：将 3 个 `.pth` 文件移出 git 索引，本地文件不受影响
+- **`README.md`**：
+  - 「第二步：克隆仓库」去除"克隆后获得 FISD 权重"说明，改为提示 FISD 和 MolMetaLM 均需单独获取
+  - 「仓库结构」`WEIGHTS/FISD/` 条目从 `★ 已随仓库提供` 改为 `✗ 需单独获取（无明确许可证）`
+  - 「外部资产说明」总表新增 FISD 权重行（❌ 需单独获取）
+  - 「FISD 权重」小节重写：说明不再随仓库分发的原因，提供两种获取方式（方式 A：从本地 `化学描述符相关项目/FISD/` 复制；方式 B：重训练上游 FISD 笔记本）
+  - 「License」表中 FISD 条目注明"无明确许可证，不随本仓库分发"
+
 **README.md：「示例结果」改为基于 result/test-7 的真实冒烟测试数据**
 - 原占位表格（历史 R² 数值，部分为空）替换为 `dataset/test-amide-coupling.csv`（10 行）全量 4×4 跑出的真实指标
 - 新增「控制台输出（片段）」：展示 16 个组合的实际 `[done]` 日志行（含 R²、RMSE、用时）
