@@ -14,6 +14,14 @@
 
 ### Changed
 
+**README.md：补充各数据集与模型的来源标注**
+- 酰胺缩合数据集（`dataset/amide-coupling.csv`）新增引用提示，指向 DOI:10.1039/D5SC03364K
+- FISD 权重小节：新增 GitHub 链接（`KeantChen/FISD/tree/main/model`）、论文 DOI（10.1039/D5SC00451A），获取方式 A 改为"GitHub 直接下载"，原方式 A/B 顺延为 B/C
+- MolMetaLM 权重小节：新增 GitHub 链接（`CSUBioGroup/MolMetaLM`）、论文 DOI（10.48550/arXiv.2411.15500）
+- 算法实现对照表：FISD 行补充上游仓库链接与 DOI；MolMetaLM 行补充 GitHub 链接与 DOI
+- 引用小节：新增酰胺缩合数据集、FISD、MolMetaLM 三条 BibTeX 模板
+- License 表：FISD 行补充 DOI 链接
+
 **FISD 权重移出 git 追踪，改为需用户自行获取**
 - **动机**：`WEIGHTS/FISD/` 中的 3 个 `.pth` 文件（`qm_9_mse_model.pth`、`qm_9_cos_model.pth`、`qm_9_2in1_model.pth`）来自上游 FISD 项目，该项目未附任何明确开源许可证；在许可证不明确的情况下，将上游产物作为二进制文件随仓库分发存在法律风险
 - **`.gitignore`**：新增 `WEIGHTS/FISD/` 条目，更新注释说明原因；原"bundled with the repo"注释改为"no explicit license; not redistributed"

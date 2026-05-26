@@ -204,7 +204,7 @@ python yonod.py
 [done] 全部完成。
 ```
 
-烟测通过标志：`result/smoke-test/metrics_summary.csv` 生成，文件中包含 R² 指标。
+最后会输出`result/smoke-test/metrics_summary.csv` ，文件中包含 R² 指标。
 
 ### 第八步：完整运行
 
@@ -214,13 +214,7 @@ python yonod.py
 
 > **Windows 用户**：如遇中文路径问题，可将数据集复制到纯英文路径再指定 `--csv`。
 
----
-
-## 示例结果
-
-以下示例展示运行完整 4×4 冒烟测试后的典型输出格式。
-
-### 控制台输出（片段）
+#### 控制台输出示例
 
 ```
 [init] 任务：<task-name>
@@ -237,27 +231,6 @@ python yonod.py
 [report] HTML 报告已生成: result/<task-name>/report.html
 [done] 全部完成。
 ```
-
-### metrics_summary.csv — R²（5 折 CV）
-
-| 描述符 | XGB | RF | SVM | AutoGluon |
-|---|---|---|---|---|
-| morgan    | X.XXX | X.XXX | X.XXX | X.XXX |
-| maccs     | X.XXX | X.XXX | X.XXX | X.XXX |
-| fisd      | X.XXX | X.XXX | X.XXX | X.XXX |
-| molmetalm | X.XXX | X.XXX | X.XXX | X.XXX |
-
-> 样本量较小时，5 折 CV 每折测试集仅有少量样本，R² 可能出现负值，**属正常现象，不代表模型有 Bug**。
-
-### report.html — 推荐组合（加权排名前三）
-
-| 名次 | 描述符 | 模型 | R² | RMSE | MAE | 综合分 | 用时 |
-|---|---|---|---|---|---|---|---|
-| 🥇 | \<descriptor\> | \<model\> | X.XXX | X.XXX | X.XXX | X.XXX | X.Xs |
-| 🥈 | \<descriptor\> | \<model\> | X.XXX | X.XXX | X.XXX | X.XXX | X.Xs |
-| 🥉 | \<descriptor\> | \<model\> | X.XXX | X.XXX | X.XXX | X.XXX | X.Xs |
-
-report.html 还包含各组合的完整指标列表和描述符说明，可用浏览器直接打开查看。
 
 ---
 
@@ -305,10 +278,6 @@ YONOD/
 │   ├── evaluate.py                   模型注册表 + evaluate_one() 入口
 │   └── plot.py                       预测 vs 真值散点图生成
 │
-├── tests/                            开发期烟测脚本（不随仓库分发）
-│   ├── test_csv_loader.py              测试通用 CSV 加载器
-│   ├── test_feature_builder.py         测试特征构建
-│   └── test_report.py                  测试报告生成
 │
 ├── WEIGHTS/                          模型权重目录
 │   ├── FISD/                         ✗ 需单独获取（约 19 MB，无明确许可证，见外部资产说明）
@@ -356,7 +325,9 @@ YONOD/
 
 `dataset/amide-coupling.csv` 来自 [aichemeco/amide_coupling](https://github.com/aichemeco/amide_coupling/tree/main)（MIT 协议），47015 条酰胺缩合反应，产率归一化到 [0, 1]。`dataset/test-amide-coupling.csv` 为其中 10 行子集，用于快速调试。
 
-如您将该数据集用于发表，请同时引用原始数据来源（具体文献信息见项目计划书）。
+如您将该数据集用于发表，请引用原始论文：
+
+> Dai *et al.*, *Chem. Sci.*, 2025. DOI: [10.1039/D5SC03364K](https://doi.org/10.1039/D5SC03364K)
 
 数据集 schema（CSV 列说明）：
 
@@ -378,7 +349,9 @@ YONOD/
 
 ### MolMetaLM 权重
 
-来自 HuggingFace：[wudejian789/MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base)
+- **HuggingFace**：[wudejian789/MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base)
+- **GitHub**：[CSUBioGroup/MolMetaLM](https://github.com/CSUBioGroup/MolMetaLM)
+- **论文**：DOI [10.48550/arXiv.2411.15500](https://doi.org/10.48550/arXiv.2411.15500)
 
 ```bash
 # 方式 A：用 huggingface_hub CLI
@@ -398,6 +371,9 @@ snapshot_download('wudejian789/MolMetaLM-base', local_dir='WEIGHTS/MolMetaLM-bas
 
 ### FISD 权重
 
+- **GitHub**：[KeantChen/FISD — model/](https://github.com/KeantChen/FISD/tree/main/model)
+- **论文**：DOI [10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A)
+
 FISD 描述符依赖 3 个在 QM9 上预训练的 GCN 权重文件（合计约 19 MB）。上游项目未附明确的开源许可证，因此本仓库**不再随 git 分发**这些文件，需单独获取后放置到 `WEIGHTS/FISD/`：
 
 ```
@@ -408,8 +384,9 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 ```
 
 **获取方式**：
-- **方式 A（本地已有上游源码）**：从 `化学描述符相关项目/FISD/` 中找到同名 `.pth` 文件，复制到 `WEIGHTS/FISD/`。
-- **方式 B（重训练）**：运行上游 FISD 项目中的 `code/MLMS_mse.ipynb`、`MLMS_cos.ipynb`、`MLMS_2IN1.ipynb`，训练完成后将产出的 `.pth` 文件复制到 `WEIGHTS/FISD/`。
+- **方式 A（GitHub 直接下载）**：访问 [KeantChen/FISD/tree/main/model](https://github.com/KeantChen/FISD/tree/main/model)，下载 3 个 `.pth` 文件，放置到 `WEIGHTS/FISD/`。
+- **方式 B（本地已有上游源码）**：从 `化学描述符相关项目/FISD/` 中找到同名 `.pth` 文件，复制到 `WEIGHTS/FISD/`。
+- **方式 C（重训练）**：运行上游 FISD 项目中的 `code/MLMS_mse.ipynb`、`MLMS_cos.ipynb`、`MLMS_2IN1.ipynb`，训练完成后将产出的 `.pth` 文件复制到 `WEIGHTS/FISD/`。
 
 `fisd.py` 默认从 `WEIGHTS/FISD/` 加载，亦支持 `model_dir=` 参数覆盖路径。若文件缺失，运行时会报 `FileNotFoundError`。
 
@@ -434,11 +411,11 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 |---|---|---|
 | Morgan ECFP4 指纹 | [morgan.py:32-50](yonod/descriptors/morgan.py#L32-L50) | RDKit `rdkit.Chem.AllChem.GetMorganFingerprintAsBitVect`（仅作 API 调用） |
 | MACCS keys（166 维） | [atmomaccs.py:30-44](yonod/descriptors/atmomaccs.py#L30-L44) | RDKit `rdkit.Chem.rdMolDescriptors.GetMACCSKeysFingerprint`；与上游 ATMOMACCS 的 `generate_MACCS.py` 完全等价（去掉占位 bit 0）。引用：[Zenodo 18669279](https://zenodo.org/records/18669279) / [DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548) |
-| FISD 双 GCN 嵌入（架构） | [fisd.py:51-95](yonod/descriptors/fisd.py#L51-L95) (`_GNN`、`_TwoInOne` 类) | 与上游 FISD `code/MLMS_mse.ipynb` / `MLMS_cos.ipynb` / `MLMS_2IN1.ipynb` 完全一致 |
+| FISD 双 GCN 嵌入（架构） | [fisd.py:51-95](yonod/descriptors/fisd.py#L51-L95) (`_GNN`、`_TwoInOne` 类) | 与上游 FISD `code/MLMS_mse.ipynb` / `MLMS_cos.ipynb` / `MLMS_2IN1.ipynb` 完全一致；上游：[KeantChen/FISD](https://github.com/KeantChen/FISD)；论文：[DOI:10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A) |
 | FISD 原子特征（45 维） | [fisd.py:99-132](yonod/descriptors/fisd.py#L99-L132) (`_atom_features`) | 与上游 `test_MLMS/reproduce_mlms.py::get_atom_features` 一致 |
 | FISD 图构建 | [fisd.py:134-150](yonod/descriptors/fisd.py#L134-L150) (`_smiles_to_graph`) | 同上游；含单原子分子自环兜底 |
 | FISD 前向 + 池化 | [fisd.py:153-216](yonod/descriptors/fisd.py#L153-L216) (`FISDDescriptor`) | 加载 3 个 `qm_9_*.pth`（`WEIGHTS/FISD/`），双 GCN → concat → TwoInOne → 50 维 |
-| MolMetaLM 嵌入 | [molmetalm.py:80-149](yonod/descriptors/molmetalm.py#L80-L149) | HuggingFace [`wudejian789/MolMetaLM-base`](https://huggingface.co/wudejian789/MolMetaLM-base)；用 `AutoModel`（带 CausalLM 兜底）+ attention-masked mean-pool 取 768 维 |
+| MolMetaLM 嵌入 | [molmetalm.py:80-149](yonod/descriptors/molmetalm.py#L80-L149) | HuggingFace [`wudejian789/MolMetaLM-base`](https://huggingface.co/wudejian789/MolMetaLM-base)；GitHub：[CSUBioGroup/MolMetaLM](https://github.com/CSUBioGroup/MolMetaLM)；论文：[DOI:10.48550/arXiv.2411.15500](https://doi.org/10.48550/arXiv.2411.15500)；用 `AutoModel`（带 CausalLM 兜底）+ attention-masked mean-pool 取 768 维 |
 | 通用 CSV 自动探测 | [csv_loader.py](yonod/universal/csv_loader.py) | 本项目原创；用 RDKit 解析率 > threshold 判定 SMILES 列 |
 | 通用特征矩阵构建 | [feature_builder.py](yonod/universal/feature_builder.py) | 本项目原创；SMILES 描述符 + 数值辅助列拼接 |
 | 反应级 6 分子特征拼接 | [reaction_featurizer.py:33-57](yonod/features/reaction_featurizer.py#L33-L57) | 本项目原创设计（v0.3 §2.3），含 `(无)` 零向量 + `,` → `.` 预处理 |
@@ -538,6 +515,44 @@ python yonod.py \
 }
 ```
 
+如使用了酰胺缩合数据集，请引用：
+
+```bibtex
+@article{amide_coupling_2025,
+  title   = {(dataset paper title)},
+  journal = {Chem. Sci.},
+  year    = {2025},
+  doi     = {10.1039/D5SC03364K},
+  url     = {https://doi.org/10.1039/D5SC03364K}
+}
+```
+
+如使用了 FISD 描述符，请引用：
+
+```bibtex
+@article{fisd_2025,
+  title   = {(FISD paper title)},
+  journal = {Chem. Sci.},
+  year    = {2025},
+  doi     = {10.1039/D5SC00451A},
+  url     = {https://doi.org/10.1039/D5SC00451A}
+}
+```
+
+如使用了 MolMetaLM 嵌入，请引用：
+
+```bibtex
+@misc{molmetalm_2024,
+  title         = {MolMetaLM},
+  author        = {wudejian789 et al.},
+  year          = {2024},
+  eprint        = {2411.15500},
+  archivePrefix = {arXiv},
+  doi           = {10.48550/arXiv.2411.15500},
+  url           = {https://doi.org/10.48550/arXiv.2411.15500}
+}
+```
+
 如使用了 ATMOMACCS 结果，请同时引用：
 
 ```bibtex
@@ -569,7 +584,7 @@ python yonod.py \
 | scikit-learn / PyTorch / PyTorch Geometric | BSD-style |
 | XGBoost / AutoGluon | Apache 2.0 |
 | MolMetaLM 权重 | 见 [上游仓库](https://huggingface.co/wudejian789/MolMetaLM-base) |
-| FISD 预训练权重 | 上游 FISD 项目（**无明确许可证**，不随本仓库分发，见 [外部资产说明](#fisd-权重)） |
+| FISD 预训练权重 | 上游 FISD 项目（**无明确许可证**，不随本仓库分发，见 [外部资产说明](#fisd-权重)）；论文：[DOI:10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A) |
 | ATMOMACCS 引用 | [J. Chem. Phys. DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548) |
 
 ---
