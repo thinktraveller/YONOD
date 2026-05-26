@@ -2,13 +2,8 @@
 
 > **Y**ou **O**nly **N**eed **O**utstanding **D**escriptors
 > 以 SMILES 为统一输入，比较 4 类分子描述符 × 4 种机器学习算法在多类有机合成任务上的表现。
->
-> **Track A**：酰胺缩合反应**产率**预测（47015 条）
-> **Track B**：镍催化不对称交叉偶联**对映选择性 ΔΔG** 预测（6590 条）
 
-[![Python](https://img.shields.io/badge/Python-3.9-blue.svg)](https://www.python.org)
-[![CUDA](https://img.shields.io/badge/CUDA-12.1-green.svg)](https://developer.nvidia.com/cuda-12-1-0-download-archive)
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.9-blue.svg)](https://www.python.org) [![CUDA](https://img.shields.io/badge/CUDA-12.1-green.svg)](https://developer.nvidia.com/cuda-12-1-0-download-archive) [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
 
 ---
 
@@ -31,29 +26,12 @@
 
 本项目以 **SMILES 字符串作为统一输入**，对不同有机合成场景系统比较多种描述符与 ML 模型的组合，所有任务均使用 5 折交叉验证。
 
-### Track A — 酰胺缩合产率预测
-
-47015 条酰胺缩合反应，比较 **16 种（4 × 4）** 描述符 × 模型组合：
-
 |                | XGBoost | Random Forest | SVM (RBF) | AutoGluon |
 |---|---|---|---|---|
 | **Morgan ECFP4**   | ✓ | ✓ | ✓ | ✓ |
 | **ATMOMACCS (MACCS)** | ✓ | ✓ | ✓ | ✓ |
 | **FISD (GNN embedding)** | ✓ | ✓ | ✓ | ✓ |
 | **MolMetaLM (Llama embedding)** | ✓ | ✓ | ✓ | ✓ |
-
-反应级特征：6 个分子（2 底物 + 4 试剂）描述符拼接，总维度 = 6 × 单分子维度。
-
-### Track B — 镍催化对映选择性预测
-
-6590 条 Ni 催化不对称交叉偶联反应，预测 **ΔΔG（kcal/mol）**，比较 **8 种（2 × 4）** 组合：
-
-|                | XGBoost | Random Forest | SVM (RBF) | AutoGluon |
-|---|---|---|---|---|
-| **Morgan ECFP4**   | ✓ | ✓ | ✓ | ✓ |
-| **ATMOMACCS (MACCS)** | ✓ | ✓ | ✓ | ✓ |
-
-反应级特征：配体 SMILES + 产物底物 SMILES 描述符拼接，再附加温度标量（共 2×单分子维度 + 1 维）。
 
 详细设计文档见 [YONOD项目构建计划书.md](YONOD项目构建计划书.md)；
 迁移到云端/Linux/GitHub 的指南见 [MIGRATION.md](MIGRATION.md)。
@@ -80,7 +58,7 @@ git clone https://github.com/thinktraveller/YONOD.git
 cd YONOD
 ```
 
-克隆后你会得到代码和 FISD 权重（`WEIGHTS/FISD/`）。**数据集和 MolMetaLM 权重需要单独获取**，见 [外部资产说明](#外部资产说明)。
+克隆后你会得到代码、FISD 权重（`WEIGHTS/FISD/`）以及酰胺缩合样本数据集（`dataset/amide-coupling.csv`，MIT 协议）。**Track B ECC 数据集和 MolMetaLM 权重需要单独获取**，见 [外部资产说明](#外部资产说明)。
 
 ### 第三步：创建 conda 环境
 
@@ -123,14 +101,17 @@ pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 
 ### 第六步：准备数据集
 
-数据集**不随仓库提供**（文件较大，见 [外部资产说明](#外部资产说明)）。获取后请按如下路径放置：
+**Track A 酰胺缩合数据集已随仓库提供**（`dataset/amide-coupling.csv`，47015 条，MIT 协议），克隆后可直接使用。
+
+Track B ECC 数据集需单独获取（见 [外部资产说明](#外部资产说明)），获取后按如下路径放置：
 
 ```
 YONOD/
-└── 数据集/
-    ├── 酰胺缩合数据集.csv              ← Track A 数据
+└── dataset/
+    ├── amide-coupling.csv              ← Track A 数据（✅ 仓库已含）
+    ├── test-amide-coupling.csv         ← Track A 10 行样本（✅ 仓库已含，快速调试用）
     └── 镍催化偶联数据集/
-        └── Raw_Dataset.csv             ← Track B 数据
+        └── Raw_Dataset.csv             ← Track B 数据（❌ 需单独获取）
 ```
 
 ### 第七步：快速验证（烟测）
@@ -139,30 +120,30 @@ YONOD/
 # 方式一：交互向导（推荐新手，会提示你选择数据集和参数）
 python yonod.py
 
-# 方式二：命令行直接运行 Track A 小样本（500 行，约 30 秒）
+# 方式二：命令行直接运行 Track A 小样本（10 行样本集，秒级完成）
 python yonod.py \
-    --csv 数据集/酰胺缩合数据集.csv \
+    --csv dataset/test-amide-coupling.csv \
     --label-col yield \
-    --smiles-cols sub_1_smiles sub_2_smiles activation_id additive_id base_id solvent_id \
+    --smiles-cols sub_1_smiles sub_2_smiles activation additive base solvent \
     --descriptors morgan --models xgb \
-    --nrows 500 --task-name smoke-test
+    --task-name smoke-test
 ```
 
-烟测预期：输出 `[PASS]` 或 R² 数值，`results/smoke-test/` 下生成 `metrics_summary.csv`。
+烟测预期：输出 R² 数值，`results/smoke-test/` 下生成 `metrics_summary.csv`。
 
 ### 第八步：完整运行
 
 ```bash
 # Track A 完整 4×4 grid（约 30~60 分钟，需 GPU）
 python yonod.py \
-    --csv 数据集/酰胺缩合数据集.csv \
+    --csv dataset/amide-coupling.csv \
     --label-col yield \
     --smiles-cols sub_1_smiles sub_2_smiles activation_id additive_id base_id solvent_id \
     --task-name TrackA
 
 # Track B 完整 2×4 grid（约 30~60 分钟）
 python yonod.py \
-    --csv 数据集/镍催化偶联数据集/Raw_Dataset.csv \
+    --csv dataset/镍催化偶联数据集/Raw_Dataset.csv \
     --smiles-cols Ligand_SMILES Product_SMILES \
     --numeric-cols "Temp (K)" \
     --label-col "ddG" \
@@ -267,10 +248,11 @@ YONOD/
 ├── cache/                            运行时缓存（自动生成，不入库）
 │                                     存放试剂描述符的 .pkl 缓存，加速重复运行
 │
-├── 数据集/                           ✗ 不随仓库提供（需单独获取，见外部资产说明）
-│   ├── 酰胺缩合数据集.csv              Track A（47015 条）
-│   └── 镍催化偶联数据集/
-│       └── Raw_Dataset.csv             Track B（6590 条）
+├── dataset/                          数据集目录
+│   ├── amide-coupling.csv            ★ Track A（47015 条，MIT 协议，仓库已含）
+│   ├── test-amide-coupling.csv       ★ Track A 10 行样本（MIT 协议，仓库已含，调试用）
+│   └── 镍催化偶联数据集/             ✗ Track B（6590 条，需单独获取）
+│       └── Raw_Dataset.csv
 │
 ├── 化学描述符相关项目/               ✗ 不随仓库提供（第三方源码，仅供本地参考）
 │
@@ -291,14 +273,15 @@ YONOD/
 
 | 资产 | 是否随仓库提供 | 默认放置路径 | 获取方式 |
 |---|---|---|---|
-| 数据集 `酰胺缩合数据集.csv` | ❌ 需单独获取 | `数据集/` | 见下方 [Track A 数据集](#track-a-数据集) |
-| ECC 数据集 `Raw_Dataset.csv` | ❌ 需单独获取 | `数据集/镍催化偶联数据集/` | 见下方 [Track B 数据集](#track-b-数据集) |
+| 酰胺缩合数据集 `amide-coupling.csv`（47015 条）| ✅ 仓库已含（MIT） | `dataset/` | 直接 `git clone` 即获得 |
+| 酰胺缩合样本 `test-amide-coupling.csv`（10 条）| ✅ 仓库已含（MIT） | `dataset/` | 直接 `git clone` 即获得 |
+| ECC 数据集 `Raw_Dataset.csv` | ❌ 需单独获取 | `dataset/镍催化偶联数据集/` | 见下方 [Track B 数据集](#track-b-数据集) |
 | FISD 模型权重（3 个 .pth） | ✅ 仓库已含 | `WEIGHTS/FISD/` | 直接 `git clone` 即获得 |
 | MolMetaLM 权重 (~500 MB) | ❌ 需单独下载 | `WEIGHTS/MolMetaLM-base/` | 见下方 [MolMetaLM 权重](#molmetalm-权重) |
 
 ### Track A 数据集
 
-`数据集/酰胺缩合数据集.csv` 衍生自公开发表的反应数据库（USPTO / Reaxys 风格），47015 条酰胺缩合反应，产率取实验报告值并归一化到 [0, 1]。
+`dataset/amide-coupling.csv` 来自 [aichemeco/amide_coupling](https://github.com/aichemeco/amide_coupling/tree/main)（MIT 协议），47015 条酰胺缩合反应，产率归一化到 [0, 1]。`dataset/test-amide-coupling.csv` 为其中 10 行子集，用于快速调试。
 
 如您将该数据集用于发表，请同时引用原始数据来源（具体文献信息见项目计划书）。
 
@@ -444,7 +427,7 @@ WEIGHTS/FISD/
 ```bash
 # Track A 酰胺缩合（全量 4×4，跳过 MolMetaLM）
 python yonod.py \
-    --csv 数据集/酰胺缩合数据集.csv \
+    --csv dataset/amide-coupling.csv \
     --label-col yield \
     --smiles-cols sub_1_smiles sub_2_smiles activation_id additive_id base_id solvent_id \
     --descriptors morgan maccs fisd \
@@ -452,7 +435,7 @@ python yonod.py \
 
 # Track B 镍催化（仅 morgan × xgb，快速验证）
 python yonod.py \
-    --csv 数据集/镍催化偶联数据集/Raw_Dataset.csv \
+    --csv dataset/镍催化偶联数据集/Raw_Dataset.csv \
     --smiles-cols Ligand_SMILES Product_SMILES \
     --numeric-cols "Temp (K)" \
     --label-col "ddG" \

@@ -14,6 +14,17 @@
 
 ### Changed
 
+**数据集目录重命名 & 样本数据集纳入仓库**
+- 数据集目录从 `数据集/` 重命名为 `dataset/`（英文路径，避免跨平台中文路径问题）
+- `dataset/amide-coupling.csv`（47015 条）和 `dataset/test-amide-coupling.csv`（10 条样本）正式纳入 git 追踪，来源：[aichemeco/amide_coupling](https://github.com/aichemeco/amide_coupling/tree/main)，遵循 MIT 协议
+- `.gitignore` 更新：`dataset/*` 整体忽略，通过 `!dataset/amide-coupling.csv` / `!dataset/test-amide-coupling.csv` 豁免两个样本 CSV；保留旧 `数据集/` 规则以兼容历史
+- `README.md` 同步更新：
+  - 第六步「准备数据集」：说明 Track A 样本已随仓库提供，更新放置路径示意
+  - 烟测命令：改为使用 `dataset/test-amide-coupling.csv`（10 行，秒级），并修正列名为 `activation additive base solvent`
+  - 完整运行命令：路径更新为 `dataset/amide-coupling.csv` / `dataset/镍催化偶联数据集/Raw_Dataset.csv`
+  - 外部资产表：两个样本 CSV 标记为 ✅ 仓库已含（MIT）
+  - 仓库结构树：`数据集/` → `dataset/`，标注各文件来源
+
 **仓库清理：移除大型数据集和第三方源码的 git 追踪**
 - `git rm --cached -r 数据集/ 化学描述符相关项目/`：共 18685 个文件从 git 索引中移除，远端不再保存这两个目录；本地文件不受影响
 - 两者在 `.gitignore` 中已存在（`化学描述符相关项目/` 与 `数据集/` 条目），本次操作使远端历史与 gitignore 声明保持一致
