@@ -135,10 +135,14 @@ def _validate_label(df: pd.DataFrame, label_col: str, columns: list) -> None:
 
 
 def _normalize_smiles(smi: str) -> str:
-    """将逗号分隔的阴阳离子对规范化为 RDKit 标准的点分隔形式。
-    例：'CCN=C=NCCCN(C)C,Cl' → 'CCN=C=NCCCN(C)C.Cl'
+    """将各类非标准分隔符规范化为 RDKit 标准的点分隔形式。
+
+    处理三类情况：
+    - 逗号（',')：阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
+    - 星号（'*'）：反应步骤分隔符，如 'A.B*C.D*E'（反应 SMILES 格式）
+    - 波浪线（'~'）：组分替代表示，如 'CC(=O)O~CC(=O)O~[Pd]'
     """
-    return smi.replace(",", ".")
+    return smi.replace(",", ".").replace("*", ".").replace("~", ".")
 
 
 def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None:

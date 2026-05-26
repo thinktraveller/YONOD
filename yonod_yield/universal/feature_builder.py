@@ -103,10 +103,15 @@ def build_universal_features(
     for col in smiles_cols:
         if col not in df.columns:
             raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
-        # 将逗号分隔的阴阳离子对（如 'CCN=C=NCCCN(C)C,Cl'）规范化为
-        # RDKit 标准的点分隔形式（'CCN=C=NCCCN(C)C.Cl'），再传入描述符
-        smiles_list = [s.replace(",", ".") if isinstance(s, str) else ""
-                       for s in df[col].fillna("").tolist()]
+        # 规范化为 RDKit 标准点分隔形式（'.'）：
+        #   逗号（','）→ 阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
+        #   星号（'*'）→ 反应步骤分隔符，如反应 SMILES 'A.B*C.D*E'
+        #   波浪线（'~'）→ 组分替代表示，如 'CC(=O)O~[Pd]'
+        smiles_list = [
+            s.replace(",", ".").replace("*", ".").replace("~", ".")
+            if isinstance(s, str) else ""
+            for s in df[col].fillna("").tolist()
+        ]
         feats, mask = descriptor.featurize(smiles_list)
         col_blocks.append(feats)
         row_mask |= mask  # 任一列有效则保留该行；无效列贡献零向量
