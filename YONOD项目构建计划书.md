@@ -17,7 +17,7 @@
 >   8. AutoGluon 保留但简化（无异步、无前端调度）；
 >   9. **试剂 SMILES 化**：4 个试剂列改为通过"试剂编号-SMILES 对应表"映射后再描述符化，`(无)` 用零向量填充，反应级特征 = 6 个分子描述符拼接；
 >   10. **DFT 暂缓**：从主流程剔除 DFT 描述符，描述符总数从 5 降为 **4**，结果矩阵由 5×4=20 变为 **4×4=16**，原 T2.D1~T2.D4 任务删除。
->   11. **包管理改用 conda**：环境约定 `yonod-yield`，T0.2 命令从 `py -3.9 -m venv` 改为 `conda create -n yonod-yield python=3.9`；所有 `Activate.ps1` 调用替换为 `conda activate yonod-yield`；离线 torch whl 仍通过 pip 装（conda 无同版本通道）。理由见 §九 Q11。
+>   11. **包管理改用 conda**：环境约定 `yonod`，T0.2 命令从 `py -3.9 -m venv` 改为 `conda create -n yonod python=3.9`；所有 `Activate.ps1` 调用替换为 `conda activate yonod`；离线 torch whl 仍通过 pip 装（conda 无同版本通道）。理由见 §九 Q11。
 >   12. **数据集已预先完成 id → SMILES 映射**（2026-05-15 实测确认）：CSV 中 `activation_id` / `additive_id` / `base_id` / `solvent_id` 4 列直接存储 SMILES 字符串（含 `,` 分隔的盐/复合物形式），**不再需要解析"试剂编号-SMILES对应表.md"构建字典**。T0.4 由"解析映射表"改为"提取唯一试剂 SMILES 集 + 预计算描述符缓存"；T1.3 从"按 id 查字典"改为"直接对 SMILES 列调用描述符（含 `(无)` → 零向量、`,` → `.` 多片段合并）"。详见 §九 Q12。
 > - **v0.3.2**（2026-05-15，全量执行配套）：
 >   13. **全量 4×4 grid 改为分两阶段执行**（方案 C）：先跑 12 组非 RF 组合，再跑 4 个 RF 组合，用 `--append` 合并入同一 `metrics_summary.csv`。理由是 RF 在 Morgan/MolMetaLM 高维特征上单折 7~8 分钟、5 折 ≈ 38 分钟，本地一次跑完时间窗太长。详见新增 T4.4 + Q13。
@@ -169,7 +169,7 @@ reaction_feature = concat([
 
 - OS：Windows 11（当前开发环境）
 - **Python 3.9**（严格要求，因为离线 torch whl 是 cp39 版本）
-- 包管理：**conda**（Miniconda / Anaconda 均可），环境名约定 `yonod-yield`
+- 包管理：**conda**（Miniconda / Anaconda 均可），环境名约定 `yonod`
 - CUDA：12.1
 
 ### 3.3 离线 torch 轮子位置
@@ -341,7 +341,7 @@ Write-Host "目录骨架创建完成"
 
 **操作要点**：
 1. 确认已安装 Miniconda 或 Anaconda（检查 `conda --version`）；
-2. 用 conda 创建 Python 3.9 环境 `yonod-yield`；
+2. 用 conda 创建 Python 3.9 环境 `yonod`；
 3. 在环境内先用 pip 离线安装 torch 三件套（顺序：torch → torchvision → torchaudio）；
 4. 再用 pip 安装其余依赖（rdkit 也直接走 pip，与 transformers/sklearn 版本对齐更稳）。
 
@@ -350,7 +350,7 @@ Write-Host "目录骨架创建完成"
 - transformers / xgboost / autogluon 等在 PyPI 上更新更及时；
 - conda 主要作用是**隔离 Python 解释器**和后续可能引入的非 Python 二进制依赖（如未来要装 cudatoolkit、openbabel 时切换更方便）。
 
-**产出物**：conda 环境 `yonod-yield`，依赖全部就绪。
+**产出物**：conda 环境 `yonod`，依赖全部就绪。
 
 **验收标准**：`python -c "import torch; print(torch.cuda.is_available())"` 输出 `True`。
 
@@ -363,9 +363,9 @@ $whl  = "H:\AI模型及torch包\torch_wheels"
 # 步骤 1：确认 conda 可用
 conda --version
 
-# 步骤 2：创建并激活环境（约定环境名 yonod-yield）
-conda create -n yonod-yield python=3.9 -y
-conda activate yonod-yield
+# 步骤 2：创建并激活环境（约定环境名 yonod）
+conda create -n yonod python=3.9 -y
+conda activate yonod
 
 # 步骤 3：升级 pip
 python -m pip install --upgrade pip
@@ -405,7 +405,7 @@ python -c "import torch; print('CUDA 可用:', torch.cuda.is_available()); print
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import pandas as pd
 df = pd.read_csv(r'$root\数据集\酰胺缩合反应数据集.csv')
@@ -443,7 +443,7 @@ print(df['yield'].describe())
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import pandas as pd
 csv = r'$root\数据集\酰胺缩合反应数据集.csv'
@@ -495,7 +495,7 @@ for s in bad[:5]:
 ```powershell
 # 验证文件语法
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -m py_compile "$root\yonod_yield\descriptors\base.py"; if ($?) { Write-Host "语法检查通过" }
 ```
 
@@ -516,7 +516,7 @@ python -m py_compile "$root\yonod_yield\descriptors\base.py"; if ($?) { Write-Ho
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys
 sys.path.insert(0, r'$root')
@@ -548,7 +548,7 @@ print('shape:', feats.shape, 'mask sum:', mask.sum())
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys, pandas as pd, numpy as np, joblib, time
 sys.path.insert(0, r'$root')
@@ -590,7 +590,7 @@ print('试剂描述符缓存已保存')
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys, pandas as pd
 sys.path.insert(0, r'$root')
@@ -624,7 +624,7 @@ print('mask sum:', mask.sum())
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys, pandas as pd, numpy as np
 sys.path.insert(0, r'$root')
@@ -656,7 +656,7 @@ print(metrics)
 ```powershell
 # 将上方命令中 XGBYieldModel 替换为 RFYieldModel 即可，路径相同
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys, pandas as pd
 sys.path.insert(0, r'$root')
@@ -687,7 +687,7 @@ print(RFYieldModel().cross_validate(X, y, cv=5))
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys, pandas as pd
 sys.path.insert(0, r'$root')
@@ -707,7 +707,7 @@ print(SVMYieldModel(auto_pca=True).cross_validate(X, y, cv=5))
 #### T2.4 实现 AutoGluon 适配器
 
 **操作要点**：
-- `pip install autogluon.tabular==1.1.1`（需在 conda 环境 `yonod-yield` 激活后单独运行，体积大）
+- `pip install autogluon.tabular==1.1.1`（需在 conda 环境 `yonod` 激活后单独运行，体积大）
 - 包装 `TabularPredictor(label='yield', problem_type='regression')`
 - 设置 `presets='medium_quality'`、`time_limit=300`、`num_cpus=1`（Windows 兼容）
 - 用 `holdout_frac=0.2` 代替 K 折（AutoGluon 内置 CV 策略）
@@ -720,7 +720,7 @@ print(SVMYieldModel(auto_pca=True).cross_validate(X, y, cv=5))
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 # 先安装 AutoGluon（首次较慢，需联网）
 pip install autogluon.tabular==1.1.1
 
@@ -754,7 +754,7 @@ print(AutoGluonYieldModel(time_limit=120).fit_evaluate(X, y))
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -m py_compile "$root\yonod_yield\evaluate.py"; if ($?) { Write-Host "语法检查通过" }
 ```
 
@@ -785,7 +785,7 @@ python -m py_compile "$root\yonod_yield\evaluate.py"; if ($?) { Write-Host "语�
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys, torch
 sys.path.insert(0, r'$root')
@@ -836,7 +836,7 @@ Get-ChildItem -Recurse "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD\�
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys
 sys.path.insert(0, r'$root')
@@ -895,7 +895,7 @@ Get-ChildItem -Recurse "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD\�
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys, numpy as np
 sys.path.insert(0, r'$root')
@@ -926,7 +926,7 @@ print('散点图已保存至 results/')
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 
 # 快速冒烟测试（仅 Morgan × XGB，500 行数据）
 python "$root\run_yield_prediction.py" `
@@ -956,7 +956,7 @@ python "$root\run_yield_prediction.py" `
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
 Get-ChildItem "$root\results" | Select-Object Name, Length, LastWriteTime
 # 查看 metrics 内容
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import pandas as pd
 df = pd.read_csv(r'$root\results\metrics_summary.csv')
@@ -993,7 +993,7 @@ print(df.to_string())
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 
 # === 阶段 A：12 组（约 1~2 小时） ===
 python "$root\run_yield_prediction.py" `
@@ -1038,8 +1038,8 @@ python "$root\run_yield_prediction.py" `
 
 ```bash
 # 1. 创建 conda 环境
-conda create -n yonod-yield python=3.9 -y
-conda activate yonod-yield
+conda create -n yonod python=3.9 -y
+conda activate yonod
 
 # 2. 装 torch（云端有网，直接走官方 cu121 通道）
 pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
@@ -1208,7 +1208,7 @@ v0.2 草案曾考虑 one-hot，v0.3 正式改为 SMILES 描述符化，原因如
 **答**：两个根本原因。第一，本数据集 47015 条反应**没有任何配套的 Gaussian log 文件**，DFT 描述符的原始输入材料根本不存在；第二，即使临时补算，对每个底物做 DFT 单点计算（B3LYP/6-31G* 级别）通常需要数小时，47015 条全部算完是巨大算力负担，不符合本项目"演示脚本"的轻量定位。与 HSPOC 处理方式一致，v0.3 完全移除 DFT，结果矩阵由 5×4=20 缩减为 **4×4=16**。详见 §6.6。
 
 ### Q11（2026-05-14）：为什么从 venv 改为 conda？
-**答**：venv 是 Python 标准库自带、零额外安装、足够轻量；conda 的优势在化学/AI 项目场景下更明显：① RDKit 在 conda-forge 上的二进制最为稳定可靠（虽然 PyPI 的 `rdkit==2023.9.5` 也已可用）；② 后续若需要 cudatoolkit、openbabel、psi4 等非 Python 二进制依赖，conda 的安装体验明显优于 venv + pip；③ `conda env list` 在多项目场景下管理更直观。本项目 v0.3 正式约定环境名 `yonod-yield`。注意：离线 torch whl 仍通过 pip 安装（conda 没有同版本通道），二者不冲突。
+**答**：venv 是 Python 标准库自带、零额外安装、足够轻量；conda 的优势在化学/AI 项目场景下更明显：① RDKit 在 conda-forge 上的二进制最为稳定可靠（虽然 PyPI 的 `rdkit==2023.9.5` 也已可用）；② 后续若需要 cudatoolkit、openbabel、psi4 等非 Python 二进制依赖，conda 的安装体验明显优于 venv + pip；③ `conda env list` 在多项目场景下管理更直观。本项目 v0.3 正式约定环境名 `yonod`。注意：离线 torch whl 仍通过 pip 安装（conda 没有同版本通道），二者不冲突。
 
 ### Q12（2026-05-15）：还需要解析"试剂编号-SMILES对应表.md"吗？
 **答**：**不需要**。T0.3 数据探索阶段实测确认，CSV 中的 `activation_id` / `additive_id` / `base_id` / `solvent_id` 4 列已经直接存储 SMILES 字符串（例如 `activation_id = "CC(C)N=C=NC(C)C"` 是 DIC 的 SMILES，`additive_id = "C1=CC2=C(N=C1)N(N=N2)O"` 是 HOAt 的 SMILES），CSV 在分发前已完成 id → SMILES 映射。"试剂编号-SMILES对应表.md" 仅作人类可读的索引参考，**程序运行时不需要读取**。
@@ -1505,7 +1505,7 @@ ee = tanh(ΔΔG / (2 × R × T)) × 100%
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import pandas as pd, numpy as np
 from rdkit import Chem
@@ -1615,7 +1615,7 @@ def build_ecc_features(descriptor: BaseDescriptor,
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 python -c "
 import sys
 sys.path.insert(0, r'$root')
@@ -1734,7 +1734,7 @@ if __name__ == "__main__":
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 # 快速冒烟：Morgan × XGB，5 折，全量数据
 python "$root\run_ecc_prediction.py" --desc morgan --model xgb --cv 5
 # 预期输出：R² > 0.3，RMSE < 0.8 kcal/mol（保守估计；ECC 数据集较小但特征性强）
@@ -1830,7 +1830,7 @@ ECC-T4（全量 4×4 grid 运行 + 与原论文对比，运行 1~2 小时）
 
 ```powershell
 $root = "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
-conda activate yonod-yield
+conda activate yonod
 
 # 冒烟测试：Morgan × XGB，不超过 5 分钟
 python "$root\run_ecc_prediction.py" --desc morgan --model xgb --cv 5
@@ -2372,9 +2372,9 @@ echo.
 pause
 
 :: 激活 conda 环境并执行
-call conda activate yonod-yield
+call conda activate yonod
 if %ERRORLEVEL% NEQ 0 (
-    echo [错误] conda activate yonod-yield 失败，请确认环境名称正确。
+    echo [错误] conda activate yonod 失败，请确认环境名称正确。
     pause
     exit /b 1
 )
@@ -2466,7 +2466,7 @@ def rank_combinations(metrics_df: pd.DataFrame) -> pd.DataFrame:
 | 文件路径 | 用途 | 依赖 |
 |---|---|---|
 | `run_yonod.py` | 通用化 CLI 入口（主脚本） | `yonod_yield/universal/` |
-| `yonod.bat` | Windows 交互式向导，双击执行 | `run_yonod.py`，conda 环境 `yonod-yield` |
+| `yonod.bat` | Windows 交互式向导，双击执行 | `run_yonod.py`，conda 环境 `yonod` |
 | `yonod_yield/universal/__init__.py` | 子包初始化 | 无 |
 | `yonod_yield/universal/csv_loader.py` | CSV 加载 + 列角色探测 | pandas，rdkit |
 | `yonod_yield/universal/feature_builder.py` | 通用特征构建（多 SMILES 拼接 + 数值列 scaler）| 现有描述符适配器 |
