@@ -45,8 +45,8 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from yonod_yield.universal.csv_loader import load_csv_with_roles
-from yonod_yield.universal.feature_builder import build_universal_features
+from yonod.universal.csv_loader import load_csv_with_roles
+from yonod.universal.feature_builder import build_universal_features
 
 _DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm"]
 _MODEL_NAMES = ["xgb", "rf", "svm", "autogluon"]
@@ -75,7 +75,7 @@ class _Tee:
 
     def __init__(self, fh: TextIO) -> None:
         self.fh = fh
-        self._real_stdout = sys.__stdout__
+        self._real_stdout: TextIO = sys.__stdout__ if sys.__stdout__ is not None else sys.stdout
         self._bol = True
 
     def write(self, data: str) -> int:
@@ -125,21 +125,21 @@ class _Heartbeat:
 
 def _make_model(model_name: str, args: argparse.Namespace) -> Any:
     if model_name == "xgb":
-        from yonod_yield.models.xgb_model import XGBYieldModel
+        from yonod.models.xgb_model import XGBYieldModel
         return XGBYieldModel()
     if model_name == "rf":
-        from yonod_yield.models.rf_model import RFYieldModel
+        from yonod.models.rf_model import RFYieldModel
         return RFYieldModel(
             n_jobs=args.rf_n_jobs,
             n_estimators=args.rf_n_estimators,
             max_depth=args.rf_max_depth,
         )
     if model_name == "svm":
-        from yonod_yield.models.svm_model import SVMYieldModel
+        from yonod.models.svm_model import SVMYieldModel
         sub = args.svm_subsample if args.svm_subsample > 0 else None
         return SVMYieldModel(subsample_n=sub)
     if model_name == "autogluon":
-        from yonod_yield.models.autogluon_model import AutoGluonYieldModel
+        from yonod.models.autogluon_model import AutoGluonYieldModel
         return AutoGluonYieldModel()
     raise ValueError(f"未知模型名称 {model_name!r}")
 
@@ -348,7 +348,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             df=df,
             desc_name=desc_name,
         )
-        y = df[label_col].values[mask].astype(np.float64)
+        y = df[label_col].to_numpy(dtype=np.float64)[mask]
 
         print(
             f"[desc] {desc_name}: n_valid={mask.sum()}  "
@@ -415,7 +415,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"\n[save] 指标已保存: {csv_out}")
 
         try:
-            from yonod_yield.universal.report import generate_report
+            from yonod.universal.report import generate_report
             task_info = {
                 "task_name":     task_name,
                 "csv_path":      args.csv,
@@ -566,7 +566,7 @@ def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None
     try:
         from rdkit import Chem
         from rdkit import RDLogger
-        RDLogger.DisableLog("rdApp.*")
+        RDLogger.DisableLog("rdApp.*")  # type: ignore[attr-defined]
     except ImportError:
         print("  [警告] RDKit 未安装，跳过 SMILES 格式验证。")
         return
@@ -626,6 +626,7 @@ def wizard() -> None:
     print("[2/8] 标签列（预测目标，如 yield / ee / ddG）")
     print("      支持：列名  /  字母（如 B）  /  序号（如 2）")
     label_col = _ask_single_col("  标签列", columns, required=True)
+    assert label_col is not None
     print(f"  → 标签列确认：'{label_col}'")
     _validate_label(df, label_col, columns)
     print()
