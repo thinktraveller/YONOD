@@ -94,8 +94,8 @@ rsync -avzP \
 
 ```bash
 # 1) 创建 Python 3.9 环境
-conda create -n yonod-yield python=3.9 -y
-conda activate yonod-yield
+conda create -n yonod python=3.9 -y
+conda activate yonod
 
 # 2) 装 torch（云端有网，走官方 CUDA 12.1 通道，无需离线 whl）
 pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
@@ -130,7 +130,7 @@ tmux new -s yonod
 
 # 在 tmux 里启动
 cd /root/YONOD
-conda activate yonod-yield
+conda activate yonod
 python run_yield_prediction.py \
     --svm-subsample 8000 \
     --rf-verbose 1 \
@@ -216,7 +216,7 @@ scp/rsync 传输时使用 OpenSSH 默认配置即可保持 UTF-8。若用某些�
 | 变量赋值 | `$root = "/path"` | `root="/path"` |
 | 环境变量 | `$env:HF_TOKEN = "xxx"` | `export HF_TOKEN=xxx` |
 | 续行 | `` ` `` (反引号) | `\` (反斜杠) |
-| 激活 conda | `conda activate yonod-yield` | 完全一致 |
+| 激活 conda | `conda activate yonod` | 完全一致 |
 | 删文件 | `Remove-Item file` | `rm file` |
 | 列目录 | `Get-ChildItem` / `ls` | `ls` |
 | 路径分隔符 | `\` 或 `/` | 仅 `/` |
@@ -321,7 +321,7 @@ WEIGHTS/
 ## Quick start
 
 ```bash
-conda create -n yonod-yield python=3.9 -y && conda activate yonod-yield
+conda create -n yonod python=3.9 -y && conda activate yonod
 pip install -r requirements.txt
 python test_run_yield.py            # smoke test
 python run_yield_prediction.py      # full 4x4 grid (~1 hour on 16 cores + GPU)
@@ -362,7 +362,7 @@ MIT (or whichever you choose).
 从当前 conda env 导出：
 
 ```bash
-conda activate yonod-yield
+conda activate yonod
 pip freeze | grep -Ev "^(autogluon|lightgbm|catboost)" > requirements.txt
 # 然后手工把 autogluon.tabular[lightgbm,catboost]==1.1.1 加到末尾
 ```
@@ -416,10 +416,10 @@ git add YONOD项目构建计划书.md
 git commit -m "feat: initial YONOD v0.3.2 source"
 
 # 6) 在 GitHub 创建空仓库（网页操作）：
-#    https://github.com/new  → 仓库名比如 yonod-yield  → 创建（不要勾选 README/gitignore，已经有了）
+#    https://github.com/new  → 仓库名比如 yonod  → 创建（不要勾选 README/gitignore，已经有了）
 
 # 7) 关联远端 + 推送
-git remote add origin https://github.com/你的用户名/yonod-yield.git
+git remote add origin https://github.com/你的用户名/yonod.git
 git push -u origin main
 ```
 

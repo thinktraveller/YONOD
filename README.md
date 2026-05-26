@@ -77,8 +77,8 @@
 
 ```bash
 # 1) 创建 conda 环境
-conda create -n yonod-yield python=3.9 -y
-conda activate yonod-yield
+conda create -n yonod python=3.9 -y
+conda activate yonod
 
 # 2) 安装 PyTorch (CUDA 12.1)
 pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
