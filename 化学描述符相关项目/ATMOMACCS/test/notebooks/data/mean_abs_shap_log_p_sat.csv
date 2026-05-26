@@ -1,6 +1,0 @@
-,Feature category,Sum of mean absolute SHAP values for feature categories
-0,MACCS keys,4.623385966221577
-1,carbonNumber,3.425718526756585
-2,functionalGroups,1.1646135778003774
-3,oxygenNumber,0.8237562046366743
-4,carbonBondTypes,0.2086278800878337
