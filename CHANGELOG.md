@@ -167,6 +167,16 @@
   - §13 通用化重构方案分析（对 5 条设计方案的逐条评价与改进建议）
   - §14 通用化重构确认方案与实施计划（数值列归一化量化分析、CLI 参数规范、BAT 向导设计、文件新增清单）
 
+### Removed
+
+**废弃入口脚本清理（yonod.py 合并后遗留）**
+- **删除** `run_yield_prediction.py`：Track A 专用入口，已由 `yonod.py` 通用 CLI 完全替代
+- **删除** `run_ecc_prediction.py`：Track B (ECC) 专用入口，已由 `yonod.py --smiles-cols ... --numeric-cols ... --label-col ddG` 替代
+- **删除** `generate_report.py`：独立报告生成器，报告生成已集成进 `yonod.py` pipeline（通过 `yonod_yield/universal/report.py`）
+- **删除** `test_run_yield.py`：通过 subprocess 调用 `run_yield_prediction.py` 的冒烟测试，被删文件不复存在
+- **删除** `test_ecc_load.py`：ECC 专用加载器的冒烟测试，与 Track B 旧入口一并废弃
+- **迁移** `test_csv_loader.py` / `test_feature_builder.py` / `test_report.py` → `tests/`：仍有效的通用子包单元测试，集中到 `tests/` 目录并加入 `.gitignore`（仅供本地开发使用）
+
 ### Changed
 
 **管线通用化（v1.1.0 范围，随本版本一同发布）**

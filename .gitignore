@@ -28,7 +28,7 @@ env/
 # Runtime caches (auto-regenerated on first run)
 cache/
 
-# Pipeline outputs (regenerate by re-running run_yield_prediction.py)
+# Pipeline outputs (regenerate by re-running yonod.py)
 results/
 !results/.gitkeep
 
@@ -59,6 +59,7 @@ WEIGHTS/MolMetaLM-base/
 # git; the runtime-needed FISD weights are duplicated to WEIGHTS/FISD/).
 # Cite upstream projects in README.md instead of vendoring their source here.
 化学描述符相关项目/
+数据集/
 
 # ===================== Secrets =====================
 .env
@@ -77,6 +78,10 @@ desktop.ini
 
 # Claude Code agent metadata (if you keep this in a separate tooling repo)
 .claude/
+
+# ===================== Tests =====================
+# Unit / smoke tests are kept locally for dev verification, not distributed
+tests/
 
 # ===================== Misc =====================
 *.bak
