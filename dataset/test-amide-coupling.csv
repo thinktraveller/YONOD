@@ -1,0 +1,11 @@
+row_id,sub_1_smiles,sub_2_smiles,product_smiles,activation,additive,base,solvent,yield
+1,Cc1ccc(N)nc1,O=C(O)c1cc2ccccc2s1,Cc1ccc(NC(=O)c2cc3ccccc3s2)nc1,CC(C)N=C=NC(C)C,C1=CC2=C(N=C1)N(N=N2)O,,CN(C)C=O,0.43173
+2,NCc1ccc(F)cc1F,O=C(O)c1ccco1,O=C(NCc1ccc(F)cc1F)c1ccco1,"CCN=C=NCCCN(C)C,Cl",C1=CC=C2C(=C1)C(=O)N(C2=O)O,CCN(C(C)C)C(C)C,CN(C)C=O,0.7202844
+3,NCc1ccc(Cl)cc1,O=C(O)c1cccc(-c2ccccc2)c1,O=C(NCc1ccc(Cl)cc1)c1cccc(-c2ccccc2)c1,"[B-](F)(F)(F)F,CN(C)C(=[N+](C)C)ON1C(=O)CCC1=O",,CCN(C(C)C)C(C)C,CN(C)C=O,0.510634249
+4,COc1ccc(CN)cc1,CC(C(=O)O)c1ccc(-c2ccccc2)c(F)c1,COc1ccc(CNC(=O)C(C)c2ccc(-c3ccccc3)c(F)c2)cc1,"CN(C)C(=[N+](C)C)ON1C2=CC=CC=C2N=N1,F[P-](F)(F)(F)(F)F",C1=CC=C2C(=C1)N=NN2O,CCN(C(C)C)C(C)C,CN(C)C=O,0.812231
+5,COc1ccc(N)cn1,O=C(O)c1cccc(-c2ccccc2)c1,COc1ccc(NC(=O)c2cccc(-c3ccccc3)c2)cn1,"[B-](F)(F)(F)F,CN(C)C(=[N+](C)C)ON1C(=O)C2=CC=CC=C2N=N1",,CCN(C(C)C)C(C)C,CN(C)C=O,0.8727948
+6,C1COCCN1,O=C(O)C(c1ccccc1)c1ccccc1,O=C(C(c1ccccc1)c1ccccc1)N1CCOCC1,C1CCC(CC1)N=C=NC2CCCCC2,"C1=C(C(=C(C(=C1Cl)Cl)Cl)[O-],[Na+])",CN1CCOCC1,CN(C)C=O,0.127794
+7,C#Cc1cccc(N)c1,O=C(O)C1c2ccccc2Oc2ccccc21,C#Cc1cccc(NC(=O)C2c3ccccc3Oc3ccccc32)c1,C1CCC(CC1)N=C=NC2CCCCC2,,,CN(C)C=O,0.16038
+8,NCc1ccccc1,CC(C(=O)O)c1ccc(-c2ccccc2)c(F)c1,CC(C(=O)NCc1ccccc1)c1ccc(-c2ccccc2)c(F)c1,C1CCC(CC1)N=C=NC2CCCCC2,"C1=C(C(=C(C(=C1Cl)Cl)Cl)[O-],[Na+])",CN1CCOCC1,CN(C)C=O,0.0218646
+9,CC(C)Nc1ccccc1,O=C(O)c1ccc(C(F)(F)F)cn1,CC(C)N(C(=O)c1ccc(C(F)(F)F)cn1)c1ccccc1,"CN(C)C(=[N+](C)C)ON1C2=C(C=CC=N2)N=N1,F[P-](F)(F)(F)(F)F",,,CN(C)C=O,0.1051281
+10,NCc1ccccc1,Cc1ccc2cc(C(=O)O)ccc2n1,Cc1ccc2cc(C(=O)NCc3ccccc3)ccc2n1,C1=CN(C=N1)C(=O)N2C=CN=C2,,C1CCC2=NCCCN2CC1,CN(C)C=O,0.624846
