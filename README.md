@@ -413,12 +413,6 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 | SVR + 自动 PCA + 子采样 | [svm_model.py](yonod/models/svm_model.py) | `sklearn.svm.SVR(kernel='rbf')` + `PCA(n=256)`（输入 >512 维触发）+ 每折随机抽样训练 |
 | AutoGluon 适配器 | [autogluon_model.py](yonod/models/autogluon_model.py) | `autogluon.tabular.TabularPredictor`（medium_quality preset，80/20 holdout） |
 
-**为什么不把上游源码 vendor 进本仓库？**
-
-- 上游各项目（ATMOMACCS / FISD / MolMetaLM）有各自的 LICENSE，逐项重发分布需要审查每份协议；
-- inline 实现反而让代码自包含，`git clone` 后即跑，无需 submodule 操作或单独 clone；
-- 上游 URL 在本文档完整列出，审计者可逐行对照原仓库的对应文件。
-
 ---
 
 ## 命令行参数速查
@@ -488,72 +482,6 @@ python yonod.py \
 
 **建议直接跳过 fastai**：FastAI 只是 AutoGluon 16 个内置子模型之一，其余主力模型（LightGBM、XGBoost、RandomForest、ExtraTrees、CatBoost 等）均正常运行。对分子描述符（高维稀疏指纹）任务，树模型通常优于 FastAI tabular，安装 fastai 不会带来明显的 R² 提升。
 
----
-
-## 引用
-
-如需引用本仓库代码，可使用如下 BibTeX（请按需补充作者与年份）：
-
-```bibtex
-@misc{yonod2026,
-  title  = {YONOD: Descriptor-Model Comparison for Amide Condensation Yield Prediction},
-  author = {thinktraveller},
-  year   = {2026},
-  howpublished = {\url{https://github.com/thinktraveller/YONOD}}
-}
-```
-
-如使用了酰胺缩合数据集，请引用：
-
-```bibtex
-@article{amide_coupling_2025,
-  title   = {(dataset paper title)},
-  journal = {Chem. Sci.},
-  year    = {2025},
-  doi     = {10.1039/D5SC03364K},
-  url     = {https://doi.org/10.1039/D5SC03364K}
-}
-```
-
-如使用了 FISD 描述符，请引用：
-
-```bibtex
-@article{fisd_2025,
-  title   = {(FISD paper title)},
-  journal = {Chem. Sci.},
-  year    = {2025},
-  doi     = {10.1039/D5SC00451A},
-  url     = {https://doi.org/10.1039/D5SC00451A}
-}
-```
-
-如使用了 MolMetaLM 嵌入，请引用：
-
-```bibtex
-@misc{molmetalm_2024,
-  title         = {MolMetaLM},
-  author        = {wudejian789 et al.},
-  year          = {2024},
-  eprint        = {2411.15500},
-  archivePrefix = {arXiv},
-  doi           = {10.48550/arXiv.2411.15500},
-  url           = {https://doi.org/10.48550/arXiv.2411.15500}
-}
-```
-
-如使用了 ATMOMACCS 结果，请同时引用：
-
-```bibtex
-@article{atmomaccs,
-  title   = {ATMOMACCS},
-  journal = {J. Chem. Phys.},
-  doi     = {10.1063/5.0308548},
-  url     = {https://zenodo.org/records/18669279}
-}
-```
-
----
-
 ## License
 
 本项目代码与文档采用 **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)** 协议：
@@ -564,21 +492,3 @@ python yonod.py \
 
 完整协议见 [LICENSE](LICENSE) 文件。
 
-依赖与第三方资产遵循各自的协议：
-
-| 资产 | 协议 |
-|---|---|
-| RDKit | BSD 3-Clause |
-| scikit-learn / PyTorch / PyTorch Geometric | BSD-style |
-| XGBoost / AutoGluon | Apache 2.0 |
-| MolMetaLM 权重 | 见 [上游仓库](https://huggingface.co/wudejian789/MolMetaLM-base) |
-| FISD 预训练权重 | 上游 FISD 项目（**无明确许可证**，不随本仓库分发，见 [外部资产说明](#fisd-权重)）；论文：[DOI:10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A) |
-| ATMOMACCS 引用 | **CC BY 4.0**（上游项目）；论文：[J. Chem. Phys. DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548)；存档：[Zenodo 18669279](https://zenodo.org/records/18669279) |
-
----
-
-## 致谢
-
-- 公开反应数据社区（USPTO / Reaxys 等）；
-- MolMetaLM 作者 [@wudejian789](https://huggingface.co/wudejian789)；
-- FISD 与 ATMOMACCS 上游项目作者。
