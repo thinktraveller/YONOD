@@ -14,6 +14,14 @@
 
 ### Fixed
 
+**项目清理：移除废弃文件、补入遗漏源文件**
+- **移除** `yonod.bat`：已由 `yonod.py`（Python 交互向导）完全替代，bat 方案因 cmd.exe 解析缺陷已弃用
+- **移除** `verify_morgan_rf.py`：开发期一次性性能诊断工具，功能已无需保留
+- **移除** `数据集/测试.csv`、`数据集/镍催化偶联数据集/test.csv`：临时测试用小 CSV，不应入库
+- **补入** `yonod_yield/universal/__init__.py`、`yonod_yield/universal/csv_loader.py`、`test_csv_loader.py`：universal 子包的核心文件及测试脚本此前未被 git 追踪，本次一并入库
+- **更新** `.gitignore`：新增 `result/`（本地运行输出目录）排除规则
+- **更新** `run_yonod.py`：`_Tee` 日志类改为直接持有 `sys.__stdout__` 引用，去掉冗余的 `real_stream` 构造参数
+
 **report.py：推荐组合表格加入模型用时列**
 - `rank_combinations()`：若输入 `metrics_df` 含 `train_time_s` 列，将其保留至返回 DataFrame（列位于 `score` 与 `reason` 之间）
 - `_section_ranking()`：前三名推荐表和完整排名表新增「用时」列（`has_time` 条件渲染，不含 `train_time_s` 时自动隐藏，向后兼容）
