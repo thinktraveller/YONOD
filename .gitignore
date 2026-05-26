@@ -55,7 +55,7 @@ WEIGHTS/MolMetaLM-base/
 dataset/*
 !dataset/amide-coupling.csv
 !dataset/test-amide-coupling.csv
-数据集/
+tests/
 
 # ===================== Third-party project sources =====================
 # These upstream repos are kept locally for reference but not redistributed
