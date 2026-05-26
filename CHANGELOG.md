@@ -14,6 +14,10 @@
 
 ### Changed
 
+**tests/ 移出 git 追踪**
+- `tests/test_csv_loader.py`、`tests/test_feature_builder.py`、`tests/test_report.py` 通过 `git rm --cached` 移出 git 索引；`tests/` 在 `.gitignore` 中已存在，本次使远端历史与声明保持一致
+- 动机：单元测试为本地开发辅助脚本，不属于可分发源码；与 `.gitignore` 注释保持一致（"仅供本地开发使用"）
+
 **数据集目录重命名 & 样本数据集纳入仓库**
 - 数据集目录从 `数据集/` 重命名为 `dataset/`（英文路径，避免跨平台中文路径问题）
 - `dataset/amide-coupling.csv`（47015 条）和 `dataset/test-amide-coupling.csv`（10 条样本）正式纳入 git 追踪，来源：[aichemeco/amide_coupling](https://github.com/aichemeco/amide_coupling/tree/main)，遵循 MIT 协议
