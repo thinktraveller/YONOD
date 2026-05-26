@@ -354,16 +354,9 @@ YONOD/
 - **论文**：DOI [10.48550/arXiv.2411.15500](https://doi.org/10.48550/arXiv.2411.15500)
 
 ```bash
-# 方式 A：用 huggingface_hub CLI
+# 从 huggingface_hub CLI 下载权重
 pip install -U "huggingface_hub>=0.34"
-# 国内用户加镜像：export HF_ENDPOINT=https://hf-mirror.com
 hf download wudejian789/MolMetaLM-base --local-dir WEIGHTS/MolMetaLM-base
-
-# 方式 B：Python 脚本
-python -c "
-from huggingface_hub import snapshot_download
-snapshot_download('wudejian789/MolMetaLM-base', local_dir='WEIGHTS/MolMetaLM-base')
-"
 ```
 
 文件总大小约 500 MB。下载完成后 `WEIGHTS/MolMetaLM-base/` 应包含：
@@ -371,10 +364,9 @@ snapshot_download('wudejian789/MolMetaLM-base', local_dir='WEIGHTS/MolMetaLM-bas
 
 ### FISD 权重
 
-- **GitHub**：[KeantChen/FISD — model/](https://github.com/KeantChen/FISD/tree/main/model)
 - **论文**：DOI [10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A)
 
-FISD 描述符依赖 3 个在 QM9 上预训练的 GCN 权重文件（合计约 19 MB）。上游项目未附明确的开源许可证，因此本仓库**不再随 git 分发**这些文件，需单独获取后放置到 `WEIGHTS/FISD/`：
+FISD 描述符依赖 3 个在 QM9 上预训练的 GCN 权重文件（合计约 19 MB）。需从 [项目的github仓库](https://github.com/KeantChen/FISD/tree/main/model) 单独获取后放置到 `WEIGHTS/FISD/`：
 
 ```
 WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
@@ -383,21 +375,17 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 └── qm_9_2in1_model.pth    (~3.5 MB) — 拼接两路的 TwoInOne MLP
 ```
 
-**获取方式**：
-- **方式 A（GitHub 直接下载）**：访问 [KeantChen/FISD/tree/main/model](https://github.com/KeantChen/FISD/tree/main/model)，下载 3 个 `.pth` 文件，放置到 `WEIGHTS/FISD/`。
-- **方式 B（本地已有上游源码）**：从 `化学描述符相关项目/FISD/` 中找到同名 `.pth` 文件，复制到 `WEIGHTS/FISD/`。
-- **方式 C（重训练）**：运行上游 FISD 项目中的 `code/MLMS_mse.ipynb`、`MLMS_cos.ipynb`、`MLMS_2IN1.ipynb`，训练完成后将产出的 `.pth` 文件复制到 `WEIGHTS/FISD/`。
-
 `fisd.py` 默认从 `WEIGHTS/FISD/` 加载，亦支持 `model_dir=` 参数覆盖路径。若文件缺失，运行时会报 `FileNotFoundError`。
 
 ### ATMOMACCS 说明
 
-本项目的 ATMOMACCS 描述符**仅调用 RDKit 的标准 MACCS keys**（167 位去除占位 bit 0 后为 166 维），**无需下载**任何外部资产。
-
-如您在论文中引用本项目的 ATMOMACCS 实验结果，请同时致谢上游：
-
 - **代码与权重**：[Zenodo / 18669279](https://zenodo.org/records/18669279)
 - **文献**：[J. Chem. Phys. — DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548)
+- **许可证**：上游 ATMOMACCS 项目采用 **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** 协议，请遵守该协议及 Zenodo 存档页面上各文件附带的许可条款。
+
+本项目的 ATMOMACCS 描述符**仅调用 RDKit 的标准 MACCS keys**（167 位去除占位 bit 0 后为 166 维），**无需下载**任何外部资产。
+
+如您在论文中引用本项目的 ATMOMACCS 实验结果，请同时引用上游论文（[DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548)）及 Zenodo 存档（[Zenodo 18669279](https://zenodo.org/records/18669279)）。
 
 ---
 
@@ -585,7 +573,7 @@ python yonod.py \
 | XGBoost / AutoGluon | Apache 2.0 |
 | MolMetaLM 权重 | 见 [上游仓库](https://huggingface.co/wudejian789/MolMetaLM-base) |
 | FISD 预训练权重 | 上游 FISD 项目（**无明确许可证**，不随本仓库分发，见 [外部资产说明](#fisd-权重)）；论文：[DOI:10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A) |
-| ATMOMACCS 引用 | [J. Chem. Phys. DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548) |
+| ATMOMACCS 引用 | **CC BY 4.0**（上游项目）；论文：[J. Chem. Phys. DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548)；存档：[Zenodo 18669279](https://zenodo.org/records/18669279) |
 
 ---
 
