@@ -218,26 +218,23 @@ python yonod.py
 
 ## 示例结果
 
-以下数据均来自 `dataset/test-amide-coupling.csv`（**10 行**）的完整 4×4 冒烟测试，输出目录为 `result/test-7/`。
+以下示例展示运行完整 4×4 冒烟测试后的典型输出格式。
 
 ### 控制台输出（片段）
 
 ```
-[init] 任务：smoke-test
-[load] n_rows=10  SMILES列=[7 列]  数值列=无  标签列='yield'
+[init] 任务：<task-name>
+[load] n_rows=N  SMILES列=[M 列]  数值列=无  标签列='yield'
 [grid] 描述符=['morgan', 'maccs', 'fisd', 'molmetalm']  模型=['xgb', 'rf', 'svm', 'autogluon']  cv=5
 
 [desc] 计算描述符: morgan ...
-[desc] morgan: n_valid=10  X_smiles.shape=(10, 7168)
 [eval] 开始: morgan x xgb (1/16)
-[done] morgan x xgb (1/16)  R²=-2.6117  RMSE=0.3660  t=6.3s
-[eval] 开始: morgan x rf (2/16)
-[done] morgan x rf (2/16)  R²=-1.5438  RMSE=0.2926  t=2.2s
+[done] morgan x xgb (1/16)  R²=X.XXXX  RMSE=X.XXXX  t=X.Xs
 ...
-[done] molmetalm x autogluon (16/16)  R²=-285.2306  RMSE=0.2757  t=68.1s
+[done] molmetalm x autogluon (16/16)  R²=X.XXXX  RMSE=X.XXXX  t=X.Xs
 
-[save] 指标已保存: result/smoke-test/metrics_summary.csv
-[report] HTML 报告已生成: result/smoke-test/report.html
+[save] 指标已保存: result/<task-name>/metrics_summary.csv
+[report] HTML 报告已生成: result/<task-name>/report.html
 [done] 全部完成。
 ```
 
@@ -245,34 +242,22 @@ python yonod.py
 
 | 描述符 | XGB | RF | SVM | AutoGluon |
 |---|---|---|---|---|
-| morgan    | -2.612 | **-1.544** | -1.789 | -345.17 |
-| maccs     | -2.546 | -2.092 | **-1.930** | -346.30 |
-| fisd      | -6.583 | -2.071 | -3.623 | -377.40 |
-| molmetalm | -4.568 | -1.699 | -2.012 | -285.23 |
+| morgan    | X.XXX | X.XXX | X.XXX | X.XXX |
+| maccs     | X.XXX | X.XXX | X.XXX | X.XXX |
+| fisd      | X.XXX | X.XXX | X.XXX | X.XXX |
+| molmetalm | X.XXX | X.XXX | X.XXX | X.XXX |
 
-> **为什么 R² 全是负值？** 10 行数据做 5 折 CV，每折测试集只有 2 个样本，R² 在此条件下极不稳定，**负值属正常现象，不代表模型有 Bug**。
-> AutoGluon 的 R² 尤其极端（约 -300），是因为它内部使用 holdout 划分，2 个样本的 holdout 结果完全随机。
+> 样本量较小时，5 折 CV 每折测试集仅有少量样本，R² 可能出现负值，**属正常现象，不代表模型有 Bug**。
 
 ### report.html — 推荐组合（加权排名前三）
 
 | 名次 | 描述符 | 模型 | R² | RMSE | MAE | 综合分 | 用时 |
 |---|---|---|---|---|---|---|---|
-| 🥇 | morgan    | rf  | -1.544 | 0.2926 | 0.2777 | -0.590 | 2.2s |
-| 🥈 | molmetalm | rf  | -1.698 | 0.2912 | 0.2798 | -0.668 | 2.6s |
-| 🥉 | morgan    | svm | -1.789 | 0.2940 | 0.2807 | -0.715 | 0.1s |
+| 🥇 | \<descriptor\> | \<model\> | X.XXX | X.XXX | X.XXX | X.XXX | X.Xs |
+| 🥈 | \<descriptor\> | \<model\> | X.XXX | X.XXX | X.XXX | X.XXX | X.Xs |
+| 🥉 | \<descriptor\> | \<model\> | X.XXX | X.XXX | X.XXX | X.XXX | X.Xs |
 
-### 全量数据集基线（供参考）
-
-使用全量 47015 条数据集的历史实测结果（R²，5 折 CV）：
-
-| 描述符 | XGB | RF | SVM | AutoGluon |
-|---|---|---|---|---|
-| Morgan ECFP4 | 0.732 | — | 0.703 | **0.874** |
-| ATMOMACCS    | 0.740 | — | 0.685 | **0.866** |
-| FISD         | 0.771 | — | 0.635 | **0.861** |
-| MolMetaLM    | 0.696 | — | 0.581 | 0.700 |
-
-**关键发现**：AutoGluon 在 3/4 描述符上最优；FISD 在 XGB 列最优（0.771），跨域迁移有效；MolMetaLM 未经 fine-tune 效果偏弱。
+report.html 还包含各组合的完整指标列表和描述符说明，可用浏览器直接打开查看。
 
 ---
 
