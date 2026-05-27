@@ -172,14 +172,9 @@ thead th { background: #1e3a5f; color: white; }
 .scatter-grid img { max-width: 380px; border-radius: 6px;
                     box-shadow: 0 1px 4px rgba(0,0,0,.12); }
 .formula-block { background: #f0f4ff; border-left: 3px solid #2563eb;
-                 border-radius: 4px; padding: 8px 14px; margin: 8px 0 12px;
-                 font-family: "Courier New", monospace; font-size: 0.92rem;
-                 color: #1e3a5f; line-height: 1.9; }
-.formula-block .frac { display: inline-flex; flex-direction: column;
-                       align-items: center; vertical-align: middle;
-                       margin: 0 2px; font-size: 0.82em; }
-.formula-block .frac .num { border-bottom: 1px solid #1e3a5f; padding: 0 3px; }
-.formula-block .frac .den { padding: 0 3px; }
+                 border-radius: 4px; padding: 10px 16px; margin: 8px 0 12px;
+                 font-family: "Courier New", Consolas, monospace; font-size: 0.93rem;
+                 color: #1e3a5f; line-height: 1.8; white-space: pre; }
 </style>
 """
 
@@ -261,15 +256,9 @@ def _section_glossary() -> str:
 <h2>2 · 指标解读与计算公式</h2>
 
 <p><b>R²（决定系数）</b>：衡量模型预测方差占真实方差的比例，取值上限为 1。</p>
-<div class="formula-block">
-  R² = 1 &minus;
-  <span class="frac">
-    <span class="num">&Sigma;(y&#x1D62; &minus; &#x177;&#x1D62;)²</span>
-    <span class="den">&Sigma;(y&#x1D62; &minus; &#x1D8F;)²</span>
-  </span>
-  &nbsp;&nbsp;
-  其中 &#x1D8F; 为真实值均值，&#x177;&#x1D62; 为模型预测值
-</div>
+<div class="formula-block">R² = 1 - &Sigma;(y&#7522; - &#375;&#7522;)&sup2; / &Sigma;(y&#7522; - &#563;)&sup2;
+
+    y&#7522; : 真实值 &nbsp; &#375;&#7522; : 预测值 &nbsp; &#563; : 真实值均值</div>
 <ul style="margin:4px 0 12px 20px;line-height:1.8">
   <li>R² &gt; 0.85：预测可靠性较强，可用于辅助筛选实验条件</li>
   <li>R² 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎</li>
@@ -277,16 +266,9 @@ def _section_glossary() -> str:
 </ul>
 
 <p><b>RMSE（均方根误差）</b>：对大误差样本更敏感，平方项会放大异常值。标签归一化到 [0,1] 时，单位等同于产率百分点。</p>
-<div class="formula-block">
-  RMSE =
-  <span style="font-size:1.3em;vertical-align:middle">&radic;</span><span style="border-top:1px solid #1e3a5f;padding:0 4px">
-    <span class="frac" style="display:inline-flex">
-      <span class="num">1</span>
-      <span class="den">n</span>
-    </span>
-    &nbsp;&middot;&nbsp;&Sigma;(y&#x1D62; &minus; &#x177;&#x1D62;)²
-  </span>
-</div>
+<div class="formula-block">RMSE = &radic;[ (1/n) &middot; &Sigma;(y&#7522; - &#375;&#7522;)&sup2; ]
+
+    n : 样本量</div>
 <ul style="margin:4px 0 12px 20px;line-height:1.8">
   <li>RMSE &lt; 0.05：平均误差约 5 个百分点，接近实验重复性误差范围</li>
   <li>RMSE 0.05～0.10：中等误差，可区分高产率和低产率区间</li>
@@ -294,14 +276,7 @@ def _section_glossary() -> str:
 </ul>
 
 <p><b>MAE（平均绝对误差）</b>：对每个样本的预测偏差取绝对值后平均，不受极端样本干扰，反映"典型单次预测"误差。</p>
-<div class="formula-block">
-  MAE =
-  <span class="frac">
-    <span class="num">1</span>
-    <span class="den">n</span>
-  </span>
-  &nbsp;&middot;&nbsp;&Sigma;|y&#x1D62; &minus; &#x177;&#x1D62;|
-</div>
+<div class="formula-block">MAE = (1/n) &middot; &Sigma; |y&#7522; - &#375;&#7522;|</div>
 <ul style="margin:4px 0 12px 20px;line-height:1.8">
   <li>MAE &lt; 0.04：典型偏差极小，预测稳定性好</li>
   <li>MAE 0.04～0.08：中等偏差，结合 R² 综合评估</li>
@@ -377,7 +352,8 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
 
 
 def _section_scatter(out_dir: Path) -> str:
-    pngs = sorted(out_dir.glob("scatter_*.png"))
+    pics_dir = out_dir / "pictures"
+    pngs = sorted(pics_dir.glob("scatter_*.png")) if pics_dir.exists() else []
     if not pngs:
         return ""
     imgs = ""
