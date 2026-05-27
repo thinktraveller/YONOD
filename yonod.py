@@ -396,6 +396,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "feature_dim":   int(X_smiles.shape[1]) + (X_numeric.shape[1] if X_numeric is not None else 0),
                 "cv":            args.cv,
             }
+            oof_pred   = metrics.get("oof_pred")
+            oof_y_true = metrics.get("oof_y_true")
             for k, v in metrics.items():
                 if k not in ("oof_pred", "oof_y_true"):
                     row[k] = v
@@ -407,6 +409,19 @@ def main(argv: Optional[List[str]] = None) -> int:
                 f"RMSE={row.get('rmse_mean', float('nan')):.4f}  "
                 f"t={row.get('train_time_s', 0):.1f}s"
             )
+
+            if oof_pred is not None and oof_y_true is not None:
+                try:
+                    from yonod.plot import plot_scatter
+                    valid = ~np.isnan(oof_pred)
+                    if valid.sum() >= 2:
+                        plot_scatter(
+                            oof_y_true[valid], oof_pred[valid],
+                            desc_name, model_name, out_dir,
+                            x_label="真实值", y_label="预测值",
+                        )
+                except Exception as _exc:
+                    print(f"[warn] 散点图生成失败 ({label}): {_exc}", file=sys.stderr)
 
     _print_table(rows)
 
