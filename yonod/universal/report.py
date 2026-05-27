@@ -173,17 +173,8 @@ thead th { background: #1e3a5f; color: white; }
                     box-shadow: 0 1px 4px rgba(0,0,0,.12); }
 .formula-block { background: #f0f4ff; border-left: 3px solid #2563eb;
                  border-radius: 4px; padding: 12px 20px; margin: 8px 0 12px;
-                 color: #1e3a5f; overflow-x: auto; }
-.var-table { border: none; width: auto; margin: 4px 0 0 16px; font-size: 0.85rem; }
-.var-table td { border: none; padding: 1px 8px; text-align: left; color: #374151; }
+                 color: #1e3a5f; font-size: 1rem; text-align: center; }
 </style>
-<script>
-MathJax = {
-  tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']] },
-  options: { skipHtmlTags: ['script','noscript','style','textarea'] }
-};
-</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 """
 
 
@@ -258,48 +249,46 @@ def _section_grid(df: pd.DataFrame) -> str:
 
 
 def _section_glossary() -> str:
-    """§14.5.2 固定指标解释文字（含 MathJax 渲染公式）。"""
+    """§14.5.2 固定指标解释文字（含 MathJax LaTeX 公式）。"""
     return r"""
 <section>
 <h2>2 · 指标解读与计算公式</h2>
 
 <p><b>R²（决定系数）</b>：衡量模型预测方差占真实方差的比例，取值上限为 1。</p>
 <div class="formula-block">
-$$R^2 = 1 - \dfrac{\displaystyle\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{\displaystyle\sum_{i=1}^{n}(y_i - \bar{y})^2}$$
-<table class="var-table">
-<tr><td>$y_i$</td><td>真实值</td><td style="padding-left:24px">$\hat{y}_i$</td><td>预测值</td><td style="padding-left:24px">$\bar{y}$</td><td>真实值均值</td></tr>
-</table>
+  \[R^2 = 1 - \frac{\displaystyle\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{\displaystyle\sum_{i=1}^{n}(y_i - \bar{y})^2}\]
+  <span style="font-size:0.82rem;color:#4b5563">\(y_i\)：真实值 &ensp; \(\hat{y}_i\)：预测值 &ensp; \(\bar{y}\)：真实值均值</span>
 </div>
 <ul style="margin:4px 0 12px 20px;line-height:1.8">
-  <li>$R^2 > 0.85$：预测可靠性较强，可用于辅助筛选实验条件</li>
-  <li>$R^2$ 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎</li>
-  <li>$R^2 < 0.7$ 或负值：拟合效果弱；样本量极少时（如 5 折 CV 每折仅 2 个测试样本）负值属正常现象</li>
+  <li>R² &gt; 0.85：预测可靠性较强，可用于辅助筛选实验条件</li>
+  <li>R² 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎</li>
+  <li>R² &lt; 0.7 或负值：拟合效果弱；样本量极少时（如 5 折 CV 每折仅 2 个测试样本）负值属正常现象</li>
 </ul>
 
 <p><b>RMSE（均方根误差）</b>：对大误差样本更敏感，平方项会放大异常值。标签归一化到 [0,1] 时，单位等同于产率百分点。</p>
 <div class="formula-block">
-$$\text{RMSE} = \sqrt{\dfrac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}$$
-<table class="var-table">
-<tr><td>$n$</td><td>样本量</td></tr>
-</table>
+  \[\mathrm{RMSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}\]
+  <span style="font-size:0.82rem;color:#4b5563">\(n\)：样本量</span>
 </div>
 <ul style="margin:4px 0 12px 20px;line-height:1.8">
-  <li>RMSE $< 0.05$：平均误差约 5 个百分点，接近实验重复性误差范围</li>
+  <li>RMSE &lt; 0.05：平均误差约 5 个百分点，接近实验重复性误差范围</li>
   <li>RMSE 0.05～0.10：中等误差，可区分高产率和低产率区间</li>
-  <li>RMSE $> 0.10$：误差偏大，不建议用于定量预测</li>
+  <li>RMSE &gt; 0.10：误差偏大，不建议用于定量预测</li>
 </ul>
 
 <p><b>MAE（平均绝对误差）</b>：对每个样本的预测偏差取绝对值后平均，不受极端样本干扰，反映"典型单次预测"误差。</p>
 <div class="formula-block">
-$$\text{MAE} = \dfrac{1}{n}\sum_{i=1}^{n}\left|y_i - \hat{y}_i\right|$$
+  \[\mathrm{MAE} = \frac{1}{n}\sum_{i=1}^{n}\left|y_i - \hat{y}_i\right|\]
 </div>
 <ul style="margin:4px 0 12px 20px;line-height:1.8">
-  <li>MAE $< 0.04$：典型偏差极小，预测稳定性好</li>
-  <li>MAE 0.04～0.08：中等偏差，结合 $R^2$ 综合评估</li>
-  <li>MAE $> 0.08$：典型偏差较大，预测结果存在系统性偏移风险</li>
+  <li>MAE &lt; 0.04：典型偏差极小，预测稳定性好</li>
+  <li>MAE 0.04～0.08：中等偏差，结合 R² 综合评估</li>
+  <li>MAE &gt; 0.08：典型偏差较大，预测结果存在系统性偏移风险</li>
 </ul>
 
-<p class="note">综合排名权重：$R^2 \times 0.5 \;+\; \left(1-\dfrac{\text{RMSE}}{\text{RMSE}_\max}\right)\times 0.3 \;+\; \left(1-\dfrac{\text{MAE}}{\text{MAE}_\max}\right)\times 0.2$</p>
+<p class="note">综合排名权重：
+  \(S = R^2 \times 0.5 \;+\; \left(1 - \dfrac{\mathrm{RMSE}}{\mathrm{RMSE}_{\max}}\right) \times 0.3 \;+\; \left(1 - \dfrac{\mathrm{MAE}}{\mathrm{MAE}_{\max}}\right) \times 0.2\)
+</p>
 </section>"""
 
 
@@ -438,6 +427,13 @@ def generate_report(
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>YONOD 报告 — {_esc(str(task_info.get('task_name', '')))} </title>
 {_CSS}
+<script>
+MathJax = {{
+  tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\\\]']] }},
+  options: {{ skipHtmlTags: ['script','noscript','style','textarea','pre'] }}
+}};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
 <body>
 {body}
