@@ -33,8 +33,7 @@
 | **FISD (GNN embedding)** | ✓ | ✓ | ✓ | ✓ |
 | **MolMetaLM (Llama embedding)** | ✓ | ✓ | ✓ | ✓ |
 
-详细设计文档见 [YONOD项目构建计划书.md](YONOD项目构建计划书.md)；
-迁移到云端/Linux/GitHub 的指南见 [MIGRATION.md](MIGRATION.md)。
+详细设计文档见 [YONOD项目构建计划书.md](YONOD项目构建计划书.md)。
 
 ---
 
@@ -304,7 +303,6 @@ YONOD/
 ├── 化学描述符相关项目/               ✗ 不随仓库提供（第三方源码，仅供本地参考）
 │
 ├── README.md                         本文件
-├── MIGRATION.md                      云端/Linux/GitHub 迁移指南
 ├── CHANGELOG.md                      版本变更记录
 ├── YONOD项目构建计划书.md            完整设计文档（含决策记录、Q&A）
 ├── requirements.txt                  Python 依赖（不含 torch / autogluon，见快速开始）

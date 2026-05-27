@@ -14,6 +14,13 @@
 
 ### Changed
 
+**MIGRATION.md 移出 git 追踪，改为本地私有文档**
+- **动机**：`MIGRATION.md` 含内部部署细节（云服务商选型、成本估算、本地路径硬编码等），不适合公开分发
+- **`.gitignore`**：新增 `MIGRATION.md` 条目并附注释说明原因
+- **`git rm --cached`**：将 `MIGRATION.md` 移出 git 索引；本地文件不受影响
+- **`README.md`**：删除项目简介中指向 `MIGRATION.md` 的超链接；从仓库结构树中移除该条目
+- **`CHANGELOG.md`**（v1.0.0 Notes）：删除"云端 Linux 部署指南见 `MIGRATION.md`"的引用；`Added` 文档列表中同步移除该条目
+
 **README.md：ATMOMACCS 小节补充许可证说明**
 - 新增许可证条目：上游 ATMOMACCS 项目采用 CC BY 4.0，提醒用户遵守项目协议及 Zenodo 存档页面上各文件的许可条款
 - 修复引用提示语被截断的问题，补全为完整句子并同时指向 DOI 和 Zenodo 存档
@@ -301,14 +308,14 @@
 - 报告生成器 `generate_report.py`：自包含 HTML（base64 内嵌 PNG），含术语解释、推荐表、热力图、散点画廊
 - 诊断工具 `verify_morgan_rf.py`：单独验证 RF 在高维特征上的耗时
 - 烟测脚本 `test_run_yield.py`
-- 文档：`README.md`、`MIGRATION.md`（云端/Linux/GitHub 迁移指南）、`YONOD项目构建计划书.md`（含设计决策与 13 条 Q&A）
+- 文档：`README.md`、`YONOD项目构建计划书.md`（含设计决策与 13 条 Q&A）
 - 协议：CC BY-NC 4.0
 - `.gitignore` + `requirements.txt`
 
 ### Notes
 - 数据集：47015 条酰胺缩合反应（公开来源），R²（5 折 CV）实测范围 0.58~0.87；冠军组合 Morgan × AutoGluon (R²=0.874)。
 - 仓库初始大小约 40 MB（含数据 CSV + FISD 3 个 `.pth`）；MolMetaLM 权重 500 MB 需从 HuggingFace 单独下载。
-- 已在 Windows 11 + Python 3.9 + CUDA 12.1 + torch 2.1.2 上跑通；云端 Linux 部署指南见 `MIGRATION.md`。
+- 已在 Windows 11 + Python 3.9 + CUDA 12.1 + torch 2.1.2 上跑通。
 
 ---
 
