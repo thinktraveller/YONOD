@@ -289,8 +289,10 @@ YONOD/
 ├── results/                          运行输出（自动生成，不入库）
 │   └── <task-name>/
 │       ├── metrics_summary.csv         所有 (描述符, 模型) 组合的 R²/RMSE/MAE
-│       ├── report.html                 可视化报告（含散点图）
-│       └── run_<timestamp>.log         运行日志镜像
+│       ├── report.html                 可视化报告（内嵌散点图画廊，可直接用浏览器打开）
+│       ├── run_<timestamp>.log         运行日志镜像
+│       └── pictures/                   各 (描述符 × 模型) 组合的 OOF 散点图
+│           └── scatter_<desc>_<model>.png
 │
 ├── cache/                            运行时缓存（自动生成，不入库）
 │                                     存放试剂描述符的 .pkl 缓存，加速重复运行

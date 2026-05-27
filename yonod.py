@@ -417,8 +417,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     if valid.sum() >= 2:
                         plot_scatter(
                             oof_y_true[valid], oof_pred[valid],
-                            desc_name, model_name, out_dir,
-                            x_label="真实值", y_label="预测值",
+                            desc_name, model_name,
+                            out_dir / "pictures",
                         )
                 except Exception as _exc:
                     print(f"[warn] 散点图生成失败 ({label}): {_exc}", file=sys.stderr)
