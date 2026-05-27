@@ -171,6 +171,15 @@ thead th { background: #1e3a5f; color: white; }
 .scatter-grid { display: flex; flex-wrap: wrap; gap: 12px; }
 .scatter-grid img { max-width: 380px; border-radius: 6px;
                     box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.formula-block { background: #f0f4ff; border-left: 3px solid #2563eb;
+                 border-radius: 4px; padding: 8px 14px; margin: 8px 0 12px;
+                 font-family: "Courier New", monospace; font-size: 0.92rem;
+                 color: #1e3a5f; line-height: 1.9; }
+.formula-block .frac { display: inline-flex; flex-direction: column;
+                       align-items: center; vertical-align: middle;
+                       margin: 0 2px; font-size: 0.82em; }
+.formula-block .frac .num { border-bottom: 1px solid #1e3a5f; padding: 0 3px; }
+.formula-block .frac .den { padding: 0 3px; }
 </style>
 """
 
@@ -246,29 +255,60 @@ def _section_grid(df: pd.DataFrame) -> str:
 
 
 def _section_glossary() -> str:
-    """§14.5.2 固定指标解释文字。"""
+    """§14.5.2 固定指标解释文字（含计算公式）。"""
     return """
 <section>
-<h2>2 · 指标解读（化学实验直觉版）</h2>
-<p><b>R²（决定系数）</b>：取值 0～1，越接近 1 表示模型对标签变化的解释能力越强。</p>
-<ul style="margin:8px 0 8px 20px;line-height:1.8">
+<h2>2 · 指标解读与计算公式</h2>
+
+<p><b>R²（决定系数）</b>：衡量模型预测方差占真实方差的比例，取值上限为 1。</p>
+<div class="formula-block">
+  R² = 1 &minus;
+  <span class="frac">
+    <span class="num">&Sigma;(y&#x1D62; &minus; &#x177;&#x1D62;)²</span>
+    <span class="den">&Sigma;(y&#x1D62; &minus; &#x1D8F;)²</span>
+  </span>
+  &nbsp;&nbsp;
+  其中 &#x1D8F; 为真实值均值，&#x177;&#x1D62; 为模型预测值
+</div>
+<ul style="margin:4px 0 12px 20px;line-height:1.8">
   <li>R² &gt; 0.85：预测可靠性较强，可用于辅助筛选实验条件</li>
   <li>R² 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎</li>
-  <li>R² &lt; 0.7：拟合效果较弱，仅供参考</li>
+  <li>R² &lt; 0.7 或负值：拟合效果弱；样本量极少时（如 5 折 CV 每折仅 2 个测试样本）负值属正常现象</li>
 </ul>
-<p><b>RMSE（均方根误差）</b>：与标签量纲相同，对大误差样本更敏感（平方放大异常值）。标签为 0～1 产率时，单位等同于产率百分点。</p>
-<ul style="margin:8px 0 8px 20px;line-height:1.8">
+
+<p><b>RMSE（均方根误差）</b>：对大误差样本更敏感，平方项会放大异常值。标签归一化到 [0,1] 时，单位等同于产率百分点。</p>
+<div class="formula-block">
+  RMSE =
+  <span style="font-size:1.3em;vertical-align:middle">&radic;</span><span style="border-top:1px solid #1e3a5f;padding:0 4px">
+    <span class="frac" style="display:inline-flex">
+      <span class="num">1</span>
+      <span class="den">n</span>
+    </span>
+    &nbsp;&middot;&nbsp;&Sigma;(y&#x1D62; &minus; &#x177;&#x1D62;)²
+  </span>
+</div>
+<ul style="margin:4px 0 12px 20px;line-height:1.8">
   <li>RMSE &lt; 0.05：平均误差约 5 个百分点，接近实验重复性误差范围</li>
   <li>RMSE 0.05～0.10：中等误差，可区分高产率和低产率区间</li>
   <li>RMSE &gt; 0.10：误差偏大，不建议用于定量预测</li>
 </ul>
-<p><b>MAE（平均绝对误差）</b>：与标签量纲相同，对每个样本的预测偏差取绝对值后平均，反映"典型单次预测"的误差大小，不受少数极端样本影响。MAE 越小，说明日常预测越稳定准确。</p>
-<ul style="margin:8px 0 8px 20px;line-height:1.8">
+
+<p><b>MAE（平均绝对误差）</b>：对每个样本的预测偏差取绝对值后平均，不受极端样本干扰，反映"典型单次预测"误差。</p>
+<div class="formula-block">
+  MAE =
+  <span class="frac">
+    <span class="num">1</span>
+    <span class="den">n</span>
+  </span>
+  &nbsp;&middot;&nbsp;&Sigma;|y&#x1D62; &minus; &#x177;&#x1D62;|
+</div>
+<ul style="margin:4px 0 12px 20px;line-height:1.8">
   <li>MAE &lt; 0.04：典型偏差极小，预测稳定性好</li>
   <li>MAE 0.04～0.08：中等偏差，结合 R² 综合评估</li>
   <li>MAE &gt; 0.08：典型偏差较大，预测结果存在系统性偏移风险</li>
 </ul>
-<p class="note">综合排名权重：R²×0.5 + (1−RMSE/max_RMSE)×0.3 + (1−MAE/max_MAE)×0.2</p>
+
+<p class="note">综合排名权重：R²×0.5 + (1&minus;RMSE/max_RMSE)×0.3 + (1&minus;MAE/max_MAE)×0.2</p>
 </section>"""
 
 
@@ -353,7 +393,11 @@ def _section_scatter(out_dir: Path) -> str:
             )
     return f"""
 <section>
-<h2>4 · 散点图画廊</h2>
+<h2>5 · 散点图画廊（真实值 vs 预测值）</h2>
+<p style="font-size:0.85rem;color:#6b7280;margin-bottom:10px">
+  每张图对应一个（描述符 × 模型）组合，横轴为真实标签，纵轴为模型预测值，虚线为 y = x 理想参考线。
+  点越靠近虚线表示预测越准确；图内标注了该组合的 R²、RMSE 及样本量。
+</p>
 <div class="scatter-grid">{imgs}</div>
 </section>"""
 
