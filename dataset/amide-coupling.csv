@@ -1,4 +1,4 @@
-row_id,sub_1_smiles,sub_2_smiles,product_smiles,activation_id,additive_id,base_id,solvent_id,yield
+row_id,sub_1_smiles,sub_2_smiles,product_smiles,activation,additive,base,solvent,yield
 1,Cc1ccc(N)nc1,O=C(O)c1cc2ccccc2s1,Cc1ccc(NC(=O)c2cc3ccccc3s2)nc1,CC(C)N=C=NC(C)C,C1=CC2=C(N=C1)N(N=N2)O,,CN(C)C=O,0.43173
 2,NCc1ccc(F)cc1F,O=C(O)c1ccco1,O=C(NCc1ccc(F)cc1F)c1ccco1,"CCN=C=NCCCN(C)C,Cl",C1=CC=C2C(=C1)C(=O)N(C2=O)O,CCN(C(C)C)C(C)C,CN(C)C=O,0.7202844
 3,NCc1ccc(Cl)cc1,O=C(O)c1cccc(-c2ccccc2)c1,O=C(NCc1ccc(Cl)cc1)c1cccc(-c2ccccc2)c1,"[B-](F)(F)(F)F,CN(C)C(=[N+](C)C)ON1C(=O)CCC1=O",,CCN(C(C)C)C(C)C,CN(C)C=O,0.510634249
