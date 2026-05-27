@@ -48,8 +48,9 @@ def plot_scatter(
 ) -> Path:
     """Render and save a prediction-vs-truth scatter plot.
 
-    Both axes share the same limits (union of y_true and y_pred range) so
-    the y=x reference line is a true 45° diagonal.
+    X-axis range is determined by y_true min/max;
+    Y-axis range is determined by y_pred min/max.
+    The y=x reference line spans the combined range of both axes.
 
     Args:
         y_true: ground-truth labels, shape (n,).
@@ -71,13 +72,15 @@ def plot_scatter(
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     ax.scatter(y_true, y_pred, s=18, alpha=0.5, edgecolor="none", color="#3b82f6")
 
-    # Unified axis range: same limits for x and y so the y=x line is a true diagonal.
-    all_vals = np.concatenate([y_true, y_pred])
-    v_lo, v_hi = float(all_vals.min()), float(all_vals.max())
-    pad = 0.05 * (v_hi - v_lo + 1e-9)
-    lims = (v_lo - pad, v_hi + pad)
+    # Shared axis range: both axes span the same [min, max] so the y=x line
+    # sits exactly on the diagonal and the visual aspect ratio is meaningful.
+    all_lo = min(float(y_true.min()), float(y_pred.min()))
+    all_hi = max(float(y_true.max()), float(y_pred.max()))
+    pad = 0.05 * (all_hi - all_lo + 1e-9)
+    lims = (all_lo - pad, all_hi + pad)
 
     ax.plot(lims, lims, "--", color="#666666", linewidth=1, label="y = x")
+
     ax.set_xlim(lims)
     ax.set_ylim(lims)
 
