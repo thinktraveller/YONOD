@@ -48,9 +48,8 @@ def plot_scatter(
 ) -> Path:
     """Render and save a prediction-vs-truth scatter plot.
 
-    X-axis range is determined by y_true min/max;
-    Y-axis range is determined by y_pred min/max.
-    The y=x reference line spans the combined range of both axes.
+    Both axes share the same limits (union of y_true and y_pred range) so
+    the y=x reference line is a true 45° diagonal.
 
     Args:
         y_true: ground-truth labels, shape (n,).
@@ -72,22 +71,15 @@ def plot_scatter(
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     ax.scatter(y_true, y_pred, s=18, alpha=0.5, edgecolor="none", color="#3b82f6")
 
-    # Independent axis ranges: x follows y_true, y follows y_pred.
-    x_lo, x_hi = float(y_true.min()), float(y_true.max())
-    y_lo, y_hi = float(y_pred.min()), float(y_pred.max())
-    x_pad = 0.05 * (x_hi - x_lo + 1e-9)
-    y_pad = 0.05 * (y_hi - y_lo + 1e-9)
-    x_lims = (x_lo - x_pad, x_hi + x_pad)
-    y_lims = (y_lo - y_pad, y_hi + y_pad)
+    # Unified axis range: same limits for x and y so the y=x line is a true diagonal.
+    all_vals = np.concatenate([y_true, y_pred])
+    v_lo, v_hi = float(all_vals.min()), float(all_vals.max())
+    pad = 0.05 * (v_hi - v_lo + 1e-9)
+    lims = (v_lo - pad, v_hi + pad)
 
-    # y=x reference line spans the combined visible range; matplotlib clips to axes.
-    diag_lo = min(x_lims[0], y_lims[0])
-    diag_hi = max(x_lims[1], y_lims[1])
-    ax.plot([diag_lo, diag_hi], [diag_lo, diag_hi],
-            "--", color="#666666", linewidth=1, label="y = x")
-
-    ax.set_xlim(x_lims)
-    ax.set_ylim(y_lims)
+    ax.plot(lims, lims, "--", color="#666666", linewidth=1, label="y = x")
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
 
     ax.set_xlabel(x_label, fontsize=11)
     ax.set_ylabel(y_label, fontsize=11)
