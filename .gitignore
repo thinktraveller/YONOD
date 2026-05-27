@@ -89,11 +89,6 @@ desktop.ini
 # Unit / smoke tests are kept locally for dev verification, not distributed
 tests/
 
-# ===================== Internal docs =====================
-# MIGRATION.md contains internal deployment details (server IPs, file paths,
-# cost estimates) not intended for public distribution.
-MIGRATION.md
-
 # ===================== Misc =====================
 *.bak
 *.swp
