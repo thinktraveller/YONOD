@@ -14,6 +14,20 @@
 
 ### Changed
 
+**报告增强：数据集来源字段 + 双格式输出（HTML / Markdown）**
+
+- **`yonod.py`（CLI）**：新增 4 个可选参数
+  - `--dataset-citation TEXT`：文献来源（如 `Dai et al., Chem. Sci., 2025`）
+  - `--dataset-url URL`：开源地址（如 GitHub 链接）
+  - `--dataset-notes TEXT`：自由备注
+  - `--output-format {html,md,both}`：报告格式选择，默认 `both`（同时生成 HTML 和 Markdown）
+- **`yonod.py`（向导）**：向导版本升至 v4，步骤从 8 步扩展到 10 步
+  - 新步骤 [9/10]：逐项询问数据集来源（文献引用 / 开源地址 / 备注），均可留空跳过
+  - 新步骤 [10/10]：询问报告输出格式（html / md / both，默认 both）
+- **`yonod/universal/report.py`**：
+  - `_section_intro()`：当 `task_info` 含任一数据集来源字段时，在 HTML 报告任务信息区块下方渲染"数据集来源"子表（含超链接）
+  - 新增 `generate_markdown_report()`：生成完整 Markdown 格式报告（`report.md`），包含任务信息表、数据集来源（可选）、R² 结果矩阵、详细指标表、推荐排名（含可折叠完整列表）、指标说明；适合二次编辑和版本管理
+
 **MIGRATION.md 移出 git 追踪，改为本地私有文档**
 - **动机**：`MIGRATION.md` 含内部部署细节（云服务商选型、成本估算、本地路径硬编码等），不适合公开分发
 - **`.gitignore`**：新增 `MIGRATION.md` 条目并附注释说明原因

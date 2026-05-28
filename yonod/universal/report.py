@@ -186,6 +186,36 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
     num_c   = _esc(str(task_info.get("numeric_cols", "（无）")))
     lbl     = _esc(task_info.get("label_col", "—"))
     n_combo = task_info.get("n_combinations", "—")
+
+    citation = task_info.get("dataset_citation")
+    url      = task_info.get("dataset_url")
+    notes    = task_info.get("dataset_notes")
+    dataset_section = ""
+    if any([citation, url, notes]):
+        ds_rows = ""
+        if citation:
+            ds_rows += (
+                f"<tr><th style='text-align:left'>文献引用</th>"
+                f"<td style='text-align:left'>{_esc(citation)}</td></tr>"
+            )
+        if url:
+            url_esc = _esc(url)
+            ds_rows += (
+                f"<tr><th style='text-align:left'>开源地址</th>"
+                f"<td style='text-align:left'>"
+                f"<a href='{url_esc}' target='_blank' rel='noopener'>{url_esc}</a>"
+                f"</td></tr>"
+            )
+        if notes:
+            ds_rows += (
+                f"<tr><th style='text-align:left'>备注</th>"
+                f"<td style='text-align:left'>{_esc(notes)}</td></tr>"
+            )
+        dataset_section = (
+            f"\n<h2 style='margin-top:16px;font-size:1rem'>数据集来源</h2>"
+            f"\n<table>{ds_rows}</table>"
+        )
+
     return f"""
 <section>
 <h1>YONOD 通用建模报告 — {name}</h1>
@@ -197,7 +227,7 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
 <tr><th style="text-align:left">SMILES 列</th><td style="text-align:left"><code>{smi_c}</code></td></tr>
 <tr><th style="text-align:left">数值辅助列</th><td style="text-align:left"><code>{num_c}</code></td></tr>
 <tr><th style="text-align:left">标签列</th><td style="text-align:left"><code>{lbl}</code></td></tr>
-</table>
+</table>{dataset_section}
 </section>"""
 
 
@@ -445,4 +475,185 @@ MathJax = {{
 
     out_path = out_dir / filename
     out_path.write_text(html, encoding="utf-8")
+    return out_path
+
+
+def generate_markdown_report(
+    metrics_df: pd.DataFrame,
+    task_info: Dict[str, Any],
+    out_dir: Path,
+    filename: str = "report.md",
+) -> Path:
+    """生成 Markdown 格式报告，适合二次编辑和版本管理。
+
+    包含任务信息、数据集来源、结果矩阵、详细指标、推荐排名和指标说明。
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    now       = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    task_name = str(task_info.get("task_name", "—"))
+
+    # 统一列名
+    desc_col  = "desc_name"  if "desc_name"  in metrics_df.columns else "descriptor"
+    model_col = "model_name" if "model_name" in metrics_df.columns else "model"
+    r2_col    = "r2_mean"    if "r2_mean"    in metrics_df.columns else "r2"
+    rmse_col  = "rmse_mean"  if "rmse_mean"  in metrics_df.columns else "rmse"
+    mae_col   = "mae_mean"   if "mae_mean"   in metrics_df.columns else "mae"
+
+    def _fv(v: Any, d: int = 4) -> str:
+        if v is None or (isinstance(v, float) and math.isnan(float(v))):
+            return "—"
+        return f"{float(v):.{d}f}"
+
+    lines: List[str] = []
+
+    # ── 标题 ─────────────────────────────────────────────────────────────────
+    lines += [
+        f"# YONOD 建模报告 — {task_name}",
+        "",
+        f"> 生成时间：{now}  ",
+        f"> 评估组合数：{task_info.get('n_combinations', '—')}",
+        "",
+        "---",
+        "",
+    ]
+
+    # ── 任务信息 ─────────────────────────────────────────────────────────────
+    lines += [
+        "## 任务信息",
+        "",
+        "| 项目 | 内容 |",
+        "|---|---|",
+        f"| 任务名称 | {task_name} |",
+        f"| CSV 路径 | `{task_info.get('csv_path', '—')}` |",
+        f"| 有效样本量 | {task_info.get('n_samples', '—')} |",
+        f"| SMILES 列 | `{task_info.get('smiles_cols', '—')}` |",
+        f"| 数值辅助列 | `{task_info.get('numeric_cols', '（无）')}` |",
+        f"| 标签列 | `{task_info.get('label_col', '—')}` |",
+        "",
+    ]
+
+    # ── 数据集来源（可选）───────────────────────────────────────────────────
+    citation = task_info.get("dataset_citation")
+    url      = task_info.get("dataset_url")
+    notes    = task_info.get("dataset_notes")
+    if any([citation, url, notes]):
+        lines += ["---", "", "## 数据集来源", "", "| 项目 | 信息 |", "|---|---|"]
+        if citation:
+            lines.append(f"| 文献引用 | {citation} |")
+        if url:
+            lines.append(f"| 开源地址 | {url} |")
+        if notes:
+            lines.append(f"| 备注 | {notes} |")
+        lines.append("")
+
+    # ── 结果矩阵（R²）────────────────────────────────────────────────────────
+    descs  = metrics_df[desc_col].unique().tolist()
+    models = metrics_df[model_col].unique().tolist()
+
+    lines += ["---", "", "## 结果矩阵（R²）", ""]
+    header = "| 描述符 \\ 模型 | " + " | ".join(models) + " |"
+    sep    = "|---|" + "---|" * len(models)
+    lines += [header, sep]
+    for d in descs:
+        cells = []
+        for m in models:
+            sub = metrics_df[(metrics_df[desc_col] == d) & (metrics_df[model_col] == m)]
+            if sub.empty:
+                cells.append("—")
+            else:
+                cells.append(_fv(sub.iloc[0].get(r2_col, float("nan"))))
+        lines.append("| " + d + " | " + " | ".join(cells) + " |")
+    lines.append("")
+
+    # ── 详细指标 ─────────────────────────────────────────────────────────────
+    has_time = "train_time_s" in metrics_df.columns
+    time_th  = " 用时 |" if has_time else ""
+    time_sep = "---|" if has_time else ""
+
+    lines += ["---", "", "## 详细指标", ""]
+    lines.append(f"| 描述符 | 模型 | R² 均值 | R² 标准差 | RMSE | MAE |{time_th}")
+    lines.append(f"|---|---|---|---|---|---|{time_sep}")
+    for _, row in metrics_df.iterrows():
+        r2_std = row.get("r2_std", float("nan")) if "r2_std" in row.index else float("nan")
+        t_cell = f" {_fmt_time(row.get('train_time_s'))} |" if has_time else ""
+        lines.append(
+            f"| {row[desc_col]} | {row[model_col]}"
+            f" | {_fv(row.get(r2_col))} | {_fv(r2_std)}"
+            f" | {_fv(row.get(rmse_col))} | {_fv(row.get(mae_col))} |{t_cell}"
+        )
+    lines.append("")
+
+    # ── 推荐组合 ─────────────────────────────────────────────────────────────
+    ranked = rank_combinations(metrics_df)
+    lines += ["---", "", "## 推荐组合（加权排名）", ""]
+    if not ranked.empty:
+        has_rk_time = "train_time_s" in ranked.columns
+        rk_time_th  = " 用时 |" if has_rk_time else ""
+        rk_time_sep = "---|" if has_rk_time else ""
+        rk_header = f"| 名次 | 描述符 | 模型 | R² | RMSE | MAE | 综合分 |{rk_time_th} 推荐理由 |"
+        rk_sep    = f"|---|---|---|---|---|---|---|{rk_time_sep}---|"
+        lines += [rk_header, rk_sep]
+        for _, r in ranked.head(3).iterrows():
+            medal  = ["🥇", "🥈", "🥉"][int(r["rank"]) - 1]
+            t_cell = f" {_fmt_time(r['train_time_s'])} |" if has_rk_time else ""
+            reason = r.get("reason") or "综合指标较优"
+            lines.append(
+                f"| {medal} {int(r['rank'])} | **{r['desc_name']}** | **{r['model_name']}**"
+                f" | {_fv(r['r2'], 3)} | {_fv(r['rmse'], 4)} | {_fv(r['mae'], 4)}"
+                f" | {_fv(r['score'], 3)} |{t_cell} {reason} |"
+            )
+        lines += [
+            "",
+            "<details>",
+            "<summary>展开完整排名</summary>",
+            "",
+            rk_header,
+            rk_sep,
+        ]
+        for _, r in ranked.iterrows():
+            t_cell = f" {_fmt_time(r['train_time_s'])} |" if has_rk_time else ""
+            lines.append(
+                f"| {int(r['rank'])} | {r['desc_name']} | {r['model_name']}"
+                f" | {_fv(r['r2'], 3)} | {_fv(r['rmse'], 4)} | {_fv(r['mae'], 4)}"
+                f" | {_fv(r['score'], 3)} |{t_cell}|"
+            )
+        lines += ["", "</details>", ""]
+    else:
+        lines += ["无有效结果。", ""]
+
+    # ── 指标说明 ─────────────────────────────────────────────────────────────
+    lines += [
+        "---",
+        "",
+        "## 指标说明",
+        "",
+        "**R²（决定系数）**：衡量模型预测方差占真实方差的比例，取值上限为 1。",
+        "",
+        "- R² > 0.85：预测可靠性较强，可用于辅助筛选实验条件",
+        "- R² 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎",
+        "- R² < 0.7 或负值：拟合效果弱；样本量极少时负值属正常现象",
+        "",
+        "**RMSE（均方根误差）**：对大误差样本更敏感。标签归一化到 [0,1] 时，单位等同于产率百分点。",
+        "",
+        "- RMSE < 0.05：平均误差约 5 个百分点，接近实验重复性误差范围",
+        "- RMSE 0.05～0.10：中等误差，可区分高产率和低产率区间",
+        "- RMSE > 0.10：误差偏大，不建议用于定量预测",
+        "",
+        "**MAE（平均绝对误差）**：对每个样本的预测偏差取绝对值后平均。",
+        "",
+        "- MAE < 0.04：典型偏差极小，预测稳定性好",
+        "- MAE 0.04～0.08：中等偏差，结合 R² 综合评估",
+        "- MAE > 0.08：典型偏差较大",
+        "",
+        "**综合评分**：S = R² × 0.5 + (1 − RMSE / RMSE_max) × 0.3 + (1 − MAE / MAE_max) × 0.2",
+        "",
+        "---",
+        "",
+        f"*由 YONOD report.py 自动生成 · {now}*",
+    ]
+
+    out_path = out_dir / filename
+    out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path
