@@ -253,6 +253,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--rf-n-jobs", type=int, default=-1)
     p.add_argument("--rf-n-estimators", type=int, default=300)
     p.add_argument("--rf-max-depth", type=int, default=None)
+    p.add_argument("--dataset-citation", default=None, metavar="TEXT",
+                   help="数据集文献来源（可选，显示在报告中）")
+    p.add_argument("--dataset-url", default=None, metavar="URL",
+                   help="数据集开源地址（可选，显示在报告中）")
+    p.add_argument("--dataset-notes", default=None, metavar="TEXT",
+                   help="数据集备注（可选，显示在报告中）")
+    p.add_argument(
+        "--output-format", choices=["html", "md", "both"], default="both",
+        help="报告输出格式：html / md / both（默认 both，同时生成 HTML 和 Markdown）",
+    )
     return p.parse_args(argv)
 
 
@@ -429,23 +439,36 @@ def main(argv: Optional[List[str]] = None) -> int:
         csv_out = _save_metrics(rows, out_dir, args.append)
         print(f"\n[save] 指标已保存: {csv_out}")
 
-        try:
-            from yonod.universal.report import generate_report
-            task_info = {
-                "task_name":     task_name,
-                "csv_path":      args.csv,
-                "n_samples":     rows[0].get("n_samples", "—") if rows else "—",
-                "smiles_cols":   smiles_cols,
-                "numeric_cols":  numeric_cols or "（无）",
-                "label_col":     label_col,
-                "n_combinations":len(rows),
-            }
-            report_path = generate_report(
-                pd.DataFrame(rows), task_info, out_dir
-            )
-            print(f"[report] HTML 报告已生成: {report_path}")
-        except Exception as exc:
-            print(f"[warn] HTML 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
+        task_info = {
+            "task_name":        task_name,
+            "csv_path":         args.csv,
+            "n_samples":        rows[0].get("n_samples", "—") if rows else "—",
+            "smiles_cols":      smiles_cols,
+            "numeric_cols":     numeric_cols or "（无）",
+            "label_col":        label_col,
+            "n_combinations":   len(rows),
+            "dataset_citation": args.dataset_citation,
+            "dataset_url":      args.dataset_url,
+            "dataset_notes":    args.dataset_notes,
+        }
+        metrics_df = pd.DataFrame(rows)
+        fmt = args.output_format
+
+        if fmt in ("html", "both"):
+            try:
+                from yonod.universal.report import generate_report
+                report_path = generate_report(metrics_df, task_info, out_dir)
+                print(f"[report] HTML 报告已生成: {report_path}")
+            except Exception as exc:
+                print(f"[warn] HTML 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
+
+        if fmt in ("md", "both"):
+            try:
+                from yonod.universal.report import generate_markdown_report
+                md_path = generate_markdown_report(metrics_df, task_info, out_dir)
+                print(f"[report] Markdown 报告已生成: {md_path}")
+            except Exception as exc:
+                print(f"[warn] Markdown 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
     else:
         print("\n[warn] 无有效结果，metrics_summary.csv 未写入", file=sys.stderr)
 
@@ -607,12 +630,12 @@ def wizard() -> None:
     print()
     print("=" * 60)
     print("  YONOD - Your One-stop Notebook Of Descriptors")
-    print("  通用交互向导  v3")
+    print("  通用交互向导  v4")
     print("=" * 60)
     print()
 
     # ── 1. CSV 路径 ──────────────────────────────────────────────────────────
-    print("[1/8] 输入 CSV 文件路径（可直接拖拽文件到终端）")
+    print("[1/10] 输入 CSV 文件路径（可直接拖拽文件到终端）")
     while True:
         raw = _ask_required("  路径")
         csv_path = Path(raw.strip('"').strip("'"))
@@ -638,7 +661,7 @@ def wizard() -> None:
     _show_columns(columns)
 
     # ── 2. 标签列 ────────────────────────────────────────────────────────────
-    print("[2/8] 标签列（预测目标，如 yield / ee / ddG）")
+    print("[2/10] 标签列（预测目标，如 yield / ee / ddG）")
     print("      支持：列名  /  字母（如 B）  /  序号（如 2）")
     label_col = _ask_single_col("  标签列", columns, required=True)
     assert label_col is not None
@@ -647,7 +670,7 @@ def wizard() -> None:
     print()
 
     # ── 3. SMILES 列 ─────────────────────────────────────────────────────────
-    print("[3/8] SMILES 列（分子结构列，至少指定一列）")
+    print("[3/10] SMILES 列（分子结构列，至少指定一列）")
     print("      支持：列名 / 字母 / 序号，多列用空格分隔")
     smiles_cols = _ask_multi_cols("  SMILES 列", columns, required=True)
     if label_col in smiles_cols:
@@ -661,7 +684,7 @@ def wizard() -> None:
     print()
 
     # ── 4. 数值辅助列 ────────────────────────────────────────────────────────
-    print("[4/8] 数值辅助列（温度/压力等，可选）")
+    print("[4/10] 数值辅助列（温度/压力等，可选）")
     print("      支持：列名 / 字母 / 序号，多列用空格分隔")
     numeric_cols = _ask_multi_cols("  数值辅助列", columns, required=False)
     bad_numeric = [c for c in numeric_cols if c in smiles_cols or c == label_col]
@@ -672,7 +695,7 @@ def wizard() -> None:
     print()
 
     # ── 5. 任务名称 ──────────────────────────────────────────────────────────
-    print("[5/8] 任务名称（用于输出目录和报告标题）")
+    print("[5/10] 任务名称（用于输出目录和报告标题）")
     print("      规则：仅允许英文字母、数字、下划线、连字符，如 amide_coupling")
     while True:
         task_name = _ask_required("  任务名称")
@@ -685,14 +708,14 @@ def wizard() -> None:
 
     # ── 6. 输出目录 ──────────────────────────────────────────────────────────
     default_out = str(Path(__file__).resolve().parent / "result" / task_name)
-    print(f"[6/8] 输出目录（默认：{default_out}）")
+    print(f"[6/10] 输出目录（默认：{default_out}）")
     output_dir_raw = _ask_optional("  输出目录", default=default_out)
     output_dir_raw = output_dir_raw.strip('"').strip("'")
     print(f"  → 输出目录确认：'{output_dir_raw}'")
     print()
 
     # ── 7. 描述符 ────────────────────────────────────────────────────────────
-    print("[7/8] 描述符选择（可选）")
+    print("[7/10] 描述符选择（可选）")
     print("      可选值: morgan  maccs  fisd  molmetalm")
     descs_raw = _ask_optional("  描述符（空格分隔，留空=全选）")
     descs = descs_raw.split() if descs_raw else []
@@ -706,7 +729,7 @@ def wizard() -> None:
     print()
 
     # ── 8. 模型 ──────────────────────────────────────────────────────────────
-    print("[8/8] 模型选择（可选）")
+    print("[8/10] 模型选择（可选）")
     print("      可选值: xgb  rf  svm  autogluon")
     models_raw = _ask_optional("  模型（空格分隔，留空=全选）")
     models = models_raw.split() if models_raw else []
@@ -717,6 +740,27 @@ def wizard() -> None:
             print(f"  [警告] 未知模型已忽略：{bad_models}")
             models = [m for m in models if m in _valid_models]
     print(f"  → 模型确认：{models if models else '（全选）'}")
+    print()
+
+    # ── 9. 数据集来源 ────────────────────────────────────────────────────────
+    print("[9/10] 数据集来源（可选，将显示在报告中）")
+    print("       留空直接回车跳过各子项")
+    dataset_citation = _ask_optional("  文献引用（如 Dai et al., Chem. Sci., 2025）")
+    dataset_url      = _ask_optional("  开源地址（如 https://github.com/...）")
+    dataset_notes    = _ask_optional("  备注")
+    print(f"  → 文献引用：{dataset_citation or '（未填写）'}")
+    print(f"  → 开源地址：{dataset_url or '（未填写）'}")
+    print(f"  → 备注：{dataset_notes or '（未填写）'}")
+    print()
+
+    # ── 10. 输出格式 ──────────────────────────────────────────────────────────
+    print("[10/10] 报告输出格式")
+    print("        可选值: html  md  both（默认 both，同时生成 HTML 和 Markdown）")
+    fmt_raw = _ask_optional("  输出格式", default="both")
+    if fmt_raw not in ("html", "md", "both"):
+        print(f"  [警告] 未知格式 '{fmt_raw}'，已使用默认值 both")
+        fmt_raw = "both"
+    print(f"  → 输出格式确认：'{fmt_raw}'")
     print()
 
     # ── 命令预览 ─────────────────────────────────────────────────────────────
@@ -733,6 +777,13 @@ def wizard() -> None:
         cmd_parts += ["--descriptors", *descs]
     if models:
         cmd_parts += ["--models", *models]
+    if dataset_citation:
+        cmd_parts += ["--dataset-citation", f'"{dataset_citation}"']
+    if dataset_url:
+        cmd_parts += ["--dataset-url", f'"{dataset_url}"']
+    if dataset_notes:
+        cmd_parts += ["--dataset-notes", f'"{dataset_notes}"']
+    cmd_parts += ["--output-format", fmt_raw]
 
     print("=" * 60)
     print("  即将执行（等效命令）:")
@@ -754,6 +805,13 @@ def wizard() -> None:
         argv += ["--descriptors", *descs]
     if models:
         argv += ["--models", *models]
+    if dataset_citation:
+        argv += ["--dataset-citation", dataset_citation]
+    if dataset_url:
+        argv += ["--dataset-url", dataset_url]
+    if dataset_notes:
+        argv += ["--dataset-notes", dataset_notes]
+    argv += ["--output-format", fmt_raw]
 
     sys.exit(main(argv))
 
