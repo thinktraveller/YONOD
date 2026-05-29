@@ -15,22 +15,9 @@ import matplotlib
 matplotlib.use("Agg")  # headless backend; avoids GUI / Tk dependency on Windows.
 
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as _fm
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 
-# ── Chinese font setup (Windows: Microsoft YaHei; Linux: WenQuanYi; fallback: DejaVu) ──
-_CHINESE_FONT_CANDIDATES = [
-    "Microsoft YaHei", "微软雅黑",
-    "SimHei", "黑体",
-    "STHeiti", "华文黑体",
-    "WenQuanYi Micro Hei",
-    "Arial Unicode MS",
-]
-_available_fonts = {f.name for f in _fm.fontManager.ttflist}
-_chosen = next((f for f in _CHINESE_FONT_CANDIDATES if f in _available_fonts), None)
-if _chosen:
-    matplotlib.rcParams["font.sans-serif"] = [_chosen] + matplotlib.rcParams.get("font.sans-serif", [])
 matplotlib.rcParams["axes.unicode_minus"] = False  # prevent minus sign from becoming a box
 
 
@@ -43,8 +30,8 @@ def plot_scatter(
     *,
     figsize: tuple = (5, 5),
     dpi: int = 120,
-    x_label: str = "真实值",
-    y_label: str = "预测值",
+    x_label: str = "True Value",
+    y_label: str = "Predicted Value",
 ) -> Path:
     """Render and save a prediction-vs-truth scatter plot.
 
@@ -58,7 +45,7 @@ def plot_scatter(
         desc: descriptor name (used in title and filename).
         model: model name (used in title and filename).
         save_dir: directory to save the PNG into; created if missing.
-        x_label / y_label: axis labels (default: Chinese).
+        x_label / y_label: axis labels.
 
     Returns:
         Path to the saved PNG file.
@@ -86,7 +73,7 @@ def plot_scatter(
 
     ax.set_xlabel(x_label, fontsize=11)
     ax.set_ylabel(y_label, fontsize=11)
-    ax.set_title(f"{desc}  ×  {model}", fontsize=11)
+    ax.set_title(f"{desc} x {model}", fontsize=11)
     ax.text(
         0.05, 0.95,
         f"$R^2$ = {r2:.3f}\nRMSE = {rmse:.4f}\nn = {len(y_true)}",
