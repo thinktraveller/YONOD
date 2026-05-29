@@ -17,6 +17,7 @@ Implementation notes:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -24,8 +25,8 @@ import numpy as np
 from .base import BaseDescriptor
 
 # Default checkpoint location -- matches YONOD §3.5 path convention.
-DEFAULT_WEIGHT_PATH = (
-    r"C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD\WEIGHTS\MolMetaLM-base"
+DEFAULT_WEIGHT_PATH = str(
+    Path(__file__).resolve().parents[2] / "WEIGHTS" / "MolMetaLM-base"
 )
 
 
