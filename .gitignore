@@ -66,6 +66,7 @@ dataset/*
 # git; the runtime-needed FISD weights are duplicated to WEIGHTS/FISD/).
 # Cite upstream projects in README.md instead of vendoring their source here.
 化学描述符相关项目/
+start-conda.txt
 
 # ===================== Secrets =====================
 .env
