@@ -66,6 +66,8 @@ dataset/*
 # git; the runtime-needed FISD weights are duplicated to WEIGHTS/FISD/).
 # Cite upstream projects in README.md instead of vendoring their source here.
 化学描述符相关项目/
+构建计划书.md
+课题组工作再次建模\课题组工作整理.pdf
 
 # ===================== Secrets =====================
 .env
