@@ -247,12 +247,13 @@ YONOD/
 │
 ├── yonod/                          ★ 核心代码包
 │   │
-│   ├── descriptors/                  分子描述符实现（4 种）
+│   ├── descriptors/                  分子描述符实现（5 种）
 │   │   ├── base.py                     描述符基类（接口定义）
 │   │   ├── morgan.py                   Morgan ECFP4 指纹（RDKit 调用）
 │   │   ├── atmomaccs.py                MACCS keys 166 维（RDKit 调用）
 │   │   ├── fisd.py                     FISD 双 GCN 嵌入（加载 WEIGHTS/FISD/*.pth）
-│   │   └── molmetalm.py                MolMetaLM Llama 嵌入（加载 WEIGHTS/MolMetaLM-base/）
+│   │   ├── molmetalm.py                MolMetaLM Llama 嵌入（加载 WEIGHTS/MolMetaLM-base/）
+│   │   └── maf.py                      MAF 多分子加和指纹（128 维，本项目原创）
 │   │
 │   ├── features/                     反应级特征工程
 │   │   ├── dataset.py                  酰胺缩合数据加载（6 列 SMILES + yield）
@@ -399,6 +400,7 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 |---|---|---|
 | Morgan ECFP4 指纹 | [morgan.py:32-50](yonod/descriptors/morgan.py#L32-L50) | RDKit `rdkit.Chem.AllChem.GetMorganFingerprintAsBitVect`（仅作 API 调用） |
 | MACCS keys（166 维） | [atmomaccs.py:30-44](yonod/descriptors/atmomaccs.py#L30-L44) | RDKit `rdkit.Chem.rdMolDescriptors.GetMACCSKeysFingerprint`；与上游 ATMOMACCS 的 `generate_MACCS.py` 完全等价（去掉占位 bit 0）。引用：[Zenodo 18669279](https://zenodo.org/records/18669279) / [DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548) |
+| MAF 多分子加和指纹（128 维） | [maf.py:50-112](yonod/descriptors/maf.py#L50-L112) | 本项目原创设计（2026-06-22）；对多组分反应中每个分子生成 ECFP (radius=2, 128 bits)，按位加和得到整数向量，捕捉集体子结构特征 |
 | FISD 双 GCN 嵌入（架构） | [fisd.py:51-95](yonod/descriptors/fisd.py#L51-L95) (`_GNN`、`_TwoInOne` 类) | 与上游 FISD `code/MLMS_mse.ipynb` / `MLMS_cos.ipynb` / `MLMS_2IN1.ipynb` 完全一致；上游：[KeantChen/FISD](https://github.com/KeantChen/FISD)；论文：[DOI:10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A) |
 | FISD 原子特征（45 维） | [fisd.py:99-132](yonod/descriptors/fisd.py#L99-L132) (`_atom_features`) | 与上游 `test_MLMS/reproduce_mlms.py::get_atom_features` 一致 |
 | FISD 图构建 | [fisd.py:134-150](yonod/descriptors/fisd.py#L134-L150) (`_smiles_to_graph`) | 同上游；含单原子分子自环兜底 |
