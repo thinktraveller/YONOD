@@ -27,3 +27,23 @@
 - 步骤 2：注册 MAF 到 `DESCRIPTOR_REGISTRY`，使其可通过 CLI 调用
 
 ---
+
+## [2026-06-22 23:42] 步骤 2 完成：注册 MAF 到系统
+
+### 执行的任务
+- 修改 `yonod/evaluate.py`，导入 `MAFDescriptor`
+- 将 `MAFDescriptor` 注册到 `DESCRIPTOR_REGISTRY` 字典
+- 验证注册成功
+
+### 关键变更
+- **修改文件**：`yonod/evaluate.py`
+  - 第 34 行：添加 `from .descriptors.maf import MAFDescriptor`
+  - 第 48 行：在 `DESCRIPTOR_REGISTRY` 中添加 `"maf": MAFDescriptor`
+
+### 遇到的问题及解决方案
+- 无
+
+### 下一步计划
+- 步骤 3：更新 CLI 参数（检查 `yonod.py` 是否需要更新）
+
+---

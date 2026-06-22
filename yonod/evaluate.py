@@ -31,6 +31,7 @@ import numpy as np
 from .descriptors.atmomaccs import ATMOMACCSDescriptor
 from .descriptors.base import BaseDescriptor
 from .descriptors.fisd import FISDDescriptor
+from .descriptors.maf import MAFDescriptor
 from .descriptors.molmetalm import MolMetaLMDescriptor
 from .descriptors.morgan import MorganDescriptor
 from .features.dataset import MoleculeFeaturizer
@@ -45,6 +46,7 @@ DESCRIPTOR_REGISTRY: Dict[str, Type[BaseDescriptor]] = {
     "atmomaccs": ATMOMACCSDescriptor,
     "fisd": FISDDescriptor,
     "molmetalm": MolMetaLMDescriptor,
+    "maf": MAFDescriptor,
 }
 
 MODEL_REGISTRY: Dict[str, Type[Any]] = {
