@@ -66,3 +66,33 @@
 - 步骤 4：适配多分子输入格式（使用方案 A）
 
 ---
+
+## [2026-06-22 23:53] 步骤 4 完成：适配多分子输入格式（方案 A）
+
+### 执行的任务
+- 分析现有通用架构（`build_universal_features`）
+- 发现架构已自动支持多分子点分隔格式转换（第 110-113 行）
+- 在 `feature_builder.py` 的 `_DESCRIPTOR_IMPORT_MAP` 中添加 MAF
+- 更新模块文档字符串
+- 通过集成测试验证 MAF 在通用架构中的工作
+
+### 关键变更
+- **修改文件**：`yonod/universal/feature_builder.py`
+  - 第 48 行：在 `_DESCRIPTOR_IMPORT_MAP` 中添加 `"maf": ("..descriptors.maf", "MAFDescriptor")`
+  - 第 22 行：更新文档字符串，添加 MAF 描述
+- **架构优势**：现有 `build_universal_features` 已内置多分子格式转换，无需额外实现 `prepare_maf_input()`
+
+### 遇到的问题及解决方案
+- **发现**：原计划方案 A 需要新增 `prepare_maf_input()` 函数，但分析后发现通用架构已自动处理多分子格式
+- **解决**：直接注册 MAF 到 `_DESCRIPTOR_IMPORT_MAP`，利用现有格式转换机制
+
+### 验证结果
+- 输出维度：768 = 128 × 6 列 ✅
+- 所有测试样本有效：3/3 ✅
+- 特征非零率：5.03%（合理范围）✅
+- 特征类型：int32 ✅
+
+### 下一步计划
+- 步骤 5：端到端集成测试（与 4 种模型联调）
+
+---

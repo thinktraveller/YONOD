@@ -19,6 +19,7 @@
   "maccs"      → ATMOMACCSDescriptor（166 维 MACCS keys）
   "fisd"       → FISDDescriptor（50 维 QM9 GCN）
   "molmetalm"  → MolMetaLMDescriptor（768 维 LLM mean-pool）
+  "maf"        → MAFDescriptor（128 维 多分子加和指纹）
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ _DESCRIPTOR_IMPORT_MAP: dict[str, tuple[str, str]] = {
     "maccs":     ("..descriptors.atmomaccs", "ATMOMACCSDescriptor"),
     "fisd":      ("..descriptors.fisd",      "FISDDescriptor"),
     "molmetalm": ("..descriptors.molmetalm", "MolMetaLMDescriptor"),
+    "maf":       ("..descriptors.maf",       "MAFDescriptor"),
 }
 
 
