@@ -629,7 +629,7 @@ def wizard() -> None:
     """交互向导：逐步收集参数，确认后调用 main() 执行 pipeline。"""
     print()
     print("=" * 60)
-    print("  YONOD - Your One-stop Notebook Of Descriptors")
+    print("  YONOD - Your Only Need Outstanding Descriptors")
     print("  通用交互向导  v4")
     print("=" * 60)
     print()
@@ -716,11 +716,11 @@ def wizard() -> None:
 
     # ── 7. 描述符 ────────────────────────────────────────────────────────────
     print("[7/10] 描述符选择（可选）")
-    print("      可选值: morgan  maccs  fisd  molmetalm")
+    print("      可选值: morgan  maccs  fisd  molmetalm  maf ")
     descs_raw = _ask_optional("  描述符（空格分隔，留空=全选）")
     descs = descs_raw.split() if descs_raw else []
     if descs:
-        _valid_descs = {"morgan", "maccs", "fisd", "molmetalm"}
+        _valid_descs = {"morgan", "maccs", "fisd", "molmetalm", "maf"}
         bad_descs = [d for d in descs if d not in _valid_descs]
         if bad_descs:
             print(f"  [警告] 未知描述符已忽略：{bad_descs}")
