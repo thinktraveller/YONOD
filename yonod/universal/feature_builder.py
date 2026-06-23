@@ -117,9 +117,40 @@ def build_universal_features(
                 "DRFP 描述符需要至少指定反应物或产物列。\n"
                 "请使用 --reactant-cols 和 --product-cols 参数。"
             )
-        # DRFP 需要特殊处理：构建反应 SMARTS
-        # 这里暂不实现，等待步骤 3 创建 drfp_desc.py 后再调用
-        raise NotImplementedError("DRFP 描述符将在步骤 3 实现")
+
+        # 构建反应 SMARTS
+        from ..descriptors.drfp_desc import build_reaction_smarts_from_df, DRFPDescriptor
+        smiles_series = build_reaction_smarts_from_df(
+            df,
+            reactant_cols=smiles_roles['reactant'],
+            product_cols=smiles_roles['product'],
+        )
+        smiles_list = smiles_series.tolist()
+
+        # 计算 DRFP
+        desc = DRFPDescriptor()
+        features_full, mask = desc.featurize(smiles_list)
+        X_smiles = features_full[mask]
+        row_mask = mask
+
+        # DRFP 直接返回，跳过后续逐列处理
+        X_numeric: Optional[np.ndarray] = None
+        if numeric_cols:
+            missing = [c for c in numeric_cols if c not in df.columns]
+            if missing:
+                raise KeyError(f"DataFrame 中未找到数值列：{missing}")
+            X_numeric_full = df[numeric_cols].to_numpy(dtype=np.float32)
+            X_numeric = X_numeric_full[row_mask]
+
+        n_valid = int(row_mask.sum())
+        n_dropped = n - n_valid
+        if n_dropped:
+            _warn(
+                f"[feature_builder] 描述符计算失败，过滤掉 {n_dropped} 行 "
+                f"（共 {n} 行，保留 {n_valid} 行）"
+            )
+
+        return X_smiles, X_numeric, row_mask
     else:
         # 其他描述符：使用所有 SMILES 列
         cols_to_use = smiles_cols

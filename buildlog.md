@@ -265,3 +265,51 @@
 
 ---
 
+## [2026-06-23 23:04] 步骤 3 完成：实现 DRFP 描述符
+
+### 执行的任务
+- 创建 `yonod/descriptors/drfp_desc.py`，实现 `DRFPDescriptor` 类
+- 实现 `build_reaction_smarts_from_df()` 辅助函数（从 DataFrame 构建反应 SMARTS）
+- 实现 `build_reaction_smarts()` 辅助函数（从单条数据构建反应 SMARTS）
+- 延迟导入 drfp 库（允许可选安装）
+- 更新 `feature_builder.py`，集成 DRFP 特殊处理逻辑
+- 创建单元测试文件 `tests/test_drfp_descriptor.py`，包含 11 个测试用例
+
+### 关键变更
+- **新增文件**：`yonod/descriptors/drfp_desc.py`（227 行）
+  - 继承 `BaseDescriptor` 抽象基类
+  - 延迟导入 `drfp.DrfpEncoder`（全局缓存）
+  - 2048 维差分反应指纹（drfp 0.3.x 固定维度）
+  - 自动处理空字符串、`(无)` 标记、NaN 值
+  - 提供两个辅助函数：DataFrame 批量构建和单条构建
+
+- **修改文件**：`yonod/universal/feature_builder.py`
+  - 第 112-148 行：DRFP 特殊处理分支
+  - 从反应物和产物列构建反应 SMARTS
+  - 调用 `DRFPDescriptor.featurize()` 计算指纹
+  - 直接返回结果，跳过逐列处理逻辑
+
+- **新增文件**：`tests/test_drfp_descriptor.py`
+  - 测试 `build_reaction_smarts()` 函数（4 个用例）
+  - 测试 `build_reaction_smarts_from_df()` 函数（2 个用例）
+  - 测试 `DRFPDescriptor` 类（5 个用例）
+  - 包含空值处理、格式验证、维度检查等
+
+### 遇到的问题及解决方案
+- **问题**：drfp 0.3.x 的 API 与计划书假设不同（无 `from_default` 方法）
+- **解决**：
+  - 调用 `DrfpEncoder()` 无参数初始化（固定 2048 维）
+  - `encode()` 返回 `list[ndarray]`，取第一个元素
+  - 限制 `n_bits` 参数只能为 2048（硬编码检查）
+
+### 验证结果
+- ✅ 单元测试：11/11 通过
+- ✅ 输出维度：2048 维
+- ✅ 反应 SMARTS 构建：正确处理多反应物、空值、`(无)` 标记
+- ✅ 延迟导入：未安装时正确抛出 ImportError
+
+### 下一步计划
+- 步骤 4：注册描述符到系统
+
+---
+
