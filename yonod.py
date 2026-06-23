@@ -659,12 +659,12 @@ def wizard() -> None:
     print()
     print("=" * 60)
     print("  YONOD - Your Only Need Outstanding Descriptors")
-    print("  通用交互向导  v4")
+    print("  通用交互向导  v5 (支持列角色分类)")
     print("=" * 60)
     print()
 
     # ── 1. CSV 路径 ──────────────────────────────────────────────────────────
-    print("[1/10] 输入 CSV 文件路径（可直接拖拽文件到终端）")
+    print("[1/11] 输入 CSV 文件路径（可直接拖拽文件到终端）")
     while True:
         raw = _ask_required("  路径")
         csv_path = Path(raw.strip('"').strip("'"))
@@ -690,7 +690,7 @@ def wizard() -> None:
     _show_columns(columns)
 
     # ── 2. 标签列 ────────────────────────────────────────────────────────────
-    print("[2/10] 标签列（预测目标，如 yield / ee / ddG）")
+    print("[2/11] 标签列（预测目标，如 yield / ee / ddG）")
     print("      支持：列名  /  字母（如 B）  /  序号（如 2）")
     label_col = _ask_single_col("  标签列", columns, required=True)
     assert label_col is not None
@@ -699,7 +699,7 @@ def wizard() -> None:
     print()
 
     # ── 3. SMILES 列 ─────────────────────────────────────────────────────────
-    print("[3/10] SMILES 列（分子结构列，至少指定一列）")
+    print("[3/11] SMILES 列（分子结构列，至少指定一列）")
     print("      支持：列名 / 字母 / 序号，多列用空格分隔")
     smiles_cols = _ask_multi_cols("  SMILES 列", columns, required=True)
     if label_col in smiles_cols:
@@ -712,8 +712,92 @@ def wizard() -> None:
     _validate_smiles(df, smiles_cols, columns)
     print()
 
+    # ── 3a. 是否启用列角色分类 ───────────────────────────────────────────────
+    print("[3a/11] 列角色分类（可选，用于 DRFP 等描述符）")
+    print()
+    print("  " + "=" * 58)
+    print("  推荐启用列角色分类以提升 DRFP 等描述符的准确性")
+    print("  （对其他描述符无影响）")
+    print()
+    print("  启用后您需要指定：")
+    print("    - 反应物列（反应前的分子）")
+    print("    - 产物列（反应后的分子）")
+    print("    - 其他参与者列（催化剂、溶剂等，自动归类）")
+    print("  " + "=" * 58)
+    print()
+
+    reactant_cols = []
+    product_cols = []
+    other_cols = []
+
+    enable_roles = _ask_optional("  是否启用列角色分类？[y/N]", default="N").lower()
+
+    if enable_roles in ("y", "yes"):
+        print("  → 已启用列角色分类")
+        print()
+
+        # ── 3b. 选择反应物列 ──────────────────────────────────────────────────
+        print("[3b/11] 反应物列（反应前的分子，至少选择一列）")
+        print("        可从以下 SMILES 列中选择：")
+        _show_columns(smiles_cols)
+
+        while True:
+            reactant_cols = _ask_multi_cols("  反应物列", smiles_cols, required=True)
+            if reactant_cols:
+                break
+            print("  [错误] 必须至少选择一个反应物列。")
+
+        print(f"  → 反应物列确认：{reactant_cols}")
+        print()
+
+        # ── 3c. 选择产物列 ────────────────────────────────────────────────────
+        remaining_cols = [c for c in smiles_cols if c not in reactant_cols]
+
+        if not remaining_cols:
+            print("  [错误] 所有 SMILES 列都已被指定为反应物，无剩余列可选为产物。")
+            print("         请重新运行并调整选择。")
+            sys.exit(1)
+
+        print("[3c/11] 产物列（反应后的分子，至少选择一列）")
+        print("        可从以下剩余列中选择：")
+        _show_columns(remaining_cols)
+
+        while True:
+            product_cols = _ask_multi_cols("  产物列", remaining_cols, required=True)
+            if product_cols:
+                break
+            print("  [错误] 必须至少选择一个产物列。")
+
+        print(f"  → 产物列确认：{product_cols}")
+        print()
+
+        # ── 3d. 确认其他参与者列 ──────────────────────────────────────────────
+        other_cols = [c for c in smiles_cols if c not in reactant_cols and c not in product_cols]
+
+        if other_cols:
+            print("[3d/11] 其他参与者列（催化剂、溶剂等）")
+            print("        剩余列将自动归为其他参与者：")
+            for col in other_cols:
+                print(f"          - {col}")
+            print()
+            confirm = _ask_optional("  是否确认？[Y/n]", default="Y").lower()
+            if confirm in ("n", "no"):
+                print("  [提示] 已取消，将使用传统模式（所有 SMILES 列等价）。")
+                reactant_cols = []
+                product_cols = []
+                other_cols = []
+            else:
+                print(f"  → 其他参与者列确认：{other_cols}")
+        else:
+            print("[3d/11] 其他参与者列")
+            print("        所有 SMILES 列已被分配为反应物或产物，无其他参与者列。")
+        print()
+    else:
+        print("  → 已跳过，将使用传统模式（所有 SMILES 列等价）")
+        print()
+
     # ── 4. 数值辅助列 ────────────────────────────────────────────────────────
-    print("[4/10] 数值辅助列（温度/压力等，可选）")
+    print("[4/11] 数值辅助列（温度/压力等，可选）")
     print("      支持：列名 / 字母 / 序号，多列用空格分隔")
     numeric_cols = _ask_multi_cols("  数值辅助列", columns, required=False)
     bad_numeric = [c for c in numeric_cols if c in smiles_cols or c == label_col]
@@ -724,7 +808,7 @@ def wizard() -> None:
     print()
 
     # ── 5. 任务名称 ──────────────────────────────────────────────────────────
-    print("[5/10] 任务名称（用于输出目录和报告标题）")
+    print("[5/11] 任务名称（用于输出目录和报告标题）")
     print("      规则：仅允许英文字母、数字、下划线、连字符，如 amide_coupling")
     while True:
         task_name = _ask_required("  任务名称")
@@ -737,19 +821,19 @@ def wizard() -> None:
 
     # ── 6. 输出目录 ──────────────────────────────────────────────────────────
     default_out = str(Path(__file__).resolve().parent / "result" / task_name)
-    print(f"[6/10] 输出目录（默认：{default_out}）")
+    print(f"[6/11] 输出目录（默认：{default_out}）")
     output_dir_raw = _ask_optional("  输出目录", default=default_out)
     output_dir_raw = output_dir_raw.strip('"').strip("'")
     print(f"  → 输出目录确认：'{output_dir_raw}'")
     print()
 
     # ── 7. 描述符 ────────────────────────────────────────────────────────────
-    print("[7/10] 描述符选择（可选）")
-    print("      可选值: morgan  maccs  fisd  molmetalm  maf ")
+    print("[7/11] 描述符选择（可选）")
+    print("      可选值: morgan  maccs  fisd  molmetalm  maf  rdkit2d  drfp")
     descs_raw = _ask_optional("  描述符（空格分隔，留空=全选）")
     descs = descs_raw.split() if descs_raw else []
     if descs:
-        _valid_descs = {"morgan", "maccs", "fisd", "molmetalm", "maf"}
+        _valid_descs = {"morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"}
         bad_descs = [d for d in descs if d not in _valid_descs]
         if bad_descs:
             print(f"  [警告] 未知描述符已忽略：{bad_descs}")
@@ -758,7 +842,7 @@ def wizard() -> None:
     print()
 
     # ── 8. 模型 ──────────────────────────────────────────────────────────────
-    print("[8/10] 模型选择（可选）")
+    print("[8/11] 模型选择（可选）")
     print("      可选值: xgb  rf  svm  autogluon")
     models_raw = _ask_optional("  模型（空格分隔，留空=全选）")
     models = models_raw.split() if models_raw else []
@@ -772,7 +856,7 @@ def wizard() -> None:
     print()
 
     # ── 9. 数据集来源 ────────────────────────────────────────────────────────
-    print("[9/10] 数据集来源（可选，将显示在报告中）")
+    print("[9/11] 数据集来源（可选，将显示在报告中）")
     print("       留空直接回车跳过各子项")
     dataset_citation = _ask_optional("  文献引用（如 Dai et al., Chem. Sci., 2025）")
     dataset_url      = _ask_optional("  开源地址（如 https://github.com/...）")
@@ -783,13 +867,26 @@ def wizard() -> None:
     print()
 
     # ── 10. 输出格式 ──────────────────────────────────────────────────────────
-    print("[10/10] 报告输出格式")
+    print("[10/11] 报告输出格式")
     print("        可选值: html  md  both（默认 both，同时生成 HTML 和 Markdown）")
     fmt_raw = _ask_optional("  输出格式", default="both")
     if fmt_raw not in ("html", "md", "both"):
         print(f"  [警告] 未知格式 '{fmt_raw}'，已使用默认值 both")
         fmt_raw = "both"
     print(f"  → 输出格式确认：'{fmt_raw}'")
+    print()
+
+    # ── 11. 确认配置（最终预览） ──────────────────────────────────────────────
+    print("[11/11] 配置确认")
+    print()
+    if reactant_cols or product_cols:
+        print("  ✓ 列角色分类：已启用")
+        print(f"    - 反应物列: {reactant_cols}")
+        print(f"    - 产物列: {product_cols}")
+        if other_cols:
+            print(f"    - 其他参与者列: {other_cols}")
+    else:
+        print("  - 列角色分类：未启用（传统模式）")
     print()
 
     # ── 命令预览 ─────────────────────────────────────────────────────────────
@@ -801,6 +898,12 @@ def wizard() -> None:
     ]
     if numeric_cols:
         cmd_parts += ["--numeric-cols", *numeric_cols]
+    if reactant_cols:
+        cmd_parts += ["--reactant-cols", *reactant_cols]
+    if product_cols:
+        cmd_parts += ["--product-cols", *product_cols]
+    if other_cols:
+        cmd_parts += ["--other-cols", *other_cols]
     cmd_parts += ["--task-name", task_name, "--output-dir", f'"{output_dir_raw}"']
     if descs:
         cmd_parts += ["--descriptors", *descs]
@@ -829,6 +932,12 @@ def wizard() -> None:
     ]
     if numeric_cols:
         argv += ["--numeric-cols", *numeric_cols]
+    if reactant_cols:
+        argv += ["--reactant-cols", *reactant_cols]
+    if product_cols:
+        argv += ["--product-cols", *product_cols]
+    if other_cols:
+        argv += ["--other-cols", *other_cols]
     argv += ["--task-name", task_name, "--output-dir", output_dir_raw]
     if descs:
         argv += ["--descriptors", *descs]
