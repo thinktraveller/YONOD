@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from yonod.universal.csv_loader import load_csv_with_roles
 from yonod.universal.feature_builder import build_universal_features
 
-_DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm", "maf"]
+_DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"]
 _MODEL_NAMES = ["xgb", "rf", "svm", "autogluon"]
 
 DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent / "results"

@@ -313,3 +313,39 @@
 
 ---
 
+## [2026-06-23 23:08] 步骤 4 完成：注册描述符到系统
+
+### 执行的任务
+- 更新 `yonod/evaluate.py`，导入并注册 RDKit2D 和 DRFP 到 `DESCRIPTOR_REGISTRY`
+- 更新 `yonod/descriptors/__init__.py`，导出新增的两个描述符类
+- 更新 `yonod/universal/feature_builder.py` 的 `_DESCRIPTOR_IMPORT_MAP`
+- 更新 `yonod.py` 的 `_DESCRIPTOR_NAMES` 列表
+
+### 关键变更
+- **修改文件**：`yonod/evaluate.py`
+  - 第 36-37 行：导入 `RDKit2DDescriptor` 和 `DRFPDescriptor`
+  - 第 48-49 行：注册到 `DESCRIPTOR_REGISTRY`
+
+- **修改文件**：`yonod/descriptors/__init__.py`
+  - 第 9-10 行：导入新增描述符
+  - 第 17-18 行：添加到 `__all__` 列表
+
+- **修改文件**：`yonod/universal/feature_builder.py`
+  - 第 49-50 行：添加 rdkit2d 和 drfp 到 `_DESCRIPTOR_IMPORT_MAP`
+
+- **修改文件**：`yonod.py`
+  - 第 51 行：更新 `_DESCRIPTOR_NAMES`（新增 rdkit2d, drfp）
+
+### 遇到的问题及解决方案
+- 无
+
+### 验证结果
+- ✅ 所有描述符已注册到系统
+- ✅ CLI 参数 `--descriptors` 新增 rdkit2d 和 drfp 选项
+
+### 下一步计划
+- 步骤 5：更新主脚本集成（已在步骤 1 完成，跳过）
+- 步骤 6：编写端到端集成测试
+
+---
+

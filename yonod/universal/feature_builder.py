@@ -47,6 +47,8 @@ _DESCRIPTOR_IMPORT_MAP: dict[str, tuple[str, str]] = {
     "fisd":      ("..descriptors.fisd",      "FISDDescriptor"),
     "molmetalm": ("..descriptors.molmetalm", "MolMetaLMDescriptor"),
     "maf":       ("..descriptors.maf",       "MAFDescriptor"),
+    "rdkit2d":   ("..descriptors.rdkit2d",   "RDKit2DDescriptor"),
+    "drfp":      ("..descriptors.drfp_desc", "DRFPDescriptor"),
 }
 
 
