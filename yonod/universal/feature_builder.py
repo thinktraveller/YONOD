@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 import sys
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import numpy as np
 import pandas as pd
@@ -79,14 +79,17 @@ def build_universal_features(
     numeric_cols: List[str],
     df: pd.DataFrame,
     desc_name: str,
+    smiles_roles: Optional[Dict[str, List[str]]] = None,
 ) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray]:
-    """计算 SMILES 描述符矩阵与原始数值矩阵。
+    """计算 SMILES 描述符矩阵与原始数值矩阵（支持三分类角色）。
 
     Args:
         smiles_cols:  SMILES 列名列表，顺序决定拼接顺序。
         numeric_cols: 数值辅助列名列表（如温度）；空列表则返回 None。
         df:           已通过 csv_loader 加载的 DataFrame（含所有角色列）。
         desc_name:    描述符名称，见模块文档。
+        smiles_roles: 三分类角色映射 {'reactant': [...], 'product': [...], 'other': [...]}
+                      None 表示传统模式（所有列等价）。
 
     Returns:
         X_smiles  : ndarray shape (n_valid, n_smiles_cols * desc_dim)
@@ -96,14 +99,36 @@ def build_universal_features(
     if not smiles_cols:
         raise ValueError("smiles_cols 不能为空")
 
+    # 默认使用传统模式
+    if smiles_roles is None:
+        smiles_roles = {'reactant': [], 'product': [], 'other': smiles_cols}
+
     descriptor = _get_descriptor(desc_name)
     n = len(df)
+
+    # --- 根据描述符类型选择使用的列 ---
+    # DRFP 等反应类描述符：仅使用反应物+产物
+    # 其他分子类描述符：使用所有列
+    if desc_name.lower() == "drfp":
+        # DRFP：仅使用反应物+产物列
+        cols_to_use = smiles_roles['reactant'] + smiles_roles['product']
+        if not cols_to_use:
+            raise ValueError(
+                "DRFP 描述符需要至少指定反应物或产物列。\n"
+                "请使用 --reactant-cols 和 --product-cols 参数。"
+            )
+        # DRFP 需要特殊处理：构建反应 SMARTS
+        # 这里暂不实现，等待步骤 3 创建 drfp_desc.py 后再调用
+        raise NotImplementedError("DRFP 描述符将在步骤 3 实现")
+    else:
+        # 其他描述符：使用所有 SMILES 列
+        cols_to_use = smiles_cols
 
     # --- 逐列计算 SMILES 描述符 ---
     col_blocks: list[np.ndarray] = []
     row_mask = np.zeros(n, dtype=bool)  # 至少一列有效则行有效（空列用零向量填充）
 
-    for col in smiles_cols:
+    for col in cols_to_use:
         if col not in df.columns:
             raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
         # 规范化为 RDKit 标准点分隔形式（'.'）：
