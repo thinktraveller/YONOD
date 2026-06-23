@@ -33,6 +33,21 @@ def _ensure_drfp():
         return True
     try:
         from drfp import DrfpEncoder
+        import drfp.fingerprint as _fp_module
+
+        # Monkey patch: 修复 drfp 0.3.x 在 Windows 上的 int32 溢出问题
+        # 原始代码使用 np.int32，但 hash 值可能超过 int32 范围
+        _original_hash = _fp_module.DrfpEncoder.hash
+
+        @staticmethod
+        def _patched_hash(shingled_smiles):
+            import numpy as np
+            hash_values = [hash(s) for s in shingled_smiles]
+            # 使用 int64 避免溢出
+            return np.array(hash_values, dtype=np.int64)
+
+        _fp_module.DrfpEncoder.hash = _patched_hash
+
         _DrfpEncoder = DrfpEncoder
         _DRFP_AVAILABLE = True
         return True
