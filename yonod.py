@@ -232,7 +232,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     p.add_argument("--csv", type=Path, required=True, help="输入数据集 CSV 路径")
     p.add_argument("--label-col", required=True, help="标签列名（必填）")
-    p.add_argument("--smiles-cols", nargs="+", required=True, help="SMILES 列名，多列空格分隔（必填）")
+    p.add_argument("--smiles-cols", nargs="+", default=None, help="SMILES 列名（传统模式必填，三分类模式可省略）")
     p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
 
     # 新增：三分类模式参数
@@ -313,6 +313,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.csv.exists():
         print(f"[error] CSV 不存在: {args.csv}", file=sys.stderr)
         return 1
+
+    # 验证 SMILES 列参数：必须指定 --smiles-cols 或三分类参数
+    if not args.smiles_cols and not (args.reactant_cols or args.product_cols):
+        print(
+            "[error] 请指定 --smiles-cols 参数，或使用三分类模式（--reactant-cols + --product-cols）。",
+            file=sys.stderr
+        )
+        return 1
+
+    # 验证 DRFP 描述符与列角色分类的依赖关系
+    if "drfp" in args.descriptors:
+        if not args.reactant_cols or not args.product_cols:
+            print(
+                "[error] DRFP 描述符需要列角色分类，请同时指定 --reactant-cols 和 --product-cols 参数。",
+                file=sys.stderr
+            )
+            return 1
 
     task_name = args.task_name or args.csv.stem
     out_dir = _resolve_output_dir(args.csv, task_name, args.output_dir)
@@ -723,6 +740,8 @@ def wizard() -> None:
     print("    - 反应物列（反应前的分子）")
     print("    - 产物列（反应后的分子）")
     print("    - 其他参与者列（催化剂、溶剂等，自动归类）")
+    print()
+    print("  ⚠️  注意：不启用列角色分类将无法使用 DRFP 描述符")
     print("  " + "=" * 58)
     print()
 
@@ -829,15 +848,36 @@ def wizard() -> None:
 
     # ── 7. 描述符 ────────────────────────────────────────────────────────────
     print("[7/11] 描述符选择（可选）")
-    print("      可选值: morgan  maccs  fisd  molmetalm  maf  rdkit2d  drfp")
+
+    # 根据是否启用列角色分类调整可选描述符列表
+    if reactant_cols or product_cols:
+        available_descs_str = "morgan  maccs  fisd  molmetalm  maf  rdkit2d  drfp"
+    else:
+        available_descs_str = "morgan  maccs  fisd  molmetalm  maf  rdkit2d"
+        print("      ⚠️  因未启用列角色分类，不可使用 DRFP 描述符")
+
+    print(f"      可选值: {available_descs_str}")
     descs_raw = _ask_optional("  描述符（空格分隔，留空=全选）")
     descs = descs_raw.split() if descs_raw else []
     if descs:
         _valid_descs = {"morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"}
         bad_descs = [d for d in descs if d not in _valid_descs]
+
+        # 检查是否在未启用分类时选择了 drfp
+        if "drfp" in descs and not (reactant_cols or product_cols):
+            print("  [错误] 因未启用列角色分类，无法使用 DRFP 描述符。")
+            print("         DRFP 需要区分反应物和产物列，请返回重新启用列角色分类。")
+            sys.exit(1)
+
         if bad_descs:
             print(f"  [警告] 未知描述符已忽略：{bad_descs}")
             descs = [d for d in descs if d in _valid_descs]
+    else:
+        # 留空全选时，根据是否启用分类决定是否包含 drfp
+        if not (reactant_cols or product_cols):
+            # 未启用分类时，全选不包含 drfp
+            descs = []  # 保持为空表示全选，但在后续 argv 构建时会被默认值处理
+
     print(f"  → 描述符确认：{descs if descs else '（全选）'}")
     print()
 
