@@ -178,3 +178,51 @@
 
 ---
 
+## [2026-06-23 22:50] 步骤 1 完成：实现 SMILES 列角色分类机制
+
+### 执行的任务
+- 扩展 `LoadedDataset` 数据类，新增 `smiles_roles` 字段（三分类映射）
+- 更新 `load_csv_with_roles()` 函数，支持 `--reactant-cols`、`--product-cols`、`--other-cols` 参数
+- 实现三分类模式：反应物/产物/其他参与者
+- 实现自动推断 other_cols（从自动探测结果中排除已指定的反应物和产物列）
+- 更新 `build_universal_features()` 函数，根据描述符类型选择性使用列（为 DRFP 预留接口）
+- 更新 `yonod.py` CLI 参数和主流程，添加角色信息打印
+- 编写单元测试验证四个场景（传统模式、三分类模式、显式指定 other_cols、错误处理）
+
+### 关键变更
+- **修改文件**：`yonod/universal/csv_loader.py`
+  - 第 9 行：更新文档字符串，说明 smiles_roles 字段
+  - 第 27 行：导入 `Dict` 类型
+  - 第 40-45 行：扩展 `LoadedDataset` 数据类，新增 `smiles_roles` 字段（默认三分类结构）
+  - 第 122-130 行：新增三个参数（reactant_cols, product_cols, other_cols）
+  - 第 171-230 行：实现三分类逻辑（验证、自动推断、角色映射、向后兼容）
+  - 第 247 行：返回时包含 `smiles_roles`
+
+- **修改文件**：`yonod/universal/feature_builder.py`
+  - 第 29 行：导入 `Dict` 类型
+  - 第 77-90 行：新增 `smiles_roles` 参数和描述符类型判断逻辑
+  - 第 92-102 行：DRFP 描述符占位（等待步骤 3 实现）
+  - 第 104 行：使用 `cols_to_use` 替代 `smiles_cols`（根据描述符类型动态选择）
+
+- **修改文件**：`yonod.py`
+  - 第 237-239 行：新增 CLI 参数（--reactant-cols, --product-cols, --other-cols）
+  - 第 332-337 行：调用 `load_csv_with_roles()` 时传入三分类参数
+  - 第 338-348 行：打印角色信息（三分类模式 vs 传统模式）
+  - 第 362-365 行：根据描述符类型打印使用的列
+  - 第 371 行：调用 `build_universal_features()` 时传入 `smiles_roles`
+
+### 遇到的问题及解决方案
+- **问题**：自动探测时 activation 列因有效率恰好 50% 被跳过
+- **解决**：在测试中改为检查 base 和 solvent 列（稳定存在于自动探测结果中）
+
+### 验证结果
+- ✅ 传统模式：所有列归入 `'other'`，向后兼容
+- ✅ 三分类模式：正确分类 reactant/product/other
+- ✅ 显式指定 other_cols：覆盖自动推断
+- ✅ 错误处理：正确捕获列重叠错误
+
+### 下一步计划
+- 步骤 2：实现 RDKit 2D 描述符
+
+---
+

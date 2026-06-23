@@ -234,6 +234,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--label-col", required=True, help="标签列名（必填）")
     p.add_argument("--smiles-cols", nargs="+", required=True, help="SMILES 列名，多列空格分隔（必填）")
     p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
+
+    # 新增：三分类模式参数
+    p.add_argument("--reactant-cols", nargs="+", default=None, help="反应物 SMILES 列名（三分类模式）")
+    p.add_argument("--product-cols", nargs="+", default=None, help="产物 SMILES 列名（三分类模式）")
+    p.add_argument("--other-cols", nargs="+", default=None, help="其他参与者 SMILES 列名（三分类模式，可选）")
+
     p.add_argument("--task-name", default=None, help="任务名称（报告标题，默认 CSV 文件名去后缀）")
     p.add_argument(
         "--descriptors", nargs="+", default=_DESCRIPTOR_NAMES,
@@ -328,12 +334,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         smiles_cols=args.smiles_cols,
         numeric_cols=args.numeric_cols or [],
         label_col=args.label_col,
+        reactant_cols=args.reactant_cols,
+        product_cols=args.product_cols,
+        other_cols=args.other_cols,
         nrows=args.nrows,
     )
     df = dataset.df
     smiles_cols = dataset.smiles_cols
     numeric_cols = dataset.numeric_cols
     label_col = dataset.label_col
+    smiles_roles = dataset.smiles_roles
+
+    # 打印角色信息
+    if smiles_roles['reactant'] or smiles_roles['product']:
+        print("\n[INFO] SMILES 列角色分类：")
+        print(f"  反应物列: {', '.join(smiles_roles['reactant'])}")
+        print(f"  产物列: {', '.join(smiles_roles['product'])}")
+        if smiles_roles['other']:
+            print(f"  其他参与者列: {', '.join(smiles_roles['other'])}")
+    else:
+        print("\n[INFO] 使用传统模式（所有 SMILES 列等价）")
 
     print(
         f"[load] n_rows={len(df)}  "
@@ -352,11 +372,20 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     for desc_name in args.descriptors:
         print(f"\n[desc] 计算描述符: {desc_name} ...")
+
+        # 根据描述符类型显示使用的列
+        if desc_name.lower() == "drfp":
+            cols_used = smiles_roles['reactant'] + smiles_roles['product']
+            print(f"  使用列（反应物+产物）: {', '.join(cols_used)}")
+        else:
+            print(f"  使用列（全部）: {', '.join(smiles_cols)}")
+
         X_smiles, X_numeric, mask = build_universal_features(
             smiles_cols=smiles_cols,
             numeric_cols=numeric_cols,
             df=df,
             desc_name=desc_name,
+            smiles_roles=smiles_roles,
         )
         y = df[label_col].to_numpy(dtype=np.float64)[mask]
 
