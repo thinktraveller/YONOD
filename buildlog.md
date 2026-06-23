@@ -226,3 +226,42 @@
 
 ---
 
+## [2026-06-23 22:55] 步骤 2 完成：实现 RDKit 2D 描述符
+
+### 执行的任务
+- 创建 `yonod/descriptors/rdkit2d.py`，实现 `RDKit2DDescriptor` 类
+- 硬编码 200 个 2D 描述符列表（跨 RDKit 版本兼容）
+- 实现 NaN/Inf 自动替换为 0
+- 支持多组分 SMILES（取第一组分计算）
+- 创建单元测试文件 `tests/test_rdkit2d_descriptor.py`，包含 6 个测试用例
+
+### 关键变更
+- **新增文件**：`yonod/descriptors/rdkit2d.py`（230 行）
+  - 继承 `BaseDescriptor` 抽象基类
+  - 硬编码 `RDKIT_2D_DESCRIPTORS` 列表（200 个描述符）
+  - 使用 `MolecularDescriptorCalculator` 批量计算
+  - 自动处理空字符串、`(无)` 标记、多组分 SMILES
+  - 使用 `np.nan_to_num()` 确保数值稳定性
+
+- **新增文件**：`tests/test_rdkit2d_descriptor.py`
+  - 测试输出维度（200 维）
+  - 测试有效 SMILES 解析
+  - 测试无效 SMILES 处理
+  - 测试 `(无)` 标记处理
+  - 测试多组分 SMILES（仅取第一个）
+  - 测试 `get_descriptor_names()` 方法
+
+### 遇到的问题及解决方案
+- 无
+
+### 验证结果
+- ✅ 单元测试：6/6 通过
+- ✅ 输出维度：200 维
+- ✅ NaN/Inf 处理：正确替换为 0
+- ✅ 多组分 SMILES：仅取第一组分
+
+### 下一步计划
+- 步骤 3：实现 DRFP 描述符
+
+---
+
