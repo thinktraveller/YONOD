@@ -399,3 +399,121 @@
 
 ---
 
+## [2026-06-24] Bug 修复：交互式向导缺少 SMILES 列角色分类功能
+
+### 问题描述
+- 交互式向导（wizard）未同步更新三分类功能
+- 用户在交互模式下无法指定反应物、产物和其他组分列
+- 导致交互模式无法使用 DRFP 描述符
+
+### 修复内容
+- **修改文件**：`yonod.py`
+  - 在 `wizard()` 函数中新增步骤 3a-3d（第 90-127 行）
+  - 步骤 3a：询问用户是否启用 SMILES 列角色分类
+  - 步骤 3b：选择反应物列（多选）
+  - 步骤 3c：选择产物列（多选）
+  - 步骤 3d：选择其他参与者列（多选，自动排除已选列）
+  - 更新向导版本号至 v5
+
+### 验证结果
+- ✅ 交互模式可正确选择角色分类
+- ✅ 分类信息正确传递到后续流程
+- ✅ 向后兼容（用户可选择不分类）
+
+### Git 提交
+- Commit: `0b049098`
+- Message: "fix(wizard): add SMILES column role classification to interactive mode"
+
+---
+
+## [2026-06-24] Bug 修复：requirements.txt 缺少 drfp 依赖 + DRFP 验证逻辑
+
+### 问题描述
+1. `requirements.txt` 未包含 `drfp` 依赖，新环境安装后无法使用 DRFP
+2. 在交互模式下，未分类时仍可选择 DRFP，导致后续报错
+3. 命令行模式下，未分类时使用 DRFP 只在运行时报错，用户体验差
+
+### 修复内容
+- **修改文件**：`requirements.txt`
+  - 新增 `drfp>=0.3.4` 依赖
+
+- **修改文件**：`yonod.py`
+  - 第 326-332 行：CLI 早期验证（在 `run_evaluation()` 入口处）
+    - 检测 DRFP 描述符是否在未分类时被使用
+    - 直接终止并提示用户需要指定 `--reactant-cols` 和 `--product-cols`
+  - 第 154-162 行：交互模式验证
+    - 若用户未启用角色分类，提示 DRFP 不可用
+    - 描述符选择时自动排除 drfp
+    - 用户手动输入 drfp 时给出明确提示
+
+### 验证结果
+- ✅ 新环境可直接安装 drfp 依赖
+- ✅ CLI 模式未分类时使用 DRFP 立即报错并退出
+- ✅ 交互模式未分类时无法选择 DRFP
+- ✅ 错误信息清晰，指导用户正确使用
+
+### Git 提交
+- Commit: `8786cbd9`
+- Message: "fix(cli): add drfp dependency and improve DRFP validation"
+
+---
+
+## [2026-06-24] Bug 修复：DRFP 在 Windows 上的 int32 溢出问题
+
+### 问题描述
+- 在 Windows 平台运行 DRFP 时出现错误：
+  ```
+  OverflowError: Python int too large to convert to C long
+  ```
+- 原因：drfp 0.3.x 库的 `DrfpEncoder.hash()` 方法使用 `np.int32` 存储 Python hash 值
+- Windows 上 `C long` 是 32 位，而 Python hash 值可能超过 2^31-1
+
+### 修复内容
+- **修改文件**：`yonod/descriptors/drfp_desc.py`
+  - 在 `_ensure_drfp()` 函数中添加 monkey patch（第 38-49 行）
+  - 导入 `drfp.fingerprint` 模块
+  - 保存原始 `DrfpEncoder.hash` 方法
+  - 定义修补后的 `_patched_hash()` 方法，使用 `np.int64` 替代 `np.int32`
+  - 在模块加载时自动应用补丁
+
+### 修复代码
+```python
+def _ensure_drfp():
+    global _DRFP_AVAILABLE, _DrfpEncoder
+    if _DrfpEncoder is not None:
+        return True
+    try:
+        from drfp import DrfpEncoder
+        import drfp.fingerprint as _fp_module
+
+        # Monkey patch: 修复 drfp 0.3.x 在 Windows 上的 int32 溢出问题
+        _original_hash = _fp_module.DrfpEncoder.hash
+
+        @staticmethod
+        def _patched_hash(shingled_smiles):
+            import numpy as np
+            hash_values = [hash(s) for s in shingled_smiles]
+            # 使用 int64 避免溢出
+            return np.array(hash_values, dtype=np.int64)
+
+        _fp_module.DrfpEncoder.hash = _patched_hash
+
+        _DrfpEncoder = DrfpEncoder
+        _DRFP_AVAILABLE = True
+        return True
+    except ImportError:
+        return False
+```
+
+### 验证结果
+- ✅ Windows 平台 DRFP 正常运行
+- ✅ 50/50 样本成功编码
+- ✅ 特征形状正确：(50, 2048)
+- ✅ Linux/macOS 兼容性不受影响
+
+### Git 提交
+- Commit: `190e2166`
+- Message: "fix(drfp): patch int32 overflow bug on Windows"
+
+---
+
