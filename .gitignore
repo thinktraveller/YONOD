@@ -58,6 +58,7 @@ WEIGHTS/FISD/
 dataset/*
 !dataset/amide-coupling.csv
 !dataset/test-amide-coupling.csv
+csv_output
 
 
 # ===================== Third-party project sources =====================
