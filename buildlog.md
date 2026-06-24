@@ -557,3 +557,81 @@ MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无�
 
 ---
 
+
+## [2026-06-24 23:20] 修复：SMILES 验证逻辑的多分隔符一致性支持
+
+### 问题描述
+- 现象：在描述符计算阶段（MAF/RDKit2D）已支持逗号、分号、点号三种分隔符，但 SMILES 验证逻辑仅支持部分分隔符
+- 影响范围：
+  - `yonod.py` 的 `_normalize_smiles()` 缺少分号 (`;`) 支持
+  - `csv_loader.py` 的 `auto_detect_smiles_cols()` 未预处理多组分 SMILES，导致分号分隔的列无法被自动探测
+  - `yonod.py` 的 `_validate_smiles()` 未逐组分验证，错误提示不够精确
+
+### 根本原因
+验证逻辑与描述符计算逻辑使用不同的分隔符处理策略：
+- 描述符计算：使用 `split_multi_smiles()`（支持逗号、分号、点号优先级策略）
+- SMILES 验证：使用 `_normalize_smiles()` + 直接调用 `Chem.MolFromSmiles`（仅支持逗号、星号、波浪线，**缺少分号**）
+
+导致以下不一致：
+1. 分号分隔的 SMILES 在验证阶段被误判为无效
+2. 自动探测无法识别分号分隔的 SMILES 列
+3. 验证错误信息不能精确定位多组分中的具体问题组分
+
+### 修复方案
+统一使用 `split_multi_smiles()` 的分隔符优先级策略：
+
+#### 1. `yonod.py` 的 `_normalize_smiles()` 新增分号支持
+- 修改第 638 行：`s = smi.replace(",", ".").replace(";", ".").replace("*", ".").replace("~", ".")`
+- 新增分号 (`;`) 到点号 (`.`) 的规范化
+- 更新文档注释，明确支持四类分隔符
+
+#### 2. `yonod.py` 的 `_validate_smiles()` 改用逐组分验证
+- 新增第 49 行：导入 `from yonod.descriptors.base import split_multi_smiles`
+- 修改第 668-676 行：
+  - 先调用 `_normalize_smiles()` 规范化非标准分隔符
+  - 再调用 `split_multi_smiles()` 拆分组分
+  - 逐组分调用 `Chem.MolFromSmiles()` 验证
+  - 错误提示精确到组分索引（如"第 3 行第 2 个组分无效"）
+
+#### 3. `csv_loader.py` 的 `auto_detect_smiles_cols()` 改用多组分验证
+- 新增第 96 行：导入 `from yonod.descriptors.base import split_multi_smiles`
+- 新增第 98-104 行：`_is_valid_smiles()` 辅助函数
+  - 调用 `split_multi_smiles()` 拆分组分
+  - 验证所有非空组分都能成功解析
+- 修改第 109 行：`valid_count = sum(1 for s in sample if _is_valid_smiles(s))`
+
+### 变更文件
+- `yonod.py`：
+  - 第 49 行：新增 `split_multi_smiles` 导入
+  - 第 635 行：文档注释更新（三类→四类分隔符）
+  - 第 638 行：新增分号支持
+  - 第 646-676 行：`_validate_smiles()` 改用逐组分验证
+- `yonod/universal/csv_loader.py`：
+  - 第 73 行：文档注释更新（说明多组分支持）
+  - 第 96-109 行：新增 `_is_valid_smiles()` 辅助函数并应用
+
+### 验证方法
+创建测试脚本 `_verify/fix_smiles_multi_separator.py`，验证五个场景：
+
+1. ✅ `_normalize_smiles()` 的四类分隔符支持（6 个测试用例）
+   - 逗号、分号、星号、波浪线、连续点号、首尾点号
+2. ✅ `split_multi_smiles()` 的优先级策略（5 个测试用例）
+   - 逗号优先级最高、分号次之、点号后备、混合优先级
+3. ✅ `_validate_smiles()` 的多组分验证（5 行测试数据）
+   - 单组分、逗号分隔、分号分隔、点号分隔、离子对
+4. ✅ `auto_detect_smiles_cols()` 的多组分支持（4 列测试数据）
+   - 成功识别逗号分隔列 `comma_sep`
+   - 成功识别分号分隔列 `semicolon_sep`
+   - 成功识别点号分隔列 `dot_sep`
+   - 正确跳过非 SMILES 列 `not_smiles`
+5. ✅ 边界情况（5 个测试用例）
+   - 空字符串、仅空白、连续分隔符、部分无效组分
+
+所有测试通过，确认：
+- ✅ 分号分隔 SMILES 在验证阶段被正确接受
+- ✅ 自动探测能识别分号分隔的 SMILES 列（有效率 100.0%）
+- ✅ 多组分验证错误提示精确到组分索引
+- ✅ 与描述符计算逻辑保持一致
+- ✅ 向后兼容现有数据集
+
+---
