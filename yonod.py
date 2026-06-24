@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from yonod.universal.csv_loader import load_csv_with_roles
 from yonod.universal.feature_builder import build_universal_features
+from yonod.descriptors.base import split_multi_smiles
 
 _DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"]
 _MODEL_NAMES = ["xgb", "rf", "svm", "autogluon"]
@@ -629,13 +630,14 @@ def _validate_label(df: pd.DataFrame, label_col: str, columns: list) -> None:
 def _normalize_smiles(smi: str) -> str:
     """将各类非标准分隔符规范化为 RDKit 标准的点分隔形式。
 
-    处理三类情况：
+    处理四类情况：
     - 逗号（','）：阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
+    - 分号（';'）：组分分隔符，如 'CCO;CC(=O)O'
     - 星号（'*'）：反应步骤分隔符，如 'A.B*C.D*E'（反应 SMILES 格式）
     - 波浪线（'~'）：组分替代表示，如 'CC(=O)O~CC(=O)O~[Pd]'
     连续分隔符（如 '**' 空步骤）会产生 '..'，一并压缩为单个 '.'。
     """
-    s = smi.replace(",", ".").replace("*", ".").replace("~", ".")
+    s = smi.replace(",", ".").replace(";", ".").replace("*", ".").replace("~", ".")
     s = re.sub(r'\.{2,}', '.', s)
     return s.strip('.')
 
@@ -643,7 +645,8 @@ def _normalize_smiles(smi: str) -> str:
 def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None:
     """用 RDKit 逐行检查 SMILES 列；发现第一个无效 SMILES 则退出。
 
-    验证前先将逗号分隔的离子对规范化为点分隔（RDKit 标准），
+    支持多组分 SMILES（逗号、分号、点号分隔），逐组分验证。
+    验证前先将非标准分隔符规范化（星号、波浪线 → 点号），
     因此 'CCN=C=NCCCN(C)C,Cl' 这类试剂 SMILES 会被正确接受。
     RDKit 未安装时仅打印警告，不中断流程。
     """
@@ -662,12 +665,22 @@ def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None
         for raw_idx, val in enumerate(df[col]):
             if pd.isna(val):
                 continue
+
+            # 先规范化非标准分隔符（星号、波浪线 → 点号）
             normalized = _normalize_smiles(str(val))
-            if Chem.MolFromSmiles(normalized) is None:
-                display_row = raw_idx + 2
-                print(f"\n  [错误] {col_desc} 第 {display_row} 行的值 '{val}' 不是有效的 SMILES。")
-                print("         请检查数据（是否有乱码、截断或占位符）后重新运行。")
-                sys.exit(1)
+
+            # 逐组分验证（支持逗号、分号、点号优先级拆分）
+            components = split_multi_smiles(normalized)
+            for comp_idx, comp in enumerate(components):
+                comp = comp.strip()
+                if not comp:
+                    continue
+                if Chem.MolFromSmiles(comp) is None:
+                    display_row = raw_idx + 2
+                    comp_desc = f"第 {comp_idx + 1} 个组分 '{comp}'" if len(components) > 1 else f"'{val}'"
+                    print(f"\n  [错误] {col_desc} 第 {display_row} 行的 {comp_desc} 不是有效的 SMILES。")
+                    print("         请检查数据（是否有乱码、截断或占位符）后重新运行。")
+                    sys.exit(1)
         print(f"  [验证] SMILES 列 '{col}' 全量验证通过。")
 
 

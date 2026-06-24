@@ -72,6 +72,8 @@ def auto_detect_smiles_cols(
 ) -> List[str]:
     """对 df 中除 label_col 之外每列随机抽样，用 RDKit 判断是否为 SMILES 列。
 
+    支持多组分 SMILES（逗号、分号、点号分隔），逐组分验证。
+
     Args:
         df: 输入 DataFrame（已加载 CSV）
         label_col: 标签列名，探测时跳过
@@ -92,6 +94,16 @@ def auto_detect_smiles_cols(
     except ImportError as exc:
         raise ImportError("auto_detect_smiles_cols 依赖 RDKit，请先 conda install -c conda-forge rdkit") from exc
 
+    from yonod.descriptors.base import split_multi_smiles
+
+    def _is_valid_smiles(s: str) -> bool:
+        """验证单个 SMILES 字符串（支持多组分）。"""
+        components = split_multi_smiles(s)
+        if not components:
+            return False
+        # 所有非空组分都必须能成功解析
+        return all(Chem.MolFromSmiles(c) is not None for c in components if c.strip())
+
     rng = random.Random(seed)
     smiles_cols: List[str] = []
 
@@ -105,7 +117,7 @@ def auto_detect_smiles_cols(
         if not non_null:
             continue
         sample = rng.sample(non_null, min(sample_size, len(non_null)))
-        valid_count = sum(1 for s in sample if Chem.MolFromSmiles(s) is not None)
+        valid_count = sum(1 for s in sample if _is_valid_smiles(s))
         valid_rate = valid_count / len(sample)
         if valid_rate > threshold:
             smiles_cols.append(col)
