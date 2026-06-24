@@ -517,3 +517,43 @@ def _ensure_drfp():
 
 ---
 
+## [2026-06-24 23:05] 修复：SMILES 多分隔符识别支持
+
+### 问题描述
+- 现象：系统在处理单元格内多个 SMILES 字符串时，仅识别点号 (`.`) 作为分隔符
+- 影响范围：MAFDescriptor（多组分累加）和 RDKit2DDescriptor（取第一组分）
+
+### 根本原因
+MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无法处理逗号 (`,`) 和分号 (`;`) 作为分隔符的输入数据。
+
+### 修复方案
+创建通用的 `split_multi_smiles()` 函数，支持多种分隔符的自动识别，并实现优先级机制：
+1. 优先使用逗号 (`,`) 分割
+2. 其次使用分号 (`;`) 分割
+3. 最后使用点号 (`.`) 分割（保护多组分分子的化学语义，如盐类 `[Na+].[Cl-]`）
+
+### 变更文件
+- `yonod/descriptors/base.py`：新增 `split_multi_smiles()` 函数（51 行）
+  - 实现三级优先级分隔符检测
+  - 返回去除首尾空格的组分列表
+  - 处理空字符串边界情况
+- `yonod/descriptors/maf.py`：第 26 行导入，第 75 行使用新函数
+  - 替换 `multi_smi.split(".")` 为 `split_multi_smiles(multi_smi)`
+- `yonod/descriptors/rdkit2d.py`：第 17 行导入，第 119-120 行使用新函数
+  - 替换 `smi.split(".")[0]` 为 `split_multi_smiles(smi)` 并取第一个元素
+
+### 验证方法
+创建测试脚本验证四个场景：
+1. ✅ `split_multi_smiles()` 函数的分隔符优先级（8 个测试用例）
+2. ✅ MAFDescriptor 对三种分隔符的支持（特征一致性验证）
+3. ✅ RDKit2DDescriptor 对三种分隔符的支持（特征一致性验证）
+4. ✅ 向后兼容性（点号分隔格式仍然有效）
+
+所有测试通过，确认：
+- 逗号分隔：`"CCO,CC(=O)O"` ✅
+- 分号分隔：`"CCO;CC(=O)O"` ✅
+- 点号分隔：`"CCO.CC(=O)O"` ✅（向后兼容）
+- 优先级正确：`"CCO,CC.C"` → `["CCO", "CC.C"]`（逗号优先于点号）
+
+---
+

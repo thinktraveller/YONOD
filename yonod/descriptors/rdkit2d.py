@@ -14,7 +14,7 @@ from rdkit import Chem
 from rdkit.Chem import Descriptors
 from rdkit.ML.Descriptors import MoleculeDescriptors
 
-from .base import BaseDescriptor
+from .base import BaseDescriptor, split_multi_smiles
 
 
 # 硬编码的 2D 描述符列表（避免 RDKit 版本兼容问题）
@@ -116,7 +116,8 @@ class RDKit2DDescriptor(BaseDescriptor):
                 continue
 
             # Handle multi-component SMILES (take first component)
-            smi_clean = smi.split(".")[0].strip()
+            components = split_multi_smiles(smi)
+            smi_clean = components[0] if components else ""
             if not smi_clean or smi_clean == "(无)":
                 continue
 
