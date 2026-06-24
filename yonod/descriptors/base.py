@@ -18,6 +18,51 @@ from typing import List, Tuple
 import numpy as np
 
 
+def split_multi_smiles(smiles: str) -> List[str]:
+    """Split a SMILES string containing multiple components.
+
+    Supports multiple separators with priority:
+    1. Comma (,) - highest priority
+    2. Semicolon (;) - second priority
+    3. Period (.) - lowest priority (used for salts/complexes in SMILES)
+
+    Args:
+        smiles: Input SMILES string that may contain multiple components
+            separated by comma, semicolon, or period.
+
+    Returns:
+        List of individual SMILES components (stripped of whitespace).
+        Returns [smiles] if no separator is found.
+
+    Examples:
+        >>> split_multi_smiles("CCO,CC")
+        ['CCO', 'CC']
+        >>> split_multi_smiles("CCO;CC;C")
+        ['CCO', 'CC', 'C']
+        >>> split_multi_smiles("CCO.CC")  # period as fallback
+        ['CCO', 'CC']
+        >>> split_multi_smiles("[Na+].[Cl-]")  # ionic compound
+        ['[Na+]', '[Cl-]']
+    """
+    if not smiles:
+        return []
+
+    # Priority 1: Comma
+    if ',' in smiles:
+        return [s.strip() for s in smiles.split(',')]
+
+    # Priority 2: Semicolon
+    if ';' in smiles:
+        return [s.strip() for s in smiles.split(';')]
+
+    # Priority 3: Period (fallback, used in SMILES for salts)
+    if '.' in smiles:
+        return [s.strip() for s in smiles.split('.')]
+
+    # No separator found
+    return [smiles.strip()]
+
+
 class BaseDescriptor(abc.ABC):
     """Abstract base for molecular descriptors used in YONOD."""
 

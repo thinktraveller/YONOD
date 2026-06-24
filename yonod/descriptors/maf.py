@@ -23,7 +23,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.DataStructs import ConvertToNumpyArray
 
-from .base import BaseDescriptor
+from .base import BaseDescriptor, split_multi_smiles
 
 
 class MAFDescriptor(BaseDescriptor):
@@ -71,8 +71,8 @@ class MAFDescriptor(BaseDescriptor):
             if not multi_smi or multi_smi.strip() == "":
                 continue
 
-            # 分割多分子 SMILES (格式: "mol1.mol2.mol3...")
-            component_smiles = multi_smi.split(".")
+            # 分割多分子 SMILES (支持逗号、分号、点号分隔符)
+            component_smiles = split_multi_smiles(multi_smi)
 
             # 累加各组分的 ECFP
             accumulated_fp = np.zeros(self.output_dim, dtype=np.int32)
