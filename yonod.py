@@ -612,17 +612,40 @@ def _col_display(col: str, columns: list) -> str:
 
 
 def _validate_label(df: pd.DataFrame, label_col: str, columns: list) -> None:
+    """验证标签列的数值合法性，支持 JSON 数组格式（如 [0.85] 或 ["0.85"]）。
+
+    处理三种格式：
+    - 普通数值：0.85
+    - JSON 数组（数值）：[0.85]
+    - JSON 数组（字符串）：["0.85"]
+    """
     print(f"  [验证] 检查标签列 '{label_col}' 的数值合法性 ...")
-    series = df[label_col]
+    series = df[label_col].copy()
+
+    # 预处理：删除 JSON 数组格式的首末方括号和双引号
+    def _normalize_label(val):
+        if pd.isna(val):
+            return val
+        s = str(val).strip()
+        # 检测 JSON 数组格式：以 [ 开头、以 ] 结尾
+        if s.startswith('[') and s.endswith(']'):
+            # 删除最外层方括号
+            s = s[1:-1].strip()
+            # 删除双引号（处理 ["0.85"] 格式）
+            s = s.strip('"').strip("'")
+        return s
+
+    series = series.apply(_normalize_label)
+
     numeric = pd.to_numeric(series, errors="coerce")
-    bad_mask = numeric.isna() & series.notna()
+    bad_mask = numeric.isna() & df[label_col].notna()
     if bad_mask.any():
         raw_idx = int(bad_mask.idxmax())
         display_row = raw_idx + 2
-        bad_val = series.iloc[raw_idx]
+        bad_val = df[label_col].iloc[raw_idx]
         col_desc = _col_display(label_col, columns)
         print(f"\n  [错误] {col_desc} 第 {display_row} 行的值 '{bad_val}' 不是数值。")
-        print("         标签列必须为整数或浮点数，请检查数据后重新运行。")
+        print("         标签列必须为整数或浮点数（支持 JSON 数组格式如 [0.85] 或 [\"0.85\"]），请检查数据后重新运行。")
         sys.exit(1)
     print(f"  [验证] 标签列 '{label_col}' 全量数值验证通过（共 {len(df)} 行）。")
 
