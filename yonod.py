@@ -630,7 +630,8 @@ def _validate_label(df: pd.DataFrame, label_col: str, columns: list) -> None:
 def _normalize_smiles(smi: str) -> str:
     """将各类非标准分隔符规范化为 RDKit 标准的点分隔形式。
 
-    处理四类情况：
+    处理五类情况：
+    - JSON 数组格式：如 '["CCO","CC(=O)O"]' → 'CCO.CC(=O)O'
     - 逗号（','）：阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
     - 分号（';'）：组分分隔符，如 'CCO;CC(=O)O' 或 'CCO; CC(=O)O'（分号+空格）
     - 星号（'*'）：反应步骤分隔符，如 'A.B*C.D*E'（反应 SMILES 格式）
@@ -638,9 +639,21 @@ def _normalize_smiles(smi: str) -> str:
 
     替换后会移除分隔符周围的空白字符，避免产生无效的尾部点号。
     连续分隔符（如 '**' 空步骤）会产生 '..'，一并压缩为单个 '.'。
+
+    注意：只删除 JSON 数组的最外层方括号，不会误删 SMILES 内部的方括号（如 [Na+]、[Cl-]）。
     """
     # 先去除整个字符串首尾空白
     s = smi.strip()
+
+    # JSON 数组格式预处理：删除最外层方括号和双引号
+    # 判断条件：以 [ 开头、以 ] 结尾，且内部包含双引号（JSON 数组特征）
+    if s.startswith('[') and s.endswith(']') and '"' in s:
+        # 删除最外层方括号
+        s = s[1:-1]
+        # 删除成对的双引号（精确匹配 JSON 数组中的引号，不误删其他字符）
+        # 模式：匹配 "..." 形式的字符串，提取内容后用逗号+内容重新拼接
+        s = re.sub(r'"([^"]*)"', r'\1', s)
+
     # 去除分隔符周围的空白字符（处理 '; ' 这类情况）
     s = re.sub(r'\s*[,;*~]\s*', '.', s)
     # 压缩连续点号
