@@ -92,6 +92,7 @@ desktop.ini
 # ===================== Tests =====================
 # Unit / smoke tests are kept locally for dev verification, not distributed
 tests/
+_verify
 
 # ===================== Misc =====================
 *.bak
