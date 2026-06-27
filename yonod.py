@@ -692,7 +692,8 @@ def _normalize_smiles(smi: str) -> str:
     # 判断条件：以 [ 开头、以 ] 结尾（包括空数组 "[]"）
     if s.startswith('[') and s.endswith(']'):
         # 空数组特殊处理：直接返回空字符串
-        if s == '[]':
+        # 支持 []、[ ]、[  ] 等带空格的变体
+        if re.match(r'^\[\s*\]$', s):
             return ''
 
         # 非空 JSON 数组：删除最外层方括号和双引号
