@@ -64,7 +64,7 @@ _CSV_COLUMNS = [
 
 # ── 向导正则常量 ──────────────────────────────────────────────────────────────
 
-_RE_LETTER = re.compile(r'^[A-Za-z]$')
+_RE_LETTER = re.compile(r'^[A-Za-z]+$')  # 支持多字母列名（如 AA、AB、AZ）
 _RE_NUMBER = re.compile(r'^\d+$')
 _RE_TASK   = re.compile(r'^[A-Za-z0-9_\-]+$')
 
@@ -547,12 +547,32 @@ def _ask_optional(prompt: str, default: str = "") -> str:
     return val if val else default
 
 
+def _col_index_to_excel(idx: int) -> str:
+    """将列索引（0-based）转换为 Excel 风格列名（A, B, ..., Z, AA, AB, ..., AZ, BA, ...）。"""
+    result = ""
+    n = idx + 1  # 转为 1-based
+    while n > 0:
+        n -= 1  # Excel 列名没有"0"，需要先减 1
+        result = chr(ord('A') + n % 26) + result
+        n //= 26
+    return result
+
+
+def _excel_to_col_index(letter: str) -> int:
+    """将 Excel 风格列名转换为列索引（0-based）。A→0, Z→25, AA→26, AZ→51, BA→52..."""
+    letter = letter.upper()
+    result = 0
+    for ch in letter:
+        result = result * 26 + (ord(ch) - ord('A') + 1)
+    return result - 1  # 转为 0-based
+
+
 def _show_columns(columns: list) -> None:
     print()
     print("  列序号  列名")
     print("  ------  ----")
     for i, col in enumerate(columns):
-        letter = chr(ord('A') + i) if i < 26 else f"({i+1})"
+        letter = _col_index_to_excel(i)
         print(f"  {letter}({i+1:>2})   {col}")
     print()
 
@@ -561,7 +581,7 @@ def _resolve_one(token: str, columns: list) -> str | None:
     if token in columns:
         return token
     if _RE_LETTER.match(token):
-        idx = ord(token.upper()) - ord('A')
+        idx = _excel_to_col_index(token)  # 支持多字母列名（如 AA、AB、AZ）
         if 0 <= idx < len(columns):
             return columns[idx]
         return None
@@ -669,16 +689,33 @@ def _normalize_smiles(smi: str) -> str:
     s = smi.strip()
 
     # JSON 数组格式预处理：删除最外层方括号和双引号
-    # 判断条件：以 [ 开头、以 ] 结尾，且内部包含双引号（JSON 数组特征）
-    if s.startswith('[') and s.endswith(']') and '"' in s:
-        # 删除最外层方括号
-        s = s[1:-1]
-        # 删除成对的双引号（精确匹配 JSON 数组中的引号，不误删其他字符）
-        # 模式：匹配 "..." 形式的字符串，提取内容后用逗号+内容重新拼接
-        s = re.sub(r'"([^"]*)"', r'\1', s)
+    # 判断条件：以 [ 开头、以 ] 结尾（包括空数组 "[]"）
+    if s.startswith('[') and s.endswith(']'):
+        # 空数组特殊处理：直接返回空字符串
+        if s == '[]':
+            return ''
+
+        # 非空 JSON 数组：删除最外层方括号和双引号
+        # 额外检查：确保内部包含双引号（避免误删 SMILES 内部的化学方括号，如 [Na+].[Cl-]）
+        if '"' in s:
+            # 删除最外层方括号
+            s = s[1:-1]
+            # 删除成对的双引号（精确匹配 JSON 数组中的引号，不误删其他字符）
+            # 模式：匹配 "..." 形式的字符串，提取内容后用逗号+内容重新拼接
+            s = re.sub(r'"([^"]*)"', r'\1', s)
 
     # 去除分隔符周围的空白字符（处理 '; ' 这类情况）
-    s = re.sub(r'\s*[,;*~]\s*', '.', s)
+    # 注意：星号（*）需要特殊处理，因为它可能是原子映射标记（如 [*:1]）或分隔符
+    # 策略：先替换非星号分隔符，再单独处理星号
+
+    # 步骤 1：替换逗号、分号、波浪线
+    s = re.sub(r'\s*[,;~]\s*', '.', s)
+
+    # 步骤 2：替换星号分隔符（但保留原子映射星号）
+    # 原子映射特征：*: 后跟数字，如 [*:1]、[*:2]
+    # 使用否定后视断言 (?<!:) 确保星号前面不是冒号，使用否定前瞻断言 (?!:) 确保星号后面不是冒号
+    s = re.sub(r'\s*\*\s*(?!:)', '.', s)
+
     # 压缩连续点号
     s = re.sub(r'\.{2,}', '.', s)
     # 移除首尾点号
