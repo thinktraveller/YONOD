@@ -1,5 +1,174 @@
 # 构建日志
 
+---
+
+## [2026-05-16] v1.0.0 首个公开发布：酰胺缩合反应产率预测专题
+
+### 执行的任务
+- 完成首个公开发布版本，实现酰胺缩合反应产率预测的完整 pipeline
+
+### 关键变更
+- **新增 4 类分子描述符**：
+  - `MorganDescriptor`（RDKit ECFP4，1024 bit）
+  - `ATMOMACCSDescriptor`（RDKit MACCS keys，166 维）
+  - `FISDDescriptor`（QM9 预训练双 GCN + TwoInOne MLP，50 维，权重已 inline 至 `WEIGHTS/FISD/`）
+  - `MolMetaLMDescriptor`（HuggingFace Llama base，768 维，attention-masked mean-pool）
+- **新增 4 类机器学习适配器**：
+  - `XGBYieldModel`（GPU `tree_method='hist'`，5 折 CV）
+  - `RFYieldModel`（sklearn 300 棵树，5 折 CV）
+  - `SVMYieldModel`（RBF SVR + 自动 PCA，子采样训练以应对 O(n²) 复杂度）
+  - `AutoGluonYieldModel`（80/20 holdout + bagging+stacking）
+- **新增核心模块**：
+  - `ReactionFeaturizer`：6 个分子（2 底物 + 4 试剂）描述符向量拼接
+  - `reagent_cache.py`：试剂 SMILES 去重 + 描述符预计算缓存
+  - `run_yield_prediction.py`：主入口，4×4 grid 自动执行 + 心跳 + 文件日志
+  - `generate_report.py`：自包含 HTML 报告生成器
+- **新增文档**：`README.md`、`YONOD项目构建计划书.md`、`.gitignore`、`requirements.txt`
+- **协议**：CC BY-NC 4.0
+
+### 验证结果
+- 数据集：47015 条酰胺缩合反应（公开来源）
+- R²（5 折 CV）实测范围 0.58~0.87
+- 冠军组合：Morgan × AutoGluon (R²=0.874)
+- 已在 Windows 11 + Python 3.9 + CUDA 12.1 + torch 2.1.2 上跑通
+
+---
+
+## [2026-05-17 ~ 2026-06-01] 通用化子包 yonod_yield/universal/ 开发
+
+### 执行的任务
+- 实现通用 CSV 加载器、特征构建器、报告生成器
+- 创建 Windows 交互向导
+- 完成全链路集成
+
+### 关键变更
+
+#### 第 1 步：csv_loader.py（205 行）
+- `auto_detect_smiles_cols()`：对每列随机抽样 50 行用 RDKit 检测 SMILES 有效率
+- `load_csv_with_roles()`：支持显式指定或自动探测 smiles_cols / numeric_cols / label_col
+- `LoadedDataset` dataclass：统一返回 df + 列角色元数据
+
+#### 第 2 步：feature_builder.py（119 行）
+- `_get_descriptor()`：按需懒加载描述符，避免重依赖预先导入
+- `build_universal_features()`：多 SMILES 列描述符向量按列拼接，数值列不做归一化
+
+#### 第 3 步：run_yonod.py（267 行）
+- 全 CLI 参数支持：`--csv`、`--label-col`、`--smiles-cols`、`--numeric-cols` 等
+- KFold 循环内每折独立 `StandardScaler`（防数据泄露）
+- 多描述符 × 多模型 grid 自动执行
+
+#### 第 4 步：yonod.bat
+- Windows 双击交互式向导，7 步引导完成配置
+- 拖拽支持、命令预览、conda 环境激活
+
+#### 第 5 步：report.py
+- `rank_combinations()`：加权排名函数（R²×0.5 + (1−RMSE/max)×0.3 + (1−MAE/max)×0.2）
+- `generate_report()`：输出自包含 HTML，含结果矩阵、指标解释、加权排名、散点图画廊
+
+### 验证结果
+- mock 4 行 metrics_df 排名：morgan×rf（R²=0.87）正确排第1，score=0.759
+- 全链路冒烟测试（200 行酰胺缩合，morgan×rf）：正常生成 `metrics_summary.csv` + `report.html`
+
+---
+
+## [2026-06-02 ~ 2026-06-08] Track B：Ni 催化不对称偶联 ΔΔG 预测
+
+### 执行的任务
+- 实现 ECC 数据集支持
+- 添加 ee% 换算指标
+
+### 关键变更
+- **新增文件**：
+  - `run_ecc_prediction.py`：ECC 专用入口，4×4 grid（2 描述符 × 4 模型）
+  - `yonod_yield/features/ecc_dataset.py`：ECC 数据加载器
+  - `yonod_yield/metrics/ee_metrics.py`：`ddG_to_ee()` 转换函数及 `ee_mae()` 指标
+- **数据集整理**：
+  - `数据集/镍催化偶联数据集/`：6590 条 `Raw_Dataset.csv` + 5 个预计算描述符 CSV
+  - `数据集/GraphRXN数据集/`：142 个 CSV（BuchwaldHartwig、SuzukiMiyaura、Denmark、InHouse）
+
+---
+
+## [2026-06-09 ~ 2026-06-15] 仓库清理与资产管理
+
+### 执行的任务
+- 移除大型数据集和第三方源码的 git 追踪
+- 规范数据集目录结构
+- 更新外部资产说明
+
+### 关键变更
+- `git rm --cached -r 数据集/ 化学描述符相关项目/`：共 18685 个文件从 git 索引移除
+- 数据集目录从 `数据集/` 重命名为 `dataset/`（英文路径）
+- `dataset/amide-coupling.csv`（47015 条）和 `dataset/test-amide-coupling.csv`（10 条样本）纳入 git 追踪
+- FISD 权重移出 git 追踪（许可证不明确）
+- MIGRATION.md 移出 git 追踪（含内部部署细节）
+- `tests/` 移出 git 追踪（仅供本地开发使用）
+
+---
+
+## [2026-06-16 ~ 2026-06-18] 交互向导重构与 Bug 修复
+
+### 执行的任务
+- 以 Python 交互脚本替代 yonod.bat
+- 修复变量拼接、乱码等问题
+- 实现列必须显式指定
+
+### 关键变更
+
+#### yonod.py 交互向导
+- 标准 Python `input()` 完成 8 步交互，无需 shell
+- 加载 CSV 后显示带字母序号的列索引表
+- 标签列单列必填，SMILES 列多列必填
+- 任务名称强制英文（`^[A-Za-z0-9_\-]+$`）
+
+#### run_yonod.py 变更
+- `--label-col` 和 `--smiles-cols` 改为 `required=True`
+- 移除 `--smiles-threshold` 参数
+
+#### Bug 修复
+- yonod.bat 变量拼接失效（三次修复）
+- yonod.bat 乱码与交互失效（二次修复）
+- 编码问题（UTF-8 → GBK）
+
+---
+
+## [2026-06-19 ~ 2026-06-21] 验证逻辑与报告增强
+
+### 执行的任务
+- 实现标签列数值验证 + SMILES 列 RDKit 全量验证
+- 修复 SMILES 行有效性判断
+- 添加报告增强功能
+
+### 关键变更
+
+#### yonod.py v3 验证
+- 标签列验证：`pd.to_numeric(errors='coerce')`，首个失败格子报错
+- SMILES 列验证：逐行调用 `Chem.MolFromSmiles()`，首个解析失败报错
+
+#### feature_builder.py 修复
+- SMILES 行有效性判断改为「至少一列有效」（或掩码）
+- 逗号分隔阴阳离子 SMILES 规范化
+
+#### 报告增强
+- 新增 4 个 CLI 参数：`--dataset-citation`、`--dataset-url`、`--dataset-notes`、`--output-format`
+- 新增 `generate_markdown_report()`：生成 Markdown 格式报告
+- 推荐组合表格加入模型用时列
+
+---
+
+## [2026-06-21] 废弃入口脚本清理
+
+### 执行的任务
+- 删除已被 yonod.py 替代的旧入口脚本
+
+### 关键变更
+- **删除** `run_yield_prediction.py`：Track A 专用入口
+- **删除** `run_ecc_prediction.py`：Track B (ECC) 专用入口
+- **删除** `generate_report.py`：独立报告生成器
+- **删除** `test_run_yield.py`、`test_ecc_load.py`
+- **迁移** 单元测试至 `tests/` 目录
+
+---
+
 ## [2026-06-22 23:31] 步骤 1 完成：创建 MAF 描述符类文件
 
 ### 执行的任务
@@ -147,7 +316,7 @@
 
 ---
 
-## [2026-06-23 00:06] 🎉 项目构建完成
+## [2026-06-23 00:06] 🎉 MAF 描述符构建完成
 
 ### 完成情况
 - ✅ 步骤 1：创建 MAF 描述符类文件（5/5 单元测试通过）
@@ -635,72 +804,6 @@ MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无�
 - ✅ 向后兼容现有数据集
 
 ---
-
-## [2026-06-24 23:55] �޸����ֺ�+�ո�ָ������µ� SMILES ��֤ʧ��
-
-### ��������
-- �����û����� 
-============================================================
-  YONOD - Your Only Need Outstanding Descriptors
-  ͨ�ý�����  v5 (֧���н�ɫ����)
-============================================================
-
-[1/11] ���� CSV �ļ�·������ֱ����ק�ļ����նˣ�
-  ·��: 
-[�ж�] �û�ȡ���� ����ʽ��ʱ������֤  �ļ��� SMILES ��ʱ����ʧ��
-- Ӱ�췶Χ������ʹ�÷ֺ�+�ո񣨣���Ϊ����ַָ����� CSV �ļ�����֤�׶λᱨ���˳�
-
-### ����ԭ��
- �������滻�ָ���ʱδ�����ָ�����Χ�Ŀհ��ַ���
-- ԭʼ SMILES�����ֺź��пո�
-- �滻�ֺ�Ϊ��ţ�����ź����˿ո�
--  ����ŷָ
-- ��һ����֣���������
-- �ڶ�����֣���ǰ���ո�
-
-��Ȼ RDKit ��  ������ǰ���ո񣬵���ĳЩ�߽�����£���β�����+�ո񣩻��������ʧ�ܡ�
-
-### �޸�����
-�޸�  �� 630-642 �е�  ������
-1. ���滻�ָ���ǰ����ȥ�������ַ�����β�հף���
-2. ʹ���������ʽ�滻�ָ���������Χ�հף�
-3. �������Դ��� ���� �����б���
-
-�޸ĺ���߼���
-- ԭʼ��
-- ȥ����β�հף�
-- �滻�ָ������հף�
-- ѹ��������ţ�
-- ȥ����β��ţ�
-
-### ����ļ�
-- ��
-  - �� 630-642 �У��޸�  ����
-  - ������ 640 �У���ȥ�������ַ�����β�հף�
-  - �޸ĵ� 641 �У���ȥ���ָ�����Χ�հף�
-  - �����ĵ�ע�ͣ���ȷ˵��֧�� ���ֺ�+�ո񣩸�ʽ
-
-### ��֤����
-�������Խű�  �� ��
-
-1. ��Ԫ���ԣ�8 ����������
-   -  �� �淶��Ϊ 
-   -  �� �淶��Ϊ ���ֺ�+�ո�
-   -  �� �淶��Ϊ ����β+�ָ����հף�
-   - �����߽�����������ָ��������š��Ǻš������ߣ�
-
-2. RDKit �������ԣ�
-   - ��֤�淶����� SMILES �ܱ� RDKit ��ȷ����
-   -  �� 2 �����ȫ�������ɹ�
-   -  �� 5 �����ȫ�������ɹ�
-
-3. ��ʵ CSV ���ԣ�
-   - ��֤  ǰ 100 �е� 5 �� SMILES ��
-   - ��������֤ͨ����reactants_smiles, reagents_smiles, catalysts_smiles, solvents_smiles, products_smiles��
-
-���в���ͨ����ȷ���޸���Ч��
-
-
 
 ## [2026-06-24 23:55] 修复：分号+空格分隔符导致的 SMILES 验证失败
 

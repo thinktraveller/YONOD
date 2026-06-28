@@ -38,6 +38,7 @@ AutogluonModels/
 # Logs
 *.log
 result/
+teaching.md
 
 # ===================== Large model weights =====================
 # WEIGHTS/MolMetaLM-base/  is ~500 MB -- download separately, see README.
@@ -55,10 +56,6 @@ WEIGHTS/FISD/
 # ===================== Datasets =====================
 # dataset/ contains large/proprietary data; only the two MIT-licensed sample CSVs
 # (from github.com/aichemeco/amide_coupling) are tracked.
-dataset/*
-!dataset/amide-coupling.csv
-!dataset/test-amide-coupling.csv
-csv_output
 
 
 # ===================== Third-party project sources =====================
@@ -66,9 +63,6 @@ csv_output
 # (the original 化学描述符相关项目/FISD/ has its own .git heritage that confuses
 # git; the runtime-needed FISD weights are duplicated to WEIGHTS/FISD/).
 # Cite upstream projects in README.md instead of vendoring their source here.
-化学描述符相关项目/
-构建计划书.md
-课题组工作再次建模\课题组工作整理.pdf
 start-conda.txt
 
 # ===================== Secrets =====================
@@ -99,4 +93,3 @@ _verify
 *.swp
 *.tmp
 ~$*
-课题组工作再次建模/课题组工作整理.pdf
