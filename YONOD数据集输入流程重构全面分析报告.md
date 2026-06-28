@@ -229,6 +229,93 @@
 
 ---
 
+## 1.6 列角色与合法性检验机制总览
+
+下表汇总了重构方案中定义的所有列角色及其对应的合法性检验规则：
+
+| 列角色 | 英文标识 | 用户输入数量 | 默认名称 | 合法性检验规则 | 空值处理 | 非法值处理 |
+|--------|----------|--------------|----------|----------------|----------|------------|
+| **标签列** | `label` | 仅 1 列 | `yield` | 必须为**数值类型**（可转换为 `float`） | ❌ **不允许空值** | 标记该行为非法，生成规范数据集时跳过 |
+| **反应物列** | `reactant` | 可多列 | `reactant` | 必须为**有效 SMILES**（RDKit 可解析） | ❌ **不允许空值** | 标记该行为非法，生成规范数据集时跳过 |
+| **产物列** | `product` | 仅 1 列 | `product` | 必须为**单一 SMILES**（每个单元格仅含 1 个独立分子，离子对除外） | ❌ **不允许空值** | 标记该行为非法，生成规范数据集时跳过 |
+| **其他组分列** | `others` | 可多列（循环添加） | 原列名或用户指定 | 必须为**有效 SMILES**（RDKit 可解析） | ✅ **允许空值** | 标记该行为非法，生成规范数据集时跳过 |
+| **条件数值列** | `condition` | 可多列（循环添加） | 原列名或用户指定 | 必须为**数值类型**（可转换为 `float`） | ✅ **允许空值** | 标记该行为非法，生成规范数据集时跳过 |
+
+### 检验规则详解
+
+#### 1. SMILES 合法性检验（适用于 `reactant`、`product`、`others`）
+
+```python
+from rdkit import Chem
+
+def is_valid_smiles(smiles: str) -> bool:
+    """判断 SMILES 是否合法（RDKit 可解析）"""
+    if not smiles or pd.isna(smiles):
+        return False
+    try:
+        mol = Chem.MolFromSmiles(str(smiles))
+        return mol is not None
+    except:
+        return False
+```
+
+#### 2. 数值合法性检验（适用于 `label`、`condition`）
+
+```python
+def is_valid_numeric(value) -> bool:
+    """判断值是否为有效数值"""
+    if pd.isna(value):
+        return False  # label 列：空值非法；condition 列：空值合法
+    try:
+        float(value)
+        return True
+    except (ValueError, TypeError):
+        return False
+```
+
+#### 3. 产物列单 SMILES 约束（仅适用于 `product`）
+
+```python
+def is_single_smiles(smiles: str) -> bool:
+    """
+    判断是否为单一 SMILES（产物列专用）
+    - 允许离子对（如 [Na+].[Cl-]，总电荷为 0）
+    - 不允许多组分混合物（如 CCO.CC）
+    """
+    components = split_multi_smiles(smiles)  # 按 . ; , 拆分
+    if len(components) == 1:
+        return True
+
+    # 检查是否为离子对
+    mols = [Chem.MolFromSmiles(c) for c in components]
+    if any(m is None for m in mols):
+        return False
+
+    charges = [mol.GetFormalCharge() for mol in mols]
+    return all(c != 0 for c in charges) and sum(charges) == 0
+```
+
+### 非法值处理策略对比
+
+| 处理方式 | 原流程 | 重构后流程 |
+|----------|--------|------------|
+| 检测到非法值时 | 立即退出程序，要求用户修复 | **累积记录**，继续检验后续列 |
+| 非法值报告 | 无 | 生成 Markdown 报告，逐行展示 |
+| 规范数据集生成 | 非法值导致无法生成 | **跳过非法行**，仅保留合法行 |
+| 用户确认流程 | 无 | 生成报告后要求用户浏览确认 |
+
+### 列角色与描述符嵌入关系
+
+| 列角色 | 参与描述符嵌入 | 嵌入方式说明 |
+|--------|----------------|--------------|
+| `reactant` | ✅ 所有描述符 | 横向拼接 / 逐点加和 / DRFP 反应物 |
+| `product` | ✅ 所有描述符 | 横向拼接 / 逐点加和 / DRFP 产物 |
+| `others` | ✅ 所有描述符 | 横向拼接 / 逐点加和 / 可选加入 DRFP 反应物侧 |
+| `condition` | ❌ 不参与 | 作为辅助特征直接拼接到特征向量末尾 |
+| `label` | ❌ 不参与 | 作为建模目标 (y 值) |
+
+---
+
 ## 2. 步骤分析报告
 
 ### 步骤 1：指定初始数据集、列映射文件、项目名称和文件夹
