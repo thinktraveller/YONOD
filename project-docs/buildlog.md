@@ -1577,3 +1577,49 @@ python yonod.py --csv data.csv --label-col yield --smiles-cols R1 R2 --descripto
 - 重构已完成，可继续后续开发任务（步骤4/步骤6）或进行端到端集成测试
 
 ---
+## [2026-06-29 22:57] 明确 column_mapping.csv 为人类参考文件
+
+### 执行的任务
+- 在 yonod.py 的 `step3_2_generate_column_mapping()` 函数中添加注释和输出提示
+- 在 `save_config_file()` 函数中为 JSON 配置的 `column_mapping_path` 字段添加注释
+- 明确说明 column_mapping.csv 仅供人类参考查阅，不参与 main.py 的执行流程
+- main.py 使用 JSON 配置中的 `column_roles` 字段识别列角色
+
+### 关键变更
+- **修改文件**：`yonod.py`（2处注释添加）
+  - L951-953：`step3_2_generate_column_mapping()` docstring 添加说明：
+    ```
+    注意: 此CSV文件仅供人类参考查阅,不参与main.py的执行流程。
+    main.py使用JSON配置文件中的column_roles字段来识别列角色。
+    ```
+  - L974：输出提示添加：`(注: 此文件仅供人类参考,不参与建模执行流程)`
+  - L1675：JSON配置字典中添加行内注释：
+    ```python
+    'column_mapping_path': column_mapping_path,  # 注: 仅供人类参考,不参与main.py执行流程
+    'column_roles': column_roles  # main.py使用此字段识别列角色
+    ```
+
+### 遇到的问题及解决方案
+- 无问题
+
+### 架构说明
+**数据流确认**：
+```
+yonod.py (向导)
+  ├─ 步骤2: 逐列声明 → all_column_configs
+  ├─ 步骤3.2: 生成 column_mapping.csv （仅供人类参考）
+  └─ 配置保存: save_config_file()
+       ├─ column_mapping_path（记录文件路径，人类可查阅）
+       └─ column_roles（main.py 的实际执行依据）
+
+main.py (建模)
+  ├─ 读取 JSON 配置文件
+  ├─ 使用 config['column_roles'] 识别列角色
+  └─ 完全不读取 column_mapping.csv
+```
+
+### 下一步计划
+- 方案B已完成，column_mapping.csv 定位明确
+- 可继续其他开发任务
+
+---
