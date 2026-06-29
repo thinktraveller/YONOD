@@ -20,6 +20,7 @@ import re
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Set
+from datetime import datetime
 from rdkit import Chem
 from rdkit import RDLogger
 
@@ -813,6 +814,417 @@ def step2_orchestrate(df: pd.DataFrame) -> List[Dict]:
     return all_configs
 
 
+# ==================== 步骤3: 生成规范数据集与非法输入排除报告 ====================
+
+def split_smiles(smiles_str: str) -> List[str]:
+    """
+    拆分包含多个SMILES的字符串
+
+    支持的分隔符: , ; 空格 .
+    优先级：逗号 > 分号 > 空格 > 点号
+
+    Args:
+        smiles_str: SMILES字符串（可能包含多个分子）
+
+    Returns:
+        list: SMILES列表
+    """
+    # 按优先级尝试分隔符
+    separators = [',', ';', ' ', '.']
+
+    for sep in separators:
+        if sep in smiles_str:
+            parts = [s.strip() for s in smiles_str.split(sep) if s.strip()]
+            # 过滤掉纯分隔符的残留（如空格分隔时可能有'.', ',', ';'残留）
+            parts = [p for p in parts if p not in ['.', ',', ';', ' ']]
+            if parts:  # 确保有有效部分
+                return parts
+
+    # 无分隔符,单个SMILES
+    return [smiles_str.strip()]
+
+
+def step3_1_generate_invalid_report(
+    df: pd.DataFrame,
+    all_column_configs: List[Dict],
+    project_folder: str,
+    project_name: str
+) -> Optional[str]:
+    """
+    步骤3.1: 生成非法输入排除报告(Markdown格式)
+
+    Args:
+        df: 原始数据集
+        all_column_configs: 所有列的配置列表(每个元素是dict,包含invalid_rows)
+        project_folder: 项目文件夹路径
+        project_name: 项目名称
+
+    Returns:
+        str: 报告文件路径(如果生成),否则返回None
+    """
+    # 汇总所有非法行
+    all_invalid_rows = set()
+    for config in all_column_configs:
+        all_invalid_rows.update(config['invalid_rows'])
+
+    if not all_invalid_rows:
+        print("\n[OK] 无非法输入,跳过报告生成")
+        return None
+
+    print(f"\n生成非法输入排除报告... 共 {len(all_invalid_rows)} 行")
+
+    report_path = os.path.join(project_folder, f"{project_name}_invalid_report.md")
+
+    with open(report_path, 'w', encoding='utf-8') as f:
+        f.write(f"# {project_name} 非法输入排除报告\n\n")
+        f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        f.write("---\n\n")
+
+        # 第一部分: 汇总信息
+        f.write("## 一、排除行汇总\n\n")
+        f.write(f"**总计排除行数:** {len(all_invalid_rows)}\n\n")
+
+        # 按行索引排序
+        sorted_invalid_rows = sorted(all_invalid_rows)
+
+        # 为每行标注在哪些步骤出现非法值
+        row_error_map = {}  # {row_idx: [column_configs]}
+        for row_idx in sorted_invalid_rows:
+            row_error_map[row_idx] = []
+            for config in all_column_configs:
+                if row_idx in config['invalid_rows']:
+                    row_error_map[row_idx].append(config)
+
+        f.write("| 行号 | 出现非法值的列 |\n")
+        f.write("|------|----------------|\n")
+        for row_idx in sorted_invalid_rows:
+            error_cols = [cfg['origin_name'] for cfg in row_error_map[row_idx]]
+            f.write(f"| {row_idx} | {', '.join(error_cols)} |\n")
+
+        f.write("\n---\n\n")
+
+        # 第二部分: 逐行详细信息
+        f.write("## 二、排除行详细信息\n\n")
+
+        for row_idx in sorted_invalid_rows:
+            f.write(f"### 行 {row_idx}\n\n")
+
+            # 提取该行数据
+            row_data = df.iloc[row_idx]
+
+            # 生成表格
+            f.write("| 列名 | 值 |\n")
+            f.write("|------|----|\n")
+
+            for config in all_column_configs:
+                col_name = config['origin_name']
+                col_value = row_data[col_name]
+
+                # 如果该列在此行非法,加粗
+                if row_idx in config['invalid_rows']:
+                    col_value_str = f"**{col_value}**"
+                else:
+                    col_value_str = str(col_value)
+
+                f.write(f"| {col_name} | {col_value_str} |\n")
+
+            # 标注非法值位置
+            error_cols = [cfg['origin_name'] for cfg in row_error_map[row_idx]]
+            f.write(f"\n**非法值所在列:** {', '.join(error_cols)}\n\n")
+            f.write("---\n\n")
+
+    print(f"[OK] 报告已生成: {report_path}")
+    return report_path
+
+
+def step3_2_generate_column_mapping(
+    all_column_configs: List[Dict],
+    project_folder: str,
+    project_name: str
+) -> str:
+    """
+    步骤3.2: 生成列映射说明表(CSV格式)
+
+    Args:
+        all_column_configs: 所有列的配置列表
+        project_folder: 项目文件夹路径
+        project_name: 项目名称
+
+    Returns:
+        str: 列映射文件路径
+    """
+    print("\n生成列映射说明表...")
+
+    mapping_path = os.path.join(project_folder, f"{project_name}_column_mapping.csv")
+
+    mapping_data = []
+    for config in all_column_configs:
+        mapping_data.append({
+            'origin_name': config['origin_name'],
+            'role': config['role'],
+            'name': config['name']
+        })
+
+    mapping_df = pd.DataFrame(mapping_data)
+    mapping_df.to_csv(mapping_path, index=False, encoding='utf-8')
+
+    print(f"[OK] 列映射表已生成: {mapping_path}")
+    print("\n列映射内容预览:")
+    print(mapping_df.to_string(index=False))
+
+    return mapping_path
+
+
+def step3_3_generate_normalized_dataset(
+    df: pd.DataFrame,
+    all_column_configs: List[Dict],
+    project_folder: str,
+    project_name: str
+) -> str:
+    """
+    步骤3.3: 生成规范数据集(改进版: 两次扫描)
+
+    第一次扫描: 确定每类SMILES的最大列数
+    第二次扫描: 填充数据
+
+    Args:
+        df: 原始数据集
+        all_column_configs: 所有列的配置列表
+        project_folder: 项目文件夹路径
+        project_name: 项目名称
+
+    Returns:
+        str: 规范数据集文件路径
+    """
+    print("\n生成规范数据集...")
+
+    # 汇总所有非法行
+    all_invalid_rows = set()
+    for config in all_column_configs:
+        all_invalid_rows.update(config['invalid_rows'])
+
+    valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
+
+    if all_invalid_rows:
+        print(f"  跳过 {len(all_invalid_rows)} 个非法行")
+
+    # 按角色分组
+    role_groups = {
+        'reactant': [],
+        'others': [],
+        'condition': [],
+        'product': [],
+        'label': []
+    }
+
+    for config in all_column_configs:
+        role_groups[config['role']].append(config)
+
+    # 第一次扫描: 确定最大列数
+    max_reactant_count = 0
+    max_others_count = {}  # {others_name: max_count}
+
+    for row_idx in valid_row_indices:
+        row_data = df.iloc[row_idx]
+
+        # 统计reactant
+        reactant_count = 0
+        for config in role_groups['reactant']:
+            col_name = config['origin_name']
+            value = row_data[col_name]
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                reactant_count += len(smiles_parts)
+        max_reactant_count = max(max_reactant_count, reactant_count)
+
+        # 统计others
+        for config in role_groups['others']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                if new_name not in max_others_count:
+                    max_others_count[new_name] = 0
+                max_others_count[new_name] = max(max_others_count[new_name], len(smiles_parts))
+
+    print(f"  最大reactant数量: {max_reactant_count}")
+    for name, count in max_others_count.items():
+        print(f"  最大{name}数量: {count}")
+
+    # 构建最终列名列表(按顺序)
+    final_columns = []
+
+    # reactant列
+    for i in range(max_reactant_count):
+        final_columns.append(f'reactant-{i+1}')
+
+    # others列
+    for config in role_groups['others']:
+        name = config['name']
+        if name in max_others_count:
+            count = max_others_count[name]
+            if count == 1:
+                final_columns.append(name)
+            else:
+                for i in range(count):
+                    final_columns.append(f'{name}-{i+1}')
+        else:
+            # 如果所有行都为空,仍然保留一列
+            final_columns.append(name)
+
+    # condition列
+    for config in role_groups['condition']:
+        final_columns.append(config['name'])
+
+    # product列
+    for config in role_groups['product']:
+        final_columns.append(config['name'])
+
+    # label列
+    for config in role_groups['label']:
+        final_columns.append(config['name'])
+
+    # 第二次扫描: 填充数据
+    normalized_rows = []
+
+    for row_idx in valid_row_indices:
+        row_data = df.iloc[row_idx]
+        normalized_row = {col: '' for col in final_columns}  # 初始化为空字符串
+
+        # 填充reactant
+        reactant_smiles_list = []
+        for config in role_groups['reactant']:
+            col_name = config['origin_name']
+            value = row_data[col_name]
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                reactant_smiles_list.extend(smiles_parts)
+
+        for i, smiles in enumerate(reactant_smiles_list):
+            if i < max_reactant_count:
+                normalized_row[f'reactant-{i+1}'] = smiles
+
+        # 填充others
+        for config in role_groups['others']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                if len(smiles_parts) == 1:
+                    if new_name in normalized_row:
+                        normalized_row[new_name] = smiles_parts[0]
+                else:
+                    for i, smiles in enumerate(smiles_parts):
+                        col_name_indexed = f'{new_name}-{i+1}'
+                        if col_name_indexed in normalized_row:
+                            normalized_row[col_name_indexed] = smiles
+
+        # 填充condition
+        for config in role_groups['condition']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = value if pd.notna(value) else ''
+
+        # 填充product
+        for config in role_groups['product']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = str(value).strip() if pd.notna(value) else ''
+
+        # 填充label
+        for config in role_groups['label']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = value if pd.notna(value) else ''
+
+        normalized_rows.append(normalized_row)
+
+    # 转换为DataFrame(按final_columns顺序)
+    normalized_df = pd.DataFrame(normalized_rows, columns=final_columns)
+
+    # 将NaN替换为空字符串（确保空值显示为空字符串而非NaN）
+    normalized_df = normalized_df.fillna('')
+
+    # 保存
+    normalized_path = os.path.join(project_folder, f"{project_name}_normalized_dataset.csv")
+    normalized_df.to_csv(normalized_path, index=False, encoding='utf-8')
+
+    print(f"[OK] 规范数据集已生成: {normalized_path}")
+    print(f"  有效行数: {len(normalized_df)}")
+    print(f"  总列数: {len(normalized_df.columns)}")
+    print("\n列名预览:")
+    if len(final_columns) <= 10:
+        print(f"  {', '.join(final_columns)}")
+    else:
+        print(f"  {', '.join(final_columns[:10])}...")
+
+    return normalized_path
+
+
+def step3_orchestrate(
+    df: pd.DataFrame,
+    all_configs: List[Dict],
+    project_folder: str,
+    project_name: str
+) -> Dict[str, Optional[str]]:
+    """
+    步骤3总调度函数: 生成规范数据集与非法输入排除报告
+
+    Returns:
+        dict: {
+            'invalid_report': str | None,
+            'column_mapping': str,
+            'normalized_dataset': str | None
+        }
+    """
+    print("\n" + "=" * 60)
+    print("步骤3: 生成规范数据集与非法输入排除报告")
+    print("=" * 60)
+
+    # 汇总所有非法行
+    all_invalid_rows = set()
+    for config in all_configs:
+        all_invalid_rows.update(config['invalid_rows'])
+
+    # 3.1 生成非法输入报告(如果有非法输入)
+    invalid_report_path = step3_1_generate_invalid_report(
+        df, all_configs, project_folder, project_name
+    )
+
+    # 3.2 生成列映射说明表(总是生成)
+    mapping_path = step3_2_generate_column_mapping(
+        all_configs, project_folder, project_name
+    )
+
+    # 3.3 生成规范数据集
+    if all_invalid_rows:
+        # 有非法行,生成规范数据集
+        normalized_path = step3_3_generate_normalized_dataset(
+            df, all_configs, project_folder, project_name
+        )
+    else:
+        # 无非法行,跳过规范数据集生成
+        print("\n[OK] 无非法输入,跳过规范数据集生成")
+        print("    原始数据集已是规范格式,可直接使用")
+        normalized_path = None
+
+    print("\n" + "=" * 60)
+    print("步骤3完成!")
+    print("=" * 60)
+
+    return {
+        'invalid_report': invalid_report_path,
+        'column_mapping': mapping_path,
+        'normalized_dataset': normalized_path
+    }
+
+
 def main():
     """
     主函数:运行数据集输入向导
@@ -851,8 +1263,33 @@ def main():
     print("\n" + "=" * 60)
     print("步骤2完成!")
     print("=" * 60)
+
+    # 步骤3: 生成规范数据集与非法输入排除报告
     print("\n接下来将进入步骤3: 生成规范数据集与非法输入排除报告")
-    print("(步骤3功能尚未实现)")
+    input("按回车键继续...")
+
+    output_paths = step3_orchestrate(
+        df,
+        all_configs,
+        basic_info['project_folder'],
+        basic_info['project_name']
+    )
+
+    # 输出总结
+    print("\n" + "=" * 60)
+    print("所有任务完成!")
+    print("=" * 60)
+    print("\n生成的文件:")
+    if output_paths['invalid_report']:
+        print(f"  - 非法输入报告: {output_paths['invalid_report']}")
+    print(f"  - 列映射表: {output_paths['column_mapping']}")
+    if output_paths['normalized_dataset']:
+        print(f"  - 规范数据集: {output_paths['normalized_dataset']}")
+    else:
+        print("  - 规范数据集: 无需生成（原始数据集无非法值）")
+
+    print("\n接下来将进入步骤4-8: 描述符配置、模型配置等")
+    print("(步骤4-8功能尚未实现)")
 
 
 if __name__ == "__main__":
