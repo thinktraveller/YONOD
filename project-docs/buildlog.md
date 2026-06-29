@@ -1052,3 +1052,91 @@ MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无�
 - 步骤 2：逐列声明列角色和名称
 
 ---
+
+## [2026-06-29 16:55] 步骤 2 完成：第17章 数据集输入流程重构 - 逐列声明列角色和名称
+
+### 执行的任务
+- 实现用户选择需要的列功能（支持all或逗号分隔的索引列表）
+- 实现逐列声明列角色和名称的完整流程：
+  - 步骤2.1：选择需要的列（备选列列表）
+  - 步骤2.2：声明标签列（label，必须1列）
+  - 步骤2.3：声明反应物SMILES列（reactant，可多列）
+  - 步骤2.4：声明产物SMILES列（product，必须1列，单SMILES）
+  - 步骤2.5：声明其他组分SMILES列（others，可多列，允许空值）
+  - 步骤2.6：声明条件数值列（condition，可多列，允许空值）
+- 实现即时合法性检验功能：
+  - 数值列验证（区分允许空值和不允许空值）
+  - SMILES列验证（支持多种分隔符：`.` ` ` `;` `,`）
+  - 产物列严格验证（单SMILES，不含分隔符）
+- 实现列名称唯一性约束（维护used_names集合）
+- 实现智能命名建议功能（solvent、catalyst、temperature等）
+- 静默RDKit警告信息（避免干扰用户体验）
+
+### 关键变更
+- **修改文件**：`dataset_input_wizard.py`（从165行扩展至917行）
+  - 第24-26行：导入RDKit并静默警告
+  - 第143-250行：实现步骤2.1选择列功能
+  - 第253-329行：实现数值列验证（允许/不允许空值）
+  - 第332-396行：实现SMILES列验证（多分隔符支持）
+  - 第399-448行：实现产物列严格验证
+  - 第451-515行：实现标签列声明（步骤2.2）
+  - 第518-594行：实现反应物列声明（步骤2.3）
+  - 第597-671行：实现产物列声明（步骤2.4）
+  - 第674-791行：实现其他组分列声明（步骤2.5，含智能命名）
+  - 第822-917行：实现条件数值列声明（步骤2.6，含智能命名）
+  - 第920-969行：实现步骤2总调度函数（step2_orchestrate）
+  - 第988-1011行：更新主函数，集成步骤2
+- **新增文件**：`tests/test_step2.py`（186行）
+  - 测试数值列验证（允许/不允许空值）
+  - 测试SMILES列验证（多分隔符、边界情况）
+  - 测试产物列严格验证
+  - 测试列名称唯一性
+  - 测试智能命名建议功能
+- **新增文件**：`_verify/step2_test_dataset.csv`（测试数据集，包含边界情况）
+- **新增文件**：`_verify/test_step2_auto.py`（自动化验证脚本）
+
+### 遇到的问题及解决方案
+- **问题1**：RDKit的`Chem.MolFromSmiles()`对非法SMILES会输出警告到stderr
+  - **解决**：在导入后立即调用`RDLogger.DisableLog('rdApp.*')`静默所有RDKit警告
+- 无其他阻塞性问题
+
+### 验证结果
+- ✅ 单元测试：11/11 通过
+  - `test_validate_numeric_column`：正确识别非数值和空值
+  - `test_validate_numeric_column_allow_empty`：允许空值时只排除非数值
+  - `test_validate_smiles_column_no_empty`：不允许空值时正确识别
+  - `test_validate_smiles_column_allow_empty`：允许空值时只排除非法SMILES
+  - `test_validate_smiles_column_with_separators`：正确处理多种分隔符
+  - `test_validate_product_column`：严格验证产物列（单SMILES）
+  - `test_validate_product_column_valid`：合法产物列不报错
+  - `test_column_name_uniqueness`：列名称唯一性约束生效
+  - `test_suggest_others_name`：智能命名建议准确（中英文）
+  - `test_suggest_condition_name`：智能命名建议准确（中英文）
+  - `test_validate_smiles_column_edge_cases`：边界情况处理正确
+- ✅ 自动化验证：6/6 测试场景通过
+  - 测试1：Yield列验证（标签列）→ 非法行[3]正确识别
+  - 测试2：Reactant_1列验证 → 非法行[3]正确识别
+  - 测试3：Product列验证 → 非法行[3]（含分隔符）正确识别
+  - 测试4：Catalyst列验证（允许空值）→ 非法行[2]正确识别
+  - 测试5：Temperature列验证（允许空值）→ 无非法行
+  - 测试6：智能命名建议 → solvent、catalyst、temperature、time全部正确
+
+### 功能特性
+1. **多分隔符支持**：SMILES列支持`.` ` ` `;` `,`四种分隔符，逐组分验证
+2. **差异化空值策略**：
+   - 标签列/反应物/产物：不允许空值
+   - 其他组分/条件数值：允许空值
+3. **产物列严格定义**：单SMILES，不含任何分隔符（符合计划书要求）
+4. **智能命名建议**：
+   - 其他组分：solvent、catalyst、reagent、base
+   - 条件数值：temperature、pressure、time
+5. **列名称唯一性**：维护used_names集合，强制禁止重复
+6. **用户体验优化**：
+   - 静默RDKit警告信息
+   - 使用[OK]和[X]替代Unicode字符（避免Windows终端编码问题）
+   - 每列声明后立即显示非法行数
+
+### 下一步计划
+- 步骤 3：生成规范数据集与非法输入排除报告（预计4.5小时）
+
+---
