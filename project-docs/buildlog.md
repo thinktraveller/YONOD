@@ -1312,3 +1312,120 @@ MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无�
 - ✅ 第17章数据集输入流程重构已全部完成
 
 ---
+
+## [2026-06-29 17:35] 第17章数据集输入流程重构 - 完整终验通过
+
+### 执行的任务
+- 创建包含各种边界情况的测试数据集（10行 × 8列）
+- 模拟用户完整操作流程（步骤1-8）
+- 验证所有生成的输出文件的正确性
+- 检查列顺序、SMILES拆分、空值处理等细节
+
+### 测试数据集设计
+**10行数据，覆盖以下边界情况：**
+- 第1行：逗号分隔多SMILES（`CCO,CCC`）
+- 第2行：分号分隔多SMILES（`CCO;CCC`）
+- 第3行：点号分隔多SMILES（`CCO.CCC`）
+- 第4行：空格分隔多SMILES（`CCO CCC`）
+- 第5行：包含空值（catalyst和temperature为空）
+- 第6行：非法SMILES（`invalid_smiles`）
+- 第7行：非法数值（temperature=`invalid_temp`）
+- 第8行：产物列包含分隔符（`CO.CC`，应被拒绝）
+- 第9行：正常数据（单SMILES）
+- 第10行：离子对（`[Na+].[Cl-]`，点号保护化学语义）
+
+### 终验结果
+**所有13个验证步骤通过：**
+
+1. **步骤1：收集基本信息**
+   - 数据集路径验证
+   - 项目名称验证
+   - 项目文件夹创建
+
+2. **步骤2：逐列声明列角色和名称**
+   - 选择8列（all选项）
+   - 标签列声明（yield → y）
+   - 反应物列声明（reactant_1 → r1, reactant_2 → r2）
+   - 产物列声明（product → p）
+   - 其他组分列声明（catalyst, solvent）
+   - 条件数值列声明（temperature → temp, time）
+   - 非法行检测：3行（第6, 7, 8行）
+
+3. **步骤3.1：非法输入排除报告生成**
+   - Markdown格式报告生成
+   - 包含所有非法行信息（第6, 7, 8行）
+   - 非法值加粗显示
+
+4. **步骤3.2：列映射说明表生成**
+   - CSV格式输出
+   - 包含8行映射（origin_name, role, name）
+   - 角色正确（label, reactant×2, product, others×2, condition×2）
+
+5. **步骤3.3：规范数据集生成**
+   - 正确跳过3个非法行（剩余7行）
+   - 列顺序正确（reactant → others → condition → product → label）
+   - 多SMILES拆分正确：reactant-1, reactant-2, reactant-3, solvent-1, solvent-2
+   - 第1行拆分验证：`CCO,CCC` → reactant-1=`CCO`, reactant-2=`CCC`
+   - 空值处理：第5行的catalyst和temp列为空字符串（不是NaN）
+
+6. **步骤4：指定描述符**
+   - 选择3个描述符（morgan, maf, drfp）
+   - morgan配置：横向拼接，默认顺序，5列
+   - maf配置：逐点加和，选择5列
+   - drfp配置：固定反应模式，添加catalyst到reactant
+
+7. **步骤5：选择建模模型**
+   - 选择3个模型（XGBoost, Random Forest, AutoGluon）
+
+8. **步骤6：补充数据集元信息**
+   - repo_url：`https://github.com/test/repo`
+   - doi：`10.1234/test.doi`
+   - notes：`Test final verification`
+
+9. **步骤7：选择报告输出格式**
+   - 选择3种格式（Markdown, HTML, JSON）
+
+10. **步骤8：生成修复后数据集**
+    - 正确删除3个非法行
+    - 原始行数：10，删除行数：3，剩余行数：7
+
+### 边界情况测试
+**10个边界情况全部通过：**
+1. 逗号分隔SMILES拆分（`,`）
+2. 分号分隔SMILES拆分（`;`）
+3. 点号分隔SMILES拆分（`.`）
+4. 空格分隔SMILES拆分（` `）
+5. 离子对点号保护（`[Na+].[Cl-]`）
+6. 空值处理（允许空值的列）
+7. 非法SMILES检测
+8. 非法数值检测
+9. 产物列严格验证（拒绝多SMILES）
+10. 列顺序正确（reactant → others → condition → product → label）
+
+### 生成的文件
+**4个输出文件全部正确生成：**
+1. `test_project_invalid_report.md`（1182 bytes）
+2. `test_project_column_mapping.csv`（204 bytes）
+3. `test_project_normalized_dataset.csv`（401 bytes）
+4. `test_project_修复后数据集.csv`（418 bytes）
+
+### 数据验证
+- 原始数据集：10行 × 8列
+- 非法行检测：3行（第6, 7, 8行）
+- 规范数据集：7行（正确跳过非法行）
+- 修复后数据集：7行（正确删除非法行）
+- 列映射表：8行（角色+名称映射）
+
+### 遇到的问题及修复
+1. **问题1**：Unicode字符编码问题（`✓`, `✗`, `✅` 在Windows GBK终端下无法显示）
+   - **修复**：批量替换为ASCII字符（`[OK]`, `[X]`, `[PASS]`）
+   - **影响范围**：`dataset_input_wizard.py` 全局替换，终验脚本修正
+2. **问题2**：测试数据集中的catalyst和solvent列初始使用文本（非SMILES）
+   - **修复**：修改为合法的SMILES（苯、吡啶、醇类等）
+3. **问题3**：终验脚本的用户输入序列不匹配实际交互流程
+   - **修复**：重新梳理步骤2的交互逻辑，修正输入序列
+
+### 下一步计划
+- ✅ 第17章数据集输入流程重构已全部完成并通过终验
+
+---

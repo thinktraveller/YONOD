@@ -54,19 +54,19 @@ def step1_collect_basic_info() -> Dict:
     while True:
         dataset_path = input("\n请输入初始数据集路径(CSV格式): ").strip()
         if os.path.exists(dataset_path) and dataset_path.endswith('.csv'):
-            print(f"✓ 数据集文件存在: {dataset_path}")
+            print(f"[OK] 数据集文件存在: {dataset_path}")
             break
         else:
-            print("✗ 文件不存在或不是CSV格式,请重新输入")
+            print("[X] 文件不存在或不是CSV格式,请重新输入")
 
     # 2. 可选: 输入列映射文件路径
     mapping_path = input("\n请输入列映射文件路径(可选,直接回车跳过): ").strip()
     if mapping_path:
         if os.path.exists(mapping_path) and mapping_path.endswith('.csv'):
-            print(f"✓ 列映射文件存在: {mapping_path}")
+            print(f"[OK] 列映射文件存在: {mapping_path}")
             print("  将跳过步骤2,直接使用此映射进行合法性检验")
         else:
-            print("✗ 文件不存在或不是CSV格式,将忽略此输入,进入正常流程")
+            print("[X] 文件不存在或不是CSV格式,将忽略此输入,进入正常流程")
             mapping_path = None
     else:
         mapping_path = None
@@ -75,20 +75,20 @@ def step1_collect_basic_info() -> Dict:
     while True:
         project_name = input("\n请输入项目名称(仅英文字母、数字、下划线): ").strip()
         if re.match(r'^[a-zA-Z0-9_]+$', project_name):
-            print(f"✓ 项目名称: {project_name}")
+            print(f"[OK] 项目名称: {project_name}")
             break
         else:
-            print("✗ 项目名称只能包含英文字母、数字、下划线")
+            print("[X] 项目名称只能包含英文字母、数字、下划线")
 
     # 4. 输入项目文件夹位置
     while True:
         project_folder = input("\n请输入项目文件夹位置(将在此创建输出文件): ").strip()
         if os.path.isdir(project_folder) or not os.path.exists(project_folder):
             os.makedirs(project_folder, exist_ok=True)
-            print(f"✓ 项目文件夹: {project_folder}")
+            print(f"[OK] 项目文件夹: {project_folder}")
             break
         else:
-            print("✗ 路径无效或不是文件夹")
+            print("[X] 路径无效或不是文件夹")
 
     return {
         'dataset_path': dataset_path,
@@ -120,12 +120,12 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
         print("⚠ UTF-8编码读取失败,尝试使用GBK编码...")
         try:
             df = pd.read_csv(dataset_path, encoding='gbk')
-            print("✓ 使用GBK编码成功读取")
+            print("[OK] 使用GBK编码成功读取")
         except UnicodeDecodeError:
             # 如果GBK也失败,尝试latin1(几乎不会失败)
             print("⚠ GBK编码读取失败,尝试使用latin1编码...")
             df = pd.read_csv(dataset_path, encoding='latin1')
-            print("✓ 使用latin1编码成功读取")
+            print("[OK] 使用latin1编码成功读取")
 
     print(f"\n数据集基本信息:")
     print(f"  总行数: {len(df)}")
