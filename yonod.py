@@ -948,6 +948,9 @@ def step3_2_generate_column_mapping(
     """
     步骤3.2: 生成列映射说明表(CSV格式)
 
+    注意: 此CSV文件仅供人类参考查阅,不参与main.py的执行流程。
+    main.py使用JSON配置文件中的column_roles字段来识别列角色。
+
     Args:
         all_column_configs: 所有列的配置列表
         project_folder: 项目文件夹路径
@@ -972,6 +975,7 @@ def step3_2_generate_column_mapping(
     mapping_df.to_csv(mapping_path, index=False, encoding='utf-8')
 
     print(f"[OK] 列映射表已生成: {mapping_path}")
+    print("    (注: 此文件仅供人类参考,不参与建模执行流程)")
     print("\n列映射内容预览:")
     print(mapping_df.to_string(index=False))
 
@@ -1672,12 +1676,12 @@ def save_config_file(
         'version': '1.0',
         'project_name': project_name,
         'dataset_path': effective_dataset_path,
-        'column_mapping_path': column_mapping_path,
+        'column_mapping_path': column_mapping_path,  # 注: 仅供人类参考,不参与main.py执行流程
         'descriptors': descriptor_configs,
         'models': selected_models,
         'metadata': metadata,
         'report_formats': report_formats,
-        'column_roles': column_roles
+        'column_roles': column_roles  # main.py使用此字段识别列角色
     }
 
     # 保存配置文件
