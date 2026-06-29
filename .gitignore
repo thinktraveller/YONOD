@@ -82,6 +82,7 @@ desktop.ini
 
 # Claude Code agent metadata (if you keep this in a separate tooling repo)
 .claude/
+CLAUDE.md
 
 # ===================== Tests =====================
 # Unit / smoke tests are kept locally for dev verification, not distributed

@@ -6034,4 +6034,153 @@ df = pd.read_csv(csv_path, encoding=encoding)
 
 ---
 
+## 十八、双入口重构计划（YONOD v2.0 架构升级）
+
+### 18.1 改造目标
+
+将 YONOD 项目的两个入口文件进行职责分离和协作优化：
+- **dataset_input_wizard.py**：专注于数据准备（8步交互式向导），完成后自动调用 yonod.py
+- **yonod.py**：专注于建模流程（删除交互式向导，纯CLI模式），直接读取向导生成的配置文件
+
+### 18.2 支持的使用场景
+
+#### 场景A：首次使用（完整向导流程）
+```bash
+python dataset_input_wizard.py
+# → 8步向导收集配置
+# → 自动调用 yonod.py 进行建模
+```
+
+#### 场景B：已有配置（直接建模）
+```bash
+python yonod.py --config project-folder/yonod_config.json
+```
+
+#### 场景C：传统CLI（向后兼容）
+```bash
+python yonod.py --csv data.csv --label-col yield --smiles-cols R1 R2 --descriptors morgan --models xgb
+```
+
+### 18.3 配置文件格式
+
+**文件路径**: `{project_folder}/{project_name}_yonod_config.json`
+
+```json
+{
+  "version": "1.0",
+  "project_name": "amide_coupling_test",
+  "dataset_path": "/absolute/path/to/normalized_dataset.csv",
+  "column_mapping_path": "/absolute/path/to/column_mapping.csv",
+  "descriptors": [
+    {
+      "descriptor": "morgan",
+      "mode": "concat",
+      "columns": ["reactant-1", "reactant-2", "others-1", "product-1"],
+      "extra_reactants": []
+    },
+    {
+      "descriptor": "drfp",
+      "mode": "reaction",
+      "columns": ["reactant-1", "reactant-2", "product-1"],
+      "extra_reactants": ["others-1"]
+    }
+  ],
+  "models": ["XGBoost", "Random Forest", "AutoGluon"],
+  "metadata": {
+    "repo_url": "https://github.com/example/dataset",
+    "doi": "10.1000/example.doi",
+    "notes": "Amide coupling reactions with yields"
+  },
+  "report_formats": ["HTML", "Markdown"],
+  "column_roles": {
+    "label": "yield",
+    "reactants": ["reactant-1", "reactant-2"],
+    "products": ["product-1"],
+    "others": ["others-1", "others-2"],
+    "conditions": ["temperature"]
+  }
+}
+```
+
+**字段说明**:
+- `version`：配置格式版本号（用于未来兼容性）
+- `dataset_path`：规范化数据集的绝对路径
+- `column_mapping_path`：列映射文件的绝对路径
+- `descriptors`：描述符配置数组
+  - `mode`: `concat`（横向拼接）| `sum`（逐点加和）| `reaction`（反应模式，DRFP专用）
+  - `columns`: 参与该描述符计算的列名
+  - `extra_reactants`: DRFP 特有字段，额外加入反应物的 others 列
+- `models`：模型名称列表
+- `metadata`：数据集元信息
+- `report_formats`：报告输出格式
+- `column_roles`：列角色分类
+
+### 18.4 实施步骤
+
+#### 步骤1：配置文件生成（dataset_input_wizard.py）
+
+在 `dataset_input_wizard.py` 中新增 `save_config_file()` 函数：
+- 将向导步骤4-7的配置保存为 JSON
+- 使用绝对路径确保跨目录兼容性
+- 输出文件：`{project_name}_yonod_config.json`
+
+#### 步骤2：自动调用建模（dataset_input_wizard.py）
+
+新增 `step9_auto_launch_modeling()` 函数：
+- 询问用户 "是否立即启动建模流程? [Y/n]"
+- 使用 subprocess.run() 调用 `yonod.py --config <path>`
+- 包含完善的错误处理
+
+#### 步骤3：配置文件读取（yonod.py）
+
+在 yonod.py 中新增：
+- `--config` 参数
+- `load_config_from_json()` 函数
+- `config_to_args()` 函数
+- `_MODEL_NAME_MAP` 模型名称映射
+
+#### 步骤4：删除冗余代码（yonod.py）
+
+删除约570行交互式向导代码：
+- `wizard()` 函数及辅助函数
+- 正则常量
+- 新增 `_print_usage()` 友好提示
+
+### 18.5 文件修改统计
+
+| 文件 | 新增行数 | 删除行数 | 净变化 |
+|------|---------|---------|-------|
+| dataset_input_wizard.py | +157 | 0 | +157 |
+| yonod.py | +200 | -576 | -376 |
+| CLAUDE.md | +50 | -10 | +40 |
+| **总计** | **+407** | **-586** | **-179** |
+
+### 18.6 验证方法
+
+1. **场景A测试**：运行完整向导，选择自动启动建模
+2. **场景B测试**：使用配置文件运行 `python yonod.py --config <path>`
+3. **场景C测试**：使用传统CLI参数运行，确认向后兼容
+
+### 18.7 实施状态
+
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| 步骤1：配置文件生成 | ✅ 完成 | save_config_file() 已实现 |
+| 步骤2：自动调用建模 | ✅ 完成 | step9_auto_launch_modeling() 已实现 |
+| 步骤3：配置文件读取 | ✅ 完成 | --config 参数已实现 |
+| 步骤4：删除冗余代码 | ✅ 完成 | wizard() 已删除，-376行 |
+| 步骤5：扩展 feature_builder | ⏳ 待实现 | mode/target_columns 参数 |
+| 步骤6：load_csv_with_mapping | ⏳ 待实现 | 优先使用列映射文件 |
+| 步骤7：集成测试 | ⏳ 待实现 | 三种场景端到端测试 |
+
+### 18.8 后续优化方向
+
+1. **断点续传**：向导支持中途保存进度
+2. **配置校验工具**：独立的配置文件验证脚本
+3. **Web 界面**：基于 Streamlit 的可视化向导
+4. **批量处理**：支持多数据集批量建模
+5. **结果对比**：生成多次运行的对比报告
+
+---
+
 **文档结束**

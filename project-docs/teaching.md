@@ -220,6 +220,543 @@ CSV 输入 (例：dataset/amide-coupling.csv)
 
 ## Q&A 记录
 
+### yonod.py 脚本架构（2026-06-29 新增）
+
+**Q：** 请详细分析 yonod.py 的脚本架构，包括整体结构、入口点、外部模块调用、核心函数和数据流。
+
+**A：** 以下是 yonod.py（1097 行）的完整架构解析。
+
+---
+
+#### 1. 整体架构：双模式入口 + 统一 Pipeline
+
+yonod.py 采用**单文件集成**设计，包含 5 个主要功能区块：
+
+```
+yonod.py (1097 行)
+├─ [L1-72]    模块导入 + 常量定义
+├─ [L74-123]  辅助类：_Tee（日志镜像）、_Heartbeat（心跳打印）
+├─ [L125-225] 模型工厂 + KFold CV 逻辑（带数值列的特殊处理）
+├─ [L227-524] CLI 模式：argparse 解析 + main() 主流程
+├─ [L526-1089] 交互向导模式：wizard() 逐步收集参数
+└─ [L1093-1097] 入口路由：根据 sys.argv 长度选择模式
+```
+
+**双模式入口机制**：
+```python
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        sys.exit(main())      # CLI 模式：python yonod.py --csv ...
+    else:
+        wizard()               # 向导模式：python yonod.py
+```
+
+**设计亮点**：
+- 向导模式在收集完参数后，构建 `argv` 列表并调用 `main(argv)`，**复用 CLI 逻辑**，避免代码重复
+- 日志镜像机制（`_Tee` 类）：stdout 自动同步写入 `run_<timestamp>.log`，每行前缀时间戳
+- 心跳监控（`_Heartbeat` 类）：后台线程每 30 秒打印 "still running"，防止长时间运行时无输出
+
+---
+
+#### 2. 入口点与参数解析
+
+##### 2.1 CLI 模式入口（`main(argv)`，L310-523）
+
+**核心流程**：
+```python
+def main(argv: Optional[List[str]] = None) -> int:
+    # 1. 解析参数（argparse）
+    args = parse_args(argv)
+
+    # 2. 加载数据集（CSV → LoadedDataset）
+    dataset = load_csv_with_roles(
+        csv_path=args.csv,
+        smiles_cols=args.smiles_cols,
+        numeric_cols=args.numeric_cols or [],
+        label_col=args.label_col,
+        reactant_cols=args.reactant_cols,  # 三分类模式
+        product_cols=args.product_cols,
+        other_cols=args.other_cols,
+        nrows=args.nrows,
+    )
+
+    # 3. 描述符 × 模型 笛卡尔积循环
+    for desc_name in args.descriptors:
+        # 3.1 计算描述符特征矩阵
+        X_smiles, X_numeric, mask = build_universal_features(
+            smiles_cols=dataset.smiles_cols,
+            numeric_cols=dataset.numeric_cols,
+            df=dataset.df,
+            desc_name=desc_name,
+            smiles_roles=dataset.smiles_roles,
+        )
+        y = dataset.df[dataset.label_col].to_numpy(dtype=np.float64)[mask]
+
+        for model_name in args.models:
+            # 3.2 创建模型实例
+            model = _make_model(model_name, args)
+
+            # 3.3 KFold CV（有/无数值列分支）
+            if X_numeric is None:
+                metrics = model.cross_validate(X_smiles, y, cv=args.cv)
+            else:
+                metrics = _cv_with_numeric(
+                    model_name, model, X_smiles, X_numeric, y,
+                    cv=args.cv, svm_subsample=args.svm_subsample,
+                )
+
+            # 3.4 记录指标 + 生成散点图
+            rows.append({...metrics, ...metadata})
+            plot_scatter(oof_pred, oof_y_true, desc_name, model_name, out_dir)
+
+    # 4. 生成报告（HTML + Markdown）
+    generate_report(metrics_df, task_info, out_dir)
+    generate_markdown_report(metrics_df, task_info, out_dir)
+```
+
+**关键参数组（argparse，L229-273）**：
+
+| 参数组 | 关键参数 | 说明 |
+|---|---|---|
+| **必填** | `--csv`, `--label-col` | CSV 路径和标签列名 |
+| **SMILES 列** | `--smiles-cols` | 传统模式：所有 SMILES 列等价 |
+| **三分类模式** | `--reactant-cols`, `--product-cols`, `--other-cols` | 区分反应物/产物/其他参与者 |
+| **数值辅助列** | `--numeric-cols` | 温度、压力等数值特征 |
+| **描述符/模型** | `--descriptors`, `--models` | 默认全选 7 种描述符 × 4 种模型 |
+| **输出控制** | `--task-name`, `--output-dir`, `--output-format` | 任务名、输出目录、报告格式 |
+| **数据集元信息** | `--dataset-citation`, `--dataset-url`, `--dataset-notes` | 显示在报告中 |
+
+##### 2.2 交互向导模式（`wizard()`，L768-1088）
+
+**核心流程**：11 步逐步收集参数（部分步骤合并显示）
+
+```python
+def wizard() -> None:
+    # [1/11] CSV 路径
+    csv_path = _ask_required("路径")
+    df = pd.read_csv(csv_path, encoding='utf-8-sig' or 'gbk')
+    _show_columns(df.columns)  # 展示列序号和列名
+
+    # [2/11] 标签列
+    label_col = _ask_single_col("标签列", df.columns, required=True)
+    _validate_label(df, label_col, columns)  # 数值合法性验证
+
+    # [3/11] SMILES 列
+    smiles_cols = _ask_multi_cols("SMILES 列", df.columns, required=True)
+    _validate_smiles(df, smiles_cols, columns)  # RDKit 逐行验证
+
+    # [3a-3d/11] 列角色分类（可选）
+    enable_roles = _ask_optional("是否启用列角色分类？[y/N]", default="N")
+    if enable_roles in ("y", "yes"):
+        reactant_cols = _ask_multi_cols("反应物列", smiles_cols, required=True)
+        product_cols = _ask_multi_cols("产物列", remaining_cols, required=True)
+        other_cols = [自动归类剩余列]
+
+    # [4/11] 数值辅助列
+    numeric_cols = _ask_multi_cols("数值辅助列", df.columns, required=False)
+
+    # [5/11] 任务名称
+    task_name = _ask_required("任务名称")  # 正则校验：仅允许 [A-Za-z0-9_-]
+
+    # [6/11] 输出目录
+    output_dir = _ask_optional("输出目录", default=f"result/{task_name}")
+
+    # [7/11] 描述符选择
+    descs = _ask_optional("描述符（空格分隔，留空=全选）")
+
+    # [8/11] 模型选择
+    models = _ask_optional("模型（空格分隔，留空=全选）")
+
+    # [9/11] 数据集来源
+    dataset_citation = _ask_optional("文献引用")
+    dataset_url = _ask_optional("开源地址")
+    dataset_notes = _ask_optional("备注")
+
+    # [10/11] 报告输出格式
+    fmt = _ask_optional("输出格式", default="both")  # html / md / both
+
+    # [11/11] 确认配置
+    print("即将执行（等效命令）:")
+    print(" ".join(cmd_parts))
+    _input("按 Enter 确认执行，Ctrl+C 取消... ")
+
+    # 构建 argv 并调用 main()
+    argv = ["--csv", str(csv_path), "--label-col", label_col, ...]
+    sys.exit(main(argv))
+```
+
+**辅助函数（L528-671）**：
+
+| 函数名 | 作用 |
+|---|---|
+| `_ask_required()` | 必填项输入，空值时循环提示 |
+| `_ask_optional()` | 可选项输入，支持默认值 |
+| `_col_index_to_excel()` / `_excel_to_col_index()` | 列索引 ↔ Excel 风格列名（A, B, ..., Z, AA, AB, ...） |
+| `_show_columns()` | 展示列序号和列名，格式：`A(1)  sub_1_smiles` |
+| `_ask_single_col()` / `_ask_multi_cols()` | 解析用户输入（支持列名/字母/序号） |
+| `_validate_label()` | 验证标签列数值合法性（支持 JSON 数组格式如 `[0.85]`） |
+| `_validate_smiles()` | RDKit 逐行验证 SMILES（支持多组分，逗号/分号/点分隔） |
+| `_normalize_smiles()` | 将各类分隔符统一为 RDKit 标准点分隔（`,;*~` → `.`） |
+
+**用户体验优化**：
+- **Excel 列名支持**：用户可输入 `B` 而非 `1`，对应第 2 列
+- **多字母列名支持**：支持 `AA`、`AB`、`AZ` 等（Excel 26 列后的列名）
+- **智能分隔符识别**：支持复制粘贴含 `,` 或 `;` 的多列选择
+- **实时验证反馈**：SMILES 格式错误时，打印精确的**行号+列名+组分索引**
+
+---
+
+#### 3. 外部模块调用关系
+
+yonod.py 的依赖关系（按调用顺序）：
+
+```
+yonod.py
+  ├─ yonod.universal.csv_loader
+  │   └─ load_csv_with_roles() → LoadedDataset
+  │       ├─ 自动探测 SMILES 列（RDKit 解析率 > 阈值）
+  │       └─ 三分类角色映射（reactant/product/other）
+  │
+  ├─ yonod.universal.feature_builder
+  │   └─ build_universal_features() → (X_smiles, X_numeric, mask)
+  │       ├─ 懒加载描述符（_get_descriptor）
+  │       ├─ 逐列调用 descriptor.featurize(smiles_list)
+  │       ├─ 特殊处理：DRFP 使用反应物+产物，其他用全部列
+  │       └─ 横向拼接多列 + 合并 mask
+  │
+  ├─ yonod.descriptors.base
+  │   └─ split_multi_smiles() - 多组分 SMILES 拆分工具
+  │
+  ├─ yonod.models.*
+  │   ├─ XGBYieldModel (xgb_model.py)
+  │   ├─ RFYieldModel (rf_model.py)
+  │   ├─ SVMYieldModel (svm_model.py)
+  │   └─ AutoGluonYieldModel (autogluon_model.py)
+  │       └─ 统一接口：cross_validate(X, y, cv) → metrics_dict
+  │
+  ├─ yonod.plot
+  │   └─ plot_scatter() - 生成 OOF 预测散点图
+  │
+  └─ yonod.universal.report
+      ├─ generate_report() → HTML 报告（内嵌 Base64 图片）
+      └─ generate_markdown_report() → Markdown 报告
+```
+
+**模块导入特点**：
+- **延迟导入**：模型类在 `_make_model()` 内按需 import，避免启动时加载全部依赖
+- **懒加载描述符**：`feature_builder` 通过 `importlib` 动态加载描述符模块
+- **依赖隔离**：不使用描述符时，PyTorch / torch_geometric 不被导入
+
+---
+
+#### 4. 核心函数详解
+
+##### 4.1 `_make_model(model_name, args)` - 模型工厂（L127-145）
+
+```python
+def _make_model(model_name: str, args: argparse.Namespace) -> Any:
+    if model_name == "xgb":
+        from yonod.models.xgb_model import XGBYieldModel
+        return XGBYieldModel()
+    if model_name == "rf":
+        from yonod.models.rf_model import RFYieldModel
+        return RFYieldModel(
+            n_jobs=args.rf_n_jobs,           # 默认 -1（全核并行）
+            n_estimators=args.rf_n_estimators,  # 默认 300
+            max_depth=args.rf_max_depth,     # 默认 None（不限制）
+        )
+    if model_name == "svm":
+        from yonod.models.svm_model import SVMYieldModel
+        sub = args.svm_subsample if args.svm_subsample > 0 else None
+        return SVMYieldModel(subsample_n=sub)  # 默认 8000
+    if model_name == "autogluon":
+        from yonod.models.autogluon_model import AutoGluonYieldModel
+        return AutoGluonYieldModel()
+    raise ValueError(f"未知模型名称 {model_name!r}")
+```
+
+**设计细节**：
+- 仅 RF 和 SVM 接受超参数配置（通过 CLI 参数）
+- XGBoost / AutoGluon 使用固定配置（简化用户选择）
+
+##### 4.2 `_cv_with_numeric()` - 带数值列的 KFold CV（L150-224）
+
+**问题背景**：当有数值辅助列（如温度、压力）时，需在**每折内部**对数值列 fit StandardScaler，防止数据泄露。
+
+**实现逻辑**：
+```python
+def _cv_with_numeric(
+    model_name: str,
+    model: Any,
+    X_smiles: np.ndarray,   # 已计算的描述符矩阵
+    X_numeric: np.ndarray,  # 原始数值矩阵（未归一化）
+    y: np.ndarray,
+    cv: int,
+    svm_subsample: Optional[int],
+) -> Dict[str, Any]:
+    # AutoGluon 例外处理：使用全局 scaler + 打印警告
+    if model_name == "autogluon":
+        print("[warning] AutoGluon + numeric cols: 使用全局 StandardScaler（非折内归一化）")
+        scaler = StandardScaler()
+        X_num_scaled = scaler.fit_transform(X_numeric)
+        X_combined = np.hstack([X_smiles, X_num_scaled])
+        return model.cross_validate(X_combined, y, cv=cv)
+
+    # 标准 KFold 流程
+    kf = KFold(n_splits=cv, shuffle=True, random_state=42)
+    r2s, rmses, maes = [], [], []
+    oof = np.full(len(y), np.nan, dtype=np.float64)
+
+    for fold_idx, (tr, te) in enumerate(kf.split(X_smiles)):
+        # 关键：每折独立 fit scaler
+        scaler = StandardScaler()
+        X_num_tr = scaler.fit_transform(X_numeric[tr])    # 仅 train 子集 fit
+        X_num_te = scaler.transform(X_numeric[te])        # test 子集 transform
+
+        X_tr = np.hstack([X_smiles[tr], X_num_tr])
+        X_te = np.hstack([X_smiles[te], X_num_te])
+        y_tr, y_te = y[tr], y[te]
+
+        # SVM 子采样（仅 train 集）
+        if model_name == "svm" and svm_subsample and svm_subsample < len(X_tr):
+            rng = np.random.default_rng(seed=fold_idx)
+            sub_idx = rng.choice(len(X_tr), size=svm_subsample, replace=False)
+            X_tr_fit = X_tr[sub_idx]
+            y_tr_fit = y_tr[sub_idx]
+        else:
+            X_tr_fit = X_tr
+            y_tr_fit = y_tr
+
+        # 模型训练与预测
+        est = model._build(n_features=X_tr.shape[1], n_train=len(X_tr_fit))
+        est.fit(X_tr_fit, y_tr_fit)
+        pred = est.predict(X_te)
+
+        oof[te] = pred
+        r2s.append(r2_score(y_te, pred))
+        rmses.append(float(np.sqrt(mean_squared_error(y_te, pred))))
+        maes.append(float(mean_absolute_error(y_te, pred)))
+
+    return {
+        "r2_mean": float(np.mean(r2s)),
+        "r2_std": float(np.std(r2s)),
+        "rmse_mean": float(np.mean(rmses)),
+        "mae_mean": float(np.mean(maes)),
+        "train_time_s": float(time.time() - t0),
+        "device": "cpu",
+        "oof_pred": oof,       # Out-of-Fold 预测（用于散点图）
+        "oof_y_true": y,
+    }
+```
+
+**关键设计决策**：
+- **折内归一化**：StandardScaler 在每折内独立 fit，确保测试集未见过训练集统计量
+- **SVM 子采样在 fold 内**：每折独立随机采样，测试集完整预测（无泄漏）
+- **AutoGluon 妥协**：无法嵌入 KFold，使用全局 scaler + 显式警告
+
+##### 4.3 `_validate_smiles()` - SMILES 合法性验证（L726-765）
+
+**调用位置**：向导模式第 3 步（`wizard()` L823）
+
+**核心逻辑**：
+```python
+def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None:
+    """用 RDKit 逐行检查 SMILES 列；发现第一个无效 SMILES 则退出。"""
+    try:
+        from rdkit import Chem
+        from rdkit import RDLogger
+        RDLogger.DisableLog("rdApp.*")  # 静默 RDKit 警告
+    except ImportError:
+        print("  [警告] RDKit 未安装，跳过 SMILES 格式验证。")
+        return
+
+    from yonod.descriptors.base import split_multi_smiles
+
+    for col in smiles_cols:
+        col_desc = _col_display(col, columns)  # 生成 "第 2 列（列名：'sub_1_smiles'）"
+        print(f"  [验证] 检查 SMILES 列 '{col}'（{len(df)} 行）...")
+
+        for raw_idx, val in enumerate(df[col]):
+            if pd.isna(val):
+                continue
+
+            # 规范化分隔符：, ; * ~ → .
+            normalized = _normalize_smiles(str(val))
+
+            # 逐组分验证（支持多组分 SMILES）
+            components = split_multi_smiles(normalized)
+            for comp_idx, comp in enumerate(components):
+                comp = comp.strip()
+                if not comp:
+                    continue
+                if Chem.MolFromSmiles(comp) is None:
+                    display_row = raw_idx + 2  # Excel 行号（标题行 + 1-based）
+                    comp_desc = f"第 {comp_idx + 1} 个组分 '{comp}'" if len(components) > 1 else f"'{val}'"
+                    print(f"\n  [错误] {col_desc} 第 {display_row} 行的 {comp_desc} 不是有效的 SMILES。")
+                    print("         请检查数据（是否有乱码、截断或占位符）后重新运行。")
+                    sys.exit(1)
+
+        print(f"  [验证] SMILES 列 '{col}' 全量验证通过。")
+```
+
+**错误定位精度**：
+- **行号**：`display_row = raw_idx + 2`（Excel 1-based + 标题行）
+- **列名**：`第 2 列（列名：'sub_1_smiles'）`
+- **组分索引**：`第 2 个组分 'Cl'`（多组分 SMILES 时）
+
+**分隔符支持**：
+- 逗号（`,`）：阴阳离子对，如 `CCN=C=NCCCN(C)C,Cl`
+- 分号（`;`）：组分分隔符，如 `CCO;CC(=O)O`
+- 星号（`*`）：反应步骤分隔符，如 `A.B*C.D*E`
+- 波浪线（`~`）：组分替代表示，如 `CC(=O)O~CC(=O)O~[Pd]`
+
+##### 4.4 `_normalize_smiles()` - SMILES 规范化（L673-723）
+
+**核心功能**：将各类非标准分隔符统一转换为 RDKit 标准的点分隔形式（`.`）。
+
+**处理流程**：
+```python
+def _normalize_smiles(smi: str) -> str:
+    s = smi.strip()
+
+    # JSON 数组格式预处理（如 ["CCO","CC(=O)O"] → CCO.CC(=O)O）
+    if s.startswith('[') and s.endswith(']'):
+        if re.match(r'^\[\s*\]$', s):  # 空数组 [] → ""
+            return ''
+        if '"' in s:  # 检测 JSON 引号
+            s = s[1:-1]  # 删除最外层 []
+            s = re.sub(r'"([^"]*)"', r'\1', s)  # 删除成对的双引号
+
+    # 步骤 1：替换逗号、分号、波浪线 → .
+    s = re.sub(r'\s*[,;~]\s*', '.', s)
+
+    # 步骤 2：替换星号分隔符（但保留原子映射星号，如 [*:1]）
+    # 使用否定前瞻断言 (?!:) 确保星号后面不是冒号
+    s = re.sub(r'\s*\*\s*(?!:)', '.', s)
+
+    # 步骤 3：压缩连续点号（如 .. → .）
+    s = re.sub(r'\.{2,}', '.', s)
+
+    # 步骤 4：移除首尾点号
+    return s.strip('.')
+```
+
+**设计亮点**：
+- **原子映射保护**：`[*:1]` 中的 `*` 不会被替换（化学反应映射标记）
+- **JSON 数组支持**：自动识别并删除最外层方括号和双引号
+- **空数组处理**：`[]`、`[ ]`、`[  ]` 等空数组统一返回空字符串
+
+---
+
+#### 5. 完整数据流（从 CSV 到报告）
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 用户输入：python yonod.py --csv dataset/amide-coupling.csv │
+│           --smiles-cols sub_1 sub_2 ... --label-col yield   │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 1: CSV 加载与列角色推断                                 │
+│   csv_loader.load_csv_with_roles()                          │
+│     ├─ pd.read_csv(encoding='utf-8-sig')                    │
+│     ├─ 自动探测 SMILES 列（RDKit 解析率 > 50%）            │
+│     ├─ 三分类角色映射（reactant / product / other）         │
+│     └─ 返回 LoadedDataset {df, smiles_cols, numeric_cols,  │
+│                             label_col, smiles_roles}        │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 2: 描述符计算（外层循环：7 种描述符）                   │
+│   for desc_name in ["morgan", "maccs", ...]:                │
+│     build_universal_features(smiles_cols, numeric_cols,     │
+│                              df, desc_name, smiles_roles)   │
+│       ├─ 根据 desc_name 选择使用的列                        │
+│       │   └─ DRFP: 仅反应物+产物                            │
+│       │   └─ 其他: 所有 SMILES 列                           │
+│       ├─ 逐列调用 descriptor.featurize(smiles_list)         │
+│       │   └─ 返回 (features, mask)                          │
+│       ├─ 横向拼接多列：np.concatenate([f1, f2, ...], axis=1)│
+│       ├─ 合并 mask：row_mask = mask_1 & mask_2 & ...        │
+│       └─ 过滤失败行：X_smiles = X_full[row_mask]            │
+│                                                             │
+│   输出：X_smiles (n_valid, n_cols * desc_dim)               │
+│         X_numeric (n_valid, n_numeric_cols) 或 None         │
+│         mask (n_total,)                                     │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 3: 模型训练（内层循环：4 种模型）                       │
+│   for model_name in ["xgb", "rf", "svm", "autogluon"]:     │
+│     model = _make_model(model_name, args)                   │
+│                                                             │
+│     if X_numeric is None:  # 纯 SMILES 特征                 │
+│       metrics = model.cross_validate(X_smiles, y, cv=5)     │
+│     else:  # 有数值辅助列                                   │
+│       metrics = _cv_with_numeric(                           │
+│         model_name, model, X_smiles, X_numeric, y,          │
+│         cv=5, svm_subsample=8000                            │
+│       )                                                     │
+│       └─ KFold 循环内每折独立 fit StandardScaler            │
+│                                                             │
+│     输出：metrics_dict {r2_mean, r2_std, rmse_mean,         │
+│                         mae_mean, train_time_s, device,     │
+│                         oof_pred, oof_y_true}               │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 4: 结果记录与可视化                                     │
+│   rows.append({                                             │
+│     "task_name": "amide_coupling",                          │
+│     "descriptor": desc_name,                                │
+│     "model": model_name,                                    │
+│     "n_samples": int(mask.sum()),                           │
+│     "n_total": int(len(mask)),                              │
+│     "coverage": float(mask.sum() / len(mask)),              │
+│     "feature_dim": int(X_smiles.shape[1]),                  │
+│     "cv": 5,                                                │
+│     **metrics,  # r2_mean, r2_std, rmse_mean, mae_mean, ... │
+│   })                                                        │
+│                                                             │
+│   plot_scatter(oof_pred, oof_y_true, desc_name, model_name,│
+│                out_dir / "pictures")                        │
+│     └─ 生成 PNG 散点图：<desc>_<model>.png                  │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 5: 报告生成                                             │
+│   df = pd.DataFrame(rows)                                   │
+│   df.to_csv(out_dir / "metrics_summary.csv")               │
+│                                                             │
+│   generate_report(df, task_info, out_dir)                  │
+│     └─ 生成 HTML 报告（内嵌 Base64 图片）                   │
+│                                                             │
+│   generate_markdown_report(df, task_info, out_dir)         │
+│     └─ 生成 Markdown 报告（外链图片）                       │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 输出文件（默认 results/<task-name>/）                        │
+│   ├─ metrics_summary.csv   - 所有组合的指标汇总             │
+│   ├─ report.html           - HTML 可视化报告               │
+│   ├─ report.md             - Markdown 报告                 │
+│   ├─ run_<timestamp>.log   - 控制台镜像日志                │
+│   └─ pictures/             - 散点图画廊                     │
+│       ├─ morgan_xgb.png                                     │
+│       ├─ morgan_rf.png                                      │
+│       └─ ...                                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**关键性能优化点**：
+1. **试剂缓存**（酰胺缩合专用）：复用率高的试剂 SMILES 仅计算一次
+2. **懒加载描述符**：未选中的描述符模块不加载（避免 PyTorch 预先导入）
+3. **批处理推理**（FISD/MolMetaLM）：batch_size=32，充分利用 GPU
+4. **SVM 子采样**：训练集降采样至 8000 条，测试集完整预测
+5. **心跳监控**：长时间运行任务（如 MolMetaLM）每 30 秒打印进度
+
+---
+
 ### 通用问题
 
 **Q：YONOD 项目中汇聚了多少种描述符？每个描述符的作用是什么？**
