@@ -1419,9 +1419,132 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
         }
 
 
+def generate_default_descriptor_config(descriptor_name, all_column_configs):
+    """
+    为单个描述符生成默认配置
+
+    Args:
+        descriptor_name: 描述符名称
+        all_column_configs: 所有列的配置列表
+
+    Returns:
+        dict: 描述符配置字典
+    """
+    if descriptor_name in ['morgan', 'atmomaccs', 'rdkit2d', 'fisd', 'molmetalm']:
+        # concat模式: 按 reactant → others → product 顺序
+        columns = []
+        for role in ['reactant', 'others', 'product']:
+            for cfg in all_column_configs:
+                if cfg['role'] == role:
+                    columns.append(cfg['name'])
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'concat',
+            'columns': columns
+        }
+
+    elif descriptor_name == 'maf':
+        # sum模式: 包含所有SMILES列
+        columns = [
+            cfg['name'] for cfg in all_column_configs
+            if cfg['role'] in ['reactant', 'others', 'product']
+        ]
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'sum',
+            'columns': columns
+        }
+
+    elif descriptor_name == 'drfp':
+        # reaction模式: extra_reactants为空
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'reaction',
+            'extra_reactants': []
+        }
+
+    else:
+        raise ValueError(f"未知的描述符: {descriptor_name}")
+
+
+def display_descriptor_configs_summary(descriptor_configs):
+    """
+    以表格形式展示所有描述符的配置摘要
+
+    Args:
+        descriptor_configs: 描述符配置列表
+    """
+    print("\n" + "=" * 80)
+    print("描述符配置摘要")
+    print("=" * 80)
+
+    # 表头
+    print(f"{'序号':<6}{'描述符':<15}{'模式':<12}{'配置详情':<45}")
+    print("-" * 80)
+
+    # 表内容
+    for idx, config in enumerate(descriptor_configs, 1):
+        desc_name = config['descriptor']
+        mode = config['mode']
+
+        if mode == 'concat':
+            # 横向拼接模式: 显示列顺序
+            columns_str = ' → '.join(config['columns'])
+            if len(columns_str) > 45:
+                columns_str = columns_str[:42] + '...'
+        elif mode == 'sum':
+            # 加和模式: 显示参与列数量
+            columns_str = f"加和 {len(config['columns'])} 列: {', '.join(config['columns'])}"
+            if len(columns_str) > 45:
+                columns_str = f"加和 {len(config['columns'])} 列"
+        elif mode == 'reaction':
+            # 反应模式: 显示额外反应物
+            extra = config.get('extra_reactants', [])
+            if extra:
+                columns_str = f"reactant+{', '.join(extra)} → product"
+            else:
+                columns_str = "reactant → product"
+        else:
+            columns_str = "未知模式"
+
+        print(f"{idx:<6}{desc_name:<15}{mode:<12}{columns_str:<45}")
+
+    print("=" * 80)
+
+
+def select_descriptor_to_edit(descriptor_configs):
+    """
+    让用户选择要编辑的描述符
+
+    Args:
+        descriptor_configs: 描述符配置列表
+
+    Returns:
+        int or None: 要编辑的描述符索引(0-based),若用户选择完成则返回None
+    """
+    print("\n请选择要编辑的描述符(输入序号),或输入 'done' 使用当前配置:")
+
+    while True:
+        user_input = input("序号 (或 'done'): ").strip()
+
+        if user_input.lower() == 'done':
+            return None
+
+        try:
+            idx = int(user_input)
+            if 1 <= idx <= len(descriptor_configs):
+                return idx - 1  # 返回0-based索引
+            else:
+                print(f"[X] 无效的序号,请输入 1-{len(descriptor_configs)}")
+        except ValueError:
+            print("[X] 输入格式错误,请输入数字或 'done'")
+
+
 def step4_orchestrate(all_column_configs):
     """
-    步骤4总控函数
+    步骤4总控函数(默认配置 + 可选编辑模式)
 
     Args:
         all_column_configs: 所有列的配置列表
@@ -1432,11 +1555,43 @@ def step4_orchestrate(all_column_configs):
     # 4.1 选择描述符
     selected_descriptors = step4_select_descriptors()
 
-    # 4.2 为每个描述符配置嵌入方式
+    # 4.2 自动生成所有描述符的默认配置
     descriptor_configs = []
     for desc_name in selected_descriptors:
-        config = step4_configure_descriptor(desc_name, all_column_configs)
+        config = generate_default_descriptor_config(desc_name, all_column_configs)
         descriptor_configs.append(config)
+
+    # 4.3 显示配置摘要
+    display_descriptor_configs_summary(descriptor_configs)
+
+    # 4.4 询问是否编辑
+    print("\n是否需要编辑某个描述符的配置? (Y/n)")
+    choice = input("选择: ").strip().lower()
+
+    if choice not in ['y', 'yes', '']:
+        print("\n[OK] 使用默认配置")
+        return descriptor_configs
+
+    # 4.5 循环编辑流程
+    while True:
+        # 选择要编辑的描述符
+        edit_idx = select_descriptor_to_edit(descriptor_configs)
+
+        if edit_idx is None:
+            # 用户选择完成编辑
+            print("\n[OK] 配置完成!")
+            break
+
+        # 编辑选中的描述符
+        desc_name = descriptor_configs[edit_idx]['descriptor']
+        print(f"\n正在编辑描述符: {desc_name}")
+
+        # 调用原有的配置函数
+        new_config = step4_configure_descriptor(desc_name, all_column_configs)
+        descriptor_configs[edit_idx] = new_config
+
+        # 显示更新后的配置摘要
+        display_descriptor_configs_summary(descriptor_configs)
 
     return descriptor_configs
 

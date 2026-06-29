@@ -1623,3 +1623,74 @@ main.py (建模)
 - 可继续其他开发任务
 
 ---
+
+## [2026-06-29 23:16] 优化步骤4描述符配置交互逻辑：默认配置 + 可选编辑
+
+### 执行的任务
+1. **新增辅助函数**（3个，位于 yonod.py L1422-1543）：
+   - `generate_default_descriptor_config(descriptor_name, all_column_configs)`：为单个描述符生成默认配置
+   - `display_descriptor_configs_summary(descriptor_configs)`：以表格形式展示配置摘要
+   - `select_descriptor_to_edit(descriptor_configs)`：让用户选择要编辑的描述符
+
+2. **重写 `step4_orchestrate()` 函数**（yonod.py L1545-1596）：
+   - 原流程：选择描述符 → 逐个配置
+   - 新流程：选择描述符 → 自动生成默认配置 → 显示摘要 → 询问是否编辑 → 可选循环编辑
+
+3. **保留 `step4_configure_descriptor()` 函数**：编辑时仍调用此函数，保持兼容性
+
+### 关键变更
+- **修改文件**：`yonod.py`（1处替换，3处新增）
+  - 新增 L1422-1469：`generate_default_descriptor_config()` 函数（48行）
+  - 新增 L1472-1514：`display_descriptor_configs_summary()` 函数（43行）
+  - 新增 L1517-1542：`select_descriptor_to_edit()` 函数（26行）
+  - 替换 L1545-1596：`step4_orchestrate()` 函数（52行，原20行）
+
+- **默认配置规则**：
+  - **concat 模式**（morgan, atmomaccs, rdkit2d, fisd, molmetalm）：按 reactant → others → product 顺序
+  - **sum 模式**（maf）：包含所有 SMILES 列
+  - **reaction 模式**（drfp）：extra_reactants 为空
+
+### 验证结果
+✅ **测试1**：默认配置生成正确
+  - concat 模式列顺序符合预期
+  - maf 模式包含所有 SMILES 列（7列）
+  - drfp 模式 extra_reactants 为空列表
+
+✅ **测试2**：配置摘要表格显示正常
+  - 表格对齐清晰，中文显示正确
+  - 超长列名自动截断（45字符限制）
+
+✅ **测试3**：边界情况处理正确
+  - 无 others 列场景通过
+  - drfp 无可选 others 场景通过
+  - 超长列名摘要显示正确
+
+### 交互流程优化
+**旧流程**：
+```
+步骤4: 指定描述符
+→ 选择描述符（如：morgan, maf, drfp）
+→ 配置 morgan：选择拼接顺序（用户输入）
+→ 配置 maf：选择参与列（用户输入）
+→ 配置 drfp：选择额外反应物（用户输入）
+```
+
+**新流程**：
+```
+步骤4: 指定描述符
+→ 选择描述符（如：morgan, maf, drfp）
+→ 自动生成默认配置（无需输入）
+→ 显示配置摘要表格（清晰可读）
+→ 询问是否编辑？（Y/n）
+   ├─ n：直接使用默认配置 ✅
+   └─ Y：选择描述符序号 → 编辑 → 更新摘要 → 循环询问
+```
+
+### 遇到的问题及解决方案
+- **问题**：测试脚本遇到 Windows 终端 GBK 编码错误（emoji 无法显示）
+- **解决**：使用 `sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')` 强制 UTF-8 输出
+
+### 下一步计划
+- 继续后续开发任务（步骤5/步骤6）或进行端到端集成测试
+
+---
