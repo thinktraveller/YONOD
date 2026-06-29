@@ -1541,3 +1541,39 @@ python yonod.py --csv data.csv --label-col yield --smiles-cols R1 R2 --descripto
 - 端到端集成测试（场景A/B/C）
 
 ---
+
+## [2026-06-29 22:43] 文件重命名：yonod.py ↔ dataset_input_wizard.py 互换
+
+### 执行的任务
+1. **Git 备份**：创建 `backup-before-rename` 标签
+2. **文件重命名**：
+   - `yonod.py` → `main.py`（建模入口）
+   - `dataset_input_wizard.py` → `yonod.py`（向导入口）
+3. **代码修改**（5处引用更新）：
+   - 新 `yonod.py`（原 `dataset_input_wizard.py`）：
+     - L1717: subprocess 调用路径 `'yonod.py'` → `'main.py'`
+     - L1738, L1743: 错误提示中的命令 `"python yonod.py"` → `"python main.py"`
+   - 新 `main.py`（原 `yonod.py`）：
+     - Docstring: CLI 示例命令全部更新为 `python main.py`
+     - L375: --config 参数 help 文本中的 `dataset_input_wizard.py` → `yonod.py`
+     - L702: 向导启动命令 `"python dataset_input_wizard.py"` → `"python yonod.py"`
+4. **文档更新**：更新 `CLAUDE.md` 中的所有命令示例和架构描述
+
+### 关键变更
+- **入口文件清晰化**：
+  - `yonod.py`：项目主入口（交互式向导）
+  - `main.py`：CLI 建模入口（支持 --config 和传统参数）
+- **文件变更**：
+  - 重命名：`yonod.py` → `main.py`，`dataset_input_wizard.py` → `yonod.py`
+  - 修改：`yonod.py`（3处）、`main.py`（Docstring + 3处）、`CLAUDE.md`（3处）
+
+### 验证结果
+✅ **语法检查**：`python -m py_compile yonod.py main.py` 通过
+✅ **向导启动**：`python yonod.py` 正常显示向导界面
+✅ **CLI 帮助**：`python main.py --help` 正确显示 `--config` 参数
+✅ **文档一致性**：CLAUDE.md 中的所有命令与新文件名匹配
+
+### 下一步计划
+- 重构已完成，可继续后续开发任务（步骤4/步骤6）或进行端到端集成测试
+
+---
