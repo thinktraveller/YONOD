@@ -38,7 +38,7 @@ AutogluonModels/
 # Logs
 *.log
 result/
-teaching.md
+docs/
 
 # ===================== Large model weights =====================
 # WEIGHTS/MolMetaLM-base/  is ~500 MB -- download separately, see README.
