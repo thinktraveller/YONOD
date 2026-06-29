@@ -1225,6 +1225,386 @@ def step3_orchestrate(
     }
 
 
+# ============================================================================
+# 步骤4: 指定描述符
+# ============================================================================
+
+def step4_select_descriptors():
+    """
+    展示所有可用描述符,让用户选择
+
+    Returns:
+        list: 选中的描述符名称列表
+    """
+    print("\n" + "=" * 60)
+    print("步骤4: 指定描述符")
+    print("=" * 60)
+
+    descriptors = {
+        'morgan': '横向拼接,可编辑参与列和拼接顺序',
+        'atmomaccs': '横向拼接,可编辑参与列和拼接顺序',
+        'rdkit2d': '横向拼接,可编辑参与列和拼接顺序',
+        'fisd': '横向拼接,可编辑参与列和拼接顺序',
+        'molmetalm': '横向拼接,可编辑参与列和拼接顺序',
+        'maf': '逐点加和,可编辑参与列',
+        'drfp': '固定反应模式(reactant→product),可编辑额外加入反应物的others列'
+    }
+
+    print("\n可用描述符:")
+    for idx, (name, desc) in enumerate(descriptors.items(), 1):
+        print(f"  [{idx}] {name}: {desc}")
+
+    print("\n请选择描述符(输入序号,用逗号分隔,如: 1,2,5)")
+    print("或输入'all'选择全部描述符")
+
+    while True:
+        user_input = input("描述符序号: ").strip()
+
+        if user_input.lower() == 'all':
+            selected = list(descriptors.keys())
+            break
+
+        try:
+            indices = [int(x.strip()) for x in user_input.split(',')]
+            if all(1 <= idx <= len(descriptors) for idx in indices):
+                selected = [list(descriptors.keys())[i-1] for i in indices]
+                break
+            else:
+                print("[X] 存在无效的序号")
+        except ValueError:
+            print("[X] 输入格式错误")
+
+    print(f"\n[OK] 已选择 {len(selected)} 个描述符: {', '.join(selected)}")
+    return selected
+
+
+def step4_configure_descriptor(descriptor_name, all_column_configs):
+    """
+    配置单个描述符的嵌入方式
+
+    Args:
+        descriptor_name: 描述符名称
+        all_column_configs: 所有列的配置列表(用于展示可选列)
+
+    Returns:
+        dict: {
+            'descriptor': str,
+            'mode': 'concat' | 'sum' | 'reaction',
+            'columns': list,  # 参与嵌入的列(按顺序)
+            'extra_reactants': list  # 仅DRFP使用,额外加入反应物的others列
+        }
+    """
+    print(f"\n配置描述符: {descriptor_name}")
+
+    # 获取所有SMILES列(reactant, others, product)
+    smiles_columns = [
+        cfg for cfg in all_column_configs
+        if cfg['role'] in ['reactant', 'others', 'product']
+    ]
+
+    print("\n当前所有SMILES列:")
+    for idx, cfg in enumerate(smiles_columns):
+        print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
+
+    if descriptor_name in ['morgan', 'atmomaccs', 'rdkit2d', 'fisd', 'molmetalm']:
+        # 横向拼接模式
+        print("\n该描述符为横向拼接模式")
+        print("默认顺序: reactant -> others -> product")
+        print("您可以:")
+        print("  1. 使用默认顺序")
+        print("  2. 自定义参与列和顺序(输入列序号,用逗号分隔)")
+
+        choice = input("选择(1/2): ").strip()
+
+        if choice == '1':
+            # 使用默认顺序
+            columns = []
+            # 按角色顺序添加
+            for role in ['reactant', 'others', 'product']:
+                for cfg in all_column_configs:
+                    if cfg['role'] == role:
+                        columns.append(cfg['name'])
+        else:
+            # 自定义顺序
+            print("\n请输入列序号(用逗号分隔,顺序即为拼接顺序):")
+            while True:
+                user_input = input("列序号: ").strip()
+                try:
+                    indices = [int(x.strip()) for x in user_input.split(',')]
+                    if all(0 <= idx < len(smiles_columns) for idx in indices):
+                        columns = [smiles_columns[i]['name'] for i in indices]
+                        break
+                    else:
+                        print("[X] 存在无效的序号")
+                except ValueError:
+                    print("[X] 输入格式错误")
+
+        print(f"[OK] 拼接顺序: {' -> '.join(columns)}")
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'concat',
+            'columns': columns
+        }
+
+    elif descriptor_name == 'maf':
+        # 逐点加和模式
+        print("\n该描述符为逐点加和模式,不存在拼接顺序")
+        print("请选择参与嵌入的列(输入列序号,用逗号分隔):")
+
+        while True:
+            user_input = input("列序号: ").strip()
+            try:
+                indices = [int(x.strip()) for x in user_input.split(',')]
+                if all(0 <= idx < len(smiles_columns) for idx in indices):
+                    columns = [smiles_columns[i]['name'] for i in indices]
+                    break
+                else:
+                    print("[X] 存在无效的序号")
+            except ValueError:
+                print("[X] 输入格式错误")
+
+        print(f"[OK] 参与加和的列: {', '.join(columns)}")
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'sum',
+            'columns': columns
+        }
+
+    elif descriptor_name == 'drfp':
+        # 固定反应模式
+        print("\n该描述符为固定反应模式: reactant -> product")
+        print("您可以选择将某些others列加入到reactant中(如催化剂)")
+
+        # 列出所有others列
+        others_columns = [cfg for cfg in all_column_configs if cfg['role'] == 'others']
+
+        if not others_columns:
+            print("  无可选的others列")
+            extra_reactants = []
+        else:
+            print("\n可选的others列:")
+            for idx, cfg in enumerate(others_columns):
+                print(f"  [{idx}] {cfg['name']}")
+
+            user_input = input("请输入要加入reactant的others列序号(用逗号分隔,直接回车跳过): ").strip()
+
+            if user_input:
+                try:
+                    indices = [int(x.strip()) for x in user_input.split(',')]
+                    extra_reactants = [others_columns[i]['name'] for i in indices if 0 <= i < len(others_columns)]
+                except ValueError:
+                    print("[X] 输入格式错误,跳过")
+                    extra_reactants = []
+            else:
+                extra_reactants = []
+
+        if extra_reactants:
+            print(f"[OK] 额外加入反应物的列: {', '.join(extra_reactants)}")
+        else:
+            print("[OK] 使用默认reactant列")
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'reaction',
+            'extra_reactants': extra_reactants
+        }
+
+
+def step4_orchestrate(all_column_configs):
+    """
+    步骤4总控函数
+
+    Args:
+        all_column_configs: 所有列的配置列表
+
+    Returns:
+        list: 所有描述符的配置列表
+    """
+    # 4.1 选择描述符
+    selected_descriptors = step4_select_descriptors()
+
+    # 4.2 为每个描述符配置嵌入方式
+    descriptor_configs = []
+    for desc_name in selected_descriptors:
+        config = step4_configure_descriptor(desc_name, all_column_configs)
+        descriptor_configs.append(config)
+
+    return descriptor_configs
+
+
+# ============================================================================
+# 步骤5-8: 其他配置项
+# ============================================================================
+
+def step5_select_models():
+    """
+    选择建模模型
+
+    Returns:
+        list: 选中的模型名称列表
+    """
+    print("\n" + "=" * 60)
+    print("步骤5: 指定建模模型")
+    print("=" * 60)
+
+    models = ['XGBoost', 'Random Forest', 'SVM', 'AutoGluon', 'Neural Network']
+
+    print("\n可用模型:")
+    for idx, model in enumerate(models, 1):
+        print(f"  [{idx}] {model}")
+
+    print("\n请选择模型(输入序号,用逗号分隔,如: 1,2,4)")
+    print("或输入'all'选择全部模型")
+
+    while True:
+        user_input = input("模型序号: ").strip()
+
+        if user_input.lower() == 'all':
+            selected = models
+            break
+
+        try:
+            indices = [int(x.strip()) for x in user_input.split(',')]
+            if all(1 <= idx <= len(models) for idx in indices):
+                selected = [models[i-1] for i in indices]
+                break
+            else:
+                print("[X] 存在无效的序号")
+        except ValueError:
+            print("[X] 输入格式错误")
+
+    print(f"\n[OK] 已选择 {len(selected)} 个模型: {', '.join(selected)}")
+    return selected
+
+
+def step6_dataset_metadata():
+    """
+    收集数据集元信息
+
+    Returns:
+        dict: {
+            'repo_url': str,
+            'doi': str,
+            'notes': str
+        }
+    """
+    print("\n" + "=" * 60)
+    print("步骤6: 补充数据集信息")
+    print("=" * 60)
+
+    repo_url = input("项目地址(可选): ").strip()
+    doi = input("文献DOI(可选): ").strip()
+    notes = input("备注(可选): ").strip()
+
+    metadata = {
+        'repo_url': repo_url,
+        'doi': doi,
+        'notes': notes
+    }
+
+    print("\n[OK] 元信息已记录")
+    return metadata
+
+
+def step7_select_report_format():
+    """
+    选择报告输出格式
+
+    Returns:
+        list: 选中的格式列表
+    """
+    print("\n" + "=" * 60)
+    print("步骤7: 选择报告输出格式")
+    print("=" * 60)
+
+    formats = ['Markdown', 'HTML', 'PDF', 'JSON']
+
+    print("\n可用格式:")
+    for idx, fmt in enumerate(formats, 1):
+        print(f"  [{idx}] {fmt}")
+
+    print("\n请选择输出格式(输入序号,用逗号分隔,如: 1,3)")
+
+    while True:
+        user_input = input("格式序号: ").strip()
+
+        try:
+            indices = [int(x.strip()) for x in user_input.split(',')]
+            if all(1 <= idx <= len(formats) for idx in indices):
+                selected = [formats[i-1] for i in indices]
+                break
+            else:
+                print("[X] 存在无效的序号")
+        except ValueError:
+            print("[X] 输入格式错误")
+
+    print(f"\n[OK] 已选择输出格式: {', '.join(selected)}")
+    return selected
+
+
+def step8_confirm_and_generate(df, all_invalid_rows, project_folder, project_name):
+    """
+    展示最终配置,生成修复后数据集(可选)
+
+    Args:
+        df: 原始数据集
+        all_invalid_rows: 所有非法行的索引集合
+        project_folder: 项目文件夹
+        project_name: 项目名称
+
+    Returns:
+        str: 修复后数据集文件路径(如果生成),否则返回None
+    """
+    print("\n" + "=" * 60)
+    print("步骤8: 确认配置并生成修复后数据集")
+    print("=" * 60)
+
+    print("\n是否生成修复后数据集(删除非法行)?")
+    print("  1. 是,生成修复后数据集")
+    print("  2. 否,仅保留原始数据集")
+
+    choice = input("选择(1/2): ").strip()
+
+    if choice == '1':
+        print("\n[OK] 将生成修复后数据集(删除非法行)")
+        fixed_path = generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name)
+        return fixed_path
+    else:
+        print("\n[OK] 不生成修复后数据集")
+        return None
+
+
+def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
+    """
+    生成修复后数据集(删除非法行)
+
+    Args:
+        df: 原始数据集
+        all_invalid_rows: 所有非法行的索引集合
+        project_folder: 项目文件夹
+        project_name: 项目名称
+
+    Returns:
+        str: 修复后数据集文件路径
+    """
+    print("\n生成修复后数据集...")
+
+    valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
+    fixed_df = df.iloc[valid_row_indices]
+
+    fixed_path = os.path.join(project_folder, f"{project_name}_修复后数据集.csv")
+    fixed_df.to_csv(fixed_path, index=False, encoding='utf-8')
+
+    print(f"[OK] 修复后数据集已生成: {fixed_path}")
+    print(f"  原始行数: {len(df)}")
+    print(f"  删除行数: {len(all_invalid_rows)}")
+    print(f"  剩余行数: {len(fixed_df)}")
+
+    return fixed_path
+
+
 def main():
     """
     主函数:运行数据集输入向导
@@ -1268,6 +1648,12 @@ def main():
     print("\n接下来将进入步骤3: 生成规范数据集与非法输入排除报告")
     input("按回车键继续...")
 
+    # 收集所有非法行索引(在步骤3之前需要完成)
+    all_invalid_rows = set()
+    for cfg in all_configs:
+        if 'invalid_rows' in cfg:
+            all_invalid_rows.update(cfg['invalid_rows'])
+
     output_paths = step3_orchestrate(
         df,
         all_configs,
@@ -1275,7 +1661,62 @@ def main():
         basic_info['project_name']
     )
 
-    # 输出总结
+    print("\n" + "=" * 60)
+    print("步骤3完成!")
+    print("=" * 60)
+
+    # 步骤4: 指定描述符
+    print("\n接下来将进入步骤4: 指定描述符")
+    input("按回车键继续...")
+
+    descriptor_configs = step4_orchestrate(all_configs)
+
+    print("\n" + "=" * 60)
+    print("步骤4完成!")
+    print("=" * 60)
+
+    # 步骤5: 选择建模模型
+    print("\n接下来将进入步骤5: 选择建模模型")
+    input("按回车键继续...")
+
+    selected_models = step5_select_models()
+
+    print("\n" + "=" * 60)
+    print("步骤5完成!")
+    print("=" * 60)
+
+    # 步骤6: 补充数据集元信息
+    print("\n接下来将进入步骤6: 补充数据集元信息")
+    input("按回车键继续...")
+
+    metadata = step6_dataset_metadata()
+
+    print("\n" + "=" * 60)
+    print("步骤6完成!")
+    print("=" * 60)
+
+    # 步骤7: 选择报告输出格式
+    print("\n接下来将进入步骤7: 选择报告输出格式")
+    input("按回车键继续...")
+
+    report_formats = step7_select_report_format()
+
+    print("\n" + "=" * 60)
+    print("步骤7完成!")
+    print("=" * 60)
+
+    # 步骤8: 确认配置并生成修复后数据集
+    print("\n接下来将进入步骤8: 确认配置并生成修复后数据集")
+    input("按回车键继续...")
+
+    fixed_dataset_path = step8_confirm_and_generate(
+        df,
+        all_invalid_rows,
+        basic_info['project_folder'],
+        basic_info['project_name']
+    )
+
+    # 输出最终总结
     print("\n" + "=" * 60)
     print("所有任务完成!")
     print("=" * 60)
@@ -1287,9 +1728,19 @@ def main():
         print(f"  - 规范数据集: {output_paths['normalized_dataset']}")
     else:
         print("  - 规范数据集: 无需生成（原始数据集无非法值）")
+    if fixed_dataset_path:
+        print(f"  - 修复后数据集: {fixed_dataset_path}")
 
-    print("\n接下来将进入步骤4-8: 描述符配置、模型配置等")
-    print("(步骤4-8功能尚未实现)")
+    print("\n配置汇总:")
+    print(f"  - 描述符: {', '.join([cfg['descriptor'] for cfg in descriptor_configs])}")
+    print(f"  - 模型: {', '.join(selected_models)}")
+    print(f"  - 报告格式: {', '.join(report_formats)}")
+    if metadata['repo_url']:
+        print(f"  - 项目地址: {metadata['repo_url']}")
+    if metadata['doi']:
+        print(f"  - DOI: {metadata['doi']}")
+    if metadata['notes']:
+        print(f"  - 备注: {metadata['notes']}")
 
 
 if __name__ == "__main__":

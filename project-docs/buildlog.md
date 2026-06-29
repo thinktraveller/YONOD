@@ -1229,3 +1229,86 @@ MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无�
 - 步骤 4-8：描述符配置、模型配置等（预计2小时）
 
 ---
+
+## [2026-06-29 17:19] 步骤 4-8 完成：第17章 数据集输入流程重构 - 描述符配置、模型选择、元数据收集等
+
+### 执行的任务
+- 实现步骤4：指定描述符
+  - 步骤4.1：展示并选择描述符（7种：morgan, atmomaccs, rdkit2d, fisd, molmetalm, maf, drfp）
+  - 步骤4.2：为每个描述符配置嵌入方式（横向拼接/逐点加和/固定反应模式）
+- 实现步骤5：选择建模模型（5种：XGBoost, Random Forest, SVM, AutoGluon, Neural Network）
+- 实现步骤6：收集数据集元信息（repo_url, doi, notes）
+- 实现步骤7：选择报告输出格式（Markdown, HTML, PDF, JSON）
+- 实现步骤8：确认配置并生成修复后数据集（可选，删除非法行）
+- 更新main()函数，集成步骤4-8的完整流程
+- 创建单元测试和端到端验证脚本
+
+### 关键变更
+- **修改文件**：`dataset_input_wizard.py`（从1283行扩展至1676行）
+  - 第1229-1322行：实现step4_select_descriptors()函数（支持all选项和序号输入）
+  - 第1325-1499行：实现step4_configure_descriptor()函数
+    - 横向拼接描述符（morgan, atmomaccs, rdkit2d, fisd, molmetalm）：支持默认顺序和自定义顺序
+    - 逐点加和描述符（maf）：选择参与加和的列
+    - 固定反应模式描述符（drfp）：固定reactant→product，可选额外reactant（others列）
+  - 第1502-1523行：实现step4_orchestrate()函数（总调度）
+  - 第1529-1565行：实现step5_select_models()函数
+  - 第1568-1592行：实现step6_dataset_metadata()函数
+  - 第1595-1628行：实现step7_select_report_format()函数
+  - 第1631-1668行：实现step8_confirm_and_generate()和generate_fixed_dataset()函数
+  - 第1520-1626行：更新main()函数，集成步骤4-8
+    - 收集all_invalid_rows（跨步骤传递非法行信息）
+    - 逐步骤执行并汇报进度
+    - 最终输出配置汇总（描述符、模型、报告格式、元信息）
+- **新增文件**：`tests/test_step4_8.py`（295行）
+  - 测试步骤4：描述符选择（单选、多选、all、无效输入）
+  - 测试步骤4：描述符配置（横向拼接默认顺序、自定义顺序、maf加和模式、drfp反应模式）
+  - 测试步骤5：模型选择（单选、多选、all、无效输入）
+  - 测试步骤6：元信息收集（完整输入、空输入）
+  - 测试步骤7：报告格式选择（单选、多选、无效输入）
+  - 测试步骤8：修复后数据集生成（删除非法行、无非法行）
+- **新增文件**：`_verify/step4_8_verification.py`（端到端验证脚本，已删除）
+
+### 遇到的问题及解决方案
+- 无阻塞性问题，所有功能一次性实现并通过测试
+
+### 验证结果
+- ✅ 单元测试：18/18 通过
+  - `TestStep4SelectDescriptors`：3个测试（多选、all、无效输入重试）
+  - `TestStep4ConfigureDescriptor`：5个测试（默认顺序、自定义顺序、maf加和、drfp额外反应物、drfp无额外反应物）
+  - `TestStep5SelectModels`：3个测试（多选、all、无效输入重试）
+  - `TestStep6DatasetMetadata`：2个测试（完整元信息、空元信息）
+  - `TestStep7SelectReportFormat`：3个测试（多选、单选、无效输入重试）
+  - `TestGenerateFixedDataset`：2个测试（删除非法行、无非法行）
+- ✅ 端到端验证：7/7 检查项通过
+  - 描述符选择：morgan, maf, drfp（3个）
+  - morgan配置：横向拼接，默认顺序，5列
+  - maf配置：逐点加和，3列
+  - drfp配置：固定反应模式，添加1个催化剂
+  - 模型选择：XGBoost, Random Forest, AutoGluon（3个）
+  - 元信息收集：repo_url, doi, notes全部正确
+  - 报告格式选择：Markdown, JSON（2个）
+  - 修复后数据集生成：原始5行，删除2行，剩余3行
+
+### 功能特性
+1. **描述符配置灵活性**：
+   - 横向拼接描述符：可使用默认顺序（reactant→others→product）或自定义顺序
+   - maf描述符：可选择任意列参与加和
+   - drfp描述符：固定reactant→product，可将others列加入reactant（如催化剂）
+2. **用户输入容错**：
+   - 支持'all'快捷输入
+   - 无效输入时提示并重试
+   - 使用[OK]和[X]替代Unicode字符（Windows兼容）
+3. **元信息可选**：repo_url, doi, notes均为可选字段
+4. **修复后数据集可选**：用户可选择是否生成修复后数据集（删除非法行）
+5. **配置汇总展示**：main()函数最后输出所有步骤的配置汇总
+
+### 生成的文件（步骤8）
+1. **修复后数据集**（可选）：`{project_name}_修复后数据集.csv`
+   - 删除所有非法行
+   - 保留原始数据集的列结构（不做拆分）
+   - 用于需要原始格式的场景
+
+### 下一步计划
+- ✅ 第17章数据集输入流程重构已全部完成
+
+---
