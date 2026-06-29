@@ -1001,3 +1001,54 @@ MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无�
 4. ✅ 边界情况（超范围返回 None）
 
 ---
+
+## [2026-06-29 16:44] 步骤 1 完成：第17章 数据集输入流程重构 - 指定初始数据集、列映射文件、项目名称和项目文件夹位置
+
+### 执行的任务
+- 创建主脚本文件 `dataset_input_wizard.py`，实现数据集输入向导的核心功能
+- 实现 `step1_collect_basic_info()` 函数：收集四项基本信息（数据集路径、列映射文件路径、项目名称、项目文件夹）
+- 实现 `load_and_preview_dataset()` 函数：加载CSV数据集并展示基本信息，支持多种编码（UTF-8、GBK、latin1）
+- 创建单元测试文件 `tests/test_step1.py`，包含5个测试用例
+- 创建手动验证脚本 `_verify/step1_manual_test.py` 和测试数据集
+
+### 关键变更
+- **新增文件**：`dataset_input_wizard.py`（165行）
+  - 实现用户输入验证（CSV路径、项目名称正则验证、文件夹自动创建）
+  - 支持可选的列映射文件加载（若提供则跳过步骤2）
+  - 多编码支持：UTF-8 → GBK → latin1 自动降级
+  - 重复列名检测和警告提示
+- **新增文件**：`tests/test_step1.py`（117行）
+  - 测试CSV加载功能（有效文件、不同编码、重复列名、空CSV）
+  - 测试项目名称验证逻辑（正则表达式匹配）
+- **新增文件**：`_verify/step1_manual_test.py`（101行）
+  - 自动生成测试数据集（6列 × 3行，包含SMILES和数值列）
+  - 验证 `load_and_preview_dataset()` 函数的输出（行数、列数、列名）
+- **新增文件**：`_verify/test_dataset.csv`
+  - 测试数据集（Reactant_1, Reactant_2, Product, Temperature, Time, Yield）
+
+### 遇到的问题及解决方案
+- **问题1**：Windows终端编码问题（GBK无法显示Unicode字符✓和✗）
+  - **解决**：将验证脚本中的Unicode字符替换为ASCII字符（[OK] 和 [FAIL]）
+- 无其他阻塞性问题
+
+### 验证结果
+- ✅ 单元测试：5/5 通过
+  - `test_load_valid_csv`：正确加载2行×2列CSV
+  - `test_load_csv_with_different_encodings`：UTF-8和GBK编码均成功读取
+  - `test_project_name_validation`：5个合法名称通过，6个非法名称拒绝
+  - `test_csv_with_duplicate_column_names`：正确处理重复列名（自动添加.1后缀）
+  - `test_empty_csv`：正确加载空CSV（0行但有列名）
+- ✅ 手动验证：所有检查项通过
+  - 行数检查：3 == 3
+  - 列数检查：6 == 6
+  - 列名检查：['Reactant_1', 'Reactant_2', 'Product', 'Temperature', 'Time', 'Yield']
+
+### 风险提示（来自构建计划书）
+1. **大文件加载**：数据集超过100MB时可能较慢 → 已在代码中预留扩展点
+2. **编码问题**：非UTF-8编码CSV可能失败 → 已实现三级编码降级（UTF-8 → GBK → latin1）
+3. **列名重复**：Pandas自动添加后缀 → 已添加检测和警告提示
+
+### 下一步计划
+- 步骤 2：逐列声明列角色和名称
+
+---
