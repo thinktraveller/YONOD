@@ -3874,3 +3874,2165 @@ DRFP = Hash(产物) XOR Hash(反应物)
 **计划书编写完成**：2026-06-23
 **计划书更新时间**：2026-06-23（新增列角色分类机制）
 **预计执行时间**：4-6小时（含列角色分类机制开发）
+
+
+---
+
+## 十七、数据集输入流程重构构建计划
+
+> **专题名称**: YONOD数据集输入向导(Dataset Input Wizard)
+> **重构目标**: 完全放弃原有输入步骤,建立逐列声明式输入流程
+> **文档版本**: v1.0 (2026-06-28)
+> **添加日期**: 2026-06-29
+
+
+
+---
+
+### 17.1 项目概述
+
+#### 17.1.1 重构目标
+将原本散乱的数据集输入步骤完全重构为一个**向导式、逐列声明**的交互流程,核心改变:
+
+1. **用户逐列声明列角色**(标签列、反应物SMILES、产物SMILES、其他组分SMILES、条件数值)
+2. **每列必须指定名称**(英文+符号,默认值可供快速确认)
+3. **合法性检验即时进行**,非法行标记但不中断流程
+4. **生成规范数据集**:固定列顺序(reactant → others → condition → product → label)
+5. **生成列映射文件**(CSV格式,记录原始列名→角色→新列名的对应关系)
+6. **非法值报告**(Markdown格式,可选择输出修复后的数据集到目标文件夹)
+
+#### 17.1.2 核心设计决策
+基于可行性分析报告的回复,以下设计决策已确认:
+
+| 决策点 | 最终方案 | 依据 |
+|--------|---------|------|
+| **配置文件导出功能** | 不采纳 | 不同数据集格式大相径庭,难以复用 |
+| **规范数据集保留原始列** | 不采纳 | 需要查看原始格式可直接查看原始数据集 |
+| **其他组分列智能命名** | 部分采纳 | 默认依然是原始列名,建议名称仅在输入界面供复制 |
+| **一键修复脚本** | 部分采纳 | 必须保留原始数据集,修复后数据集输出到目标文件夹,仅保留"删除行"手段 |
+| **列映射文件加载时跳过步骤2** | 强制配置 | 跳过步骤2,但正常对每列进行合法性检查,正常进入步骤3生成报告 |
+| **非法值检验策略** | 已标记行仍参与检验 | 维护"已标记行"集合,对其仍检验(仅记录错误,不重复计数) |
+| **产物列单SMILES定义** | 严格定义(可在文档中说明宽松定义) | 不含任何分隔符(点号、分号、逗号)的SMILES字符串 |
+| **描述符配置粒度** | 逐个调整 | 顺序相关描述符有默认顺序,用户逐个调整 |
+| **列名冲突处理** | 强制唯一 | 步骤2维护`used_names`集合,禁止重复 |
+| **非法输入报告生成** | 有非法输入才生成 | 如无非法输入,不生成报告 |
+| **描述符默认顺序** | reactant-others-product | 所有顺序相关描述符默认此顺序拼接 |
+| **全部合法时跳过步骤3** | 跳过 | 如果合法性检查全部通过,则跳过步骤3,不重复生成规范数据集 |
+
+#### 17.1.3 预期成果
+| 形态 | 内容 |
+|------|------|
+| 交互式向导程序 | Python脚本,终端运行,逐步引导用户完成配置 |
+| 列映射说明表 | CSV文件,记录`origin_name,role,name`三元组 |
+| 规范数据集 | CSV文件,按固定顺序排列,每单元格仅含单个SMILES或单个数值 |
+| 非法输入报告 | Markdown文档(可选),详细列出被排除的行及非法值位置 |
+| 修复后数据集 | CSV文件(可选),删除非法行后的干净数据集 |
+
+---
+
+### 17.2 可行性分析
+
+#### 17.2.1 技术可行性
+| 技术点 | 可行性 | 依据 |
+|--------|--------|------|
+| SMILES合法性检验 | 完全可行 | RDKit的`Chem.MolFromSmiles()`可直接判断 |
+| 数值合法性检验 | 完全可行 | Pandas的`pd.to_numeric(errors='coerce')`可识别非数值 |
+| CSV读写 | 完全可行 | Pandas标准功能 |
+| 交互式输入 | 完全可行 | Python `input()`配合循环和验证逻辑 |
+| SMILES分隔符拆分 | 完全可行 | 正则表达式或`str.split()`配合RDKit验证 |
+| Markdown报告生成 | 完全可行 | 字符串格式化+文件写入 |
+
+#### 17.2.2 主要风险与应对
+| 风险 | 概率 | 影响 | 应对策略 |
+|------|------|------|----------|
+| 用户输入列序号错误 | 高 | 中 | 每次输入后回显列名,要求用户确认 |
+| 列名称含非法字符 | 中 | 低 | 实时正则验证,拒绝非英文符号 |
+| SMILES含多种分隔符混用 | 低 | 中 | 支持`.` ` ` `;` `,`多种分隔符,统一拆分 |
+| 规范数据集列数过多(如反应物>20个) | 低 | 低 | 无硬性限制,但在报告中提示数据稀疏性 |
+| 用户中途退出 | 中 | 低 | 提供保存进度功能(保存部分配置为JSON) |
+
+#### 17.2.3 工作量估算
+| 步骤 | 预计工时 | 难度 |
+|------|----------|------|
+| 步骤1实现(文件路径输入) | 0.5小时 | 低 |
+| 步骤2实现(逐列声明) | 3小时 | 中 |
+| 步骤3.1实现(非法值报告) | 2小时 | 中 |
+| 步骤3.2实现(列映射表) | 0.5小时 | 低 |
+| 步骤3.3实现(规范数据集) | 2小时 | 中 |
+| 步骤4-8实现(描述符/模型/其他) | 1小时 | 低(主要是UI展示) |
+| 测试与文档 | 2小时 | 低 |
+| **总计** | **11小时** | **中等** |
+
+---
+
+### 17.3 环境配置
+
+#### 17.3.1 硬件/系统要求
+- CPU: 2核以上
+- RAM: 4GB以上
+- 磁盘: 100MB可用空间(用于缓存和输出文件)
+- OS: Windows 11 / Linux / macOS均可
+
+#### 17.3.2 开发环境搭建
+#### Git初始化
+
+```powershell
+# 如果项目目录尚未初始化Git仓库
+cd "C:\Users\joyjo\Desktop\其他大学资料\大创\YONOD"
+git init
+```
+
+#### 17.3.3 依赖安装
+**最低版本要求:**
+
+- Python >= 3.9
+- pandas >= 2.0.0
+- rdkit >= 2023.9.0
+- numpy >= 1.26.0
+
+**安装命令(Windows PowerShell):**
+
+```powershell
+# 激活conda环境(如果使用conda)
+conda activate yonod
+
+# 或直接使用pip安装(如果使用venv或系统Python)
+pip install pandas>=2.0.0 rdkit>=2023.9.0 numpy>=1.26.0
+
+# 国内用户镜像配置(推荐)
+pip install pandas>=2.0.0 rdkit>=2023.9.0 numpy>=1.26.0 -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+**验证安装:**
+
+```powershell
+python -c "import pandas; print('pandas version:', pandas.__version__)"
+python -c "from rdkit import Chem; print('RDKit imported successfully')"
+python -c "import numpy; print('numpy version:', numpy.__version__)"
+```
+
+---
+
+### 17.4 开发计划
+
+### 步骤1: 指定初始数据集、列映射文件、项目名称和项目文件夹位置
+
+#### 目标说明
+
+用户提供四项基本信息:
+1. **初始数据集路径**(必选): CSV格式,包含原始反应数据
+2. **列映射文件路径**(可选): 如果提供,则跳过步骤2的列角色声明,直接进入合法性检验
+3. **项目名称**(必选): 用于生成输出文件的前缀
+4. **项目文件夹位置**(必选): 所有输出文件将保存在此文件夹下
+
+如果提供了列映射文件,程序将:
+- 跳过步骤2(逐列声明)
+- 强制对每一列进行合法性检查
+- 正常进入步骤3生成报告(如有非法值)
+- 如果合法性检查全部通过,则跳过步骤3(无需重复生成一模一样的规范数据集)
+
+#### 具体操作
+
+**1.1 创建主脚本文件**
+
+创建文件: `YONOD/dataset_input_wizard.py`
+
+核心函数:
+```python
+def step1_collect_basic_info():
+    """
+    收集基本信息:初始数据集路径、列映射文件路径(可选)、项目名称、项目文件夹
+
+    Returns:
+        dict: {
+            'dataset_path': str,
+            'mapping_path': str | None,
+            'project_name': str,
+            'project_folder': str
+        }
+    """
+    print("=" * 60)
+    print("步骤1: 指定初始数据集、列映射文件、项目名称和项目文件夹")
+    print("=" * 60)
+
+    # 1. 输入初始数据集路径
+    while True:
+        dataset_path = input("请输入初始数据集路径(CSV格式): ").strip()
+        if os.path.exists(dataset_path) and dataset_path.endswith('.csv'):
+            print(f"✓ 数据集文件存在: {dataset_path}")
+            break
+        else:
+            print("✗ 文件不存在或不是CSV格式,请重新输入")
+
+    # 2. 可选: 输入列映射文件路径
+    mapping_path = input("请输入列映射文件路径(可选,直接回车跳过): ").strip()
+    if mapping_path:
+        if os.path.exists(mapping_path) and mapping_path.endswith('.csv'):
+            print(f"✓ 列映射文件存在: {mapping_path}")
+            print("  将跳过步骤2,直接使用此映射进行合法性检验")
+        else:
+            print("✗ 文件不存在或不是CSV格式,将忽略此输入,进入正常流程")
+            mapping_path = None
+    else:
+        mapping_path = None
+
+    # 3. 输入项目名称
+    while True:
+        project_name = input("请输入项目名称(仅英文字母、数字、下划线): ").strip()
+        if re.match(r'^[a-zA-Z0-9_]+$', project_name):
+            print(f"✓ 项目名称: {project_name}")
+            break
+        else:
+            print("✗ 项目名称只能包含英文字母、数字、下划线")
+
+    # 4. 输入项目文件夹位置
+    while True:
+        project_folder = input("请输入项目文件夹位置(将在此创建输出文件): ").strip()
+        if os.path.isdir(project_folder) or not os.path.exists(project_folder):
+            os.makedirs(project_folder, exist_ok=True)
+            print(f"✓ 项目文件夹: {project_folder}")
+            break
+        else:
+            print("✗ 路径无效或不是文件夹")
+
+    return {
+        'dataset_path': dataset_path,
+        'mapping_path': mapping_path,
+        'project_name': project_name,
+        'project_folder': project_folder
+    }
+```
+
+**1.2 读取数据集并展示基本信息**
+
+```python
+def load_and_preview_dataset(dataset_path):
+    """
+    加载数据集并展示基本信息
+
+    Returns:
+        pd.DataFrame: 原始数据集
+    """
+    df = pd.read_csv(dataset_path)
+    print(f"\n数据集基本信息:")
+    print(f"  总行数: {len(df)}")
+    print(f"  总列数: {len(df.columns)}")
+    print(f"\n列序号和列名称:")
+    for idx, col in enumerate(df.columns):
+        print(f"  [{idx}] {col}")
+
+    return df
+```
+
+#### 验证方法
+
+**单元测试:**
+
+创建测试文件: `YONOD/tests/test_step1.py`
+
+```python
+import pytest
+import os
+import pandas as pd
+from dataset_input_wizard import step1_collect_basic_info, load_and_preview_dataset
+
+def test_load_valid_csv(tmp_path):
+    """测试加载有效的CSV文件"""
+    # 创建临时CSV文件
+    test_csv = tmp_path / "test.csv"
+    df = pd.DataFrame({'col1': [1, 2], 'col2': [3, 4]})
+    df.to_csv(test_csv, index=False)
+
+    # 加载并验证
+    loaded_df = load_and_preview_dataset(str(test_csv))
+    assert len(loaded_df) == 2
+    assert list(loaded_df.columns) == ['col1', 'col2']
+
+def test_project_name_validation():
+    """测试项目名称验证逻辑"""
+    import re
+
+    valid_names = ['project1', 'my_project', 'Project_123']
+    invalid_names = ['项目1', 'my-project', 'project name', '']
+
+    pattern = r'^[a-zA-Z0-9_]+$'
+
+    for name in valid_names:
+        assert re.match(pattern, name), f"{name} should be valid"
+
+    for name in invalid_names:
+        assert not re.match(pattern, name), f"{name} should be invalid"
+
+# 运行测试
+pytest tests/test_step1.py -v
+```
+
+**手动验证检查项:**
+
+1. 输入不存在的文件路径 → 提示错误并要求重新输入
+2. 输入非CSV文件 → 提示错误并要求重新输入
+3. 输入含中文/特殊字符的项目名称 → 提示错误并要求重新输入
+4. 输入不存在的项目文件夹 → 自动创建文件夹
+5. 加载CSV后正确显示行数、列数、列序号和列名称
+
+#### 风险提示
+
+1. **大文件加载:** 如果数据集超过100MB,Pandas读取可能较慢,考虑添加进度提示
+2. **编码问题:** 如果CSV不是UTF-8编码,可能读取失败,需添加编码检测逻辑(`chardet`库)
+3. **列名重复:** Pandas会自动处理重复列名(添加`.1` `.2`后缀),但需在步骤2中提醒用户
+
+---
+
+### 步骤2: 逐列声明列角色和名称
+
+#### 目标说明
+
+**如果步骤1中提供了列映射文件,则完全跳过本步骤。**
+
+用户从原始数据集的所有列中,先选择需要的列(备选列列表),然后依次声明每列的角色和名称:
+
+1. **标签列**(label): 必须且只能1列,合法性检验排除非数值和空值
+2. **反应物SMILES列**(reactant): 可多列,合法性检验排除非法SMILES和空值
+3. **产物SMILES列**(product): 必须且只能1列,每单元格只能包含单个SMILES,合法性检验排除非法SMILES和空值
+4. **其他组分SMILES列**(others): 可多列,合法性检验排除非法SMILES但**不排除空值**
+5. **条件数值列**(condition): 可多列,合法性检验排除非数值但**不排除空值**
+
+**关键约束:**
+- 列名称必须仅使用英文和符号,禁止中文
+- 维护`used_names`集合,禁止列名称重复(强制唯一)
+- 每声明完一列,该列从备选列列表中删除
+- 建议的智能名称(如solvent、catalyst、temperature)仅在输入界面显示供用户复制,默认值仍是原始列名
+
+#### 具体操作
+
+**2.1 选择需要的列**
+
+```python
+def step2_select_columns(df):
+    """
+    从原始数据集中选择需要的列
+
+    Args:
+        df: 原始数据集DataFrame
+
+    Returns:
+        list: 选中的列索引列表
+    """
+    print("\n" + "=" * 60)
+    print("步骤2.1: 选择需要的列")
+    print("=" * 60)
+    print("当前所有列:")
+    for idx, col in enumerate(df.columns):
+        print(f"  [{idx}] {col}")
+
+    print("\n请输入需要的列序号,用逗号分隔(例如: 0,1,3,5)")
+    print("或输入'all'选择全部列")
+
+    while True:
+        user_input = input("列序号: ").strip()
+
+        if user_input.lower() == 'all':
+            selected_indices = list(range(len(df.columns)))
+            break
+
+        try:
+            selected_indices = [int(x.strip()) for x in user_input.split(',')]
+            # 验证索引有效性
+            if all(0 <= idx < len(df.columns) for idx in selected_indices):
+                break
+            else:
+                print("✗ 存在无效的列序号,请重新输入")
+        except ValueError:
+            print("✗ 输入格式错误,请使用逗号分隔的数字")
+
+    selected_columns = [df.columns[idx] for idx in selected_indices]
+    print(f"\n✓ 已选择 {len(selected_columns)} 列:")
+    for idx, col in zip(selected_indices, selected_columns):
+        print(f"  [{idx}] {col}")
+
+    return selected_indices
+```
+
+**2.2 声明标签列**
+
+```python
+def step2_2_declare_label_column(df, available_columns, used_names):
+    """
+    声明标签列(label)
+
+    Args:
+        df: 原始数据集
+        available_columns: 可用列索引列表
+        used_names: 已使用的列名称集合
+
+    Returns:
+        dict: {'origin_idx': int, 'origin_name': str, 'role': 'label', 'name': str, 'invalid_rows': set}
+    """
+    print("\n" + "=" * 60)
+    print("步骤2.2: 声明标签列(label)")
+    print("=" * 60)
+    print("可选列:")
+    for idx in available_columns:
+        print(f"  [{idx}] {df.columns[idx]}")
+
+    # 选择列
+    while True:
+        try:
+            col_idx = int(input("请输入标签列序号(只能选择1列): ").strip())
+            if col_idx in available_columns:
+                break
+            else:
+                print("✗ 该列不在可选列表中")
+        except ValueError:
+            print("✗ 请输入有效的数字")
+
+    origin_name = df.columns[col_idx]
+
+    # 输入列名称
+    default_name = 'yield'
+    print(f"\n请为此列指定名称(默认: {default_name})")
+    print("列名称只能包含英文字母、数字、下划线、连字符")
+
+    while True:
+        name = input(f"列名称[{default_name}]: ").strip() or default_name
+
+        # 验证名称格式
+        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+            print("✗ 列名称只能包含英文、数字、下划线、连字符")
+            continue
+
+        # 验证名称唯一性
+        if name in used_names:
+            print(f"✗ 列名称'{name}'已被使用,请使用其他名称")
+            continue
+
+        break
+
+    # 合法性检验: 排除非数值和空值
+    invalid_rows = validate_numeric_column(df, col_idx)
+
+    print(f"\n✓ 标签列配置完成:")
+    print(f"  原始列名: {origin_name}")
+    print(f"  新列名: {name}")
+    print(f"  非法行数: {len(invalid_rows)}")
+
+    used_names.add(name)
+    available_columns.remove(col_idx)
+
+    return {
+        'origin_idx': col_idx,
+        'origin_name': origin_name,
+        'role': 'label',
+        'name': name,
+        'invalid_rows': invalid_rows
+    }
+
+def validate_numeric_column(df, col_idx):
+    """
+    验证数值列,返回非法行索引集合
+
+    非法情况:
+    1. 非数值值
+    2. 空值(NaN)
+
+    Returns:
+        set: 非法行索引集合
+    """
+    column = df.iloc[:, col_idx]
+    invalid_rows = set()
+
+    for idx, value in enumerate(column):
+        # 检查空值
+        if pd.isna(value):
+            invalid_rows.add(idx)
+            continue
+
+        # 检查是否为数值
+        try:
+            float(value)
+        except (ValueError, TypeError):
+            invalid_rows.add(idx)
+
+    return invalid_rows
+```
+
+**2.3 声明反应物SMILES列**
+
+```python
+def step2_3_declare_reactant_columns(df, available_columns, used_names):
+    """
+    声明反应物SMILES列(可多列)
+
+    Returns:
+        list[dict]: 每个dict包含 origin_idx, origin_name, role='reactant', name, invalid_rows
+    """
+    print("\n" + "=" * 60)
+    print("步骤2.3: 声明反应物SMILES列")
+    print("=" * 60)
+
+    reactant_columns = []
+
+    while True:
+        if not available_columns:
+            print("可选列已全部声明完毕")
+            break
+
+        print("\n当前可选列:")
+        for idx in available_columns:
+            print(f"  [{idx}] {df.columns[idx]}")
+
+        user_input = input("\n请输入反应物列序号(多列用逗号分隔,直接回车结束): ").strip()
+
+        if not user_input:
+            break
+
+        try:
+            col_indices = [int(x.strip()) for x in user_input.split(',')]
+
+            # 验证有效性
+            if not all(idx in available_columns for idx in col_indices):
+                print("✗ 存在无效的列序号")
+                continue
+
+            # 为每列声明名称
+            for col_idx in col_indices:
+                origin_name = df.columns[col_idx]
+                default_name = 'reactant'
+
+                print(f"\n为列 [{col_idx}] {origin_name} 指定名称(默认: {default_name})")
+
+                while True:
+                    name = input(f"列名称[{default_name}]: ").strip() or default_name
+
+                    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+                        print("✗ 列名称只能包含英文、数字、下划线、连字符")
+                        continue
+
+                    if name in used_names:
+                        print(f"✗ 列名称'{name}'已被使用")
+                        continue
+
+                    break
+
+                # 合法性检验: 排除非法SMILES和空值
+                invalid_rows = validate_smiles_column(df, col_idx, allow_empty=False)
+
+                print(f"✓ 非法行数: {len(invalid_rows)}")
+
+                reactant_columns.append({
+                    'origin_idx': col_idx,
+                    'origin_name': origin_name,
+                    'role': 'reactant',
+                    'name': name,
+                    'invalid_rows': invalid_rows
+                })
+
+                used_names.add(name)
+                available_columns.remove(col_idx)
+
+        except ValueError:
+            print("✗ 输入格式错误")
+
+    print(f"\n✓ 共声明 {len(reactant_columns)} 个反应物列")
+    return reactant_columns
+
+def validate_smiles_column(df, col_idx, allow_empty=False):
+    """
+    验证SMILES列,返回非法行索引集合
+
+    Args:
+        df: 数据集
+        col_idx: 列索引
+        allow_empty: 是否允许空值(others列允许,reactant/product列不允许)
+
+    非法情况:
+    1. 非法SMILES(RDKit无法解析)
+    2. 空值(如果allow_empty=False)
+
+    Returns:
+        set: 非法行索引集合
+    """
+    from rdkit import Chem
+
+    column = df.iloc[:, col_idx]
+    invalid_rows = set()
+
+    for idx, value in enumerate(column):
+        # 检查空值
+        if pd.isna(value) or str(value).strip() == '':
+            if not allow_empty:
+                invalid_rows.add(idx)
+            continue
+
+        # 将值转为字符串
+        smiles_str = str(value).strip()
+
+        # 尝试解析SMILES(可能包含多个分子,用.或空格或;或,分隔)
+        # 分隔后逐个验证
+        separators = ['.', ' ', ';', ',']
+        molecules = [smiles_str]  # 默认当作单个分子
+
+        for sep in separators:
+            if sep in smiles_str:
+                molecules = [s.strip() for s in smiles_str.split(sep) if s.strip()]
+                break
+
+        # 验证每个分子
+        for mol_smiles in molecules:
+            mol = Chem.MolFromSmiles(mol_smiles)
+            if mol is None:
+                invalid_rows.add(idx)
+                break
+
+    return invalid_rows
+```
+
+**2.4 声明产物SMILES列**
+
+```python
+def step2_4_declare_product_column(df, available_columns, used_names):
+    """
+    声明产物SMILES列(必须且只能1列)
+
+    关键要求:
+    - 每个单元格只能包含一个独立的SMILES(不含分隔符)
+
+    Returns:
+        dict: origin_idx, origin_name, role='product', name, invalid_rows
+    """
+    print("\n" + "=" * 60)
+    print("步骤2.4: 声明产物SMILES列")
+    print("=" * 60)
+    print("⚠️  产物列要求: 每个单元格只能包含一个独立的SMILES")
+    print("    不允许含有分隔符(点号.、分号;、逗号,)")
+    print()
+
+    print("可选列:")
+    for idx in available_columns:
+        print(f"  [{idx}] {df.columns[idx]}")
+
+    # 选择列
+    while True:
+        try:
+            col_idx = int(input("请输入产物列序号(只能选择1列): ").strip())
+            if col_idx in available_columns:
+                break
+            else:
+                print("✗ 该列不在可选列表中")
+        except ValueError:
+            print("✗ 请输入有效的数字")
+
+    origin_name = df.columns[col_idx]
+    default_name = 'product'
+
+    print(f"\n请为此列指定名称(默认: {default_name})")
+
+    while True:
+        name = input(f"列名称[{default_name}]: ").strip() or default_name
+
+        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+            print("✗ 列名称只能包含英文、数字、下划线、连字符")
+            continue
+
+        if name in used_names:
+            print(f"✗ 列名称'{name}'已被使用")
+            continue
+
+        break
+
+    # 合法性检验: 排除非法SMILES、空值、含分隔符的SMILES
+    invalid_rows = validate_product_column(df, col_idx)
+
+    print(f"\n✓ 产物列配置完成:")
+    print(f"  原始列名: {origin_name}")
+    print(f"  新列名: {name}")
+    print(f"  非法行数: {len(invalid_rows)}")
+
+    used_names.add(name)
+    available_columns.remove(col_idx)
+
+    return {
+        'origin_idx': col_idx,
+        'origin_name': origin_name,
+        'role': 'product',
+        'name': name,
+        'invalid_rows': invalid_rows
+    }
+
+def validate_product_column(df, col_idx):
+    """
+    验证产物列,返回非法行索引集合
+
+    产物列特殊要求:
+    1. 不能为空
+    2. 必须是合法SMILES
+    3. 不能含有分隔符(.;, 空格)
+
+    注: 此处采用严格定义,可在文档中说明宽松定义的可能性
+    """
+    from rdkit import Chem
+
+    column = df.iloc[:, col_idx]
+    invalid_rows = set()
+
+    for idx, value in enumerate(column):
+        # 检查空值
+        if pd.isna(value) or str(value).strip() == '':
+            invalid_rows.add(idx)
+            continue
+
+        smiles_str = str(value).strip()
+
+        # 检查是否含有分隔符
+        if any(sep in smiles_str for sep in ['.', ';', ',', ' ']):
+            invalid_rows.add(idx)
+            continue
+
+        # 验证SMILES
+        mol = Chem.MolFromSmiles(smiles_str)
+        if mol is None:
+            invalid_rows.add(idx)
+
+    return invalid_rows
+```
+
+**2.5 声明其他组分SMILES列**
+
+```python
+def step2_5_declare_others_columns(df, available_columns, used_names):
+    """
+    声明其他组分SMILES列(可多列)
+
+    特点:
+    - 允许空值
+    - 提供智能命名建议(solvent、catalyst、reagent、base)
+
+    Returns:
+        list[dict]: 每个dict包含 origin_idx, origin_name, role='others', name, invalid_rows
+    """
+    print("\n" + "=" * 60)
+    print("步骤2.5: 声明其他组分SMILES列")
+    print("=" * 60)
+    print("常用名称建议: solvent(溶剂)、catalyst(催化剂)、reagent(试剂)、base(碱)")
+    print()
+
+    others_columns = []
+
+    while True:
+        if not available_columns:
+            print("可选列已全部声明完毕")
+            break
+
+        print("\n当前可选列:")
+        for idx in available_columns:
+            print(f"  [{idx}] {df.columns[idx]}")
+
+        user_input = input("\n请输入其他组分列序号(多列用逗号分隔,直接回车结束): ").strip()
+
+        if not user_input:
+            break
+
+        try:
+            col_indices = [int(x.strip()) for x in user_input.split(',')]
+
+            if not all(idx in available_columns for idx in col_indices):
+                print("✗ 存在无效的列序号")
+                continue
+
+            for col_idx in col_indices:
+                origin_name = df.columns[col_idx]
+
+                # 智能命名建议
+                suggested_name = suggest_others_name(origin_name)
+                default_name = origin_name  # 默认依然是原始列名
+
+                print(f"\n为列 [{col_idx}] {origin_name} 指定名称")
+                print(f"  默认: {default_name}")
+                if suggested_name != default_name:
+                    print(f"  建议: {suggested_name} (可复制)")
+
+                while True:
+                    name = input(f"列名称[{default_name}]: ").strip() or default_name
+
+                    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+                        print("✗ 列名称只能包含英文、数字、下划线、连字符")
+                        continue
+
+                    if name in used_names:
+                        print(f"✗ 列名称'{name}'已被使用")
+                        continue
+
+                    break
+
+                # 合法性检验: 排除非法SMILES,但允许空值
+                invalid_rows = validate_smiles_column(df, col_idx, allow_empty=True)
+
+                print(f"✓ 非法行数: {len(invalid_rows)}")
+
+                others_columns.append({
+                    'origin_idx': col_idx,
+                    'origin_name': origin_name,
+                    'role': 'others',
+                    'name': name,
+                    'invalid_rows': invalid_rows
+                })
+
+                used_names.add(name)
+                available_columns.remove(col_idx)
+
+        except ValueError:
+            print("✗ 输入格式错误")
+
+    print(f"\n✓ 共声明 {len(others_columns)} 个其他组分列")
+    return others_columns
+
+def suggest_others_name(origin_name):
+    """
+    根据原始列名推荐智能命名
+
+    规则:
+    - 包含'溶剂'/'solvent' → 'solvent'
+    - 包含'催化'/'catalyst' → 'catalyst'
+    - 包含'试剂'/'reagent' → 'reagent'
+    - 包含'碱'/'base' → 'base'
+    - 否则返回原始列名
+    """
+    origin_lower = origin_name.lower()
+
+    if '溶剂' in origin_name or 'solvent' in origin_lower:
+        return 'solvent'
+    elif '催化' in origin_name or 'catalyst' in origin_lower:
+        return 'catalyst'
+    elif '试剂' in origin_name or 'reagent' in origin_lower:
+        return 'reagent'
+    elif '碱' in origin_name or 'base' in origin_lower:
+        return 'base'
+    else:
+        return origin_name
+```
+
+**2.6 声明条件数值列**
+
+```python
+def step2_6_declare_condition_columns(df, available_columns, used_names):
+    """
+    声明条件数值列(可多列)
+
+    特点:
+    - 允许空值
+    - 提供智能命名建议(temperature、pressure、time)
+
+    Returns:
+        list[dict]: 每个dict包含 origin_idx, origin_name, role='condition', name, invalid_rows
+    """
+    print("\n" + "=" * 60)
+    print("步骤2.6: 声明条件数值列")
+    print("=" * 60)
+    print("常用名称建议: temperature(温度)、pressure(压力)、time(时间)")
+    print()
+
+    condition_columns = []
+
+    while True:
+        if not available_columns:
+            print("可选列已全部声明完毕")
+            break
+
+        print("\n当前可选列:")
+        for idx in available_columns:
+            print(f"  [{idx}] {df.columns[idx]}")
+
+        user_input = input("\n请输入条件数值列序号(多列用逗号分隔,直接回车结束): ").strip()
+
+        if not user_input:
+            break
+
+        try:
+            col_indices = [int(x.strip()) for x in user_input.split(',')]
+
+            if not all(idx in available_columns for idx in col_indices):
+                print("✗ 存在无效的列序号")
+                continue
+
+            for col_idx in col_indices:
+                origin_name = df.columns[col_idx]
+
+                # 智能命名建议
+                suggested_name = suggest_condition_name(origin_name)
+                default_name = origin_name
+
+                print(f"\n为列 [{col_idx}] {origin_name} 指定名称")
+                print(f"  默认: {default_name}")
+                if suggested_name != default_name:
+                    print(f"  建议: {suggested_name} (可复制)")
+
+                while True:
+                    name = input(f"列名称[{default_name}]: ").strip() or default_name
+
+                    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+                        print("✗ 列名称只能包含英文、数字、下划线、连字符")
+                        continue
+
+                    if name in used_names:
+                        print(f"✗ 列名称'{name}'已被使用")
+                        continue
+
+                    break
+
+                # 合法性检验: 排除非数值,但允许空值
+                invalid_rows = validate_numeric_column_allow_empty(df, col_idx)
+
+                print(f"✓ 非法行数: {len(invalid_rows)}")
+
+                condition_columns.append({
+                    'origin_idx': col_idx,
+                    'origin_name': origin_name,
+                    'role': 'condition',
+                    'name': name,
+                    'invalid_rows': invalid_rows
+                })
+
+                used_names.add(name)
+                available_columns.remove(col_idx)
+
+        except ValueError:
+            print("✗ 输入格式错误")
+
+    print(f"\n✓ 共声明 {len(condition_columns)} 个条件数值列")
+    return condition_columns
+
+def suggest_condition_name(origin_name):
+    """根据原始列名推荐智能命名"""
+    origin_lower = origin_name.lower()
+
+    if '温度' in origin_name or 'temp' in origin_lower:
+        return 'temperature'
+    elif '压力' in origin_name or 'pressure' in origin_lower:
+        return 'pressure'
+    elif '时间' in origin_name or 'time' in origin_lower:
+        return 'time'
+    else:
+        return origin_name
+
+def validate_numeric_column_allow_empty(df, col_idx):
+    """
+    验证数值列(允许空值),返回非法行索引集合
+
+    非法情况: 非数值值(但空值允许)
+    """
+    column = df.iloc[:, col_idx]
+    invalid_rows = set()
+
+    for idx, value in enumerate(column):
+        if pd.isna(value):
+            continue  # 空值允许
+
+        try:
+            float(value)
+        except (ValueError, TypeError):
+            invalid_rows.add(idx)
+
+    return invalid_rows
+```
+
+#### 验证方法
+
+**单元测试:**
+
+```python
+# tests/test_step2.py
+def test_validate_numeric_column():
+    """测试数值列验证"""
+    df = pd.DataFrame({'col': [1.0, 2.5, 'abc', np.nan, 3]})
+    invalid = validate_numeric_column(df, 0)
+    assert invalid == {2, 3}  # 'abc'和NaN
+
+def test_validate_smiles_column():
+    """测试SMILES列验证"""
+    df = pd.DataFrame({'col': ['CCO', 'invalid', '', np.nan, 'c1ccccc1']})
+
+    # 不允许空值
+    invalid = validate_smiles_column(df, 0, allow_empty=False)
+    assert 1 in invalid  # 'invalid'
+    assert 2 in invalid  # 空字符串
+    assert 3 in invalid  # NaN
+
+    # 允许空值
+    invalid = validate_smiles_column(df, 0, allow_empty=True)
+    assert 1 in invalid  # 'invalid'
+    assert 2 not in invalid  # 空字符串允许
+    assert 3 not in invalid  # NaN允许
+
+def test_validate_product_column():
+    """测试产物列验证(严格单SMILES)"""
+    df = pd.DataFrame({'col': [
+        'CCO',           # 合法
+        'CCO.CCC',       # 非法: 含点号
+        'invalid',       # 非法: 非法SMILES
+        '',              # 非法: 空
+        'c1ccccc1;CC'    # 非法: 含分号
+    ]})
+    invalid = validate_product_column(df, 0)
+    assert invalid == {1, 2, 3, 4}
+
+def test_column_name_uniqueness():
+    """测试列名称唯一性"""
+    used_names = {'yield', 'reactant'}
+
+    # 尝试添加重复名称
+    new_name = 'yield'
+    assert new_name in used_names  # 应该被拒绝
+
+    # 尝试添加新名称
+    new_name = 'product'
+    assert new_name not in used_names
+    used_names.add(new_name)
+    assert 'product' in used_names
+
+def test_suggest_others_name():
+    """测试智能命名建议"""
+    assert suggest_others_name('溶剂类型') == 'solvent'
+    assert suggest_others_name('Catalyst_name') == 'catalyst'
+    assert suggest_others_name('未知列') == '未知列'
+```
+
+**手动验证检查项:**
+
+1. 选择不存在的列序号 → 提示错误
+2. 输入含中文的列名称 → 提示错误
+3. 输入重复的列名称 → 提示错误并要求重新输入
+4. 标签列选择包含非数值的列 → 正确识别非法行
+5. 产物列包含多个SMILES(用`.`分隔) → 正确识别为非法行
+6. 其他组分列包含空值 → 不被标记为非法行
+7. 条件数值列包含空值 → 不被标记为非法行
+
+#### 风险提示
+
+1. **SMILES分隔符多样性:** 目前支持`.` ` ` `;` `,`四种分隔符,但可能存在其他分隔符(如`|` `tab`),需扩展正则
+2. **列名称语义冲突:** 用户可能将不同角色的列命名为相似名称(如`reactant_1`和`reactant-1`),虽然格式合法但语义易混淆
+3. **大数据集性能:** 对每列逐行验证SMILES,如果数据集超过10万行,可能耗时较长,考虑添加进度条
+4. **RDKit警告信息:** `Chem.MolFromSmiles()`对非法SMILES会输出警告信息到stderr,可能干扰用户体验,需捕获并静默
+
+---
+
+### 步骤3: 生成规范数据集与非法输入排除报告
+
+#### 目标说明
+
+完成步骤2的逐列声明后,或从列映射文件加载配置后,执行以下三项任务:
+
+**3.1 生成非法输入排除报告** (如果有非法输入)
+- Markdown格式
+- 两部分内容:
+  1. 哪些行被排除,分别在哪个/哪些步骤出现非法值
+  2. 被排除行的详细信息(表格形式,非法值加粗)
+
+**3.2 生成列映射说明表**
+- CSV格式,3列: `origin_name`, `role`, `name`
+- 记录所有声明的列
+
+**3.3 生成规范数据集**
+- CSV格式,跳过所有非法行
+- 列顺序: `reactant-1, reactant-2, ..., others-1, others-2, ..., condition-1, ..., product, label`
+- 每单元格仅含单个SMILES或单个数值
+- SMILES列中的多分子用`.`分隔后拆分到不同列
+
+**特殊处理:**
+- 如果合法性检查全部通过(无非法行),则跳过步骤3.1和3.3,因为无需重复生成一模一样的规范数据集
+
+#### 具体操作
+
+**3.1 生成非法输入排除报告**
+
+```python
+def step3_1_generate_invalid_report(df, all_column_configs, project_folder, project_name):
+    """
+    生成非法输入排除报告(Markdown格式)
+
+    Args:
+        df: 原始数据集
+        all_column_configs: 所有列的配置列表(每个元素是dict,包含invalid_rows)
+        project_folder: 项目文件夹路径
+        project_name: 项目名称
+
+    Returns:
+        str: 报告文件路径(如果生成),否则返回None
+    """
+    # 汇总所有非法行
+    all_invalid_rows = set()
+    for config in all_column_configs:
+        all_invalid_rows.update(config['invalid_rows'])
+
+    if not all_invalid_rows:
+        print("\n✓ 无非法输入,跳过报告生成")
+        return None
+
+    print(f"\n生成非法输入排除报告... 共 {len(all_invalid_rows)} 行")
+
+    report_path = os.path.join(project_folder, f"{project_name}_非法输入排除报告.md")
+
+    with open(report_path, 'w', encoding='utf-8') as f:
+        f.write(f"# {project_name} 非法输入排除报告\n\n")
+        f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        f.write("---\n\n")
+
+        # 第一部分: 汇总信息
+        f.write("## 一、排除行汇总\n\n")
+        f.write(f"**总计排除行数:** {len(all_invalid_rows)}\n\n")
+
+        # 按行索引排序
+        sorted_invalid_rows = sorted(all_invalid_rows)
+
+        # 为每行标注在哪些步骤出现非法值
+        row_error_map = {}  # {row_idx: [column_configs]}
+        for row_idx in sorted_invalid_rows:
+            row_error_map[row_idx] = []
+            for config in all_column_configs:
+                if row_idx in config['invalid_rows']:
+                    row_error_map[row_idx].append(config)
+
+        f.write("| 行号 | 出现非法值的列 |\n")
+        f.write("|------|----------------|\n")
+        for row_idx in sorted_invalid_rows:
+            error_cols = [cfg['origin_name'] for cfg in row_error_map[row_idx]]
+            f.write(f"| {row_idx} | {', '.join(error_cols)} |\n")
+
+        f.write("\n---\n\n")
+
+        # 第二部分: 逐行详细信息
+        f.write("## 二、排除行详细信息\n\n")
+
+        for row_idx in sorted_invalid_rows:
+            f.write(f"### 行 {row_idx}\n\n")
+
+            # 提取该行数据
+            row_data = df.iloc[row_idx]
+
+            # 生成表格
+            f.write("| 列名 | 值 |\n")
+            f.write("|------|----|\n")
+
+            for config in all_column_configs:
+                col_name = config['origin_name']
+                col_value = row_data[col_name]
+
+                # 如果该列在此行非法,加粗
+                if row_idx in config['invalid_rows']:
+                    col_value_str = f"**{col_value}**"
+                else:
+                    col_value_str = str(col_value)
+
+                f.write(f"| {col_name} | {col_value_str} |\n")
+
+            # 标注非法值位置
+            error_cols = [cfg['origin_name'] for cfg in row_error_map[row_idx]]
+            f.write(f"\n**非法值所在列:** {', '.join(error_cols)}\n\n")
+            f.write("---\n\n")
+
+    print(f"✓ 报告已生成: {report_path}")
+    return report_path
+```
+
+**3.2 生成列映射说明表**
+
+```python
+def step3_2_generate_column_mapping(all_column_configs, project_folder, project_name):
+    """
+    生成列映射说明表(CSV格式)
+
+    Args:
+        all_column_configs: 所有列的配置列表
+        project_folder: 项目文件夹路径
+        project_name: 项目名称
+
+    Returns:
+        str: 列映射文件路径
+    """
+    print("\n生成列映射说明表...")
+
+    mapping_path = os.path.join(project_folder, f"{project_name}_列映射.csv")
+
+    mapping_data = []
+    for config in all_column_configs:
+        mapping_data.append({
+            'origin_name': config['origin_name'],
+            'role': config['role'],
+            'name': config['name']
+        })
+
+    mapping_df = pd.DataFrame(mapping_data)
+    mapping_df.to_csv(mapping_path, index=False, encoding='utf-8')
+
+    print(f"✓ 列映射表已生成: {mapping_path}")
+    print("\n列映射内容预览:")
+    print(mapping_df.to_string(index=False))
+
+    return mapping_path
+```
+
+**3.3 生成规范数据集**
+
+```python
+def step3_3_generate_normalized_dataset(df, all_column_configs, project_folder, project_name):
+    """
+    生成规范数据集
+
+    关键步骤:
+    1. 跳过所有非法行
+    2. 按固定顺序排列列: reactant → others → condition → product → label
+    3. 拆分包含多个SMILES的单元格(用.分隔)到多列
+    4. 每单元格仅含单个SMILES或单个数值
+
+    Args:
+        df: 原始数据集
+        all_column_configs: 所有列的配置列表
+        project_folder: 项目文件夹路径
+        project_name: 项目名称
+
+    Returns:
+        str: 规范数据集文件路径
+    """
+    print("\n生成规范数据集...")
+
+    # 汇总所有非法行
+    all_invalid_rows = set()
+    for config in all_column_configs:
+        all_invalid_rows.update(config['invalid_rows'])
+
+    if all_invalid_rows:
+        print(f"  跳过 {len(all_invalid_rows)} 个非法行")
+
+    # 有效行
+    valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
+
+    # 按角色分组列配置
+    role_groups = {
+        'reactant': [],
+        'others': [],
+        'condition': [],
+        'product': [],
+        'label': []
+    }
+
+    for config in all_column_configs:
+        role_groups[config['role']].append(config)
+
+    # 构建规范数据集的列
+    normalized_rows = []
+
+    for row_idx in valid_row_indices:
+        row_data = df.iloc[row_idx]
+        normalized_row = {}
+
+        # 1. 处理reactant列(可能需要拆分)
+        reactant_smiles_list = []
+        for config in role_groups['reactant']:
+            col_name = config['origin_name']
+            value = row_data[col_name]
+
+            if pd.notna(value) and str(value).strip():
+                # 拆分多个SMILES
+                smiles_parts = split_smiles(str(value))
+                reactant_smiles_list.extend(smiles_parts)
+
+        # 确定reactant列数(取所有行中最多的)
+        # 这里先简化处理,按当前行的reactant数量填充
+        for i, smiles in enumerate(reactant_smiles_list):
+            normalized_row[f'reactant-{i+1}'] = smiles
+
+        # 2. 处理others列(同样可能需要拆分)
+        for config in role_groups['others']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                # 如果拆分成多个,需要创建多列
+                if len(smiles_parts) == 1:
+                    normalized_row[new_name] = smiles_parts[0]
+                else:
+                    for i, smiles in enumerate(smiles_parts):
+                        normalized_row[f'{new_name}-{i+1}'] = smiles
+            else:
+                normalized_row[new_name] = ''
+
+        # 3. 处理condition列(数值,直接复制)
+        for config in role_groups['condition']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = value if pd.notna(value) else ''
+
+        # 4. 处理product列(单SMILES,直接复制)
+        for config in role_groups['product']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = str(value).strip() if pd.notna(value) else ''
+
+        # 5. 处理label列(数值,直接复制)
+        for config in role_groups['label']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = value if pd.notna(value) else ''
+
+        normalized_rows.append(normalized_row)
+
+    # 转换为DataFrame
+    normalized_df = pd.DataFrame(normalized_rows)
+
+    # 确定最终列顺序(需要重新扫描所有行,确定reactant/others的最大列数)
+    # 这里简化处理,直接使用当前列顺序
+    # 实际应该先扫描一遍确定每类SMILES的最大数量
+
+    # 保存
+    normalized_path = os.path.join(project_folder, f"{project_name}_规范数据集.csv")
+    normalized_df.to_csv(normalized_path, index=False, encoding='utf-8')
+
+    print(f"✓ 规范数据集已生成: {normalized_path}")
+    print(f"  有效行数: {len(normalized_df)}")
+    print(f"  总列数: {len(normalized_df.columns)}")
+
+    return normalized_path
+
+def split_smiles(smiles_str):
+    """
+    拆分包含多个SMILES的字符串
+
+    支持的分隔符: . 空格 ; ,
+
+    Returns:
+        list: SMILES列表
+    """
+    separators = ['.', ' ', ';', ',']
+
+    for sep in separators:
+        if sep in smiles_str:
+            return [s.strip() for s in smiles_str.split(sep) if s.strip()]
+
+    # 无分隔符,单个SMILES
+    return [smiles_str.strip()]
+```
+
+**改进版3.3: 两次扫描确定列数**
+
+```python
+def step3_3_generate_normalized_dataset_v2(df, all_column_configs, project_folder, project_name):
+    """
+    生成规范数据集(改进版: 两次扫描)
+
+    第一次扫描: 确定每类SMILES的最大列数
+    第二次扫描: 填充数据
+    """
+    print("\n生成规范数据集...")
+
+    # 汇总所有非法行
+    all_invalid_rows = set()
+    for config in all_column_configs:
+        all_invalid_rows.update(config['invalid_rows'])
+
+    valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
+
+    # 按角色分组
+    role_groups = {
+        'reactant': [],
+        'others': [],
+        'condition': [],
+        'product': [],
+        'label': []
+    }
+
+    for config in all_column_configs:
+        role_groups[config['role']].append(config)
+
+    # 第一次扫描: 确定最大列数
+    max_reactant_count = 0
+    max_others_count = {}  # {others_name: max_count}
+
+    for row_idx in valid_row_indices:
+        row_data = df.iloc[row_idx]
+
+        # 统计reactant
+        reactant_count = 0
+        for config in role_groups['reactant']:
+            col_name = config['origin_name']
+            value = row_data[col_name]
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                reactant_count += len(smiles_parts)
+        max_reactant_count = max(max_reactant_count, reactant_count)
+
+        # 统计others
+        for config in role_groups['others']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                if new_name not in max_others_count:
+                    max_others_count[new_name] = 0
+                max_others_count[new_name] = max(max_others_count[new_name], len(smiles_parts))
+
+    print(f"  最大reactant数量: {max_reactant_count}")
+    for name, count in max_others_count.items():
+        print(f"  最大{name}数量: {count}")
+
+    # 构建最终列名列表(按顺序)
+    final_columns = []
+
+    # reactant列
+    for i in range(max_reactant_count):
+        final_columns.append(f'reactant-{i+1}')
+
+    # others列
+    for config in role_groups['others']:
+        name = config['name']
+        if name in max_others_count:
+            count = max_others_count[name]
+            if count == 1:
+                final_columns.append(name)
+            else:
+                for i in range(count):
+                    final_columns.append(f'{name}-{i+1}')
+
+    # condition列
+    for config in role_groups['condition']:
+        final_columns.append(config['name'])
+
+    # product列
+    for config in role_groups['product']:
+        final_columns.append(config['name'])
+
+    # label列
+    for config in role_groups['label']:
+        final_columns.append(config['name'])
+
+    # 第二次扫描: 填充数据
+    normalized_rows = []
+
+    for row_idx in valid_row_indices:
+        row_data = df.iloc[row_idx]
+        normalized_row = {col: '' for col in final_columns}  # 初始化为空字符串
+
+        # 填充reactant
+        reactant_smiles_list = []
+        for config in role_groups['reactant']:
+            col_name = config['origin_name']
+            value = row_data[col_name]
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                reactant_smiles_list.extend(smiles_parts)
+
+        for i, smiles in enumerate(reactant_smiles_list):
+            if i < max_reactant_count:
+                normalized_row[f'reactant-{i+1}'] = smiles
+
+        # 填充others
+        for config in role_groups['others']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+
+            if pd.notna(value) and str(value).strip():
+                smiles_parts = split_smiles(str(value))
+                if len(smiles_parts) == 1:
+                    normalized_row[new_name] = smiles_parts[0]
+                else:
+                    for i, smiles in enumerate(smiles_parts):
+                        normalized_row[f'{new_name}-{i+1}'] = smiles
+
+        # 填充condition
+        for config in role_groups['condition']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = value if pd.notna(value) else ''
+
+        # 填充product
+        for config in role_groups['product']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = str(value).strip() if pd.notna(value) else ''
+
+        # 填充label
+        for config in role_groups['label']:
+            col_name = config['origin_name']
+            new_name = config['name']
+            value = row_data[col_name]
+            normalized_row[new_name] = value if pd.notna(value) else ''
+
+        normalized_rows.append(normalized_row)
+
+    # 转换为DataFrame(按final_columns顺序)
+    normalized_df = pd.DataFrame(normalized_rows, columns=final_columns)
+
+    # 保存
+    normalized_path = os.path.join(project_folder, f"{project_name}_规范数据集.csv")
+    normalized_df.to_csv(normalized_path, index=False, encoding='utf-8')
+
+    print(f"✓ 规范数据集已生成: {normalized_path}")
+    print(f"  有效行数: {len(normalized_df)}")
+    print(f"  总列数: {len(normalized_df.columns)}")
+    print("\n列名预览:")
+    print(f"  {', '.join(final_columns[:10])}{'...' if len(final_columns) > 10 else ''}")
+
+    return normalized_path
+```
+
+#### 验证方法
+
+**单元测试:**
+
+```python
+# tests/test_step3.py
+def test_split_smiles():
+    """测试SMILES拆分"""
+    assert split_smiles('CCO.CCC') == ['CCO', 'CCC']
+    assert split_smiles('CCO;CCC;CCCC') == ['CCO', 'CCC', 'CCCC']
+    assert split_smiles('CCO CCC') == ['CCO', 'CCC']
+    assert split_smiles('CCO,CCC') == ['CCO', 'CCC']
+    assert split_smiles('CCO') == ['CCO']
+
+def test_normalized_dataset_structure():
+    """测试规范数据集结构"""
+    # 模拟数据
+    df = pd.DataFrame({
+        'r1': ['CCO.CCC', 'CCCC'],
+        'r2': ['CC', 'CCC'],
+        'p': ['CCCCC', 'CCCCCC'],
+        'y': [0.85, 0.90]
+    })
+
+    all_column_configs = [
+        {'origin_name': 'r1', 'origin_idx': 0, 'role': 'reactant', 'name': 'reactant', 'invalid_rows': set()},
+        {'origin_name': 'r2', 'origin_idx': 1, 'role': 'reactant', 'name': 'reactant', 'invalid_rows': set()},
+        {'origin_name': 'p', 'origin_idx': 2, 'role': 'product', 'name': 'product', 'invalid_rows': set()},
+        {'origin_name': 'y', 'origin_idx': 3, 'role': 'label', 'name': 'yield', 'invalid_rows': set()},
+    ]
+
+    # 生成规范数据集(使用临时文件夹)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        normalized_path = step3_3_generate_normalized_dataset_v2(
+            df, all_column_configs, tmpdir, 'test_project'
+        )
+
+        # 读取并验证
+        normalized_df = pd.read_csv(normalized_path)
+
+        # 第一行应该有3个reactant(CCO, CCC, CC)
+        assert normalized_df.loc[0, 'reactant-1'] == 'CCO'
+        assert normalized_df.loc[0, 'reactant-2'] == 'CCC'
+        assert normalized_df.loc[0, 'reactant-3'] == 'CC'
+
+        # 第二行应该有2个reactant(CCCC, CCC)
+        assert normalized_df.loc[1, 'reactant-1'] == 'CCCC'
+        assert normalized_df.loc[1, 'reactant-2'] == 'CCC'
+        assert normalized_df.loc[1, 'reactant-3'] == ''  # 空
+
+        # product和yield列应该存在
+        assert 'product' in normalized_df.columns
+        assert 'yield' in normalized_df.columns
+```
+
+**手动验证检查项:**
+
+1. 非法输入报告正确列出所有非法行
+2. 非法行的表格中,非法值被加粗显示
+3. 列映射表正确记录所有列的`origin_name`, `role`, `name`
+4. 规范数据集正确跳过所有非法行
+5. 规范数据集中,含多个SMILES的单元格被正确拆分到多列
+6. 规范数据集列顺序符合规范: reactant → others → condition → product → label
+7. 如果无非法行,步骤3.1和3.3被跳过
+
+#### 风险提示
+
+1. **SMILES拆分歧义:** 某些SMILES本身含有`.`(如离子对),可能被错误拆分,需要RDKit二次验证
+2. **列数过多:** 如果某行的reactant数量超过50个,会导致规范数据集极度稀疏,需在报告中提示用户
+3. **内存消耗:** 第一次扫描需要遍历所有有效行两次,如果数据集超过100万行,可能内存压力大
+4. **文件编码:** Markdown报告中可能包含特殊字符,需确保使用UTF-8编码保存
+
+---
+
+### 步骤4: 指定描述符
+
+#### 目标说明
+
+用户选择用于建模的描述符,并配置每个描述符的嵌入方式:
+
+- **横向拼接**(morgan、atmomaccs、rdkit2d、fisd、molmetalm): 默认reactant-others-product顺序,用户可调整
+- **逐点加和**(maf): 不存在拼接顺序,用户可选择参与嵌入的列
+- **固定反应模式**(DRFP): 固定reactant→product,用户可选择将某些others列加入reactant
+
+**补充说明:**
+- 所有顺序相关的描述符都有默认顺序(reactant-others-product)
+- others下可能有多个标签,默认以用户输入的顺序拼接,用户可单独调整
+
+#### 具体操作
+
+**4.1 展示描述符列表**
+
+```python
+def step4_select_descriptors():
+    """
+    展示所有可用描述符,让用户选择
+
+    Returns:
+        list: 选中的描述符名称列表
+    """
+    print("\n" + "=" * 60)
+    print("步骤4: 指定描述符")
+    print("=" * 60)
+
+    descriptors = {
+        'morgan': '横向拼接,可编辑参与列和拼接顺序',
+        'atmomaccs': '横向拼接,可编辑参与列和拼接顺序',
+        'rdkit2d': '横向拼接,可编辑参与列和拼接顺序',
+        'fisd': '横向拼接,可编辑参与列和拼接顺序',
+        'molmetalm': '横向拼接,可编辑参与列和拼接顺序',
+        'maf': '逐点加和,可编辑参与列',
+        'drfp': '固定反应模式(reactant→product),可编辑额外加入反应物的others列'
+    }
+
+    print("\n可用描述符:")
+    for idx, (name, desc) in enumerate(descriptors.items(), 1):
+        print(f"  [{idx}] {name}: {desc}")
+
+    print("\n请选择描述符(输入序号,用逗号分隔,如: 1,2,5)")
+    print("或输入'all'选择全部描述符")
+
+    while True:
+        user_input = input("描述符序号: ").strip()
+
+        if user_input.lower() == 'all':
+            selected = list(descriptors.keys())
+            break
+
+        try:
+            indices = [int(x.strip()) for x in user_input.split(',')]
+            if all(1 <= idx <= len(descriptors) for idx in indices):
+                selected = [list(descriptors.keys())[i-1] for i in indices]
+                break
+            else:
+                print("✗ 存在无效的序号")
+        except ValueError:
+            print("✗ 输入格式错误")
+
+    print(f"\n✓ 已选择 {len(selected)} 个描述符: {', '.join(selected)}")
+    return selected
+```
+
+**4.2 配置描述符嵌入方式**
+
+```python
+def step4_configure_descriptor(descriptor_name, all_column_configs):
+    """
+    配置单个描述符的嵌入方式
+
+    Args:
+        descriptor_name: 描述符名称
+        all_column_configs: 所有列的配置列表(用于展示可选列)
+
+    Returns:
+        dict: {
+            'descriptor': str,
+            'mode': 'concat' | 'sum' | 'reaction',
+            'columns': list,  # 参与嵌入的列(按顺序)
+            'extra_reactants': list  # 仅DRFP使用,额外加入反应物的others列
+        }
+    """
+    print(f"\n配置描述符: {descriptor_name}")
+
+    # 获取所有SMILES列(reactant, others, product)
+    smiles_columns = [
+        cfg for cfg in all_column_configs
+        if cfg['role'] in ['reactant', 'others', 'product']
+    ]
+
+    print("\n当前所有SMILES列:")
+    for idx, cfg in enumerate(smiles_columns):
+        print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
+
+    if descriptor_name in ['morgan', 'atmomaccs', 'rdkit2d', 'fisd', 'molmetalm']:
+        # 横向拼接模式
+        print("\n该描述符为横向拼接模式")
+        print("默认顺序: reactant → others → product")
+        print("您可以:")
+        print("  1. 使用默认顺序")
+        print("  2. 自定义参与列和顺序(输入列序号,用逗号分隔)")
+
+        choice = input("选择(1/2): ").strip()
+
+        if choice == '1':
+            # 使用默认顺序
+            columns = []
+            # 按角色顺序添加
+            for role in ['reactant', 'others', 'product']:
+                for cfg in all_column_configs:
+                    if cfg['role'] == role:
+                        columns.append(cfg['name'])
+        else:
+            # 自定义顺序
+            print("\n请输入列序号(用逗号分隔,顺序即为拼接顺序):")
+            while True:
+                user_input = input("列序号: ").strip()
+                try:
+                    indices = [int(x.strip()) for x in user_input.split(',')]
+                    if all(0 <= idx < len(smiles_columns) for idx in indices):
+                        columns = [smiles_columns[i]['name'] for i in indices]
+                        break
+                    else:
+                        print("✗ 存在无效的序号")
+                except ValueError:
+                    print("✗ 输入格式错误")
+
+        print(f"✓ 拼接顺序: {' → '.join(columns)}")
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'concat',
+            'columns': columns
+        }
+
+    elif descriptor_name == 'maf':
+        # 逐点加和模式
+        print("\n该描述符为逐点加和模式,不存在拼接顺序")
+        print("请选择参与嵌入的列(输入列序号,用逗号分隔):")
+
+        while True:
+            user_input = input("列序号: ").strip()
+            try:
+                indices = [int(x.strip()) for x in user_input.split(',')]
+                if all(0 <= idx < len(smiles_columns) for idx in indices):
+                    columns = [smiles_columns[i]['name'] for i in indices]
+                    break
+                else:
+                    print("✗ 存在无效的序号")
+            except ValueError:
+                print("✗ 输入格式错误")
+
+        print(f"✓ 参与加和的列: {', '.join(columns)}")
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'sum',
+            'columns': columns
+        }
+
+    elif descriptor_name == 'drfp':
+        # 固定反应模式
+        print("\n该描述符为固定反应模式: reactant → product")
+        print("您可以选择将某些others列加入到reactant中(如催化剂)")
+
+        # 列出所有others列
+        others_columns = [cfg for cfg in all_column_configs if cfg['role'] == 'others']
+
+        if not others_columns:
+            print("  无可选的others列")
+            extra_reactants = []
+        else:
+            print("\n可选的others列:")
+            for idx, cfg in enumerate(others_columns):
+                print(f"  [{idx}] {cfg['name']}")
+
+            user_input = input("请输入要加入reactant的others列序号(用逗号分隔,直接回车跳过): ").strip()
+
+            if user_input:
+                try:
+                    indices = [int(x.strip()) for x in user_input.split(',')]
+                    extra_reactants = [others_columns[i]['name'] for i in indices if 0 <= i < len(others_columns)]
+                except ValueError:
+                    print("✗ 输入格式错误,跳过")
+                    extra_reactants = []
+            else:
+                extra_reactants = []
+
+        if extra_reactants:
+            print(f"✓ 额外加入反应物的列: {', '.join(extra_reactants)}")
+        else:
+            print("✓ 使用默认reactant列")
+
+        return {
+            'descriptor': descriptor_name,
+            'mode': 'reaction',
+            'extra_reactants': extra_reactants
+        }
+```
+
+#### 验证方法
+
+**手动验证检查项:**
+
+1. 选择描述符时输入无效序号 → 提示错误
+2. 配置横向拼接描述符时,自定义顺序正确记录
+3. 配置DRFP时,选择额外others列正确记录
+4. 配置结果正确保存到配置文件
+
+#### 风险提示
+
+1. **用户误操作:** 用户可能不理解"拼接顺序"的含义,需要在界面上给出示例
+2. **DRFP额外reactant语义:** 催化剂加入reactant在某些反应类型中不合适,需提醒用户根据实际情况选择
+
+---
+
+### 步骤5-8: 其他配置项(简化处理)
+
+#### 步骤5: 指定建模模型
+
+```python
+def step5_select_models():
+    """
+    选择建模模型
+
+    Returns:
+        list: 选中的模型名称列表
+    """
+    print("\n" + "=" * 60)
+    print("步骤5: 指定建模模型")
+    print("=" * 60)
+
+    models = ['XGBoost', 'Random Forest', 'SVM', 'AutoGluon', 'Neural Network']
+
+    print("\n可用模型:")
+    for idx, model in enumerate(models, 1):
+        print(f"  [{idx}] {model}")
+
+    print("\n请选择模型(输入序号,用逗号分隔,如: 1,2,4)")
+    print("或输入'all'选择全部模型")
+
+    while True:
+        user_input = input("模型序号: ").strip()
+
+        if user_input.lower() == 'all':
+            selected = models
+            break
+
+        try:
+            indices = [int(x.strip()) for x in user_input.split(',')]
+            if all(1 <= idx <= len(models) for idx in indices):
+                selected = [models[i-1] for i in indices]
+                break
+            else:
+                print("✗ 存在无效的序号")
+        except ValueError:
+            print("✗ 输入格式错误")
+
+    print(f"\n✓ 已选择 {len(selected)} 个模型: {', '.join(selected)}")
+    return selected
+```
+
+#### 步骤6: 补充数据集信息
+
+```python
+def step6_dataset_metadata():
+    """
+    收集数据集元信息
+
+    Returns:
+        dict: {
+            'repo_url': str,
+            'doi': str,
+            'notes': str
+        }
+    """
+    print("\n" + "=" * 60)
+    print("步骤6: 补充数据集信息")
+    print("=" * 60)
+
+    repo_url = input("项目地址(可选): ").strip()
+    doi = input("文献DOI(可选): ").strip()
+    notes = input("备注(可选): ").strip()
+
+    metadata = {
+        'repo_url': repo_url,
+        'doi': doi,
+        'notes': notes
+    }
+
+    print("\n✓ 元信息已记录")
+    return metadata
+```
+
+#### 步骤7: 选择报告输出格式
+
+```python
+def step7_select_report_format():
+    """
+    选择报告输出格式
+
+    Returns:
+        list: 选中的格式列表
+    """
+    print("\n" + "=" * 60)
+    print("步骤7: 选择报告输出格式")
+    print("=" * 60)
+
+    formats = ['Markdown', 'HTML', 'PDF', 'JSON']
+
+    print("\n可用格式:")
+    for idx, fmt in enumerate(formats, 1):
+        print(f"  [{idx}] {fmt}")
+
+    print("\n请选择输出格式(输入序号,用逗号分隔,如: 1,3)")
+
+    while True:
+        user_input = input("格式序号: ").strip()
+
+        try:
+            indices = [int(x.strip()) for x in user_input.split(',')]
+            if all(1 <= idx <= len(formats) for idx in indices):
+                selected = [formats[i-1] for i in indices]
+                break
+            else:
+                print("✗ 存在无效的序号")
+        except ValueError:
+            print("✗ 输入格式错误")
+
+    print(f"\n✓ 已选择输出格式: {', '.join(selected)}")
+    return selected
+```
+
+#### 步骤8: 确认命令行并生成修复后数据集
+
+```python
+def step8_confirm_and_generate():
+    """
+    展示最终配置,生成修复后数据集(可选)
+    """
+    print("\n" + "=" * 60)
+    print("步骤8: 确认配置并生成修复后数据集")
+    print("=" * 60)
+
+    print("\n是否生成修复后数据集(删除非法行)?")
+    print("  1. 是,生成修复后数据集")
+    print("  2. 否,仅保留原始数据集")
+
+    choice = input("选择(1/2): ").strip()
+
+    if choice == '1':
+        print("\n✓ 将生成修复后数据集(删除非法行)")
+        generate_fixed = True
+    else:
+        print("\n✓ 不生成修复后数据集")
+        generate_fixed = False
+
+    return generate_fixed
+
+def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
+    """
+    生成修复后数据集(删除非法行)
+
+    Args:
+        df: 原始数据集
+        all_invalid_rows: 所有非法行的索引集合
+        project_folder: 项目文件夹
+        project_name: 项目名称
+
+    Returns:
+        str: 修复后数据集文件路径
+    """
+    print("\n生成修复后数据集...")
+
+    valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
+    fixed_df = df.iloc[valid_row_indices]
+
+    fixed_path = os.path.join(project_folder, f"{project_name}_修复后数据集.csv")
+    fixed_df.to_csv(fixed_path, index=False, encoding='utf-8')
+
+    print(f"✓ 修复后数据集已生成: {fixed_path}")
+    print(f"  原始行数: {len(df)}")
+    print(f"  删除行数: {len(all_invalid_rows)}")
+    print(f"  剩余行数: {len(fixed_df)}")
+
+    return fixed_path
+```
+
+#### 验证方法
+
+**手动验证检查项:**
+
+1. 选择模型时输入无效序号 → 提示错误
+2. 数据集元信息正确保存
+3. 报告格式选择正确记录
+4. 修复后数据集正确删除所有非法行
+
+---
+
+### 17.5 Q&A 记录
+
+### 步骤1: 指定初始数据集、列映射文件、项目名称和项目文件夹位置
+
+**Q: 如果提供了列映射文件,还需要手动声明列吗?**
+**A:** 不需要。如果提供了列映射文件,程序将跳过步骤2(逐列声明),直接使用映射文件中的配置进行合法性检验,并正常进入步骤3生成报告(如有非法值)。如果合法性检查全部通过,则跳过步骤3,因为无需重复生成一模一样的规范数据集。
+
+---
+
+### 步骤2: 逐列声明列角色和名称
+
+**Q: 为什么标签列不允许空值,但条件列允许?**
+**A:** 标签列(如yield)是建模的目标值,必须有值才能训练模型。条件列(如temperature)是辅助特征,缺失值可以通过填充策略(如均值填充)或直接作为特殊标记处理,不影响建模流程。
+
+**Q: 产物列为什么必须是单个SMILES?**
+**A:** 这是目前采用的严格定义。产物列通常表示主产物,一个反应只有一个主产物。如果需要支持多产物,可以在文档中说明宽松定义,但需要修改后续描述符化逻辑。
+
+**Q: 其他组分列为什么允许空值?**
+**A:** 某些反应可能不需要某种组分(如无需催化剂的反应),空值表示"不存在该组分",这在化学上是合理的。
+
+**Q: 列名称为什么禁止中文?**
+**A:** 后续建模代码可能在不同环境(Linux/Windows/云端)运行,中文列名可能导致编码问题。强制英文列名可确保跨平台兼容性。
+
+**Q: 为什么要维护`used_names`集合?**
+**A:** 避免列名重复,导致后续数据处理时无法区分不同列。列名唯一性是数据规范化的基本要求。
+
+---
+
+### 步骤3: 生成规范数据集与非法输入排除报告
+
+**Q: 为什么非法行仍参与后续检验?**
+**A:** 一行数据可能在多个列都有非法值,完整检验所有列可以给用户提供完整的错误信息,便于修复数据源。如果检测到第一个非法值就跳过该行,用户需要多次运行才能发现所有错误。
+
+**Q: 为什么全部合法时跳过步骤3.3?**
+**A:** 如果没有非法行,规范数据集与原始数据集(仅列名和顺序不同)在内容上一模一样,重复生成没有意义。用户可以直接使用原始数据集配合列映射文件进行后续操作。
+
+**Q: 规范数据集的列顺序为什么固定?**
+**A:** 固定顺序便于后续描述符化脚本统一处理,不需要每次都读取列映射文件重新定位列位置。
+
+---
+
+### 步骤4: 指定描述符
+
+**Q: 为什么所有顺序相关描述符默认都是reactant-others-product?**
+**A:** 这是化学反应建模的常见约定,反应物→其他组分→产物的顺序符合化学反应的自然逻辑。用户可以根据实际需要调整。
+
+**Q: DRFP为什么是固定模式?**
+**A:** DRFP(Differential Reaction Fingerprint)是专门设计用于反应差异表征的描述符,其核心思想是reactant→product的转换,不适合任意调整顺序。
+
+---
+
+### 通用问题
+
+**Q: 为什么不采纳配置文件导出功能?**
+**A:** 不同数据集的格式大相径庭,列名、列数、数据类型都可能完全不同,导出的配置文件难以在其他数据集上复用。即使同一研究组的不同实验,列名也可能不一致。
+
+**Q: 为什么不在规范数据集中保留原始列?**
+**A:** 这会导致数据冗余,且混淆"原始列"和"规范列"的语义。用户如需查看原始格式,可直接打开原始数据集文件。
+
+**Q: 为什么一键修复脚本只保留删除行这一手段?**
+**A:** 自动修复非法SMILES(如尝试修正拼写错误)或非法数值(如自动填充)存在语义风险,可能改变原始数据的化学含义。删除非法行是最安全的修复方式。如需更复杂的修复策略,应由用户在原始数据集上手动处理后重新导入。
+
+---
+
+### 17.6 下一步行动建议
+
+1. **实现步骤1-2的核心逻辑**(预计3.5小时):
+   - 创建`dataset_input_wizard.py`主脚本
+   - 实现步骤1的文件路径收集和验证
+   - 实现步骤2的逐列声明逻辑(2.1-2.6)
+   - 实现所有合法性检验函数
+
+2. **实现步骤3的报告和数据集生成**(预计2.5小时):
+   - 实现非法输入排除报告生成(Markdown格式)
+   - 实现列映射说明表生成(CSV格式)
+   - 实现规范数据集生成(两次扫描版本)
+
+3. **实现步骤4-8的其他配置**(预计1小时):
+   - 实现描述符选择和配置界面
+   - 实现模型选择界面
+   - 实现元信息收集
+   - 实现报告格式选择
+   - 实现修复后数据集生成
+
+4. **测试和文档**(预计2小时):
+   - 编写单元测试
+   - 手动验证所有边界情况
+   - 编写用户使用手册
+   - 更新README
+
+5. **Git提交**:
+   - 完成开发后,执行`git add 数据集输入流程重构构建计划书.md`
+   - 提交: `git commit -m "docs: 创建数据集输入流程重构构建计划书"`
+
+**总预计工时:** 11小时
+
+**优先级排序:**
+1. 步骤1-2(核心输入逻辑,最高优先级)
+2. 步骤3(输出规范数据集,次高优先级)
+3. 测试(确保稳定性)
+4. 步骤4-8(可在基础功能完成后逐步添加)
+
+---
+
+### 17.7 附录
+
+### 附录A: 国内镜像源配置
+
+#### pip镜像
+
+```powershell
+# 临时使用
+pip install <包名> -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+
+# 永久配置
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+备用镜像:
+- 阿里云: `https://mirrors.aliyun.com/pypi/simple`
+- 中科大: `https://pypi.mirrors.ustc.edu.cn/simple`
+
+#### conda镜像
+
+```powershell
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+conda config --set show_channel_urls yes
+```
+
+### 附录B: 常见错误处理
+
+#### 错误1: RDKit无法解析SMILES
+
+**现象:** `Chem.MolFromSmiles()`返回`None`
+
+**原因:**
+1. SMILES字符串含有非法字符
+2. SMILES语法错误(如括号不匹配)
+3. 立体化学标记错误
+
+**解决:**
+1. 检查SMILES字符串是否含有特殊字符(如中文、空格)
+2. 使用RDKit的`SanitizeMol()`尝试修复
+3. 如无法修复,标记为非法行
+
+#### 错误2: Pandas读取CSV失败
+
+**现象:** `UnicodeDecodeError`
+
+**原因:** CSV文件编码不是UTF-8
+
+**解决:**
+```python
+# 尝试自动检测编码
+import chardet
+
+with open(csv_path, 'rb') as f:
+    result = chardet.detect(f.read(100000))
+    encoding = result['encoding']
+
+df = pd.read_csv(csv_path, encoding=encoding)
+```
+
+#### 错误3: 列名重复
+
+**现象:** Pandas自动添加`.1` `.2`后缀
+
+**原因:** 原始CSV含有重复列名
+
+**解决:**
+1. 在步骤2.1展示列时,提醒用户注意重复列名
+2. 要求用户在声明时使用唯一的新列名
+
+---
+
+**文档结束**
