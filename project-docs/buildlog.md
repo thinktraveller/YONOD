@@ -1429,3 +1429,115 @@ MAF 和 RDKit2D 描述符硬编码使用 `split(".")` 方法分割 SMILES，无�
 - ✅ 第17章数据集输入流程重构已全部完成并通过终验
 
 ---
+
+## [2026-06-29 22:30] 双入口重构完成：dataset_input_wizard.py + yonod.py 职责分离
+
+### 执行的任务
+- 实现 YONOD 项目的双入口架构，分离数据准备和建模两个阶段
+- 在 dataset_input_wizard.py 中新增配置文件生成和自动调用建模功能
+- 在 yonod.py 中新增 --config 参数，支持配置文件驱动的建模流程
+- 删除 yonod.py 中的冗余交互式向导代码（约570行）
+- 更新 CLAUDE.md 项目文档
+
+### 支持的三种使用场景
+
+**场景A：完整向导流程（推荐）**
+```bash
+python dataset_input_wizard.py
+# → 8步向导收集配置 → 生成配置文件 → 询问是否自动启动建模
+```
+
+**场景B：使用配置文件**
+```bash
+python yonod.py --config project-folder/yonod_config.json
+```
+
+**场景C：传统CLI（向后兼容）**
+```bash
+python yonod.py --csv data.csv --label-col yield --smiles-cols R1 R2 --descriptors morgan --models xgb
+```
+
+### 关键变更
+
+#### dataset_input_wizard.py（+157行）
+1. **新增 `save_config_file()` 函数**
+   - 将向导步骤4-7的配置保存为 `{project_name}_yonod_config.json`
+   - 配置文件包含：version、dataset_path、column_mapping_path、descriptors、models、metadata、report_formats、column_roles
+   - 使用绝对路径确保跨目录调用的兼容性
+
+2. **新增 `step9_auto_launch_modeling()` 函数**
+   - 询问用户 "是否立即启动建模流程? [Y/n]"
+   - 使用 subprocess.run() 调用 `yonod.py --config <path>`
+   - 包含完善的错误处理和用户提示
+
+3. **修改 `main()` 函数**
+   - 在步骤8完成后调用配置保存和步骤9
+
+#### yonod.py（-376行净减少）
+1. **新增配置加载功能**
+   - `_MODEL_NAME_MAP`：模型名称映射（"XGBoost" → "xgb"）
+   - `_map_model_name()`：名称转换函数
+   - `load_config_from_json()`：配置文件读取和校验
+   - `config_to_args()`：JSON配置转 argparse.Namespace
+
+2. **新增 --config 参数**
+   - 当提供 --config 时，优先使用配置文件，忽略其他CLI参数
+   - 修改 --csv 和 --label-col 为非必选（配置文件模式下不需要）
+
+3. **删除交互式向导代码（约570行）**
+   - 删除 `wizard()` 函数及所有辅助函数
+   - 删除 `_input()`, `_ask_required()`, `_ask_optional()`, `_ask_single_col()`, `_ask_multi_cols()` 等
+   - 删除正则常量 `_RE_LETTER`, `_RE_NUMBER`, `_RE_TASK`
+
+4. **新增 `_print_usage()` 函数**
+   - 无参数运行时打印友好的用法提示
+   - 引导用户使用向导或CLI模式
+
+#### CLAUDE.md（+50行）
+- 更新 "Running the Project" 部分，说明三种使用场景
+- 更新 "Entry Points" 描述双入口架构
+- 新增配置文件格式说明
+
+### 配置文件格式 (yonod_config.json)
+```json
+{
+  "version": "1.0",
+  "project_name": "project_name",
+  "dataset_path": "/absolute/path/to/normalized_dataset.csv",
+  "column_mapping_path": "/absolute/path/to/column_mapping.csv",
+  "descriptors": [
+    {"descriptor": "morgan", "mode": "concat", "columns": [...], "extra_reactants": []}
+  ],
+  "models": ["XGBoost", "Random Forest"],
+  "metadata": {"repo_url": "", "doi": "", "notes": ""},
+  "report_formats": ["HTML", "Markdown"],
+  "column_roles": {
+    "label": "yield",
+    "reactants": ["reactant-1"],
+    "products": ["product-1"],
+    "others": ["others-1"],
+    "conditions": ["temperature"]
+  }
+}
+```
+
+### 验证结果
+1. **语法检查通过**：两个文件均无语法错误
+2. **无参数运行**：显示友好的用法提示，引导用户选择正确入口
+3. **--help 参数**：正确显示新增的 --config 参数说明
+4. **代码行数**：
+   - yonod.py：1097行 → 721行（减少376行）
+   - dataset_input_wizard.py：1747行 → 1904行（增加157行）
+
+### 架构优化
+- **职责分离**：数据准备（向导）与建模执行（CLI）解耦
+- **配置驱动**：支持配置文件存储和复用，提升可复现性
+- **向后兼容**：传统CLI模式完全保留
+- **代码精简**：删除冗余代码，单一职责原则
+
+### 下一步计划
+- 扩展 build_universal_features() 支持 mode/target_columns/extra_reactants 参数（步骤4待实现）
+- 实现 load_csv_with_mapping() 函数（步骤6待实现）
+- 端到端集成测试（场景A/B/C）
+
+---

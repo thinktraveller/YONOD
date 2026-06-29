@@ -17,6 +17,9 @@ YONOD 数据集输入向导 (Dataset Input Wizard)
 
 import os
 import re
+import json
+import subprocess
+import sys
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Set
@@ -1605,6 +1608,142 @@ def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
     return fixed_path
 
 
+def save_config_file(
+    project_folder: str,
+    project_name: str,
+    dataset_path: str,
+    column_mapping_path: str,
+    normalized_dataset_path: Optional[str],
+    all_column_configs: List[Dict],
+    descriptor_configs: List[Dict],
+    selected_models: List[str],
+    metadata: Dict,
+    report_formats: List[str]
+) -> str:
+    """
+    保存配置文件 (yonod_config.json)
+
+    Args:
+        project_folder: 项目文件夹路径
+        project_name: 项目名称
+        dataset_path: 原始数据集路径
+        column_mapping_path: 列映射文件路径
+        normalized_dataset_path: 规范数据集路径（可能为None）
+        all_column_configs: 所有列的配置列表
+        descriptor_configs: 描述符配置列表
+        selected_models: 选中的模型列表
+        metadata: 元信息字典
+        report_formats: 报告格式列表
+
+    Returns:
+        str: 配置文件路径
+    """
+    # 构建列角色信息
+    column_roles = {
+        'label': None,
+        'reactants': [],
+        'products': [],
+        'others': [],
+        'conditions': []
+    }
+
+    for cfg in all_column_configs:
+        role = cfg['role']
+        name = cfg['name']
+        if role == 'label':
+            column_roles['label'] = name
+        elif role == 'reactant':
+            column_roles['reactants'].append(name)
+        elif role == 'product':
+            column_roles['products'].append(name)
+        elif role == 'others':
+            column_roles['others'].append(name)
+        elif role == 'condition':
+            column_roles['conditions'].append(name)
+
+    # 确定要使用的数据集路径（优先使用规范数据集）
+    if normalized_dataset_path:
+        effective_dataset_path = normalized_dataset_path
+    else:
+        effective_dataset_path = dataset_path
+
+    # 构建配置字典
+    config = {
+        'version': '1.0',
+        'project_name': project_name,
+        'dataset_path': effective_dataset_path,
+        'column_mapping_path': column_mapping_path,
+        'descriptors': descriptor_configs,
+        'models': selected_models,
+        'metadata': metadata,
+        'report_formats': report_formats,
+        'column_roles': column_roles
+    }
+
+    # 保存配置文件
+    config_path = os.path.join(project_folder, f"{project_name}_yonod_config.json")
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
+    print(f"[OK] 配置文件已生成: {config_path}")
+    return config_path
+
+
+def step9_auto_launch_modeling(config_path: str) -> bool:
+    """
+    步骤9: 询问是否自动启动建模
+
+    Args:
+        config_path: 配置文件路径
+
+    Returns:
+        bool: 是否成功启动建模
+    """
+    print("\n" + "=" * 60)
+    print("步骤9: 启动建模")
+    print("=" * 60)
+
+    print("\n是否立即启动建模?")
+    print("  Y - 是，立即启动")
+    print("  n - 否，稍后手动执行")
+
+    user_input = input("\n选择 [Y/n]: ").strip().lower()
+
+    if user_input in ('', 'y', 'yes'):
+        print("\n[启动] 正在调用 yonod.py 进行建模...")
+        print("=" * 60)
+
+        # 构建命令
+        yonod_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'yonod.py')
+        cmd = [sys.executable, yonod_script, '--config', config_path]
+
+        try:
+            # 使用 subprocess 调用，实时输出
+            result = subprocess.run(
+                cmd,
+                check=False,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+
+            if result.returncode == 0:
+                print("\n[完成] 建模任务已成功完成!")
+                return True
+            else:
+                print(f"\n[警告] 建模任务返回码: {result.returncode}")
+                return False
+
+        except Exception as e:
+            print(f"\n[错误] 启动建模失败: {e}")
+            print(f"\n您可以稍后手动执行以下命令:")
+            print(f"  python yonod.py --config \"{config_path}\"")
+            return False
+    else:
+        print("\n[跳过] 已跳过自动建模")
+        print(f"\n您可以稍后手动执行以下命令:")
+        print(f"  python yonod.py --config \"{config_path}\"")
+        return False
+
+
 def main():
     """
     主函数:运行数据集输入向导
@@ -1716,9 +1855,23 @@ def main():
         basic_info['project_name']
     )
 
+    # 保存配置文件
+    config_path = save_config_file(
+        project_folder=basic_info['project_folder'],
+        project_name=basic_info['project_name'],
+        dataset_path=basic_info['dataset_path'],
+        column_mapping_path=output_paths['column_mapping'],
+        normalized_dataset_path=output_paths['normalized_dataset'],
+        all_column_configs=all_configs,
+        descriptor_configs=descriptor_configs,
+        selected_models=selected_models,
+        metadata=metadata,
+        report_formats=report_formats
+    )
+
     # 输出最终总结
     print("\n" + "=" * 60)
-    print("所有任务完成!")
+    print("数据准备完成!")
     print("=" * 60)
     print("\n生成的文件:")
     if output_paths['invalid_report']:
@@ -1730,6 +1883,7 @@ def main():
         print("  - 规范数据集: 无需生成（原始数据集无非法值）")
     if fixed_dataset_path:
         print(f"  - 修复后数据集: {fixed_dataset_path}")
+    print(f"  - 配置文件: {config_path}")
 
     print("\n配置汇总:")
     print(f"  - 描述符: {', '.join([cfg['descriptor'] for cfg in descriptor_configs])}")
@@ -1741,6 +1895,9 @@ def main():
         print(f"  - DOI: {metadata['doi']}")
     if metadata['notes']:
         print(f"  - 备注: {metadata['notes']}")
+
+    # 步骤9: 询问是否自动启动建模
+    step9_auto_launch_modeling(config_path)
 
 
 if __name__ == "__main__":

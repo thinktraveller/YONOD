@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import json
 import re
 import sys
 import time
@@ -61,13 +62,6 @@ _CSV_COLUMNS = [
     "cv", "r2_mean", "r2_std", "rmse_mean", "mae_mean",
     "train_time_s", "device",
 ]
-
-# ── 向导正则常量 ──────────────────────────────────────────────────────────────
-
-_RE_LETTER = re.compile(r'^[A-Za-z]+$')  # 支持多字母列名（如 AA、AB、AZ）
-_RE_NUMBER = re.compile(r'^\d+$')
-_RE_TASK   = re.compile(r'^[A-Za-z0-9_\-]+$')
-
 
 # ─────────────────────────────────────── 日志 ──────────────────────────────── #
 
@@ -224,6 +218,151 @@ def _cv_with_numeric(
     }
 
 
+# ────────────────────────── 配置文件读取 ──────────────────────────────────── #
+
+_MODEL_NAME_MAP = {
+    'XGBoost': 'xgb',
+    'Random Forest': 'rf',
+    'SVM': 'svm',
+    'AutoGluon': 'autogluon',
+    'Neural Network': 'nn',
+    # 小写版本（向后兼容）
+    'xgboost': 'xgb',
+    'random forest': 'rf',
+    'svm': 'svm',
+    'autogluon': 'autogluon',
+    'neural network': 'nn',
+}
+
+
+def _map_model_name(display_name: str) -> str:
+    """将显示名称映射为内部模型标识符。"""
+    return _MODEL_NAME_MAP.get(display_name, display_name.lower())
+
+
+def load_config_from_json(config_path: Path) -> Dict[str, Any]:
+    """
+    从 JSON 配置文件加载配置。
+
+    Args:
+        config_path: 配置文件路径
+
+    Returns:
+        配置字典
+
+    Raises:
+        FileNotFoundError: 配置文件不存在
+        json.JSONDecodeError: JSON 格式错误
+        ValueError: 配置文件缺少必要字段
+    """
+    if not config_path.exists():
+        raise FileNotFoundError(f"配置文件不存在: {config_path}")
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+
+    # 验证必要字段
+    required_fields = ['dataset_path', 'column_roles', 'descriptors', 'models']
+    missing = [f for f in required_fields if f not in config]
+    if missing:
+        raise ValueError(f"配置文件缺少必要字段: {missing}")
+
+    # 验证 column_roles 结构
+    column_roles = config.get('column_roles', {})
+    if 'label' not in column_roles or not column_roles['label']:
+        raise ValueError("配置文件中 column_roles.label 不能为空")
+
+    return config
+
+
+def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namespace:
+    """
+    将配置字典转换为 argparse.Namespace 对象。
+
+    Args:
+        config: 从 JSON 加载的配置字典
+        config_path: 配置文件路径（用于解析相对路径）
+
+    Returns:
+        argparse.Namespace 对象，与 parse_args() 返回值兼容
+    """
+    column_roles = config['column_roles']
+
+    # 构建 SMILES 列列表
+    smiles_cols = []
+    reactant_cols = column_roles.get('reactants', [])
+    product_cols = column_roles.get('products', [])
+    other_cols = column_roles.get('others', [])
+
+    # 按角色顺序拼接
+    smiles_cols = reactant_cols + product_cols + other_cols
+
+    # 解析数据集路径（支持相对路径）
+    dataset_path_str = config['dataset_path']
+    dataset_path = Path(dataset_path_str)
+    if not dataset_path.is_absolute():
+        dataset_path = config_path.parent / dataset_path
+
+    # 解析描述符配置
+    descriptor_configs = config.get('descriptors', [])
+    descriptors = [cfg['descriptor'] for cfg in descriptor_configs]
+
+    # 解析模型列表（映射显示名称）
+    models_raw = config.get('models', [])
+    models = [_map_model_name(m) for m in models_raw]
+
+    # 过滤无效模型
+    valid_models = {'xgb', 'rf', 'svm', 'autogluon'}
+    models = [m for m in models if m in valid_models]
+
+    # 解析元信息
+    metadata = config.get('metadata', {})
+
+    # 解析输出格式
+    report_formats = config.get('report_formats', ['HTML', 'Markdown'])
+    output_format = 'both'
+    if 'HTML' in report_formats and 'Markdown' not in report_formats:
+        output_format = 'html'
+    elif 'Markdown' in report_formats and 'HTML' not in report_formats:
+        output_format = 'md'
+
+    # 解析输出目录
+    project_name = config.get('project_name', dataset_path.stem)
+    output_dir = config_path.parent  # 默认输出到配置文件所在目录
+
+    args = argparse.Namespace(
+        csv=dataset_path,
+        label_col=column_roles['label'],
+        smiles_cols=smiles_cols if smiles_cols else None,
+        numeric_cols=column_roles.get('conditions', []) or None,
+        reactant_cols=reactant_cols if reactant_cols else None,
+        product_cols=product_cols if product_cols else None,
+        other_cols=other_cols if other_cols else None,
+        task_name=project_name,
+        descriptors=descriptors if descriptors else _DESCRIPTOR_NAMES,
+        models=models if models else _MODEL_NAMES,
+        output_dir=output_dir,
+        cv=5,
+        nrows=None,
+        append=False,
+        log_file=None,
+        heartbeat=30.0,
+        svm_subsample=8000,
+        rf_n_jobs=-1,
+        rf_n_estimators=300,
+        rf_max_depth=None,
+        dataset_citation=metadata.get('doi'),
+        dataset_url=metadata.get('repo_url'),
+        dataset_notes=metadata.get('notes'),
+        output_format=output_format,
+        # 新增：保存原始配置供后续使用
+        _config=config,
+        _config_path=config_path,
+    )
+
+    return args
+
+
 # ────────────────────────────── argparse ──────────────────────────────────── #
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -231,8 +370,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         description="YONOD 通用化入口：CSV → 特征 → 模型评估",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--csv", type=Path, required=True, help="输入数据集 CSV 路径")
-    p.add_argument("--label-col", required=True, help="标签列名（必填）")
+    # 配置文件模式（优先级最高）
+    p.add_argument("--config", type=Path, default=None,
+                   help="配置文件路径（JSON 格式，由 dataset_input_wizard.py 生成）")
+
+    # 传统 CLI 参数（当不使用 --config 时必填）
+    p.add_argument("--csv", type=Path, default=None, help="输入数据集 CSV 路径")
+    p.add_argument("--label-col", default=None, help="标签列名")
     p.add_argument("--smiles-cols", nargs="+", default=None, help="SMILES 列名（传统模式必填，三分类模式可省略）")
     p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
 
@@ -310,6 +454,25 @@ def _save_metrics(rows: List[dict], out_dir: Path, append: bool) -> Path:
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI pipeline 入口：解析参数 → 加载数据 → 描述符×模型 grid → 输出报告。"""
     args = parse_args(argv)
+
+    # 处理配置文件模式
+    if args.config is not None:
+        try:
+            config = load_config_from_json(args.config)
+            args = config_to_args(config, args.config)
+            print(f"[config] 已从配置文件加载: {args._config_path}")
+        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
+            print(f"[error] 配置文件错误: {e}", file=sys.stderr)
+            return 1
+
+    # 验证必要参数
+    if args.csv is None:
+        print("[error] 请指定 --csv 参数或使用 --config 配置文件。", file=sys.stderr)
+        return 1
+
+    if args.label_col is None:
+        print("[error] 请指定 --label-col 参数或使用 --config 配置文件。", file=sys.stderr)
+        return 1
 
     if not args.csv.exists():
         print(f"[error] CSV 不存在: {args.csv}", file=sys.stderr)
@@ -523,575 +686,36 @@ def main(argv: Optional[List[str]] = None) -> int:
     return 0
 
 
-# ─────────────────────────── 交互向导（wizard） ───────────────────────────── #
-
-def _input(prompt: str) -> str:
-    try:
-        return input(prompt).strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\n[中断] 用户取消。")
-        sys.exit(0)
-
-
-def _ask_required(prompt: str) -> str:
-    while True:
-        val = _input(prompt + ": ")
-        if val:
-            return val
-        print("  [错误] 此项为必填，不能为空。")
-
-
-def _ask_optional(prompt: str, default: str = "") -> str:
-    hint = f" [默认: {default}]" if default else " [留空跳过]"
-    val = _input(prompt + hint + ": ")
-    return val if val else default
-
-
-def _col_index_to_excel(idx: int) -> str:
-    """将列索引（0-based）转换为 Excel 风格列名（A, B, ..., Z, AA, AB, ..., AZ, BA, ...）。"""
-    result = ""
-    n = idx + 1  # 转为 1-based
-    while n > 0:
-        n -= 1  # Excel 列名没有"0"，需要先减 1
-        result = chr(ord('A') + n % 26) + result
-        n //= 26
-    return result
-
-
-def _excel_to_col_index(letter: str) -> int:
-    """将 Excel 风格列名转换为列索引（0-based）。A→0, Z→25, AA→26, AZ→51, BA→52..."""
-    letter = letter.upper()
-    result = 0
-    for ch in letter:
-        result = result * 26 + (ord(ch) - ord('A') + 1)
-    return result - 1  # 转为 0-based
-
-
-def _show_columns(columns: list) -> None:
-    print()
-    print("  列序号  列名")
-    print("  ------  ----")
-    for i, col in enumerate(columns):
-        letter = _col_index_to_excel(i)
-        print(f"  {letter}({i+1:>2})   {col}")
-    print()
-
-
-def _resolve_one(token: str, columns: list) -> str | None:
-    if token in columns:
-        return token
-    if _RE_LETTER.match(token):
-        idx = _excel_to_col_index(token)  # 支持多字母列名（如 AA、AB、AZ）
-        if 0 <= idx < len(columns):
-            return columns[idx]
-        return None
-    if _RE_NUMBER.match(token):
-        idx = int(token) - 1
-        if 0 <= idx < len(columns):
-            return columns[idx]
-        return None
-    return None
-
-
-def _ask_single_col(prompt: str, columns: list, required: bool = True) -> str | None:
-    while True:
-        raw = _ask_required(prompt) if required else _ask_optional(prompt)
-        if not raw:
-            return None
-        result = _resolve_one(raw.strip(), columns)
-        if result is None:
-            print(f"  [错误] 无法识别 '{raw}'，请输入列名、字母（如 B）或序号（如 2）。")
-            continue
-        return result
-
-
-def _ask_multi_cols(prompt: str, columns: list, required: bool = True) -> list:
-    while True:
-        raw = _ask_required(prompt + "（空格分隔多列）") if required \
-              else _ask_optional(prompt + "（空格分隔多列）")
-        if not raw:
-            return []
-        tokens = raw.split()
-        resolved, bad = [], []
-        for t in tokens:
-            r = _resolve_one(t, columns)
-            (bad if r is None else resolved).append(r if r else t)
-        if bad:
-            print(f"  [错误] 以下标识无法解析：{bad}。请用列名、字母或序号。")
-            continue
-        resolved = list(dict.fromkeys(resolved))
-        if required and not resolved:
-            print("  [错误] 至少需要指定一列。")
-            continue
-        return resolved
-
-
-def _col_display(col: str, columns: list) -> str:
-    idx = columns.index(col) + 1
-    return f"第 {idx} 列（列名：'{col}'）"
-
-
-def _validate_label(df: pd.DataFrame, label_col: str, columns: list) -> None:
-    """验证标签列的数值合法性，支持 JSON 数组格式（如 [0.85] 或 ["0.85"]）。
-
-    处理三种格式：
-    - 普通数值：0.85
-    - JSON 数组（数值）：[0.85]
-    - JSON 数组（字符串）：["0.85"]
-    """
-    print(f"  [验证] 检查标签列 '{label_col}' 的数值合法性 ...")
-    series = df[label_col].copy()
-
-    # 预处理：删除 JSON 数组格式的首末方括号和双引号
-    def _normalize_label(val):
-        if pd.isna(val):
-            return val
-        s = str(val).strip()
-        # 检测 JSON 数组格式：以 [ 开头、以 ] 结尾
-        if s.startswith('[') and s.endswith(']'):
-            # 删除最外层方括号
-            s = s[1:-1].strip()
-            # 删除双引号（处理 ["0.85"] 格式）
-            s = s.strip('"').strip("'")
-        return s
-
-    series = series.apply(_normalize_label)
-
-    numeric = pd.to_numeric(series, errors="coerce")
-    bad_mask = numeric.isna() & df[label_col].notna()
-    if bad_mask.any():
-        raw_idx = int(bad_mask.idxmax())
-        display_row = raw_idx + 2
-        bad_val = df[label_col].iloc[raw_idx]
-        col_desc = _col_display(label_col, columns)
-        print(f"\n  [错误] {col_desc} 第 {display_row} 行的值 '{bad_val}' 不是数值。")
-        print("         标签列必须为整数或浮点数（支持 JSON 数组格式如 [0.85] 或 [\"0.85\"]），请检查数据后重新运行。")
-        sys.exit(1)
-    print(f"  [验证] 标签列 '{label_col}' 全量数值验证通过（共 {len(df)} 行）。")
-
-
-def _normalize_smiles(smi: str) -> str:
-    """将各类非标准分隔符规范化为 RDKit 标准的点分隔形式。
-
-    处理五类情况：
-    - JSON 数组格式：如 '["CCO","CC(=O)O"]' → 'CCO.CC(=O)O'
-    - 逗号（','）：阴阳离子对，如 'CCN=C=NCCCN(C)C,Cl'
-    - 分号（';'）：组分分隔符，如 'CCO;CC(=O)O' 或 'CCO; CC(=O)O'（分号+空格）
-    - 星号（'*'）：反应步骤分隔符，如 'A.B*C.D*E'（反应 SMILES 格式）
-    - 波浪线（'~'）：组分替代表示，如 'CC(=O)O~CC(=O)O~[Pd]'
-
-    替换后会移除分隔符周围的空白字符，避免产生无效的尾部点号。
-    连续分隔符（如 '**' 空步骤）会产生 '..'，一并压缩为单个 '.'。
-
-    注意：只删除 JSON 数组的最外层方括号，不会误删 SMILES 内部的方括号（如 [Na+]、[Cl-]）。
-    """
-    # 先去除整个字符串首尾空白
-    s = smi.strip()
-
-    # JSON 数组格式预处理：删除最外层方括号和双引号
-    # 判断条件：以 [ 开头、以 ] 结尾（包括空数组 "[]"）
-    if s.startswith('[') and s.endswith(']'):
-        # 空数组特殊处理：直接返回空字符串
-        # 支持 []、[ ]、[  ] 等带空格的变体
-        if re.match(r'^\[\s*\]$', s):
-            return ''
-
-        # 非空 JSON 数组：删除最外层方括号和双引号
-        # 额外检查：确保内部包含双引号（避免误删 SMILES 内部的化学方括号，如 [Na+].[Cl-]）
-        if '"' in s:
-            # 删除最外层方括号
-            s = s[1:-1]
-            # 删除成对的双引号（精确匹配 JSON 数组中的引号，不误删其他字符）
-            # 模式：匹配 "..." 形式的字符串，提取内容后用逗号+内容重新拼接
-            s = re.sub(r'"([^"]*)"', r'\1', s)
-
-    # 去除分隔符周围的空白字符（处理 '; ' 这类情况）
-    # 注意：星号（*）需要特殊处理，因为它可能是原子映射标记（如 [*:1]）或分隔符
-    # 策略：先替换非星号分隔符，再单独处理星号
-
-    # 步骤 1：替换逗号、分号、波浪线
-    s = re.sub(r'\s*[,;~]\s*', '.', s)
-
-    # 步骤 2：替换星号分隔符（但保留原子映射星号）
-    # 原子映射特征：*: 后跟数字，如 [*:1]、[*:2]
-    # 使用否定后视断言 (?<!:) 确保星号前面不是冒号，使用否定前瞻断言 (?!:) 确保星号后面不是冒号
-    s = re.sub(r'\s*\*\s*(?!:)', '.', s)
-
-    # 压缩连续点号
-    s = re.sub(r'\.{2,}', '.', s)
-    # 移除首尾点号
-    return s.strip('.')
-
-
-def _validate_smiles(df: pd.DataFrame, smiles_cols: list, columns: list) -> None:
-    """用 RDKit 逐行检查 SMILES 列；发现第一个无效 SMILES 则退出。
-
-    支持多组分 SMILES（逗号、分号、点号分隔），逐组分验证。
-    验证前先将非标准分隔符规范化（星号、波浪线 → 点号），
-    因此 'CCN=C=NCCCN(C)C,Cl' 这类试剂 SMILES 会被正确接受。
-    RDKit 未安装时仅打印警告，不中断流程。
-    """
-    try:
-        from rdkit import Chem
-        from rdkit import RDLogger
-        RDLogger.DisableLog("rdApp.*")  # type: ignore[attr-defined]
-    except ImportError:
-        print("  [警告] RDKit 未安装，跳过 SMILES 格式验证。")
-        return
-
-    n = len(df)
-    for col in smiles_cols:
-        col_desc = _col_display(col, columns)
-        print(f"  [验证] 检查 SMILES 列 '{col}'（{n} 行）...")
-        for raw_idx, val in enumerate(df[col]):
-            if pd.isna(val):
-                continue
-
-            # 先规范化非标准分隔符（星号、波浪线 → 点号）
-            normalized = _normalize_smiles(str(val))
-
-            # 逐组分验证（支持逗号、分号、点号优先级拆分）
-            components = split_multi_smiles(normalized)
-            for comp_idx, comp in enumerate(components):
-                comp = comp.strip()
-                if not comp:
-                    continue
-                if Chem.MolFromSmiles(comp) is None:
-                    display_row = raw_idx + 2
-                    comp_desc = f"第 {comp_idx + 1} 个组分 '{comp}'" if len(components) > 1 else f"'{val}'"
-                    print(f"\n  [错误] {col_desc} 第 {display_row} 行的 {comp_desc} 不是有效的 SMILES。")
-                    print("         请检查数据（是否有乱码、截断或占位符）后重新运行。")
-                    sys.exit(1)
-        print(f"  [验证] SMILES 列 '{col}' 全量验证通过。")
-
-
-def wizard() -> None:
-    """交互向导：逐步收集参数，确认后调用 main() 执行 pipeline。"""
-    print()
-    print("=" * 60)
-    print("  YONOD - Your Only Need Outstanding Descriptors")
-    print("  通用交互向导  v5 (支持列角色分类)")
-    print("=" * 60)
-    print()
-
-    # ── 1. CSV 路径 ──────────────────────────────────────────────────────────
-    print("[1/11] 输入 CSV 文件路径（可直接拖拽文件到终端）")
-    while True:
-        raw = _ask_required("  路径")
-        csv_path = Path(raw.strip('"').strip("'"))
-        if not csv_path.exists():
-            print(f"  [错误] 文件不存在: {csv_path}")
-            continue
-        break
-
-    print("  正在读取 CSV ...")
-    df: pd.DataFrame | None = None
-    for enc in ("utf-8-sig", "gbk"):
-        try:
-            df = pd.read_csv(csv_path, encoding=enc)
-            break
-        except Exception:
-            continue
-    if df is None:
-        print("  [错误] 无法以 UTF-8 或 GBK 编码读取该 CSV，请检查文件格式。")
-        sys.exit(1)
-
-    columns: list = list(df.columns)
-    print(f"  已读取 {len(df)} 行 × {len(columns)} 列")
-    _show_columns(columns)
-
-    # ── 2. 标签列 ────────────────────────────────────────────────────────────
-    print("[2/11] 标签列（预测目标，如 yield / ee / ddG）")
-    print("      支持：列名  /  字母（如 B）  /  序号（如 2）")
-    label_col = _ask_single_col("  标签列", columns, required=True)
-    assert label_col is not None
-    print(f"  → 标签列确认：'{label_col}'")
-    _validate_label(df, label_col, columns)
-    print()
-
-    # ── 3. SMILES 列 ─────────────────────────────────────────────────────────
-    print("[3/11] SMILES 列（分子结构列，至少指定一列）")
-    print("      支持：列名 / 字母 / 序号，多列用空格分隔")
-    smiles_cols = _ask_multi_cols("  SMILES 列", columns, required=True)
-    if label_col in smiles_cols:
-        smiles_cols.remove(label_col)
-        print(f"  [警告] 标签列 '{label_col}' 已从 SMILES 列中移除。")
-    if not smiles_cols:
-        print("  [错误] SMILES 列不能全为标签列，请重新运行并指定正确的列。")
-        sys.exit(1)
-    print(f"  → SMILES 列确认：{smiles_cols}")
-    _validate_smiles(df, smiles_cols, columns)
-    print()
-
-    # ── 3a. 是否启用列角色分类 ───────────────────────────────────────────────
-    print("[3a/11] 列角色分类（可选，用于 DRFP 等描述符）")
-    print()
-    print("  " + "=" * 58)
-    print("  推荐启用列角色分类以提升 DRFP 等描述符的准确性")
-    print("  （对其他描述符无影响）")
-    print()
-    print("  启用后您需要指定：")
-    print("    - 反应物列（反应前的分子）")
-    print("    - 产物列（反应后的分子）")
-    print("    - 其他参与者列（催化剂、溶剂等，自动归类）")
-    print()
-    print("  ⚠️  注意：不启用列角色分类将无法使用 DRFP 描述符")
-    print("  " + "=" * 58)
-    print()
-
-    reactant_cols = []
-    product_cols = []
-    other_cols = []
-
-    enable_roles = _ask_optional("  是否启用列角色分类？[y/N]", default="N").lower()
-
-    if enable_roles in ("y", "yes"):
-        print("  → 已启用列角色分类")
-        print()
-
-        # ── 3b. 选择反应物列 ──────────────────────────────────────────────────
-        print("[3b/11] 反应物列（反应前的分子，至少选择一列）")
-        print("        可从以下 SMILES 列中选择：")
-        _show_columns(smiles_cols)
-
-        while True:
-            reactant_cols = _ask_multi_cols("  反应物列", smiles_cols, required=True)
-            if reactant_cols:
-                break
-            print("  [错误] 必须至少选择一个反应物列。")
-
-        print(f"  → 反应物列确认：{reactant_cols}")
-        print()
-
-        # ── 3c. 选择产物列 ────────────────────────────────────────────────────
-        remaining_cols = [c for c in smiles_cols if c not in reactant_cols]
-
-        if not remaining_cols:
-            print("  [错误] 所有 SMILES 列都已被指定为反应物，无剩余列可选为产物。")
-            print("         请重新运行并调整选择。")
-            sys.exit(1)
-
-        print("[3c/11] 产物列（反应后的分子，至少选择一列）")
-        print("        可从以下剩余列中选择：")
-        _show_columns(remaining_cols)
-
-        while True:
-            product_cols = _ask_multi_cols("  产物列", remaining_cols, required=True)
-            if product_cols:
-                break
-            print("  [错误] 必须至少选择一个产物列。")
-
-        print(f"  → 产物列确认：{product_cols}")
-        print()
-
-        # ── 3d. 确认其他参与者列 ──────────────────────────────────────────────
-        other_cols = [c for c in smiles_cols if c not in reactant_cols and c not in product_cols]
-
-        if other_cols:
-            print("[3d/11] 其他参与者列（催化剂、溶剂等）")
-            print("        剩余列将自动归为其他参与者：")
-            for col in other_cols:
-                print(f"          - {col}")
-            print()
-            confirm = _ask_optional("  是否确认？[Y/n]", default="Y").lower()
-            if confirm in ("n", "no"):
-                print("  [提示] 已取消，将使用传统模式（所有 SMILES 列等价）。")
-                reactant_cols = []
-                product_cols = []
-                other_cols = []
-            else:
-                print(f"  → 其他参与者列确认：{other_cols}")
-        else:
-            print("[3d/11] 其他参与者列")
-            print("        所有 SMILES 列已被分配为反应物或产物，无其他参与者列。")
-        print()
-    else:
-        print("  → 已跳过，将使用传统模式（所有 SMILES 列等价）")
-        print()
-
-    # ── 4. 数值辅助列 ────────────────────────────────────────────────────────
-    print("[4/11] 数值辅助列（温度/压力等，可选）")
-    print("      支持：列名 / 字母 / 序号，多列用空格分隔")
-    numeric_cols = _ask_multi_cols("  数值辅助列", columns, required=False)
-    bad_numeric = [c for c in numeric_cols if c in smiles_cols or c == label_col]
-    if bad_numeric:
-        numeric_cols = [c for c in numeric_cols if c not in bad_numeric]
-        print(f"  [警告] 以下列与标签列或 SMILES 列重叠，已忽略：{bad_numeric}")
-    print(f"  → 数值辅助列确认：{numeric_cols if numeric_cols else '（无）'}")
-    print()
-
-    # ── 5. 任务名称 ──────────────────────────────────────────────────────────
-    print("[5/11] 任务名称（用于输出目录和报告标题）")
-    print("      规则：仅允许英文字母、数字、下划线、连字符，如 amide_coupling")
-    while True:
-        task_name = _ask_required("  任务名称")
-        if not _RE_TASK.match(task_name):
-            print("  [错误] 任务名称只能包含英文字母、数字、下划线（_）、连字符（-）。")
-            continue
-        break
-    print(f"  → 任务名称确认：'{task_name}'")
-    print()
-
-    # ── 6. 输出目录 ──────────────────────────────────────────────────────────
-    default_out = str(Path(__file__).resolve().parent / "result" / task_name)
-    print(f"[6/11] 输出目录（默认：{default_out}）")
-    output_dir_raw = _ask_optional("  输出目录", default=default_out)
-    output_dir_raw = output_dir_raw.strip('"').strip("'")
-    print(f"  → 输出目录确认：'{output_dir_raw}'")
-    print()
-
-    # ── 7. 描述符 ────────────────────────────────────────────────────────────
-    print("[7/11] 描述符选择（可选）")
-
-    # 根据是否启用列角色分类调整可选描述符列表
-    if reactant_cols or product_cols:
-        available_descs_str = "morgan  maccs  fisd  molmetalm  maf  rdkit2d  drfp"
-    else:
-        available_descs_str = "morgan  maccs  fisd  molmetalm  maf  rdkit2d"
-        print("      ⚠️  因未启用列角色分类，不可使用 DRFP 描述符")
-
-    print(f"      可选值: {available_descs_str}")
-    descs_raw = _ask_optional("  描述符（空格分隔，留空=全选）")
-    descs = descs_raw.split() if descs_raw else []
-    if descs:
-        _valid_descs = {"morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"}
-        bad_descs = [d for d in descs if d not in _valid_descs]
-
-        # 检查是否在未启用分类时选择了 drfp
-        if "drfp" in descs and not (reactant_cols or product_cols):
-            print("  [错误] 因未启用列角色分类，无法使用 DRFP 描述符。")
-            print("         DRFP 需要区分反应物和产物列，请返回重新启用列角色分类。")
-            sys.exit(1)
-
-        if bad_descs:
-            print(f"  [警告] 未知描述符已忽略：{bad_descs}")
-            descs = [d for d in descs if d in _valid_descs]
-    else:
-        # 留空全选时，根据是否启用分类决定是否包含 drfp
-        if not (reactant_cols or product_cols):
-            # 未启用分类时，全选不包含 drfp
-            descs = []  # 保持为空表示全选，但在后续 argv 构建时会被默认值处理
-
-    print(f"  → 描述符确认：{descs if descs else '（全选）'}")
-    print()
-
-    # ── 8. 模型 ──────────────────────────────────────────────────────────────
-    print("[8/11] 模型选择（可选）")
-    print("      可选值: xgb  rf  svm  autogluon")
-    models_raw = _ask_optional("  模型（空格分隔，留空=全选）")
-    models = models_raw.split() if models_raw else []
-    if models:
-        _valid_models = {"xgb", "rf", "svm", "autogluon"}
-        bad_models = [m for m in models if m not in _valid_models]
-        if bad_models:
-            print(f"  [警告] 未知模型已忽略：{bad_models}")
-            models = [m for m in models if m in _valid_models]
-    print(f"  → 模型确认：{models if models else '（全选）'}")
-    print()
-
-    # ── 9. 数据集来源 ────────────────────────────────────────────────────────
-    print("[9/11] 数据集来源（可选，将显示在报告中）")
-    print("       留空直接回车跳过各子项")
-    dataset_citation = _ask_optional("  文献引用（如 Dai et al., Chem. Sci., 2025）")
-    dataset_url      = _ask_optional("  开源地址（如 https://github.com/...）")
-    dataset_notes    = _ask_optional("  备注")
-    print(f"  → 文献引用：{dataset_citation or '（未填写）'}")
-    print(f"  → 开源地址：{dataset_url or '（未填写）'}")
-    print(f"  → 备注：{dataset_notes or '（未填写）'}")
-    print()
-
-    # ── 10. 输出格式 ──────────────────────────────────────────────────────────
-    print("[10/11] 报告输出格式")
-    print("        可选值: html  md  both（默认 both，同时生成 HTML 和 Markdown）")
-    fmt_raw = _ask_optional("  输出格式", default="both")
-    if fmt_raw not in ("html", "md", "both"):
-        print(f"  [警告] 未知格式 '{fmt_raw}'，已使用默认值 both")
-        fmt_raw = "both"
-    print(f"  → 输出格式确认：'{fmt_raw}'")
-    print()
-
-    # ── 11. 确认配置（最终预览） ──────────────────────────────────────────────
-    print("[11/11] 配置确认")
-    print()
-    if reactant_cols or product_cols:
-        print("  ✓ 列角色分类：已启用")
-        print(f"    - 反应物列: {reactant_cols}")
-        print(f"    - 产物列: {product_cols}")
-        if other_cols:
-            print(f"    - 其他参与者列: {other_cols}")
-    else:
-        print("  - 列角色分类：未启用（传统模式）")
-    print()
-
-    # ── 命令预览 ─────────────────────────────────────────────────────────────
-    cmd_parts = [
-        "python", "yonod.py",
-        "--csv", f'"{csv_path}"',
-        "--label-col", label_col,
-        "--smiles-cols", *smiles_cols,
-    ]
-    if numeric_cols:
-        cmd_parts += ["--numeric-cols", *numeric_cols]
-    if reactant_cols:
-        cmd_parts += ["--reactant-cols", *reactant_cols]
-    if product_cols:
-        cmd_parts += ["--product-cols", *product_cols]
-    if other_cols:
-        cmd_parts += ["--other-cols", *other_cols]
-    cmd_parts += ["--task-name", task_name, "--output-dir", f'"{output_dir_raw}"']
-    if descs:
-        cmd_parts += ["--descriptors", *descs]
-    if models:
-        cmd_parts += ["--models", *models]
-    if dataset_citation:
-        cmd_parts += ["--dataset-citation", f'"{dataset_citation}"']
-    if dataset_url:
-        cmd_parts += ["--dataset-url", f'"{dataset_url}"']
-    if dataset_notes:
-        cmd_parts += ["--dataset-notes", f'"{dataset_notes}"']
-    cmd_parts += ["--output-format", fmt_raw]
-
-    print("=" * 60)
-    print("  即将执行（等效命令）:")
-    print("  " + " ".join(cmd_parts))
-    print("=" * 60)
-    print()
-    _input("按 Enter 确认执行，Ctrl+C 取消... ")
-
-    # ── 构建 argv 并调用 main() ──────────────────────────────────────────────
-    argv = [
-        "--csv", str(csv_path),
-        "--label-col", label_col,
-        "--smiles-cols", *smiles_cols,
-    ]
-    if numeric_cols:
-        argv += ["--numeric-cols", *numeric_cols]
-    if reactant_cols:
-        argv += ["--reactant-cols", *reactant_cols]
-    if product_cols:
-        argv += ["--product-cols", *product_cols]
-    if other_cols:
-        argv += ["--other-cols", *other_cols]
-    argv += ["--task-name", task_name, "--output-dir", output_dir_raw]
-    if descs:
-        argv += ["--descriptors", *descs]
-    if models:
-        argv += ["--models", *models]
-    if dataset_citation:
-        argv += ["--dataset-citation", dataset_citation]
-    if dataset_url:
-        argv += ["--dataset-url", dataset_url]
-    if dataset_notes:
-        argv += ["--dataset-notes", dataset_notes]
-    argv += ["--output-format", fmt_raw]
-
-    sys.exit(main(argv))
-
-
 # ─────────────────────────────── 入口 ────────────────────────────────────── #
+
+def _print_usage() -> None:
+    """无参数运行时打印友好的使用提示。"""
+    print()
+    print("=" * 60)
+    print("  YONOD - You Only Need Outstanding Descriptors")
+    print("  有机合成反应产率预测平台")
+    print("=" * 60)
+    print()
+    print("使用方法:")
+    print()
+    print("  场景A: 完整向导流程（首次使用推荐）")
+    print("    python dataset_input_wizard.py")
+    print()
+    print("  场景B: 使用配置文件建模（向导生成的配置）")
+    print("    python yonod.py --config path/to/yonod_config.json")
+    print()
+    print("  场景C: 传统CLI模式（直接指定参数）")
+    print("    python yonod.py --csv data.csv --label-col yield \\")
+    print("        --smiles-cols R1 R2 --descriptors morgan --models xgb")
+    print()
+    print("更多帮助:")
+    print("    python yonod.py --help")
+    print()
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         sys.exit(main())
     else:
-        wizard()
+        _print_usage()
+        sys.exit(0)
