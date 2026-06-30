@@ -1356,6 +1356,93 @@ python yonod.py --csv dataset/test.csv --smiles-cols smiles --label-col y \
 
 ---
 
+### main.py 功能实现分析
+
+**Q: main.py 是否实现了神经网络(Neural Network)模型?**
+
+**A: 尚未实现。**
+
+虽然 `main.py` 中存在配置映射 `'Neural Network': 'nn'` (L228),但实际可用模型列表仅包含 4 种:
+
+```python
+_MODEL_NAMES = ["xgb", "rf", "svm", "autogluon"]  # L54
+```
+
+`_make_model()` 函数(L121-139)只处理这 4 种模型,对 `'nn'` 会抛出 `ValueError: 未知模型名称 'nn'`。
+
+同时 `yonod/models/` 目录下也没有对应的 `nn_model.py` 文件:
+```
+yonod/models/
+├── xgb_model.py
+├── rf_model.py
+├── svm_model.py
+└── autogluon_model.py
+```
+
+**差距**:
+- yonod.py 向导中提供了 'Neural Network' 选项(L1623)
+- 但 main.py 实际建模时会因找不到实现而失败
+- 配置文件转换时会静默过滤掉(L315-316),不会导致运行时错误
+
+---
+
+**Q: main.py 目前支持哪些报告输出格式?**
+
+**A: 仅支持 HTML 和 Markdown。**
+
+从代码可见:
+1. `--output-format` 参数只接受 `["html", "md", "both"]`(L414)
+2. 报告生成逻辑(L667-681)仅调用:
+   - `generate_report()` → HTML 报告
+   - `generate_markdown_report()` → Markdown 报告
+3. `yonod/universal/report.py` 中也只有这两个函数,没有 PDF 或 JSON 报告生成器
+
+**差距**:
+- yonod.py 向导中提供了 4 种格式: `['Markdown', 'HTML', 'PDF', 'JSON']`(L1693)
+- 但 main.py 实际只能生成 HTML 和 Markdown
+- 用户选择 PDF 或 JSON 后,配置文件会保存这些选项,但建模时会被忽略(不报错,但也不生成)
+
+**配置文件兼容性**:
+
+`config_to_args()` 函数(L278-363)中的转换逻辑:
+
+```python
+# L322-327: 报告格式转换
+report_formats = config.get('report_formats', ['HTML', 'Markdown'])
+output_format = 'both'
+if 'HTML' in report_formats and 'Markdown' not in report_formats:
+    output_format = 'html'
+elif 'Markdown' in report_formats and 'HTML' not in report_formats:
+    output_format = 'md'
+```
+
+这意味着:
+- 配置文件包含 PDF/JSON 时,这些选项被**静默忽略**
+- 只处理 HTML 和 Markdown 的组合关系
+- 不会向用户报错或警告未实现的格式
+
+---
+
+**Q: 向导与实际实现的功能差距总结**
+
+| 功能类别 | 向导中的选项 | main.py 实际支持 | 差距说明 |
+|---|---|---|---|
+| **模型** | XGBoost, RF, SVM, AutoGluon, Neural Network | xgb, rf, svm, autogluon | NN 未实现 |
+| **报告格式** | Markdown, HTML, PDF, JSON | html, md, both | PDF/JSON 未实现 |
+| **兼容性处理** | - | 静默过滤无效模型,忽略未实现格式 | 不报错,但也不生成 |
+
+**用户体验影响**:
+1. 向导允许选择 Neural Network,但建模时不会使用(被过滤掉)
+2. 向导允许选择 PDF/JSON 格式,但最终不会生成这些文件
+3. 没有明确的错误提示或警告告知用户"该功能尚未实现"
+
+**推测的设计决策**:
+- 向导提供前瞻性选项,为未来扩展预留接口
+- 配置文件容错性强,避免因格式不支持而导致整个流程失败
+- 但缺乏显式的功能可用性说明,可能让用户产生困惑
+
+---
+
 ## 二次开发备忘
 
 > 本节记录用户的二次开发需求和改造预分析，便于后续切换至 project-planner-cn 时保留上下文。

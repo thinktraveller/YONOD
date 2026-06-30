@@ -80,12 +80,12 @@ def step1_collect_basic_info() -> Dict:
 
     # 2. 输入项目名称
     while True:
-        project_name = input("\n请输入项目名称(仅英文字母、数字、下划线): ").strip()
-        if re.match(r'^[a-zA-Z0-9_]+$', project_name):
+        project_name = input("\n请输入项目名称(仅英文字母、数字、下划线、短横杠): ").strip()
+        if re.match(r'^[a-zA-Z0-9_-]+$', project_name):
             print(f"[OK] 项目名称: {project_name}")
             break
         else:
-            print("[X] 项目名称只能包含英文字母、数字、下划线")
+            print("[X] 项目名称只能包含英文字母、数字、下划线、短横杠")
 
     # 3. 输入项目文件夹位置(默认为 result/<项目名称>)
     default_folder = os.path.join('result', project_name)
@@ -963,48 +963,6 @@ def step3_1_generate_invalid_report(
     return report_path
 
 
-def step3_2_generate_column_mapping(
-    all_column_configs: List[Dict],
-    project_folder: str,
-    project_name: str
-) -> str:
-    """
-    步骤3.2: 生成列映射说明表(CSV格式)
-
-    注意: 此CSV文件仅供人类参考查阅,不参与main.py的执行流程。
-    main.py使用JSON配置文件中的column_roles字段来识别列角色。
-
-    Args:
-        all_column_configs: 所有列的配置列表
-        project_folder: 项目文件夹路径
-        project_name: 项目名称
-
-    Returns:
-        str: 列映射文件路径
-    """
-    print("\n生成列映射说明表...")
-
-    mapping_path = os.path.join(project_folder, f"{project_name}_column_mapping.csv")
-
-    mapping_data = []
-    for config in all_column_configs:
-        mapping_data.append({
-            'origin_name': config['origin_name'],
-            'role': config['role'],
-            'name': config['name']
-        })
-
-    mapping_df = pd.DataFrame(mapping_data)
-    mapping_df.to_csv(mapping_path, index=False, encoding='utf-8')
-
-    print(f"[OK] 列映射表已生成: {mapping_path}")
-    print("    (注: 此文件仅供人类参考,不参与建模执行流程)")
-    print("\n列映射内容预览:")
-    print(mapping_df.to_string(index=False))
-
-    return mapping_path
-
-
 def step3_3_generate_normalized_dataset(
     df: pd.DataFrame,
     all_column_configs: List[Dict],
@@ -1227,12 +1185,7 @@ def step3_orchestrate(
         df, all_configs, project_folder, project_name
     )
 
-    # 3.2 生成列映射说明表(总是生成)
-    mapping_path = step3_2_generate_column_mapping(
-        all_configs, project_folder, project_name
-    )
-
-    # 3.3 生成规范数据集（无论是否有非法行，都生成规范数据集以保证列名一致性）
+    # 3.2 生成规范数据集（无论是否有非法行，都生成规范数据集以保证列名一致性）
     if all_invalid_rows:
         print(f"\n[INFO] 检测到 {len(all_invalid_rows)} 行非法输入，将被排除")
     else:
@@ -1248,7 +1201,6 @@ def step3_orchestrate(
 
     return {
         'invalid_report': invalid_report_path,
-        'column_mapping': mapping_path,
         'normalized_dataset': normalized_path
     }
 
@@ -1270,7 +1222,7 @@ def step4_select_descriptors():
 
     descriptors = {
         'morgan': '横向拼接,可编辑参与列和拼接顺序',
-        'atmomaccs': '横向拼接,可编辑参与列和拼接顺序',
+        'maccs': '横向拼接,可编辑参与列和拼接顺序',
         'rdkit2d': '横向拼接,可编辑参与列和拼接顺序',
         'fisd': '横向拼接,可编辑参与列和拼接顺序',
         'molmetalm': '横向拼接,可编辑参与列和拼接顺序',
@@ -1334,7 +1286,7 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
     for idx, cfg in enumerate(smiles_columns):
         print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
 
-    if descriptor_name in ['morgan', 'atmomaccs', 'rdkit2d', 'fisd', 'molmetalm']:
+    if descriptor_name in ['morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
         # 横向拼接模式
         print("\n该描述符为横向拼接模式")
         print("默认顺序: reactant -> others -> product")
@@ -1451,7 +1403,7 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
     Returns:
         dict: 描述符配置字典
     """
-    if descriptor_name in ['morgan', 'atmomaccs', 'rdkit2d', 'fisd', 'molmetalm']:
+    if descriptor_name in ['morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
         # concat模式: 按 reactant → others → product 顺序
         columns = []
         for role in ['reactant', 'others', 'product']:
@@ -1797,7 +1749,6 @@ def save_config_file(
     project_folder: str,
     project_name: str,
     dataset_path: str,
-    column_mapping_path: str,
     normalized_dataset_path: Optional[str],
     all_column_configs: List[Dict],
     descriptor_configs: List[Dict],
@@ -1812,7 +1763,6 @@ def save_config_file(
         project_folder: 项目文件夹路径
         project_name: 项目名称
         dataset_path: 原始数据集路径
-        column_mapping_path: 列映射文件路径
         normalized_dataset_path: 规范数据集路径（可能为None）
         all_column_configs: 所有列的配置列表
         descriptor_configs: 描述符配置列表
@@ -1904,12 +1854,21 @@ def save_config_file(
             elif role == 'condition':
                 column_roles['conditions'].append(name)
 
+    # 构建列映射数组（人类可读格式）
+    column_mapping = []
+    for cfg in all_column_configs:
+        column_mapping.append({
+            'origin_name': cfg['origin_name'],
+            'role': cfg['role'],
+            'new_name': cfg['name']
+        })
+
     # 构建配置字典
     config = {
         'version': '1.0',
         'project_name': project_name,
         'dataset_path': effective_dataset_path,
-        'column_mapping_path': column_mapping_path,  # 注: 仅供人类参考,不参与main.py执行流程
+        'column_mapping': column_mapping,  # 列映射信息（人类可读）
         'descriptors': descriptor_configs,
         'models': selected_models,
         'metadata': metadata,
@@ -2142,7 +2101,6 @@ def main():
         project_folder=basic_info['project_folder'],
         project_name=basic_info['project_name'],
         dataset_path=basic_info['dataset_path'],
-        column_mapping_path=output_paths['column_mapping'],
         normalized_dataset_path=output_paths['normalized_dataset'],
         all_column_configs=all_configs,
         descriptor_configs=descriptor_configs,
@@ -2158,7 +2116,6 @@ def main():
     print("\n生成的文件:")
     if output_paths['invalid_report']:
         print(f"  - 非法输入报告: {output_paths['invalid_report']}")
-    print(f"  - 列映射表: {output_paths['column_mapping']}")
     if output_paths['normalized_dataset']:
         print(f"  - 规范数据集: {output_paths['normalized_dataset']}")
     else:
@@ -2166,6 +2123,7 @@ def main():
     if fixed_dataset_path:
         print(f"  - 修复后数据集: {fixed_dataset_path}")
     print(f"  - 配置文件: {config_path}")
+    print("    (列映射信息已嵌入配置文件中，可通过 column_mapping 字段查看)")
 
     print("\n配置汇总:")
     print(f"  - 描述符: {', '.join([cfg['descriptor'] for cfg in descriptor_configs])}")
