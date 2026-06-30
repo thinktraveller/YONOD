@@ -1823,7 +1823,13 @@ def save_config_file(
     Returns:
         str: 配置文件路径
     """
-    # 构建列角色信息
+    # 确定要使用的数据集路径（优先使用规范数据集）
+    if normalized_dataset_path:
+        effective_dataset_path = normalized_dataset_path
+    else:
+        effective_dataset_path = dataset_path
+
+    # 构建列角色信息：读取规范数据集的实际列名
     column_roles = {
         'label': None,
         'reactants': [],
@@ -1832,25 +1838,71 @@ def save_config_file(
         'conditions': []
     }
 
-    for cfg in all_column_configs:
-        role = cfg['role']
-        name = cfg['name']
-        if role == 'label':
-            column_roles['label'] = name
-        elif role == 'reactant':
-            column_roles['reactants'].append(name)
-        elif role == 'product':
-            column_roles['products'].append(name)
-        elif role == 'others':
-            column_roles['others'].append(name)
-        elif role == 'condition':
-            column_roles['conditions'].append(name)
-
-    # 确定要使用的数据集路径（优先使用规范数据集）
     if normalized_dataset_path:
-        effective_dataset_path = normalized_dataset_path
+        # 读取规范数据集的实际列名
+        normalized_df = pd.read_csv(normalized_dataset_path, nrows=0)
+        actual_columns = normalized_df.columns.tolist()
+
+        # 从列配置中提取每个角色对应的基础名称（用户声明的名称）
+        reactant_base_names = set()
+        product_base_names = set()
+        others_base_names = set()
+        condition_base_names = set()
+
+        for cfg in all_column_configs:
+            role = cfg['role']
+            base_name = cfg['name']
+
+            if role == 'label':
+                column_roles['label'] = base_name
+            elif role == 'reactant':
+                reactant_base_names.add(base_name)
+            elif role == 'product':
+                product_base_names.add(base_name)
+            elif role == 'others':
+                others_base_names.add(base_name)
+            elif role == 'condition':
+                condition_base_names.add(base_name)
+
+        # 遍历规范数据集的实际列名，按角色分类
+        for col in actual_columns:
+            # 跳过 label 列
+            if col == column_roles['label']:
+                continue
+
+            # 判断是否为 reactant 列（reactant-1, reactant-2, ...）
+            if col.startswith('reactant-'):
+                column_roles['reactants'].append(col)
+            # 判断是否为 product 列
+            elif col in product_base_names:
+                column_roles['products'].append(col)
+            # 判断是否为 condition 列
+            elif col in condition_base_names:
+                column_roles['conditions'].append(col)
+            # 判断是否为 others 列
+            else:
+                # others 列可能是 base_name 或 base_name-1, base_name-2, ...
+                matched = False
+                for base_name in others_base_names:
+                    if col == base_name or col.startswith(f'{base_name}-'):
+                        column_roles['others'].append(col)
+                        matched = True
+                        break
     else:
-        effective_dataset_path = dataset_path
+        # 如果没有规范数据集，使用原始列名（向后兼容）
+        for cfg in all_column_configs:
+            role = cfg['role']
+            name = cfg['name']
+            if role == 'label':
+                column_roles['label'] = name
+            elif role == 'reactant':
+                column_roles['reactants'].append(name)
+            elif role == 'product':
+                column_roles['products'].append(name)
+            elif role == 'others':
+                column_roles['others'].append(name)
+            elif role == 'condition':
+                column_roles['conditions'].append(name)
 
     # 构建配置字典
     config = {
