@@ -233,9 +233,14 @@ def validate_numeric_column(df: pd.DataFrame, col_idx: int) -> Set[int]:
             invalid_rows.add(idx)
             continue
 
+        # 去除方括号包裹（如果存在）
+        test_value = value
+        if isinstance(value, str) and len(value) >= 2 and value[0] == '[' and value[-1] == ']':
+            test_value = value[1:-1]
+
         # 检查是否为数值
         try:
-            float(value)
+            float(test_value)
         except (ValueError, TypeError):
             invalid_rows.add(idx)
 
@@ -255,8 +260,13 @@ def validate_numeric_column_allow_empty(df: pd.DataFrame, col_idx: int) -> Set[i
         if pd.isna(value):
             continue  # 空值允许
 
+        # 去除方括号包裹（如果存在）
+        test_value = value
+        if isinstance(value, str) and len(value) >= 2 and value[0] == '[' and value[-1] == ']':
+            test_value = value[1:-1]
+
         try:
-            float(value)
+            float(test_value)
         except (ValueError, TypeError):
             invalid_rows.add(idx)
 
