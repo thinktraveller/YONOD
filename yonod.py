@@ -1897,8 +1897,8 @@ def save_config_file(
     config = {
         'version': '1.0',
         'project_name': project_name,
-        'origin_dataset_path': dataset_path,  # 原始数据集路径
-        'dataset_path': effective_dataset_path,  # 实际使用的数据集路径（规范化后）
+        'origin_dataset_path': dataset_path,  # 原始数据集路径（仅用于记录）
+        # 移除 dataset_path 字段：规范数据集默认为 <project_name>_normalized_dataset.csv
         'column_mapping': column_mapping,  # 列映射信息（人类可读）
         'descriptors': descriptor_configs,
         'models': selected_models,
