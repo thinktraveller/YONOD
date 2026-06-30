@@ -1232,17 +1232,15 @@ def step3_orchestrate(
         all_configs, project_folder, project_name
     )
 
-    # 3.3 生成规范数据集
+    # 3.3 生成规范数据集（无论是否有非法行，都生成规范数据集以保证列名一致性）
     if all_invalid_rows:
-        # 有非法行,生成规范数据集
-        normalized_path = step3_3_generate_normalized_dataset(
-            df, all_configs, project_folder, project_name
-        )
+        print(f"\n[INFO] 检测到 {len(all_invalid_rows)} 行非法输入，将被排除")
     else:
-        # 无非法行,跳过规范数据集生成
-        print("\n[OK] 无非法输入,跳过规范数据集生成")
-        print("    原始数据集已是规范格式,可直接使用")
-        normalized_path = None
+        print("\n[OK] 无非法输入，所有数据行均有效")
+
+    normalized_path = step3_3_generate_normalized_dataset(
+        df, all_configs, project_folder, project_name
+    )
 
     print("\n" + "=" * 60)
     print("步骤3完成!")
