@@ -35,46 +35,50 @@ def step1_collect_basic_info() -> Dict:
     """
     步骤1: 收集基本信息
 
-    收集四项基本信息:
-    1. 初始数据集路径(必选)
-    2. 列映射文件路径(可选,如提供则跳过步骤2)
-    3. 项目名称(必选,用于生成输出文件前缀)
-    4. 项目文件夹位置(必选,所有输出文件保存位置)
+    收集三项基本信息:
+    1. 数据集路径或配置文件路径(必选)
+       - CSV文件: 进入向导流程
+       - JSON文件: 验证后直接启动建模
+    2. 项目名称(必选,用于生成输出文件前缀)
+    3. 项目文件夹位置(可选,默认为 result/<项目名称>)
 
     Returns:
         dict: {
             'dataset_path': str,
-            'mapping_path': str | None,
+            'is_config_file': bool,
             'project_name': str,
             'project_folder': str
         }
     """
     print("=" * 60)
-    print("步骤1: 指定初始数据集、列映射文件、项目名称和项目文件夹")
+    print("步骤1: 指定数据集/配置文件、项目名称和项目文件夹")
     print("=" * 60)
 
-    # 1. 输入初始数据集路径
+    # 1. 输入数据集路径或配置文件路径
+    dataset_path = None
+    is_config_file = False
+
     while True:
-        dataset_path = input("\n请输入初始数据集路径(CSV格式): ").strip()
-        if os.path.exists(dataset_path) and dataset_path.endswith('.csv'):
-            print(f"[OK] 数据集文件存在: {dataset_path}")
+        file_path = input("\n请输入数据集路径(CSV)或配置文件路径(JSON): ").strip()
+
+        if not os.path.exists(file_path):
+            print("[X] 文件不存在,请重新输入")
+            continue
+
+        if file_path.endswith('.csv'):
+            print(f"[OK] CSV数据集文件: {file_path}")
+            dataset_path = file_path
+            is_config_file = False
+            break
+        elif file_path.endswith('.json'):
+            print(f"[OK] JSON配置文件: {file_path}")
+            dataset_path = file_path
+            is_config_file = True
             break
         else:
-            print("[X] 文件不存在或不是CSV格式,请重新输入")
+            print("[X] 文件格式不支持,请输入CSV或JSON文件")
 
-    # 2. 可选: 输入列映射文件路径
-    mapping_path = input("\n请输入列映射文件路径(可选,直接回车跳过): ").strip()
-    if mapping_path:
-        if os.path.exists(mapping_path) and mapping_path.endswith('.csv'):
-            print(f"[OK] 列映射文件存在: {mapping_path}")
-            print("  将跳过步骤2,直接使用此映射进行合法性检验")
-        else:
-            print("[X] 文件不存在或不是CSV格式,将忽略此输入,进入正常流程")
-            mapping_path = None
-    else:
-        mapping_path = None
-
-    # 3. 输入项目名称
+    # 2. 输入项目名称
     while True:
         project_name = input("\n请输入项目名称(仅英文字母、数字、下划线): ").strip()
         if re.match(r'^[a-zA-Z0-9_]+$', project_name):
@@ -83,9 +87,14 @@ def step1_collect_basic_info() -> Dict:
         else:
             print("[X] 项目名称只能包含英文字母、数字、下划线")
 
-    # 4. 输入项目文件夹位置
+    # 3. 输入项目文件夹位置(默认为 result/<项目名称>)
+    default_folder = os.path.join('result', project_name)
+    print(f"\n请输入项目文件夹位置(默认: {default_folder})")
+
     while True:
-        project_folder = input("\n请输入项目文件夹位置(将在此创建输出文件): ").strip()
+        user_input = input(f"项目文件夹 [{default_folder}]: ").strip()
+        project_folder = user_input if user_input else default_folder
+
         if os.path.isdir(project_folder) or not os.path.exists(project_folder):
             os.makedirs(project_folder, exist_ok=True)
             print(f"[OK] 项目文件夹: {project_folder}")
@@ -95,7 +104,7 @@ def step1_collect_basic_info() -> Dict:
 
     return {
         'dataset_path': dataset_path,
-        'mapping_path': mapping_path,
+        'is_config_file': is_config_file,
         'project_name': project_name,
         'project_folder': project_folder
     }
@@ -166,12 +175,12 @@ def step2_select_columns(df: pd.DataFrame) -> List[int]:
         print(f"  [{idx}] {col}")
 
     print("\n请输入需要的列序号,用逗号分隔(例如: 0,1,3,5)")
-    print("或输入'all'选择全部列")
+    print("或直接回车选择全部列")
 
     while True:
         user_input = input("列序号: ").strip()
 
-        if user_input.lower() == 'all':
+        if user_input == '':
             selected_indices = list(range(len(df.columns)))
             break
 
@@ -1262,12 +1271,12 @@ def step4_select_descriptors():
         print(f"  [{idx}] {name}: {desc}")
 
     print("\n请选择描述符(输入序号,用逗号分隔,如: 1,2,5)")
-    print("或输入'all'选择全部描述符")
+    print("或直接回车选择全部描述符")
 
     while True:
         user_input = input("描述符序号: ").strip()
 
-        if user_input.lower() == 'all':
+        if user_input == '':
             selected = list(descriptors.keys())
             break
 
@@ -1565,10 +1574,10 @@ def step4_orchestrate(all_column_configs):
     display_descriptor_configs_summary(descriptor_configs)
 
     # 4.4 询问是否编辑
-    print("\n是否需要编辑某个描述符的配置? (Y/n)")
-    choice = input("选择: ").strip().lower()
+    print("\n是否需要编辑某个描述符的配置? (y/N)")
+    choice = input("选择 [N]: ").strip().lower()
 
-    if choice not in ['y', 'yes', '']:
+    if choice not in ['y', 'yes']:
         print("\n[OK] 使用默认配置")
         return descriptor_configs
 
@@ -1618,12 +1627,12 @@ def step5_select_models():
         print(f"  [{idx}] {model}")
 
     print("\n请选择模型(输入序号,用逗号分隔,如: 1,2,4)")
-    print("或输入'all'选择全部模型")
+    print("或直接回车选择全部模型")
 
     while True:
         user_input = input("模型序号: ").strip()
 
-        if user_input.lower() == 'all':
+        if user_input == '':
             selected = models
             break
 
@@ -1688,9 +1697,14 @@ def step7_select_report_format():
         print(f"  [{idx}] {fmt}")
 
     print("\n请选择输出格式(输入序号,用逗号分隔,如: 1,3)")
+    print("或直接回车选择全部格式")
 
     while True:
         user_input = input("格式序号: ").strip()
+
+        if user_input == '':
+            selected = formats
+            break
 
         try:
             indices = [int(x.strip()) for x in user_input.split(',')]
@@ -1727,7 +1741,7 @@ def step8_confirm_and_generate(df, all_invalid_rows, project_folder, project_nam
     print("  1. 是,生成修复后数据集")
     print("  2. 否,仅保留原始数据集")
 
-    choice = input("选择(1/2): ").strip()
+    choice = input("选择 [2]: ").strip()
 
     if choice == '1':
         print("\n[OK] 将生成修复后数据集(删除非法行)")
@@ -1903,6 +1917,43 @@ def step9_auto_launch_modeling(config_path: str) -> bool:
         return False
 
 
+def validate_config_file(config_path: str) -> bool:
+    """
+    验证JSON配置文件是否为有效的yonod_config.json
+
+    Args:
+        config_path: 配置文件路径
+
+    Returns:
+        bool: 是否为有效配置文件
+    """
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # 检查必需字段
+        required_fields = ['version', 'project_name', 'dataset_path', 'descriptors', 'models', 'column_roles']
+        for field in required_fields:
+            if field not in config:
+                print(f"[X] 配置文件缺少必需字段: {field}")
+                return False
+
+        # 检查数据集路径是否存在
+        if not os.path.exists(config['dataset_path']):
+            print(f"[X] 配置文件中的数据集路径不存在: {config['dataset_path']}")
+            return False
+
+        print("[OK] 配置文件验证通过")
+        return True
+
+    except json.JSONDecodeError as e:
+        print(f"[X] JSON格式错误: {e}")
+        return False
+    except Exception as e:
+        print(f"[X] 配置文件验证失败: {e}")
+        return False
+
+
 def main():
     """
     主函数:运行数据集输入向导
@@ -1916,7 +1967,21 @@ def main():
     # 步骤1: 收集基本信息
     basic_info = step1_collect_basic_info()
 
-    # 加载并展示数据集
+    # 如果是JSON配置文件,验证后直接启动建模
+    if basic_info['is_config_file']:
+        print("\n" + "=" * 60)
+        print("检测到JSON配置文件,验证中...")
+        print("=" * 60)
+
+        if validate_config_file(basic_info['dataset_path']):
+            print("\n[OK] 配置文件有效,准备启动建模")
+            step9_auto_launch_modeling(basic_info['dataset_path'])
+        else:
+            print("\n[X] 配置文件无效,请检查文件格式和内容")
+
+        return
+
+    # CSV文件流程: 加载并展示数据集
     print("\n" + "=" * 60)
     print("加载数据集...")
     print("=" * 60)
@@ -1925,12 +1990,6 @@ def main():
     print("\n" + "=" * 60)
     print("步骤1完成!")
     print("=" * 60)
-
-    # 检查是否跳过步骤2
-    if basic_info['mapping_path']:
-        print("\n[!] 检测到列映射文件,将跳过步骤2")
-        print("(步骤3功能尚未实现)")
-        return
 
     # 步骤2: 逐列声明列角色和名称
     print("\n接下来将进入步骤2: 逐列声明列角色和名称")
