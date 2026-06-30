@@ -299,7 +299,12 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
     dataset_path_str = config['dataset_path']
     dataset_path = Path(dataset_path_str)
     if not dataset_path.is_absolute():
-        dataset_path = config_path.parent / dataset_path
+        # 策略1: 先尝试相对于当前工作目录（项目根目录）解析
+        if dataset_path.exists():
+            dataset_path = dataset_path.resolve()
+        # 策略2: 若不存在，尝试相对于配置文件目录解析
+        else:
+            dataset_path = config_path.parent / dataset_path
 
     # 解析描述符配置
     descriptor_configs = config.get('descriptors', [])

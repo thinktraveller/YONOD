@@ -1810,3 +1810,36 @@ python yonod.py
 - _MODEL_NAME_MAP 仅包含已实现的 4 个模型的映射
 
 ---
+
+
+## [2026-06-30 09:51] 修复：配置文件路径重复拼接问题
+
+### 问题描述
+- 现象：使用 `--config` 模式启动时，数据集路径被重复拼接，导致文件找不到
+- 实际错误路径：`result\test_interative01\result\test_interative01\test_interative01_normalized_dataset.csv`
+- 预期正确路径：`result\test_interative01\test_interative01_normalized_dataset.csv`
+- 影响范围：所有使用配置文件启动的用户
+
+### 根本原因
+在 `main.py` 的 `config_to_args()` 函数（L298-302）中，路径解析逻辑存在缺陷：
+- 配置文件中的 `dataset_path` 已经是相对于项目根目录的完整路径
+- 但代码判断为非绝对路径后，直接与配置文件目录拼接
+- 导致路径前缀被重复添加
+
+### 修复方案
+采用「先检查文件存在性，再决定是否拼接」的策略：
+1. 优先尝试相对于当前工作目录（项目根目录）解析路径
+2. 若文件不存在，再尝试相对于配置文件目录解析
+3. 保证路径解析的健壮性，同时兼容两种相对路径写法
+
+### 变更文件
+- `main.py` (L298-302)：增加路径存在性检查逻辑
+
+### 验证方法
+执行以下命令验证修复有效：
+```powershell
+python main.py --config "result\test_interative01\test_interative01_yonod_config.json"
+```
+预期能正确加载数据集，不再出现路径重复拼接错误。
+
+---
