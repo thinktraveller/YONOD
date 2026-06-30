@@ -281,14 +281,23 @@ def validate_smiles_column(df: pd.DataFrame, col_idx: int, allow_empty: bool = F
         # 将值转为字符串
         smiles_str = str(value).strip()
 
-        # 尝试解析SMILES(可能包含多个分子,用.或空格或;或,分隔)
-        # 分隔后逐个验证
-        separators = ['.', ' ', ';', ',']
-        molecules = [smiles_str]  # 默认当作单个分子
+        # 规范化处理: 将逗号替换为点号(符合RDKit标准)
+        # 数据集中可能使用逗号表示离子对,需转换为标准格式
+        smiles_normalized = smiles_str.replace(',', '.')
+
+        # 两级验证策略:
+        # 1. 先尝试直接解析完整SMILES(支持离子对和多分子体系)
+        mol = Chem.MolFromSmiles(smiles_normalized)
+        if mol is not None:
+            continue  # 直接解析成功,跳过分隔符拆分
+
+        # 2. 直接解析失败时,尝试按分隔符拆分验证
+        separators = ['.', ' ', ';']
+        molecules = [smiles_normalized]  # 默认当作单个分子
 
         for sep in separators:
-            if sep in smiles_str:
-                molecules = [s.strip() for s in smiles_str.split(sep) if s.strip()]
+            if sep in smiles_normalized:
+                molecules = [s.strip() for s in smiles_normalized.split(sep) if s.strip()]
                 break
 
         # 验证每个分子
@@ -308,9 +317,10 @@ def validate_product_column(df: pd.DataFrame, col_idx: int) -> Set[int]:
     产物列特殊要求:
     1. 不能为空
     2. 必须是合法SMILES
-    3. 不能含有分隔符(.;, 空格)
+    3. 允许点号(用于离子对,如[O-].[Na+])
+    4. 不允许分号、空格等非标准分隔符
 
-    注: 此处采用严格定义,可在文档中说明宽松定义的可能性
+    注: 验证前会自动将逗号替换为点号以符合RDKit标准
     """
     column = df.iloc[:, col_idx]
     invalid_rows = set()
@@ -323,13 +333,17 @@ def validate_product_column(df: pd.DataFrame, col_idx: int) -> Set[int]:
 
         smiles_str = str(value).strip()
 
-        # 检查是否含有分隔符
-        if any(sep in smiles_str for sep in ['.', ';', ',', ' ']):
+        # 规范化处理: 将逗号替换为点号(符合RDKit标准)
+        smiles_normalized = smiles_str.replace(',', '.')
+
+        # 检查是否含有非法分隔符(分号、空格)
+        # 允许点号(用于离子对或多分子产物,由用户判断是否合理)
+        if any(sep in smiles_normalized for sep in [';', ' ']):
             invalid_rows.add(idx)
             continue
 
-        # 验证SMILES
-        mol = Chem.MolFromSmiles(smiles_str)
+        # 验证SMILES(支持离子型产物如[O-].[Na+])
+        mol = Chem.MolFromSmiles(smiles_normalized)
         if mol is None:
             invalid_rows.add(idx)
 
