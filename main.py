@@ -682,6 +682,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         task_info = {
             "task_name":        task_name,
             "csv_path":         args.csv,
+            "project_folder":   str(out_dir),  # 添加项目文件夹位置
             "n_samples":        rows[0].get("n_samples", "—") if rows else "—",
             "smiles_cols":      smiles_cols,
             "numeric_cols":     numeric_cols or "（无）",
@@ -696,7 +697,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             task_info["column_mapping"] = args._config.get("column_mapping", [])
             task_info["descriptors"] = args._config.get("descriptors", [])
             task_info["origin_dataset_path"] = args._config.get("origin_dataset_path")
-            task_info["dataset_path"] = args._config.get("dataset_path")
+            task_info["dataset_path"] = str(args.csv)  # 实际使用的数据集路径
         if hasattr(args, '_config_path') and args._config_path:
             task_info["config_path"] = str(args._config_path)
         metrics_df = pd.DataFrame(rows)
