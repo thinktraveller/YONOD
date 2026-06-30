@@ -1783,3 +1783,30 @@ python yonod.py
 ```
 
 ---
+
+## [2026-06-30 09:46] 修复：移除未实现功能选项
+
+### 问题描述
+- 现象：向导中存在 Neural Network 模型选项，以及 PDF、JSON 报告格式选项，但这些功能尚未实现
+- 影响范围：用户选择这些选项后会导致运行失败或无法生成对应格式的报告
+
+### 根本原因
+代码中保留了计划实现但尚未完成的功能选项，未做可用性限制
+
+### 修复方案
+从可选列表中移除未实现的功能：
+1. yonod.py step5 中移除 'Neural Network' 模型选项
+2. yonod.py step7 中移除 'PDF' 和 'JSON' 报告格式选项
+3. main.py _MODEL_NAME_MAP 中移除 'Neural Network' 和 'neural network' 映射
+
+### 变更文件
+- `yonod.py`：移除 step5_select_models() 中的 'Neural Network' 选项，移除 step7_select_report_format() 中的 'PDF' 和 'JSON' 选项
+- `main.py`：从 _MODEL_NAME_MAP 字典中移除 'Neural Network': 'nn' 和 'neural network': 'nn' 两个条目
+
+### 验证方法
+语法检查通过，修改后：
+- step5 可选模型：['XGBoost', 'Random Forest', 'SVM', 'AutoGluon']
+- step7 可选报告格式：['Markdown', 'HTML']
+- _MODEL_NAME_MAP 仅包含已实现的 4 个模型的映射
+
+---

@@ -1620,7 +1620,7 @@ def step5_select_models():
     print("步骤5: 指定建模模型")
     print("=" * 60)
 
-    models = ['XGBoost', 'Random Forest', 'SVM', 'AutoGluon', 'Neural Network']
+    models = ['XGBoost', 'Random Forest', 'SVM', 'AutoGluon']
 
     print("\n可用模型:")
     for idx, model in enumerate(models, 1):
@@ -1690,7 +1690,7 @@ def step7_select_report_format():
     print("步骤7: 选择报告输出格式")
     print("=" * 60)
 
-    formats = ['Markdown', 'HTML', 'PDF', 'JSON']
+    formats = ['Markdown', 'HTML']
 
     print("\n可用格式:")
     for idx, fmt in enumerate(formats, 1):
