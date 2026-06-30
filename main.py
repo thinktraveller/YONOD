@@ -238,12 +238,13 @@ def _map_model_name(display_name: str) -> str:
     return _MODEL_NAME_MAP.get(display_name, display_name.lower())
 
 
-def load_config_from_json(config_path: Path) -> Dict[str, Any]:
+def load_config_from_json(config_path: Path, csv_override: Optional[Path] = None) -> Dict[str, Any]:
     """
     从 JSON 配置文件加载配置。
 
     Args:
         config_path: 配置文件路径
+        csv_override: 可选的CSV数据集路径，用于覆盖默认路径
 
     Returns:
         配置字典
@@ -251,7 +252,7 @@ def load_config_from_json(config_path: Path) -> Dict[str, Any]:
     Raises:
         FileNotFoundError: 配置文件不存在
         json.JSONDecodeError: JSON 格式错误
-        ValueError: 配置文件缺少必要字段
+        ValueError: 配置文件缺少必要字段或数据集不存在
     """
     if not config_path.exists():
         raise FileNotFoundError(f"配置文件不存在: {config_path}")
@@ -259,8 +260,8 @@ def load_config_from_json(config_path: Path) -> Dict[str, Any]:
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
 
-    # 验证必要字段
-    required_fields = ['dataset_path', 'column_roles', 'descriptors', 'models']
+    # 验证必要字段（移除 dataset_path 检查）
+    required_fields = ['project_name', 'column_roles', 'descriptors', 'models']
     missing = [f for f in required_fields if f not in config]
     if missing:
         raise ValueError(f"配置文件缺少必要字段: {missing}")
@@ -269,6 +270,28 @@ def load_config_from_json(config_path: Path) -> Dict[str, Any]:
     column_roles = config.get('column_roles', {})
     if 'label' not in column_roles or not column_roles['label']:
         raise ValueError("配置文件中 column_roles.label 不能为空")
+
+    # 构造数据集路径
+    project_name = config['project_name']
+    config_dir = config_path.parent
+
+    if csv_override is not None:
+        # 使用用户指定的数据集路径
+        dataset_path = csv_override
+    else:
+        # 使用命名约定: <project_name>_normalized_dataset.csv
+        dataset_path = config_dir / f"{project_name}_normalized_dataset.csv"
+
+    # 检查数据集是否存在
+    if not dataset_path.exists():
+        raise FileNotFoundError(
+            f"数据集文件不存在: {dataset_path}\n"
+            f"请确保数据集文件位于配置文件同级目录下，且文件名为: {project_name}_normalized_dataset.csv\n"
+            f"或使用 --csv 参数指定数据集路径"
+        )
+
+    # 将数据集路径添加到配置中（供后续使用）
+    config['_dataset_path'] = dataset_path
 
     return config
 
@@ -295,16 +318,8 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
     # 按角色顺序拼接
     smiles_cols = reactant_cols + product_cols + other_cols
 
-    # 解析数据集路径（支持相对路径）
-    dataset_path_str = config['dataset_path']
-    dataset_path = Path(dataset_path_str)
-    if not dataset_path.is_absolute():
-        # 策略1: 先尝试相对于当前工作目录（项目根目录）解析
-        if dataset_path.exists():
-            dataset_path = dataset_path.resolve()
-        # 策略2: 若不存在，尝试相对于配置文件目录解析
-        else:
-            dataset_path = config_path.parent / dataset_path
+    # 使用 load_config_from_json 中设置的数据集路径
+    dataset_path = config['_dataset_path']
 
     # 解析描述符配置
     descriptor_configs = config.get('descriptors', [])
@@ -374,11 +389,14 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     # 配置文件模式（优先级最高）
-    p.add_argument("--config", type=Path, default=None,
+    p.add_argument("--json", type=Path, default=None,
                    help="配置文件路径（JSON 格式，由 yonod.py 生成）")
+    p.add_argument("--config", type=Path, default=None,
+                   help="配置文件路径（向后兼容，等同于 --json）")
 
-    # 传统 CLI 参数（当不使用 --config 时必填）
-    p.add_argument("--csv", type=Path, default=None, help="输入数据集 CSV 路径")
+    # 数据集路径（可选，用于覆盖 JSON 中的默认路径）
+    p.add_argument("--csv", type=Path, default=None,
+                   help="输入数据集 CSV 路径（可选，覆盖 JSON 中的默认路径）")
     p.add_argument("--label-col", default=None, help="标签列名")
     p.add_argument("--smiles-cols", nargs="+", default=None, help="SMILES 列名（传统模式必填，三分类模式可省略）")
     p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
@@ -458,26 +476,35 @@ def main(argv: Optional[List[str]] = None) -> int:
     """CLI pipeline 入口：解析参数 → 加载数据 → 描述符×模型 grid → 输出报告。"""
     args = parse_args(argv)
 
+    # 兼容处理：--config 参数映射到 --json
+    if args.config is not None and args.json is None:
+        args.json = args.config
+
     # 处理配置文件模式
-    if args.config is not None:
+    if args.json is not None:
         try:
-            config = load_config_from_json(args.config)
-            args = config_to_args(config, args.config)
+            # 将 --csv 参数传递给 load_config_from_json
+            config = load_config_from_json(args.json, csv_override=args.csv)
+            args = config_to_args(config, args.json)
             print(f"[config] 已从配置文件加载: {args._config_path}")
+            if config.get('_dataset_path'):
+                print(f"[config] 数据集路径: {config['_dataset_path']}")
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             print(f"[error] 配置文件错误: {e}", file=sys.stderr)
             return 1
 
-    # 验证必要参数
-    if args.csv is None:
-        print("[error] 请指定 --csv 参数或使用 --config 配置文件。", file=sys.stderr)
-        return 1
+    # 验证必要参数（仅在非配置文件模式下检查）
+    if args.json is None:
+        if args.csv is None:
+            print("[error] 请指定 --json 参数（配置文件模式）或 --csv 参数（传统CLI模式）。", file=sys.stderr)
+            return 1
 
-    if args.label_col is None:
-        print("[error] 请指定 --label-col 参数或使用 --config 配置文件。", file=sys.stderr)
-        return 1
+        if args.label_col is None:
+            print("[error] 请指定 --label-col 参数或使用 --json 配置文件。", file=sys.stderr)
+            return 1
 
-    if not args.csv.exists():
+    # 检查数据集文件是否存在
+    if args.csv is not None and not args.csv.exists():
         print(f"[error] CSV 不存在: {args.csv}", file=sys.stderr)
         return 1
 
@@ -713,7 +740,10 @@ def _print_usage() -> None:
     print("    python yonod.py")
     print()
     print("  场景B: 使用配置文件建模（向导生成的配置）")
-    print("    python main.py --config path/to/yonod_config.json")
+    print("    python main.py --json path/to/project_yonod_config.json")
+    print()
+    print("    可选：覆盖默认数据集路径")
+    print("    python main.py --json config.json --csv custom_dataset.csv")
     print()
     print("  场景C: 传统CLI模式（直接指定参数）")
     print("    python main.py --csv data.csv --label-col yield \\")
