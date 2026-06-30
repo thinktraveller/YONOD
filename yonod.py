@@ -857,15 +857,19 @@ def split_smiles(smiles_str: str) -> List[str]:
     """
     拆分包含多个SMILES的字符串
 
-    支持的分隔符: , ; 空格 .
-    优先级：逗号 > 分号 > 空格 > 点号
+    支持的分隔符: , ; 空格
+    优先级：逗号 > 分号 > 空格
+
+    注意：
+    - 点号 (.) 是 SMILES 标准的组分分隔符（用于离子对、溶剂化合物等），
+      不应被拆分，否则会破坏合法的多组分 SMILES 结构
+    - 方括号 [ ] 是 SMILES 原子标记符号（如 [Na+]），不会被去除
 
     特殊处理：
-    - 如果首末均为方括号 [ ]，先去除方括号再拆分
     - 拆分后的每个元素，如果首末均为引号（单引号或双引号），去除引号
 
     Args:
-        smiles_str: SMILES字符串（可能包含多个分子，可能包裹在方括号中）
+        smiles_str: SMILES字符串（可能包含多个分子）
 
     Returns:
         list: SMILES列表
@@ -873,12 +877,11 @@ def split_smiles(smiles_str: str) -> List[str]:
     # 去除首尾空白
     smiles_str = smiles_str.strip()
 
-    # 特殊处理：检测并去除方括号
-    if smiles_str.startswith('[') and smiles_str.endswith(']'):
-        smiles_str = smiles_str[1:-1].strip()
+    # 注意：不再去除首尾方括号，因为方括号在 SMILES 中是原子标记符号（如 [Na+]），
+    # 去除会破坏离子型 SMILES 的结构（如 [O-].[Na+] 会被错误处理为 O-].[Na+）
 
-    # 按优先级尝试分隔符
-    separators = [',', ';', ' ', '.']
+    # 按优先级尝试分隔符（移除点号以避免破坏离子型 SMILES）
+    separators = [',', ';', ' ']
 
     for sep in separators:
         if sep in smiles_str:
