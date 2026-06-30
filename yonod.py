@@ -1930,18 +1930,22 @@ def step9_auto_launch_modeling(config_path: str) -> bool:
     print("步骤9: 启动建模")
     print("=" * 60)
 
+    # 构建等效命令
+    main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
+    cmd_str = f'python main.py --config "{config_path}"'
+
     print("\n是否立即启动建模?")
-    print("  Y - 是，立即启动")
+    print(f"\n等效命令: {cmd_str}")
+    print("\n  Y - 是，立即启动")
     print("  n - 否，稍后手动执行")
 
     user_input = input("\n选择 [Y/n]: ").strip().lower()
 
     if user_input in ('', 'y', 'yes'):
-        print("\n[启动] 正在调用 yonod.py 进行建模...")
+        print("\n[启动] 正在调用 main.py 进行建模...")
         print("=" * 60)
 
         # 构建命令
-        main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
         cmd = [sys.executable, main_script, '--config', config_path]
 
         try:
@@ -1962,12 +1966,12 @@ def step9_auto_launch_modeling(config_path: str) -> bool:
         except Exception as e:
             print(f"\n[错误] 启动建模失败: {e}")
             print(f"\n您可以稍后手动执行以下命令:")
-            print(f"  python main.py --config \"{config_path}\"")
+            print(f"  {cmd_str}")
             return False
     else:
         print("\n[跳过] 已跳过自动建模")
         print(f"\n您可以稍后手动执行以下命令:")
-        print(f"  python main.py --config \"{config_path}\"")
+        print(f"  {cmd_str}")
         return False
 
 
