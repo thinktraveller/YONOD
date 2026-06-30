@@ -1,0 +1,92 @@
+{
+  "version": "1.0",
+  "project_name": "amide_coupling_test",
+  "origin_dataset_path": "dataset/amide-coupling.csv",
+  "column_mapping": [
+    {
+      "origin_name": "sub_1_smiles",
+      "role": "reactant",
+      "new_name": "reactant"
+    },
+    {
+      "origin_name": "sub_2_smiles",
+      "role": "reactant",
+      "new_name": "reactant"
+    },
+    {
+      "origin_name": "product_smiles",
+      "role": "product",
+      "new_name": "product"
+    },
+    {
+      "origin_name": "catalyst_id",
+      "role": "others",
+      "new_name": "catalyst"
+    },
+    {
+      "origin_name": "solvent_id",
+      "role": "others",
+      "new_name": "solvent"
+    },
+    {
+      "origin_name": "temperature",
+      "role": "condition",
+      "new_name": "temperature"
+    },
+    {
+      "origin_name": "yield",
+      "role": "label",
+      "new_name": "yield"
+    }
+  ],
+  "descriptors": [
+    {
+      "descriptor": "morgan",
+      "mode": "concat",
+      "columns": ["reactant-1", "reactant-2", "product", "catalyst", "solvent"]
+    },
+    {
+      "descriptor": "maccs",
+      "mode": "concat",
+      "columns": ["reactant-1", "reactant-2", "product"]
+    },
+    {
+      "descriptor": "maf",
+      "mode": "sum",
+      "columns": ["reactant-1", "reactant-2", "product"]
+    },
+    {
+      "descriptor": "drfp",
+      "mode": "reaction",
+      "extra_reactants": ["catalyst"]
+    }
+  ],
+  "models": ["XGBoost", "Random Forest", "SVM", "AutoGluon"],
+  "metadata": {
+    "repo_url": "https://github.com/example/amide-coupling",
+    "doi": "10.1000/example.2024",
+    "notes": "This is an example configuration file for YONOD project."
+  },
+  "report_formats": ["HTML", "Markdown"],
+  "column_roles": {
+    "label": "yield",
+    "reactants": ["reactant-1", "reactant-2"],
+    "products": ["product"],
+    "others": ["catalyst", "solvent"],
+    "conditions": ["temperature"]
+  },
+  "_comments": {
+    "version": "配置文件格式版本号，当前为 1.0",
+    "project_name": "项目名称，必需。用于生成输出文件前缀。只能包含英文、数字、下划线、短横杠。",
+    "origin_dataset_path": "原始数据集路径（仅用于记录）。可选，用于在报告中追踪数据来源。",
+    "column_mapping": "列映射信息，记录原始列名到规范列名的转换关系。每个映射包含3个字段：\n  - origin_name: 原始CSV中的列名\n  - role: 列角色，可选值：reactant（反应物）、product（产物）、others（其他组分）、condition（条件数值）、label（标签）\n  - new_name: 规范化后的列名",
+    "descriptors": "描述符配置列表，每个描述符包含以下字段：\n  - descriptor: 描述符名称，可选值：morgan、maccs、rdkit2d、fisd、molmetalm、maf、drfp\n  - mode: 拼接模式，可选值：\n    * concat（横向拼接）：适用于 morgan、maccs、rdkit2d、fisd、molmetalm\n    * sum（逐点加和）：适用于 maf\n    * reaction（反应差分）：适用于 drfp\n  - columns: 参与嵌入的列名列表（concat和sum模式需要）\n  - extra_reactants: 额外加入反应物的others列（仅drfp模式需要）",
+    "models": "建模模型列表，可选值：XGBoost、Random Forest、SVM、AutoGluon。可以选择一个或多个。",
+    "metadata": "数据集元信息，可选字段：\n  - repo_url: 项目开源地址（可选）\n  - doi: 文献DOI（可选）\n  - notes: 备注信息（可选）",
+    "report_formats": "报告输出格式列表，可选值：HTML、Markdown。可以同时选择两种格式。",
+    "column_roles": "列角色分类，main.py使用此字段识别列角色：\n  - label: 标签列名（必需，只能有一个）\n  - reactants: 反应物SMILES列名列表（可选，可多个）\n  - products: 产物SMILES列名列表（可选，可多个）\n  - others: 其他组分SMILES列名列表（可选，可多个，如催化剂、溶剂等）\n  - conditions: 条件数值列名列表（可选，可多个，如温度、压力等）",
+    "dataset_path": "【已废弃】不再需要此字段。main.py会根据命名约定自动查找规范数据集：<project_name>_normalized_dataset.csv",
+    "file_structure": "配置文件所在文件夹的标准结构：\nproject-folder/\n  ├── <project_name>_yonod_config.json          # 本配置文件\n  ├── <project_name>_normalized_dataset.csv      # 规范化数据集（必需）\n  ├── <project_name>_column_mapping.csv          # 列映射表（可选，人类可读）\n  ├── <project_name>_invalid_report.md           # 非法输入报告（如有）\n  └── metrics_summary.csv                        # 建模结果（运行后生成）",
+    "usage": "使用方法：\n1. 将配置文件放在项目文件夹下\n2. 确保规范化数据集文件名符合命名约定：<project_name>_normalized_dataset.csv\n3. 运行命令：python main.py --json <project_name>_yonod_config.json\n4. 可选：使用 --csv 参数覆盖默认数据集路径：python main.py --json config.json --csv custom.csv"
+  }
+}
