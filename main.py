@@ -376,6 +376,8 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
         # 新增：保存原始配置供后续使用
         _config=config,
         _config_path=config_path,
+        json=config_path,
+        config=config_path,
     )
 
     return args

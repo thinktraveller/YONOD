@@ -1878,3 +1878,24 @@ python _verify/fix01_ionic_smiles.py
 - 其余非法行为空值（`nan`），验证结果正确
 
 ---
+
+
+## [2026-06-30 19:13] 修复：config_to_args 缺失 json 属性导致 AttributeError
+
+### 问题描述
+- 现象：使用 --config 参数加载配置文件时，程序在第 497 行抛出 AttributeError: 'Namespace' object has no attribute 'json'
+- 影响范围：所有使用配置文件模式的用户无法正常运行
+
+### 根本原因
+config_to_args() 函数返回的 argparse.Namespace 对象缺少 json 属性。第 488 行用新对象完全替换了原始 args，导致第 497 行的 if args.json is None: 检查失败。
+
+### 修复方案
+在 config_to_args() 函数返回的 Namespace 对象中添加 json 和 config 属性，均指向配置文件路径，确保后续逻辑能够正确判断是否为配置文件模式。
+
+### 变更文件
+- `main.py` 第 351-381 行：在 argparse.Namespace 构造中新增 json=config_path 和 config=config_path 两个属性
+
+### 验证方法
+使用配置文件运行 main.py，确认不再抛出 AttributeError 且能正常执行建模流程。
+
+---
