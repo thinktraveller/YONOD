@@ -1989,19 +1989,27 @@ def validate_config_file(config_path: str) -> bool:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
 
-        # 检查必需字段
-        required_fields = ['version', 'project_name', 'dataset_path', 'descriptors', 'models', 'column_roles']
+        # 检查必需字段（移除 dataset_path 检查）
+        required_fields = ['version', 'project_name', 'descriptors', 'models', 'column_roles']
         for field in required_fields:
             if field not in config:
                 print(f"[X] 配置文件缺少必需字段: {field}")
                 return False
 
-        # 检查数据集路径是否存在
-        if not os.path.exists(config['dataset_path']):
-            print(f"[X] 配置文件中的数据集路径不存在: {config['dataset_path']}")
+        # 检查规范数据集是否存在（使用命名约定）
+        project_name = config['project_name']
+        config_dir = os.path.dirname(os.path.abspath(config_path))
+        normalized_dataset = os.path.join(config_dir, f"{project_name}_normalized_dataset.csv")
+
+        if not os.path.exists(normalized_dataset):
+            print(f"[X] 规范数据集不存在: {normalized_dataset}")
+            print(f"    请确保数据集文件名为: {project_name}_normalized_dataset.csv")
             return False
 
         print("[OK] 配置文件验证通过")
+        print(f"    项目名称: {project_name}")
+        print(f"    项目文件夹: {config_dir}")
+        print(f"    规范数据集: {normalized_dataset}")
         return True
 
     except json.JSONDecodeError as e:
@@ -2025,15 +2033,38 @@ def main():
     # 步骤1: 收集基本信息
     basic_info = step1_collect_basic_info()
 
-    # 如果是JSON配置文件,验证后直接启动建模
+    # 如果是JSON配置文件,验证后直接调用main.py
     if basic_info['is_config_file']:
         print("\n" + "=" * 60)
         print("检测到JSON配置文件,验证中...")
         print("=" * 60)
 
         if validate_config_file(basic_info['dataset_path']):
-            print("\n[OK] 配置文件有效,准备启动建模")
-            step9_auto_launch_modeling(basic_info['dataset_path'])
+            print("\n[OK] 配置文件有效,直接启动建模")
+
+            # 构建命令
+            main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
+            cmd = [sys.executable, main_script, '--config', basic_info['dataset_path']]
+            cmd_str = f'python main.py --config "{basic_info["dataset_path"]}"'
+
+            print(f"\n执行命令: {cmd_str}")
+            print("=" * 60)
+
+            try:
+                # 使用 subprocess 调用，实时输出
+                result = subprocess.run(
+                    cmd,
+                    check=False,
+                    cwd=os.path.dirname(os.path.abspath(__file__))
+                )
+
+                if result.returncode == 0:
+                    print("\n[完成] 建模任务已成功完成!")
+                else:
+                    print(f"\n[警告] 建模任务返回码: {result.returncode}")
+
+            except Exception as e:
+                print(f"\n[错误] 启动建模失败: {e}")
         else:
             print("\n[X] 配置文件无效,请检查文件格式和内容")
 
