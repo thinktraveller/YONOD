@@ -238,6 +238,12 @@ def validate_numeric_column(df: pd.DataFrame, col_idx: int) -> Set[int]:
         if isinstance(value, str) and len(value) >= 2 and value[0] == '[' and value[-1] == ']':
             test_value = value[1:-1]
 
+        # 去除英文引号包裹（如果存在）
+        if isinstance(test_value, str) and len(test_value) >= 2:
+            if (test_value[0] == '"' and test_value[-1] == '"') or \
+               (test_value[0] == "'" and test_value[-1] == "'"):
+                test_value = test_value[1:-1]
+
         # 检查是否为数值
         try:
             float(test_value)
@@ -264,6 +270,12 @@ def validate_numeric_column_allow_empty(df: pd.DataFrame, col_idx: int) -> Set[i
         test_value = value
         if isinstance(value, str) and len(value) >= 2 and value[0] == '[' and value[-1] == ']':
             test_value = value[1:-1]
+
+        # 去除英文引号包裹（如果存在）
+        if isinstance(test_value, str) and len(test_value) >= 2:
+            if (test_value[0] == '"' and test_value[-1] == '"') or \
+               (test_value[0] == "'" and test_value[-1] == "'"):
+                test_value = test_value[1:-1]
 
         try:
             float(test_value)
@@ -301,6 +313,12 @@ def validate_smiles_column(df: pd.DataFrame, col_idx: int, allow_empty: bool = F
 
         # 将值转为字符串
         smiles_str = str(value).strip()
+
+        # 去除英文引号包裹（如果存在）
+        if len(smiles_str) >= 2:
+            if (smiles_str[0] == '"' and smiles_str[-1] == '"') or \
+               (smiles_str[0] == "'" and smiles_str[-1] == "'"):
+                smiles_str = smiles_str[1:-1].strip()
 
         # 规范化处理: 将逗号替换为点号(符合RDKit标准)
         # 数据集中可能使用逗号表示离子对,需转换为标准格式
@@ -353,6 +371,12 @@ def validate_product_column(df: pd.DataFrame, col_idx: int) -> Set[int]:
             continue
 
         smiles_str = str(value).strip()
+
+        # 去除英文引号包裹（如果存在）
+        if len(smiles_str) >= 2:
+            if (smiles_str[0] == '"' and smiles_str[-1] == '"') or \
+               (smiles_str[0] == "'" and smiles_str[-1] == "'"):
+                smiles_str = smiles_str[1:-1].strip()
 
         # 规范化处理: 将逗号替换为点号(符合RDKit标准)
         smiles_normalized = smiles_str.replace(',', '.')
