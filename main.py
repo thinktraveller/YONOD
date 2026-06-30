@@ -664,6 +664,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             "dataset_url":      args.dataset_url,
             "dataset_notes":    args.dataset_notes,
         }
+        # 如果使用配置文件模式，添加额外信息到报告
+        if hasattr(args, '_config') and args._config:
+            task_info["column_mapping"] = args._config.get("column_mapping", [])
+            task_info["descriptors"] = args._config.get("descriptors", [])
+            task_info["origin_dataset_path"] = args._config.get("origin_dataset_path")
+            task_info["dataset_path"] = args._config.get("dataset_path")
+        if hasattr(args, '_config_path') and args._config_path:
+            task_info["config_path"] = str(args._config_path)
         metrics_df = pd.DataFrame(rows)
         fmt = args.output_format
 
