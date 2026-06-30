@@ -225,13 +225,11 @@ _MODEL_NAME_MAP = {
     'Random Forest': 'rf',
     'SVM': 'svm',
     'AutoGluon': 'autogluon',
-    'Neural Network': 'nn',
     # 小写版本（向后兼容）
     'xgboost': 'xgb',
     'random forest': 'rf',
     'svm': 'svm',
     'autogluon': 'autogluon',
-    'neural network': 'nn',
 }
 
 
