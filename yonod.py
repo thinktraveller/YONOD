@@ -1867,7 +1867,8 @@ def save_config_file(
     config = {
         'version': '1.0',
         'project_name': project_name,
-        'dataset_path': effective_dataset_path,
+        'origin_dataset_path': dataset_path,  # 原始数据集路径
+        'dataset_path': effective_dataset_path,  # 实际使用的数据集路径（规范化后）
         'column_mapping': column_mapping,  # 列映射信息（人类可读）
         'descriptors': descriptor_configs,
         'models': selected_models,

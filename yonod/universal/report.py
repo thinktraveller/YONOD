@@ -386,6 +386,120 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
 </section>"""
 
 
+def _section_column_mapping(task_info: Dict[str, Any]) -> str:
+    """列映射与分类信息段落。"""
+    column_mapping = task_info.get("column_mapping", [])
+    if not column_mapping:
+        return ""
+
+    rows_html = ""
+    for item in column_mapping:
+        origin = _esc(str(item.get("origin_name", "—")))
+        role = _esc(str(item.get("role", "—")))
+        new_name = _esc(str(item.get("new_name", "—")))
+        # 角色中文映射
+        role_cn = {
+            "label": "标签列",
+            "reactant": "反应物",
+            "product": "产物",
+            "others": "其他分子",
+            "condition": "反应条件"
+        }.get(role, role)
+        rows_html += (
+            f"<tr>"
+            f"<td style='text-align:left'>{origin}</td>"
+            f"<td>{role_cn}</td>"
+            f"<td style='text-align:left'><code>{new_name}</code></td>"
+            f"</tr>\n"
+        )
+
+    return f"""
+<section>
+<h2>4 · 列映射与分类</h2>
+<p style="font-size:0.85rem;color:#6b7280;margin-bottom:10px">
+  原始数据集列名到规范名称的映射关系，以及每列的角色分类。
+</p>
+<table>
+<thead><tr><th style="text-align:left">原始列名</th><th>角色</th><th style="text-align:left">规范名称</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table>
+</section>"""
+
+
+def _section_descriptor_config(task_info: Dict[str, Any]) -> str:
+    """描述符配置信息段落。"""
+    descriptors = task_info.get("descriptors", [])
+    if not descriptors:
+        return ""
+
+    rows_html = ""
+    for desc in descriptors:
+        desc_name = _esc(str(desc.get("descriptor", "—")))
+        mode = _esc(str(desc.get("mode", "concat")))
+        columns = desc.get("columns", [])
+        columns_str = ", ".join(columns) if columns else "（全部SMILES列）"
+        # 模式中文映射
+        mode_cn = {
+            "concat": "拼接",
+            "sum": "求和",
+            "reaction": "反应差分"
+        }.get(mode, mode)
+        rows_html += (
+            f"<tr>"
+            f"<td><b>{desc_name}</b></td>"
+            f"<td>{mode_cn}</td>"
+            f"<td style='text-align:left'><code>{_esc(columns_str)}</code></td>"
+            f"</tr>\n"
+        )
+
+    return f"""
+<section>
+<h2>4.1 · 描述符配置</h2>
+<p style="font-size:0.85rem;color:#6b7280;margin-bottom:10px">
+  描述符向量化配置：每个描述符应用于哪些列，以及采用的拼接模式。
+</p>
+<table>
+<thead><tr><th>描述符</th><th>模式</th><th style="text-align:left">应用列</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table>
+</section>"""
+
+
+def _section_data_paths(task_info: Dict[str, Any]) -> str:
+    """数据路径信息段落。"""
+    origin_path = task_info.get("origin_dataset_path")
+    dataset_path = task_info.get("dataset_path") or task_info.get("csv_path")
+    config_path = task_info.get("config_path")
+
+    if not any([origin_path, config_path]):
+        return ""
+
+    rows_html = ""
+    if origin_path:
+        rows_html += (
+            f"<tr><th style='text-align:left'>原始数据集</th>"
+            f"<td style='text-align:left'><code>{_esc(str(origin_path))}</code></td></tr>"
+        )
+    if dataset_path and dataset_path != origin_path:
+        rows_html += (
+            f"<tr><th style='text-align:left'>规范化数据集</th>"
+            f"<td style='text-align:left'><code>{_esc(str(dataset_path))}</code></td></tr>"
+        )
+    if config_path:
+        rows_html += (
+            f"<tr><th style='text-align:left'>配置文件</th>"
+            f"<td style='text-align:left'><code>{_esc(str(config_path))}</code></td></tr>"
+        )
+
+    return f"""
+<section>
+<h2>4.2 · 数据路径</h2>
+<table>
+{rows_html}
+</table>
+</section>"""
+
+
 def _section_scatter(out_dir: Path) -> str:
     pics_dir = out_dir / "pictures"
     pngs = sorted(pics_dir.glob("scatter_*.png")) if pics_dir.exists() else []
@@ -404,7 +518,7 @@ def _section_scatter(out_dir: Path) -> str:
             )
     return f"""
 <section>
-<h2>5 · 散点图画廊（真实值 vs 预测值）</h2>
+<h2>6 · 散点图画廊（真实值 vs 预测值）</h2>
 <p style="font-size:0.85rem;color:#6b7280;margin-bottom:10px">
   每张图对应一个（描述符 × 模型）组合，横轴为真实标签，纵轴为模型预测值，虚线为 y = x 理想参考线。
   点越靠近虚线表示预测越准确；图内标注了该组合的 R²、RMSE 及样本量。
@@ -447,6 +561,9 @@ def generate_report(
         + _section_grid(metrics_df)
         + _section_glossary()
         + _section_ranking(ranked)
+        + _section_column_mapping(task_info)
+        + _section_descriptor_config(task_info)
+        + _section_data_paths(task_info)
         + _section_scatter(out_dir)
     )
 
@@ -622,6 +739,60 @@ def generate_markdown_report(
         lines += ["", "</details>", ""]
     else:
         lines += ["无有效结果。", ""]
+
+    # ── 列映射与分类 ─────────────────────────────────────────────────────────
+    column_mapping = task_info.get("column_mapping", [])
+    if column_mapping:
+        role_cn_map = {
+            "label": "标签列",
+            "reactant": "反应物",
+            "product": "产物",
+            "others": "其他分子",
+            "condition": "反应条件"
+        }
+        lines += ["---", "", "## 列映射与分类", ""]
+        lines += ["| 原始列名 | 角色 | 规范名称 |", "|---|---|---|"]
+        for item in column_mapping:
+            origin = str(item.get("origin_name", "—"))
+            role = str(item.get("role", "—"))
+            new_name = str(item.get("new_name", "—"))
+            role_cn = role_cn_map.get(role, role)
+            lines.append(f"| {origin} | {role_cn} | `{new_name}` |")
+        lines.append("")
+
+    # ── 描述符配置 ───────────────────────────────────────────────────────────
+    descriptors = task_info.get("descriptors", [])
+    if descriptors:
+        mode_cn_map = {
+            "concat": "拼接",
+            "sum": "求和",
+            "reaction": "反应差分"
+        }
+        lines += ["---", "", "## 描述符配置", ""]
+        lines += ["| 描述符 | 模式 | 应用列 |", "|---|---|---|"]
+        for desc in descriptors:
+            desc_name = str(desc.get("descriptor", "—"))
+            mode = str(desc.get("mode", "concat"))
+            columns = desc.get("columns", [])
+            columns_str = ", ".join(columns) if columns else "（全部SMILES列）"
+            mode_cn = mode_cn_map.get(mode, mode)
+            lines.append(f"| **{desc_name}** | {mode_cn} | `{columns_str}` |")
+        lines.append("")
+
+    # ── 数据路径 ─────────────────────────────────────────────────────────────
+    origin_path = task_info.get("origin_dataset_path")
+    dataset_path = task_info.get("dataset_path") or task_info.get("csv_path")
+    config_path = task_info.get("config_path")
+    if any([origin_path, config_path]):
+        lines += ["---", "", "## 数据路径", ""]
+        lines += ["| 项目 | 路径 |", "|---|---|"]
+        if origin_path:
+            lines.append(f"| 原始数据集 | `{origin_path}` |")
+        if dataset_path and dataset_path != origin_path:
+            lines.append(f"| 规范化数据集 | `{dataset_path}` |")
+        if config_path:
+            lines.append(f"| 配置文件 | `{config_path}` |")
+        lines.append("")
 
     # ── 指标说明 ─────────────────────────────────────────────────────────────
     lines += [
