@@ -35,23 +35,23 @@ def step1_collect_basic_info() -> Dict:
     """
     步骤1: 收集基本信息
 
-    收集三项基本信息:
+    收集信息:
     1. 数据集路径或配置文件路径(必选)
-       - CSV文件: 进入向导流程
-       - JSON文件: 验证后直接启动建模
-    2. 项目名称(必选,用于生成输出文件前缀)
-    3. 项目文件夹位置(可选,默认为 result/<项目名称>)
+       - CSV文件: 进入向导流程,需收集项目名称和文件夹
+       - JSON文件: 直接返回,在main()中验证并启动建模
+    2. 项目名称(仅CSV模式必选)
+    3. 项目文件夹位置(仅CSV模式,可选,默认为 result/<项目名称>)
 
     Returns:
         dict: {
             'dataset_path': str,
             'is_config_file': bool,
-            'project_name': str,
-            'project_folder': str
+            'project_name': str,      # JSON模式时为None
+            'project_folder': str     # JSON模式时为None
         }
     """
     print("=" * 60)
-    print("步骤1: 指定数据集/配置文件、项目名称和项目文件夹")
+    print("步骤1: 指定数据集/配置文件")
     print("=" * 60)
 
     # 1. 输入数据集路径或配置文件路径
@@ -74,9 +74,20 @@ def step1_collect_basic_info() -> Dict:
             print(f"[OK] JSON配置文件: {file_path}")
             dataset_path = file_path
             is_config_file = True
-            break
+            # JSON模式: 立即返回,不再收集项目名称和文件夹
+            return {
+                'dataset_path': dataset_path,
+                'is_config_file': True,
+                'project_name': None,
+                'project_folder': None
+            }
         else:
             print("[X] 文件格式不支持,请输入CSV或JSON文件")
+
+    # CSV模式: 继续收集项目名称和文件夹
+    print("\n" + "=" * 60)
+    print("步骤1(续): 设置项目名称和项目文件夹")
+    print("=" * 60)
 
     # 2. 输入项目名称
     while True:
