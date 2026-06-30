@@ -470,21 +470,36 @@ def _section_data_paths(task_info: Dict[str, Any]) -> str:
     origin_path = task_info.get("origin_dataset_path")
     dataset_path = task_info.get("dataset_path") or task_info.get("csv_path")
     config_path = task_info.get("config_path")
+    project_folder = task_info.get("project_folder")
 
-    if not any([origin_path, config_path]):
+    # 如果没有任何路径信息则跳过
+    if not any([origin_path, config_path, project_folder]):
         return ""
 
     rows_html = ""
+
+    # 项目文件夹（优先显示）
+    if project_folder:
+        rows_html += (
+            f"<tr><th style='text-align:left'>项目文件夹</th>"
+            f"<td style='text-align:left'><code>{_esc(str(project_folder))}</code></td></tr>"
+        )
+
+    # 原始数据集
     if origin_path:
         rows_html += (
             f"<tr><th style='text-align:left'>原始数据集</th>"
             f"<td style='text-align:left'><code>{_esc(str(origin_path))}</code></td></tr>"
         )
+
+    # 规范化数据集
     if dataset_path and dataset_path != origin_path:
         rows_html += (
             f"<tr><th style='text-align:left'>规范化数据集</th>"
             f"<td style='text-align:left'><code>{_esc(str(dataset_path))}</code></td></tr>"
         )
+
+    # 配置文件
     if config_path:
         rows_html += (
             f"<tr><th style='text-align:left'>配置文件</th>"
@@ -643,6 +658,7 @@ def generate_markdown_report(
         "| 项目 | 内容 |",
         "|---|---|",
         f"| 任务名称 | {task_name} |",
+        f"| 项目文件夹 | `{task_info.get('project_folder', '—')}` |",
         f"| CSV 路径 | `{task_info.get('csv_path', '—')}` |",
         f"| 有效样本量 | {task_info.get('n_samples', '—')} |",
         f"| SMILES 列 | `{task_info.get('smiles_cols', '—')}` |",
