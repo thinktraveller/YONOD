@@ -849,12 +849,23 @@ def split_smiles(smiles_str: str) -> List[str]:
     支持的分隔符: , ; 空格 .
     优先级：逗号 > 分号 > 空格 > 点号
 
+    特殊处理：
+    - 如果首末均为方括号 [ ]，先去除方括号再拆分
+    - 拆分后的每个元素，如果首末均为引号（单引号或双引号），去除引号
+
     Args:
-        smiles_str: SMILES字符串（可能包含多个分子）
+        smiles_str: SMILES字符串（可能包含多个分子，可能包裹在方括号中）
 
     Returns:
         list: SMILES列表
     """
+    # 去除首尾空白
+    smiles_str = smiles_str.strip()
+
+    # 特殊处理：检测并去除方括号
+    if smiles_str.startswith('[') and smiles_str.endswith(']'):
+        smiles_str = smiles_str[1:-1].strip()
+
     # 按优先级尝试分隔符
     separators = [',', ';', ' ', '.']
 
@@ -864,10 +875,29 @@ def split_smiles(smiles_str: str) -> List[str]:
             # 过滤掉纯分隔符的残留（如空格分隔时可能有'.', ',', ';'残留）
             parts = [p for p in parts if p not in ['.', ',', ';', ' ']]
             if parts:  # 确保有有效部分
-                return parts
+                # 对每个元素去除引号（如果首末均为引号）
+                cleaned_parts = []
+                for part in parts:
+                    part = part.strip()
+                    # 检测并去除双引号
+                    if part.startswith('"') and part.endswith('"') and len(part) >= 2:
+                        part = part[1:-1]
+                    # 检测并去除单引号
+                    elif part.startswith("'") and part.endswith("'") and len(part) >= 2:
+                        part = part[1:-1]
+                    cleaned_parts.append(part.strip())
+                return cleaned_parts
 
-    # 无分隔符,单个SMILES
-    return [smiles_str.strip()]
+    # 无分隔符,单个SMILES（仍需处理引号）
+    single_smiles = smiles_str.strip()
+    # 检测并去除双引号
+    if single_smiles.startswith('"') and single_smiles.endswith('"') and len(single_smiles) >= 2:
+        single_smiles = single_smiles[1:-1]
+    # 检测并去除单引号
+    elif single_smiles.startswith("'") and single_smiles.endswith("'") and len(single_smiles) >= 2:
+        single_smiles = single_smiles[1:-1]
+
+    return [single_smiles.strip()]
 
 
 def step3_1_generate_invalid_report(
