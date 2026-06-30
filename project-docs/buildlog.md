@@ -1843,3 +1843,38 @@ python main.py --config "result\test_interative01\test_interative01_yonod_config
 预期能正确加载数据集，不再出现路径重复拼接错误。
 
 ---
+
+## [2026-06-30 10:03] 修复：离子型 SMILES 验证问题
+
+### 问题描述
+- 现象：数据集中使用逗号表示离子对的 SMILES（如 `[O-],[Na+]`）被错误标记为非法输入
+- 影响范围：酰胺缩合数据集中所有含离子型添加剂的反应行被过滤
+
+### 根本原因
+数据集使用了非标准的离子对分隔符（逗号），而 RDKit 仅接受点号（`.`）作为分子间分隔符。验证逻辑未进行规范化处理，直接用 RDKit 解析导致失败。
+
+### 修复方案
+在 SMILES 验证前增加规范化步骤，将逗号自动替换为点号（符合 CLAUDE.md 中的规范化策略）：
+1. `validate_smiles_column()`: 在验证前执行 `smiles.replace(',', '.')`
+2. `validate_product_column()`: 同样规范化，并允许点号（用于离子对）
+
+### 变更文件
+- `yonod.py` (L281-306)：`validate_smiles_column()` 增加规范化逻辑
+- `yonod.py` (L313-345)：`validate_product_column()` 增加规范化逻辑并更新注释
+
+### 验证方法
+执行验证脚本测试 17 个用例：
+```powershell
+python _verify/fix01_ionic_smiles.py
+```
+预期输出：所有测试通过，包括：
+- ✅ 逗号格式离子对：`[O-],[Na+]` → 规范化为 `[O-].[Na+]` 后验证通过
+- ✅ 点号格式离子对：`[O-].[Na+]` → 直接验证通过
+- ✅ 多分子体系：`CCO.C1=CC=CC=C1` → 验证通过
+- ❌ 非法分隔符：含分号或空格的 SMILES → 正确拒绝
+
+实际数据集测试：
+- 之前被标记为非法的第6行 `C1=C(C(=C(C(=C1Cl)Cl)Cl)[O-],[Na+])` 现在验证通过
+- 其余非法行为空值（`nan`），验证结果正确
+
+---
