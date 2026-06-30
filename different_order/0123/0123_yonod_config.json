@@ -1,0 +1,82 @@
+{
+  "version": "1.0",
+  "project_name": "0123",
+  "origin_dataset_path": "different_order/amide-coupling.csv",
+  "column_mapping": [
+    {
+      "origin_name": "yield",
+      "role": "label",
+      "new_name": "yield"
+    },
+    {
+      "origin_name": "sub_1_smiles",
+      "role": "reactant",
+      "new_name": "reactant-amide"
+    },
+    {
+      "origin_name": "sub_2_smiles",
+      "role": "reactant",
+      "new_name": "reactant-acid"
+    },
+    {
+      "origin_name": "product_smiles",
+      "role": "product",
+      "new_name": "product"
+    },
+    {
+      "origin_name": "activation",
+      "role": "others",
+      "new_name": "activation"
+    },
+    {
+      "origin_name": "base",
+      "role": "others",
+      "new_name": "base"
+    },
+    {
+      "origin_name": "solvent",
+      "role": "others",
+      "new_name": "solvent"
+    }
+  ],
+  "descriptors": [
+    {
+      "descriptor": "morgan",
+      "mode": "concat",
+      "columns": [
+        "reactant-amide",
+        "reactant-acid",
+        "product",
+        "activation"
+      ]
+    }
+  ],
+  "models": [
+    "XGBoost",
+    "Random Forest",
+    "SVM",
+    "AutoGluon"
+  ],
+  "metadata": {
+    "repo_url": "",
+    "doi": "",
+    "notes": ""
+  },
+  "report_formats": [
+    "Markdown",
+    "HTML"
+  ],
+  "column_roles": {
+    "label": "yield",
+    "reactants": [],
+    "products": [],
+    "others": [
+      "reactant-1",
+      "reactant-2",
+      "product",
+      "activation-1",
+      "activation-2"
+    ],
+    "conditions": []
+  }
+}
