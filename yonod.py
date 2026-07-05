@@ -121,6 +121,51 @@ def step1_collect_basic_info() -> Dict:
     }
 
 
+def _precheck_csv_format(file_path: str, encoding: str = 'utf-8') -> List[Dict]:
+    """
+    预检查 CSV 文件格式，检测字段数不一致的行
+
+    Args:
+        file_path: CSV 文件路径
+        encoding: 文件编码
+
+    Returns:
+        list: 问题行列表，每个元素为 {'line_num': int, 'expected': int, 'actual': int, 'content': str}
+    """
+    import csv
+
+    bad_lines = []
+
+    try:
+        with open(file_path, 'r', encoding=encoding, newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return []
+
+            expected_fields = len(header)
+
+            for line_num, row in enumerate(reader, start=2):  # 从第2行开始（第1行是表头）
+                actual_fields = len(row)
+                if actual_fields != expected_fields:
+                    # 截断过长的内容，避免输出过多
+                    content_preview = ','.join(row)
+                    if len(content_preview) > 100:
+                        content_preview = content_preview[:100] + '...'
+                    bad_lines.append({
+                        'line_num': line_num,
+                        'expected': expected_fields,
+                        'actual': actual_fields,
+                        'content': content_preview
+                    })
+
+    except UnicodeDecodeError:
+        # 编码问题会在后续处理中捕获
+        pass
+
+    return bad_lines
+
+
 def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
     """
     加载数据集并展示基本信息
@@ -133,22 +178,105 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
 
     Raises:
         UnicodeDecodeError: 如果CSV文件编码不是UTF-8
-        pd.errors.ParserError: 如果CSV格式错误
+        pd.errors.ParserError: 如果CSV格式错误且无法恢复
     """
-    try:
-        # 首先尝试UTF-8编码
-        df = pd.read_csv(dataset_path, encoding='utf-8')
-    except UnicodeDecodeError:
-        # 如果UTF-8失败,尝试GBK编码(中文Windows常见编码)
-        print("⚠ UTF-8编码读取失败,尝试使用GBK编码...")
+    # 尝试的编码列表
+    encodings_to_try = ['utf-8', 'gbk', 'latin1']
+
+    df = None
+    used_encoding = None
+    parser_error = None
+
+    for encoding in encodings_to_try:
         try:
-            df = pd.read_csv(dataset_path, encoding='gbk')
-            print("[OK] 使用GBK编码成功读取")
+            # 首先尝试严格模式读取
+            df = pd.read_csv(dataset_path, encoding=encoding)
+            used_encoding = encoding
+            if encoding != 'utf-8':
+                print(f"[OK] 使用 {encoding.upper()} 编码成功读取")
+            break
+
         except UnicodeDecodeError:
-            # 如果GBK也失败,尝试latin1(几乎不会失败)
-            print("⚠ GBK编码读取失败,尝试使用latin1编码...")
-            df = pd.read_csv(dataset_path, encoding='latin1')
-            print("[OK] 使用latin1编码成功读取")
+            # 编码不匹配，尝试下一个
+            if encoding != encodings_to_try[-1]:
+                print(f"[!] {encoding.upper()} 编码读取失败，尝试其他编码...")
+            continue
+
+        except pd.errors.ParserError as e:
+            parser_error = e
+            used_encoding = encoding
+            break
+
+    # 如果所有编码都失败（UnicodeDecodeError）
+    if df is None and parser_error is None:
+        raise UnicodeDecodeError(
+            'utf-8', b'', 0, 1,
+            f"无法使用 {', '.join(encodings_to_try)} 编码读取文件"
+        )
+
+    # 处理 ParserError：CSV 格式问题
+    if parser_error is not None:
+        print(f"\n[!] CSV 格式错误: {parser_error}")
+        print("\n正在分析问题行...")
+
+        # 预检查找出问题行
+        bad_lines = _precheck_csv_format(dataset_path, used_encoding)
+
+        if bad_lines:
+            print(f"\n[!] 发现 {len(bad_lines)} 行字段数不一致:")
+            print("-" * 70)
+            # 最多显示前 10 行问题
+            for i, bl in enumerate(bad_lines[:10]):
+                print(f"  行 {bl['line_num']}: 期望 {bl['expected']} 个字段，实际 {bl['actual']} 个")
+                print(f"       内容预览: {bl['content']}")
+            if len(bad_lines) > 10:
+                print(f"  ... 还有 {len(bad_lines) - 10} 行问题未显示")
+            print("-" * 70)
+
+            print("\n[?] 常见原因及修复建议:")
+            print("  1. 字段内容包含未转义的逗号 → 用引号包裹该字段")
+            print("  2. 引号不匹配（如单独的引号） → 检查并修复引号配对")
+            print("  3. 数据行被意外换行 → 检查该行是否被拆分到多行")
+            print("  4. 使用了错误的分隔符 → 确认使用逗号作为分隔符")
+
+        # 尝试使用宽松模式读取
+        print("\n[!] 尝试跳过问题行继续读取...")
+
+        try:
+            # pandas >= 1.3.0 使用 on_bad_lines 参数
+            df = pd.read_csv(
+                dataset_path,
+                encoding=used_encoding,
+                on_bad_lines='warn'  # 'skip' 静默跳过，'warn' 显示警告
+            )
+            skipped_count = len(bad_lines) if bad_lines else 0
+            print(f"[OK] 已跳过 {skipped_count} 行问题数据，成功读取剩余数据")
+            print(f"[!] 警告: 跳过的行不会参与后续处理，请在源文件中修复问题行")
+
+        except TypeError:
+            # pandas < 1.3.0 使用旧参数
+            try:
+                df = pd.read_csv(
+                    dataset_path,
+                    encoding=used_encoding,
+                    error_bad_lines=False,
+                    warn_bad_lines=True
+                )
+                skipped_count = len(bad_lines) if bad_lines else 0
+                print(f"[OK] 已跳过 {skipped_count} 行问题数据，成功读取剩余数据")
+                print(f"[!] 警告: 跳过的行不会参与后续处理，请在源文件中修复问题行")
+
+            except Exception as fallback_error:
+                # 无法恢复，抛出原始错误
+                print(f"\n[X] 无法自动修复 CSV 格式问题")
+                print(f"    请手动检查并修复上述问题行后重试")
+                raise parser_error from fallback_error
+
+        except Exception as fallback_error:
+            # 无法恢复，抛出原始错误
+            print(f"\n[X] 无法自动修复 CSV 格式问题: {fallback_error}")
+            print(f"    请手动检查并修复上述问题行后重试")
+            raise parser_error from fallback_error
 
     print(f"\n数据集基本信息:")
     print(f"  总行数: {len(df)}")
@@ -157,7 +285,7 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
     # 检查是否有重复列名
     duplicate_cols = df.columns[df.columns.duplicated()].tolist()
     if duplicate_cols:
-        print(f"\n⚠ 警告: 数据集存在重复列名,Pandas已自动添加后缀: {duplicate_cols}")
+        print(f"\n[!] 警告: 数据集存在重复列名，Pandas 已自动添加后缀: {duplicate_cols}")
 
     print(f"\n列序号和列名称:")
     for idx, col in enumerate(df.columns):
@@ -1086,22 +1214,23 @@ def step3_3_generate_normalized_dataset(
     for config in all_column_configs:
         role_groups[config['role']].append(config)
 
-    # 第一次扫描: 确定最大列数
-    max_reactant_count = 0
+    # 第一次扫描: 确定每个列名的最大 SMILES 数量
+    max_reactant_count = {}  # {reactant_name: max_count}
     max_others_count = {}  # {others_name: max_count}
 
     for row_idx in valid_row_indices:
         row_data = df.iloc[row_idx]
 
-        # 统计reactant
-        reactant_count = 0
+        # 统计每个 reactant 列的最大 SMILES 数量（保留用户指定的名称）
         for config in role_groups['reactant']:
             col_name = config['origin_name']
+            new_name = config['name']
             value = row_data[col_name]
             if pd.notna(value) and str(value).strip():
                 smiles_parts = split_smiles(str(value))
-                reactant_count += len(smiles_parts)
-        max_reactant_count = max(max_reactant_count, reactant_count)
+                if new_name not in max_reactant_count:
+                    max_reactant_count[new_name] = 0
+                max_reactant_count[new_name] = max(max_reactant_count[new_name], len(smiles_parts))
 
         # 统计others
         for config in role_groups['others']:
@@ -1114,16 +1243,27 @@ def step3_3_generate_normalized_dataset(
                     max_others_count[new_name] = 0
                 max_others_count[new_name] = max(max_others_count[new_name], len(smiles_parts))
 
-    print(f"  最大reactant数量: {max_reactant_count}")
+    for name, count in max_reactant_count.items():
+        print(f"  最大{name}数量: {count}")
     for name, count in max_others_count.items():
         print(f"  最大{name}数量: {count}")
 
     # 构建最终列名列表(按顺序)
     final_columns = []
 
-    # reactant列
-    for i in range(max_reactant_count):
-        final_columns.append(f'reactant-{i+1}')
+    # reactant列（保留用户指定的名称）
+    for config in role_groups['reactant']:
+        name = config['name']
+        if name in max_reactant_count:
+            count = max_reactant_count[name]
+            if count == 1:
+                final_columns.append(name)
+            else:
+                for i in range(count):
+                    final_columns.append(f'{name}-{i+1}')
+        else:
+            # 如果所有行都为空，仍然保留一列
+            final_columns.append(name)
 
     # others列
     for config in role_groups['others']:
@@ -1158,18 +1298,22 @@ def step3_3_generate_normalized_dataset(
         row_data = df.iloc[row_idx]
         normalized_row = {col: '' for col in final_columns}  # 初始化为空字符串
 
-        # 填充reactant
-        reactant_smiles_list = []
+        # 填充 reactant（按用户指定的名称单独处理每个列）
         for config in role_groups['reactant']:
             col_name = config['origin_name']
+            new_name = config['name']
             value = row_data[col_name]
+
             if pd.notna(value) and str(value).strip():
                 smiles_parts = split_smiles(str(value))
-                reactant_smiles_list.extend(smiles_parts)
-
-        for i, smiles in enumerate(reactant_smiles_list):
-            if i < max_reactant_count:
-                normalized_row[f'reactant-{i+1}'] = smiles
+                if len(smiles_parts) == 1:
+                    if new_name in normalized_row:
+                        normalized_row[new_name] = smiles_parts[0]
+                else:
+                    for i, smiles in enumerate(smiles_parts):
+                        col_name_indexed = f'{new_name}-{i+1}'
+                        if col_name_indexed in normalized_row:
+                            normalized_row[col_name_indexed] = smiles
 
         # 填充others
         for config in role_groups['others']:
@@ -1898,11 +2042,19 @@ def save_config_file(
             if col == column_roles['label']:
                 continue
 
-            # 判断是否为 reactant 列（reactant-1, reactant-2, ...）
-            if col.startswith('reactant-'):
-                column_roles['reactants'].append(col)
+            # 判断是否为 reactant 列（基于用户声明的名称匹配）
+            matched_reactant = False
+            for base_name in reactant_base_names:
+                if col == base_name or col.startswith(f'{base_name}-'):
+                    column_roles['reactants'].append(col)
+                    matched_reactant = True
+                    break
+
+            if matched_reactant:
+                continue
+
             # 判断是否为 product 列
-            elif col in product_base_names:
+            if col in product_base_names:
                 column_roles['products'].append(col)
             # 判断是否为 condition 列
             elif col in condition_base_names:
@@ -1910,11 +2062,9 @@ def save_config_file(
             # 判断是否为 others 列
             else:
                 # others 列可能是 base_name 或 base_name-1, base_name-2, ...
-                matched = False
                 for base_name in others_base_names:
                     if col == base_name or col.startswith(f'{base_name}-'):
                         column_roles['others'].append(col)
-                        matched = True
                         break
     else:
         # 如果没有规范数据集，使用原始列名（向后兼容）
