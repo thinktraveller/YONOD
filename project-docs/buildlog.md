@@ -2008,3 +2008,30 @@ for desc_name in args.descriptors:
 所有测试通过，确认修复有效。
 
 ---
+
+## [2026-07-05 22:32] 步骤完成：different_order 任务配置批量生成
+
+### 执行的任务
+- 阅读 `different_order/project-goal.md`，按任务名数字映射列名生成 different_order 任务配置。
+- 基于 `different_order/1234567/1234567_yonod_config.json` 创建/更新任务文件夹及 `{任务名}_yonod_config.json`。
+- 将每个配置中的 `project_name` 修改为任务名，并将所有 descriptors 的 `columns` 统一改为任务名数字对应的列顺序。
+- 新增批量执行脚本 `different_order/run_different_order_tasks.py`，支持默认执行清单全部任务，也支持 `--new-only` 只执行 31 个新增任务。
+
+### 关键变更
+- 新增/更新 `different_order/<任务名>/<任务名>_yonod_config.json`。
+- 更新已有基准配置 `different_order/1234567/1234567_yonod_config.json`，使所有 descriptor 的列顺序与任务名 `1234567` 保持一致。
+- 新增 `different_order/run_different_order_tasks.py`，批量串行调用 `main.py --config ... --csv ...`。
+
+### 遇到的问题及解决方案
+- `project-goal.md` 文本写明 31 个任务，但显式任务清单包含 32 个名称，其中 `1234567` 为已有基准任务。已按显式清单生成/校验 32 个配置，同时脚本提供 `--new-only` 选项用于只跑 31 个新增任务。
+- 本地 Python 写入与校验命令在默认沙箱中触发底层 `bwrap` 限制，已按权限流程在沙箱外执行相同的本地文件生成与只读校验操作。
+
+### 验证结果
+- `python3 -m py_compile different_order/run_different_order_tasks.py`：通过。
+- 结构化 JSON 校验：`PASS: 32 configs verified`。
+- `python3 different_order/run_different_order_tasks.py --dry-run --new-only`：通过，输出 31 条新增任务命令。
+
+### 下一步计划
+- 在需要正式建模时，后台执行 `different_order/run_different_order_tasks.py`；如只运行新增 31 个任务，使用 `--new-only`。
+
+---
