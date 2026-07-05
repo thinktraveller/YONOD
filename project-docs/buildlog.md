@@ -1936,3 +1936,75 @@ config_to_args() 函数返回的 argparse.Namespace 对象缺少 json 属性。�
 **说明**：用户提供的原始错误 SMILES `C1=C(C(=C(C(=C1Cl)Cl)Cl)[O-].[Na+]` 本身有语法错误（多了一个左括号），已在测试中替换为正确的五氯酚钠 SMILES：`Clc1c(Cl)c(Cl)c([O-])c(Cl)c1.[Na+]`。
 
 ---
+
+## [2026-07-05 18:57] 修复：JSON 配置模式下描述符 columns 配置被忽略
+
+### 问题描述
+- 现象：使用 JSON 配置文件运行 `main.py` 时，每个描述符的 `columns` 配置被忽略，所有描述符都使用相同的全局 `smiles_cols`
+- 影响范围：所有使用 JSON 配置文件的建模任务，`n_smiles_cols` 始终为固定值（如 8），`feature_dim` 不随任务配置变化
+
+### 根本原因
+`main.py` 中存在两处问题：
+
+1. **`config_to_args()` 丢弃了 descriptor columns**（第 325-326 行）：
+```python
+descriptor_configs = config.get('descriptors', [])
+descriptors = [cfg['descriptor'] for cfg in descriptor_configs]  # 只保留名称！
+```
+这里只提取了 descriptor 名称，丢弃了 `columns` 和 `mode` 配置。
+
+2. **建模循环使用同一组全局列**（第 586-602 行）：
+```python
+for desc_name in args.descriptors:
+    X_smiles, X_numeric, mask = build_universal_features(
+        smiles_cols=smiles_cols,  # 始终使用全局列
+        ...
+    )
+```
+
+### 修复方案
+1. 在 `config_to_args()` 中新增 `_descriptor_configs` 属性，保留完整的描述符配置列表
+2. 新增三个辅助函数：
+   - `_resolve_descriptor_columns()`: 将配置中的列名解析为规范化 CSV 中的实际列名
+   - `_expand_base_name()`: 将基础名称展开为所有匹配的实际列名（如 `reactant` -> `['reactant-1', 'reactant-2']`）
+   - `_get_descriptor_config()`: 根据描述符名称查找对应的配置
+3. 修改建模循环，使每个 descriptor 使用自己配置的列，并输出详细日志
+
+### 变更文件
+- `main.py`:
+  - 第 324-326 行：更新注释说明保留完整配置
+  - 第 379-382 行：新增 `_descriptor_configs` 属性到 `args`
+  - 第 387-484 行：新增三个辅助函数 `_resolve_descriptor_columns()`, `_expand_base_name()`, `_get_descriptor_config()`
+  - 第 719-754 行：修改建模循环，每个描述符使用独立的列配置并输出日志
+
+### 验证方法
+创建单元测试和集成测试验证：
+
+1. **`_expand_base_name()` 测试**：
+   - 精确匹配：`'product'` -> `['product']`
+   - 模式匹配：`'reactant'` -> `['reactant-1', 'reactant-2']`
+   - 混合匹配：`'catalyst'` -> `['catalyst']` 或 `['catalyst-1', 'catalyst-2']`
+   - 无匹配：`'nonexistent'` -> `[]`
+
+2. **`_get_descriptor_config()` 测试**：
+   - 找到匹配的描述符配置
+   - 大小写不敏感查找
+   - 未找到返回 None
+   - 空配置返回 None
+
+3. **`_resolve_descriptor_columns()` 测试**：
+   - concat 模式：正确解析指定的列
+   - 基础名称展开：`'reactant'` 展开为 `['reactant-1', 'reactant-2']`
+   - reaction 模式（DRFP）：使用 reactant + product
+   - reaction 模式 + extra_reactants：正确添加额外列
+   - 空 columns 使用全部列
+
+4. **集成测试**（模拟 example.json 配置）：
+   - morgan: 5 列（reactant-1, reactant-2, product, catalyst, solvent）
+   - maccs: 3 列（reactant-1, reactant-2, product）
+   - maf: 3 列（reactant-1, reactant-2, product）
+   - drfp: 4 列（reactant-1, reactant-2, product, catalyst）
+
+所有测试通过，确认修复有效。
+
+---
