@@ -1214,22 +1214,23 @@ def step3_3_generate_normalized_dataset(
     for config in all_column_configs:
         role_groups[config['role']].append(config)
 
-    # 第一次扫描: 确定最大列数
-    max_reactant_count = 0
+    # 第一次扫描: 确定每个列名的最大 SMILES 数量
+    max_reactant_count = {}  # {reactant_name: max_count}
     max_others_count = {}  # {others_name: max_count}
 
     for row_idx in valid_row_indices:
         row_data = df.iloc[row_idx]
 
-        # 统计reactant
-        reactant_count = 0
+        # 统计每个 reactant 列的最大 SMILES 数量（保留用户指定的名称）
         for config in role_groups['reactant']:
             col_name = config['origin_name']
+            new_name = config['name']
             value = row_data[col_name]
             if pd.notna(value) and str(value).strip():
                 smiles_parts = split_smiles(str(value))
-                reactant_count += len(smiles_parts)
-        max_reactant_count = max(max_reactant_count, reactant_count)
+                if new_name not in max_reactant_count:
+                    max_reactant_count[new_name] = 0
+                max_reactant_count[new_name] = max(max_reactant_count[new_name], len(smiles_parts))
 
         # 统计others
         for config in role_groups['others']:
@@ -1242,16 +1243,27 @@ def step3_3_generate_normalized_dataset(
                     max_others_count[new_name] = 0
                 max_others_count[new_name] = max(max_others_count[new_name], len(smiles_parts))
 
-    print(f"  最大reactant数量: {max_reactant_count}")
+    for name, count in max_reactant_count.items():
+        print(f"  最大{name}数量: {count}")
     for name, count in max_others_count.items():
         print(f"  最大{name}数量: {count}")
 
     # 构建最终列名列表(按顺序)
     final_columns = []
 
-    # reactant列
-    for i in range(max_reactant_count):
-        final_columns.append(f'reactant-{i+1}')
+    # reactant列（保留用户指定的名称）
+    for config in role_groups['reactant']:
+        name = config['name']
+        if name in max_reactant_count:
+            count = max_reactant_count[name]
+            if count == 1:
+                final_columns.append(name)
+            else:
+                for i in range(count):
+                    final_columns.append(f'{name}-{i+1}')
+        else:
+            # 如果所有行都为空，仍然保留一列
+            final_columns.append(name)
 
     # others列
     for config in role_groups['others']:
@@ -1286,18 +1298,22 @@ def step3_3_generate_normalized_dataset(
         row_data = df.iloc[row_idx]
         normalized_row = {col: '' for col in final_columns}  # 初始化为空字符串
 
-        # 填充reactant
-        reactant_smiles_list = []
+        # 填充 reactant（按用户指定的名称单独处理每个列）
         for config in role_groups['reactant']:
             col_name = config['origin_name']
+            new_name = config['name']
             value = row_data[col_name]
+
             if pd.notna(value) and str(value).strip():
                 smiles_parts = split_smiles(str(value))
-                reactant_smiles_list.extend(smiles_parts)
-
-        for i, smiles in enumerate(reactant_smiles_list):
-            if i < max_reactant_count:
-                normalized_row[f'reactant-{i+1}'] = smiles
+                if len(smiles_parts) == 1:
+                    if new_name in normalized_row:
+                        normalized_row[new_name] = smiles_parts[0]
+                else:
+                    for i, smiles in enumerate(smiles_parts):
+                        col_name_indexed = f'{new_name}-{i+1}'
+                        if col_name_indexed in normalized_row:
+                            normalized_row[col_name_indexed] = smiles
 
         # 填充others
         for config in role_groups['others']:
@@ -2026,11 +2042,19 @@ def save_config_file(
             if col == column_roles['label']:
                 continue
 
-            # 判断是否为 reactant 列（reactant-1, reactant-2, ...）
-            if col.startswith('reactant-'):
-                column_roles['reactants'].append(col)
+            # 判断是否为 reactant 列（基于用户声明的名称匹配）
+            matched_reactant = False
+            for base_name in reactant_base_names:
+                if col == base_name or col.startswith(f'{base_name}-'):
+                    column_roles['reactants'].append(col)
+                    matched_reactant = True
+                    break
+
+            if matched_reactant:
+                continue
+
             # 判断是否为 product 列
-            elif col in product_base_names:
+            if col in product_base_names:
                 column_roles['products'].append(col)
             # 判断是否为 condition 列
             elif col in condition_base_names:
@@ -2038,11 +2062,9 @@ def save_config_file(
             # 判断是否为 others 列
             else:
                 # others 列可能是 base_name 或 base_name-1, base_name-2, ...
-                matched = False
                 for base_name in others_base_names:
                     if col == base_name or col.startswith(f'{base_name}-'):
                         column_roles['others'].append(col)
-                        matched = True
                         break
     else:
         # 如果没有规范数据集，使用原始列名（向后兼容）

@@ -725,7 +725,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         # 获取该描述符的独立配置（如果存在）
         desc_config = _get_descriptor_config(desc_name, descriptor_configs)
 
-        # 解析该描述符应使用的列
+        # 解析该描述符应使用的列和模式
         if desc_config is not None:
             # JSON 配置模式：使用描述符自己配置的列
             desc_smiles_cols = _resolve_descriptor_columns(
@@ -737,12 +737,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                 'product': [c for c in desc_smiles_cols if c in smiles_roles.get('product', [])],
                 'other': [c for c in desc_smiles_cols if c in smiles_roles.get('other', [])],
             }
-            print(f"  [config] 模式: {desc_config.get('mode', 'concat')}")
+            # 提取 mode 参数（默认 concat）
+            desc_mode = desc_config.get('mode', 'concat')
+            print(f"  [config] 模式: {desc_mode}")
             print(f"  [config] 使用列 ({len(desc_smiles_cols)}): {', '.join(desc_smiles_cols)}")
         else:
-            # 传统 CLI 模式：使用全局列
+            # 传统 CLI 模式：使用全局列，默认 concat 模式
             desc_smiles_cols = smiles_cols
             desc_smiles_roles = smiles_roles
+            desc_mode = "concat"
             # 根据描述符类型显示使用的列
             if desc_name.lower() == "drfp":
                 cols_used = smiles_roles['reactant'] + smiles_roles['product']
@@ -756,6 +759,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             df=df,
             desc_name=desc_name,
             smiles_roles=desc_smiles_roles,
+            mode=desc_mode,
         )
         y = df[label_col].to_numpy(dtype=np.float64)[mask]
 

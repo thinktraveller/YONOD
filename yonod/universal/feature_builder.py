@@ -82,19 +82,24 @@ def build_universal_features(
     df: pd.DataFrame,
     desc_name: str,
     smiles_roles: Optional[Dict[str, List[str]]] = None,
+    mode: str = "concat",
 ) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray]:
     """计算 SMILES 描述符矩阵与原始数值矩阵（支持三分类角色）。
 
     Args:
-        smiles_cols:  SMILES 列名列表，顺序决定拼接顺序。
+        smiles_cols:  SMILES 列名列表，顺序决定拼接顺序（concat 模式）或加和顺序（sum 模式）。
         numeric_cols: 数值辅助列名列表（如温度）；空列表则返回 None。
         df:           已通过 csv_loader 加载的 DataFrame（含所有角色列）。
         desc_name:    描述符名称，见模块文档。
         smiles_roles: 三分类角色映射 {'reactant': [...], 'product': [...], 'other': [...]}
                       None 表示传统模式（所有列等价）。
+        mode:         特征构建模式：
+                      - 'concat': 逐列计算描述符后横向拼接，输出 (n, n_cols * desc_dim)
+                      - 'sum': 将多列 SMILES 用点分隔符拼接后一次性计算，输出 (n, desc_dim)
+                      默认 'concat'。
 
     Returns:
-        X_smiles  : ndarray shape (n_valid, n_smiles_cols * desc_dim)
+        X_smiles  : ndarray shape (n_valid, n_smiles_cols * desc_dim) 或 (n_valid, desc_dim)
         X_numeric : ndarray shape (n_valid, len(numeric_cols)) 或 None
         valid_mask: bool ndarray shape (len(df),)，True 表示该行通过描述符过滤
     """
@@ -157,31 +162,55 @@ def build_universal_features(
         # 其他描述符：使用所有 SMILES 列
         cols_to_use = smiles_cols
 
-    # --- 逐列计算 SMILES 描述符 ---
-    col_blocks: list[np.ndarray] = []
-    row_mask = np.zeros(n, dtype=bool)  # 至少一列有效则行有效（空列用零向量填充）
+    # --- SMILES 规范化辅助函数 ---
+    def _norm(s: str) -> str:
+        """规范化为 RDKit 标准点分隔形式（'.'）"""
+        s = s.replace(",", ".").replace("*", ".").replace("~", ".")
+        s = re.sub(r'\.{2,}', '.', s)
+        return s.strip('.')
 
-    for col in cols_to_use:
-        if col not in df.columns:
-            raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
-        # 规范化为 RDKit 标准点分隔形式（'.'）：
-        #   ','  → 阴阳离子对；'*' → 反应步骤；'~' → 组分替代表示
-        #   连续点（如 '**' 空步骤产生的 '..'）压缩为单个 '.'
-        def _norm(s: str) -> str:
-            s = s.replace(",", ".").replace("*", ".").replace("~", ".")
-            s = re.sub(r'\.{2,}', '.', s)
-            return s.strip('.')
-        smiles_list = [
-            _norm(s) if isinstance(s, str) else ""
-            for s in df[col].fillna("").tolist()
-        ]
-        feats, mask = descriptor.featurize(smiles_list)
-        col_blocks.append(feats)
-        row_mask |= mask  # 任一列有效则保留该行；无效列贡献零向量
+    # --- 根据 mode 选择特征构建策略 ---
+    if mode == "sum":
+        # sum 模式：将多列 SMILES 用点分隔符拼接成一个字符串，一次性计算描述符
+        # 输出维度为 (n, desc_dim)，与列顺序无关（加和具有交换律）
+        combined_smiles: List[str] = []
+        for idx in range(n):
+            parts = []
+            for col in cols_to_use:
+                if col not in df.columns:
+                    raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
+                val = df[col].iloc[idx]
+                if pd.notna(val) and isinstance(val, str) and val.strip():
+                    normed = _norm(val)
+                    if normed:
+                        parts.append(normed)
+            # 用点分隔符连接所有非空 SMILES
+            combined_smiles.append(".".join(parts) if parts else "")
 
-    # 拼接多列描述符，只保留 valid 行
-    X_smiles_full = np.concatenate(col_blocks, axis=1)  # (n, n_cols * d)
-    X_smiles = X_smiles_full[row_mask]
+        # 一次性调用描述符
+        X_smiles_full, row_mask = descriptor.featurize(combined_smiles)
+        X_smiles = X_smiles_full[row_mask]
+
+    else:
+        # concat 模式（默认）：逐列计算描述符后横向拼接
+        # 输出维度为 (n, n_cols * desc_dim)
+        col_blocks: list[np.ndarray] = []
+        row_mask = np.zeros(n, dtype=bool)  # 至少一列有效则行有效（空列用零向量填充）
+
+        for col in cols_to_use:
+            if col not in df.columns:
+                raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
+            smiles_list = [
+                _norm(s) if isinstance(s, str) else ""
+                for s in df[col].fillna("").tolist()
+            ]
+            feats, mask = descriptor.featurize(smiles_list)
+            col_blocks.append(feats)
+            row_mask |= mask  # 任一列有效则保留该行；无效列贡献零向量
+
+        # 拼接多列描述符，只保留 valid 行
+        X_smiles_full = np.concatenate(col_blocks, axis=1)  # (n, n_cols * d)
+        X_smiles = X_smiles_full[row_mask]
 
     # --- 数值辅助列 ---
     X_numeric: Optional[np.ndarray] = None
