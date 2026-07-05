@@ -121,6 +121,51 @@ def step1_collect_basic_info() -> Dict:
     }
 
 
+def _precheck_csv_format(file_path: str, encoding: str = 'utf-8') -> List[Dict]:
+    """
+    预检查 CSV 文件格式，检测字段数不一致的行
+
+    Args:
+        file_path: CSV 文件路径
+        encoding: 文件编码
+
+    Returns:
+        list: 问题行列表，每个元素为 {'line_num': int, 'expected': int, 'actual': int, 'content': str}
+    """
+    import csv
+
+    bad_lines = []
+
+    try:
+        with open(file_path, 'r', encoding=encoding, newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return []
+
+            expected_fields = len(header)
+
+            for line_num, row in enumerate(reader, start=2):  # 从第2行开始（第1行是表头）
+                actual_fields = len(row)
+                if actual_fields != expected_fields:
+                    # 截断过长的内容，避免输出过多
+                    content_preview = ','.join(row)
+                    if len(content_preview) > 100:
+                        content_preview = content_preview[:100] + '...'
+                    bad_lines.append({
+                        'line_num': line_num,
+                        'expected': expected_fields,
+                        'actual': actual_fields,
+                        'content': content_preview
+                    })
+
+    except UnicodeDecodeError:
+        # 编码问题会在后续处理中捕获
+        pass
+
+    return bad_lines
+
+
 def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
     """
     加载数据集并展示基本信息
@@ -133,22 +178,105 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
 
     Raises:
         UnicodeDecodeError: 如果CSV文件编码不是UTF-8
-        pd.errors.ParserError: 如果CSV格式错误
+        pd.errors.ParserError: 如果CSV格式错误且无法恢复
     """
-    try:
-        # 首先尝试UTF-8编码
-        df = pd.read_csv(dataset_path, encoding='utf-8')
-    except UnicodeDecodeError:
-        # 如果UTF-8失败,尝试GBK编码(中文Windows常见编码)
-        print("⚠ UTF-8编码读取失败,尝试使用GBK编码...")
+    # 尝试的编码列表
+    encodings_to_try = ['utf-8', 'gbk', 'latin1']
+
+    df = None
+    used_encoding = None
+    parser_error = None
+
+    for encoding in encodings_to_try:
         try:
-            df = pd.read_csv(dataset_path, encoding='gbk')
-            print("[OK] 使用GBK编码成功读取")
+            # 首先尝试严格模式读取
+            df = pd.read_csv(dataset_path, encoding=encoding)
+            used_encoding = encoding
+            if encoding != 'utf-8':
+                print(f"[OK] 使用 {encoding.upper()} 编码成功读取")
+            break
+
         except UnicodeDecodeError:
-            # 如果GBK也失败,尝试latin1(几乎不会失败)
-            print("⚠ GBK编码读取失败,尝试使用latin1编码...")
-            df = pd.read_csv(dataset_path, encoding='latin1')
-            print("[OK] 使用latin1编码成功读取")
+            # 编码不匹配，尝试下一个
+            if encoding != encodings_to_try[-1]:
+                print(f"[!] {encoding.upper()} 编码读取失败，尝试其他编码...")
+            continue
+
+        except pd.errors.ParserError as e:
+            parser_error = e
+            used_encoding = encoding
+            break
+
+    # 如果所有编码都失败（UnicodeDecodeError）
+    if df is None and parser_error is None:
+        raise UnicodeDecodeError(
+            'utf-8', b'', 0, 1,
+            f"无法使用 {', '.join(encodings_to_try)} 编码读取文件"
+        )
+
+    # 处理 ParserError：CSV 格式问题
+    if parser_error is not None:
+        print(f"\n[!] CSV 格式错误: {parser_error}")
+        print("\n正在分析问题行...")
+
+        # 预检查找出问题行
+        bad_lines = _precheck_csv_format(dataset_path, used_encoding)
+
+        if bad_lines:
+            print(f"\n[!] 发现 {len(bad_lines)} 行字段数不一致:")
+            print("-" * 70)
+            # 最多显示前 10 行问题
+            for i, bl in enumerate(bad_lines[:10]):
+                print(f"  行 {bl['line_num']}: 期望 {bl['expected']} 个字段，实际 {bl['actual']} 个")
+                print(f"       内容预览: {bl['content']}")
+            if len(bad_lines) > 10:
+                print(f"  ... 还有 {len(bad_lines) - 10} 行问题未显示")
+            print("-" * 70)
+
+            print("\n[?] 常见原因及修复建议:")
+            print("  1. 字段内容包含未转义的逗号 → 用引号包裹该字段")
+            print("  2. 引号不匹配（如单独的引号） → 检查并修复引号配对")
+            print("  3. 数据行被意外换行 → 检查该行是否被拆分到多行")
+            print("  4. 使用了错误的分隔符 → 确认使用逗号作为分隔符")
+
+        # 尝试使用宽松模式读取
+        print("\n[!] 尝试跳过问题行继续读取...")
+
+        try:
+            # pandas >= 1.3.0 使用 on_bad_lines 参数
+            df = pd.read_csv(
+                dataset_path,
+                encoding=used_encoding,
+                on_bad_lines='warn'  # 'skip' 静默跳过，'warn' 显示警告
+            )
+            skipped_count = len(bad_lines) if bad_lines else 0
+            print(f"[OK] 已跳过 {skipped_count} 行问题数据，成功读取剩余数据")
+            print(f"[!] 警告: 跳过的行不会参与后续处理，请在源文件中修复问题行")
+
+        except TypeError:
+            # pandas < 1.3.0 使用旧参数
+            try:
+                df = pd.read_csv(
+                    dataset_path,
+                    encoding=used_encoding,
+                    error_bad_lines=False,
+                    warn_bad_lines=True
+                )
+                skipped_count = len(bad_lines) if bad_lines else 0
+                print(f"[OK] 已跳过 {skipped_count} 行问题数据，成功读取剩余数据")
+                print(f"[!] 警告: 跳过的行不会参与后续处理，请在源文件中修复问题行")
+
+            except Exception as fallback_error:
+                # 无法恢复，抛出原始错误
+                print(f"\n[X] 无法自动修复 CSV 格式问题")
+                print(f"    请手动检查并修复上述问题行后重试")
+                raise parser_error from fallback_error
+
+        except Exception as fallback_error:
+            # 无法恢复，抛出原始错误
+            print(f"\n[X] 无法自动修复 CSV 格式问题: {fallback_error}")
+            print(f"    请手动检查并修复上述问题行后重试")
+            raise parser_error from fallback_error
 
     print(f"\n数据集基本信息:")
     print(f"  总行数: {len(df)}")
@@ -157,7 +285,7 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
     # 检查是否有重复列名
     duplicate_cols = df.columns[df.columns.duplicated()].tolist()
     if duplicate_cols:
-        print(f"\n⚠ 警告: 数据集存在重复列名,Pandas已自动添加后缀: {duplicate_cols}")
+        print(f"\n[!] 警告: 数据集存在重复列名，Pandas 已自动添加后缀: {duplicate_cols}")
 
     print(f"\n列序号和列名称:")
     for idx, col in enumerate(df.columns):
