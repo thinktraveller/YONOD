@@ -47,6 +47,8 @@ docs/
 #                          or retrain with the upstream notebooks; see README.
 WEIGHTS/MolMetaLM-base/
 WEIGHTS/FISD/
+dataset/
+
 
 # Generic large weight file types
 *.safetensors
