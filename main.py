@@ -321,7 +321,7 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
     # 使用 load_config_from_json 中设置的数据集路径
     dataset_path = config['_dataset_path']
 
-    # 解析描述符配置
+    # 解析描述符配置（保留完整配置，包括 columns 和 mode）
     descriptor_configs = config.get('descriptors', [])
     descriptors = [cfg['descriptor'] for cfg in descriptor_configs]
 
@@ -378,9 +378,142 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
         _config_path=config_path,
         json=config_path,
         config=config_path,
+        # 新增：保留完整的描述符配置列表（包含 columns 和 mode）
+        _descriptor_configs=descriptor_configs,
     )
 
     return args
+
+
+# ────────────────────────── 描述符列解析 ──────────────────────────────────── #
+
+def _resolve_descriptor_columns(
+    desc_config: Dict[str, Any],
+    all_smiles_cols: List[str],
+    smiles_roles: Dict[str, List[str]],
+) -> List[str]:
+    """
+    将描述符配置中的列名解析为规范化 CSV 中的实际列名。
+
+    配置中的列名可能是：
+      - 用户声明的基础名称（如 'reactant', 'catalyst'）
+      - 规范化后的实际列名（如 'reactant-1', 'catalyst-1'）
+
+    本函数负责将基础名称展开为所有匹配的实际列名。
+
+    Args:
+        desc_config: 单个描述符配置字典，包含 'descriptor', 'mode', 'columns' 等
+        all_smiles_cols: 规范化 CSV 中的所有 SMILES 列名
+        smiles_roles: 列角色映射 {'reactant': [...], 'product': [...], 'other': [...]}
+
+    Returns:
+        解析后的实际列名列表
+    """
+    mode = desc_config.get('mode', 'concat')
+    desc_name = desc_config.get('descriptor', '')
+
+    # DRFP 使用 reaction 模式，固定使用 reactant + product
+    if mode == 'reaction' or desc_name.lower() == 'drfp':
+        # 基础列 = reactant + product
+        base_cols = smiles_roles.get('reactant', []) + smiles_roles.get('product', [])
+        # 额外加入的 others 列
+        extra_reactants = desc_config.get('extra_reactants', [])
+        if extra_reactants:
+            # 展开 extra_reactants 中的基础名称
+            for base_name in extra_reactants:
+                matched = _expand_base_name(base_name, all_smiles_cols)
+                base_cols.extend(matched)
+        return base_cols
+
+    # concat 或 sum 模式：从配置的 columns 中解析
+    config_columns = desc_config.get('columns', [])
+
+    if not config_columns:
+        # 如果没有指定 columns，使用默认的全部列
+        return all_smiles_cols
+
+    # 展开每个配置的列名
+    resolved = []
+    for col_name in config_columns:
+        matched = _expand_base_name(col_name, all_smiles_cols)
+        if matched:
+            resolved.extend(matched)
+        else:
+            # 如果没有匹配到，可能是精确列名，直接添加（如果存在）
+            if col_name in all_smiles_cols:
+                resolved.append(col_name)
+            else:
+                print(f"[warn] 描述符配置中的列名 '{col_name}' 未在数据集中找到，已跳过", file=sys.stderr)
+
+    return resolved
+
+
+def _expand_base_name(base_name: str, all_cols: List[str]) -> List[str]:
+    """
+    将基础名称展开为所有匹配的实际列名。
+
+    例如：
+      - 'reactant' -> ['reactant-1', 'reactant-2', ...]
+      - 'catalyst' -> ['catalyst'] 或 ['catalyst-1', 'catalyst-2', ...]
+      - 'reactant-1' -> ['reactant-1']（精确匹配）
+
+    Args:
+        base_name: 基础名称或精确列名
+        all_cols: 所有可用的列名
+
+    Returns:
+        匹配的列名列表
+    """
+    matched = []
+
+    # 精确匹配
+    if base_name in all_cols:
+        return [base_name]
+
+    # 模式匹配：base_name-N
+    for col in all_cols:
+        if col == base_name:
+            matched.append(col)
+        elif col.startswith(f"{base_name}-"):
+            # 验证后缀是数字
+            suffix = col[len(base_name) + 1:]
+            if suffix.isdigit():
+                matched.append(col)
+
+    # 按数字后缀排序
+    def sort_key(c: str) -> int:
+        if '-' in c:
+            suffix = c.rsplit('-', 1)[-1]
+            if suffix.isdigit():
+                return int(suffix)
+        return 0
+
+    matched.sort(key=sort_key)
+    return matched
+
+
+def _get_descriptor_config(
+    desc_name: str,
+    descriptor_configs: Optional[List[Dict[str, Any]]],
+) -> Optional[Dict[str, Any]]:
+    """
+    根据描述符名称查找对应的配置。
+
+    Args:
+        desc_name: 描述符名称
+        descriptor_configs: 描述符配置列表
+
+    Returns:
+        匹配的配置字典，或 None
+    """
+    if not descriptor_configs:
+        return None
+
+    for cfg in descriptor_configs:
+        if cfg.get('descriptor', '').lower() == desc_name.lower():
+            return cfg
+
+    return None
 
 
 # ────────────────────────────── argparse ──────────────────────────────────── #
@@ -583,22 +716,46 @@ def main(argv: Optional[List[str]] = None) -> int:
     total = len(args.descriptors) * len(args.models)
     done = 0
 
+    # 获取描述符配置列表（JSON 配置模式下可用）
+    descriptor_configs = getattr(args, '_descriptor_configs', None)
+
     for desc_name in args.descriptors:
         print(f"\n[desc] 计算描述符: {desc_name} ...")
 
-        # 根据描述符类型显示使用的列
-        if desc_name.lower() == "drfp":
-            cols_used = smiles_roles['reactant'] + smiles_roles['product']
-            print(f"  使用列（反应物+产物）: {', '.join(cols_used)}")
+        # 获取该描述符的独立配置（如果存在）
+        desc_config = _get_descriptor_config(desc_name, descriptor_configs)
+
+        # 解析该描述符应使用的列
+        if desc_config is not None:
+            # JSON 配置模式：使用描述符自己配置的列
+            desc_smiles_cols = _resolve_descriptor_columns(
+                desc_config, smiles_cols, smiles_roles
+            )
+            # 构建该描述符的 smiles_roles（用于 DRFP 等反应类描述符）
+            desc_smiles_roles = {
+                'reactant': [c for c in desc_smiles_cols if c in smiles_roles.get('reactant', [])],
+                'product': [c for c in desc_smiles_cols if c in smiles_roles.get('product', [])],
+                'other': [c for c in desc_smiles_cols if c in smiles_roles.get('other', [])],
+            }
+            print(f"  [config] 模式: {desc_config.get('mode', 'concat')}")
+            print(f"  [config] 使用列 ({len(desc_smiles_cols)}): {', '.join(desc_smiles_cols)}")
         else:
-            print(f"  使用列（全部）: {', '.join(smiles_cols)}")
+            # 传统 CLI 模式：使用全局列
+            desc_smiles_cols = smiles_cols
+            desc_smiles_roles = smiles_roles
+            # 根据描述符类型显示使用的列
+            if desc_name.lower() == "drfp":
+                cols_used = smiles_roles['reactant'] + smiles_roles['product']
+                print(f"  使用列（反应物+产物）: {', '.join(cols_used)}")
+            else:
+                print(f"  使用列（全部）: {', '.join(smiles_cols)}")
 
         X_smiles, X_numeric, mask = build_universal_features(
-            smiles_cols=smiles_cols,
+            smiles_cols=desc_smiles_cols,
             numeric_cols=numeric_cols,
             df=df,
             desc_name=desc_name,
-            smiles_roles=smiles_roles,
+            smiles_roles=desc_smiles_roles,
         )
         y = df[label_col].to_numpy(dtype=np.float64)[mask]
 
@@ -640,7 +797,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "task_name":     task_name,
                 "descriptor":    desc_name,
                 "model":         model_name,
-                "n_smiles_cols": len(smiles_cols),
+                "n_smiles_cols": len(desc_smiles_cols),
                 "n_numeric_cols":len(numeric_cols),
                 "n_samples":     int(mask.sum()),
                 "n_total":       int(len(mask)),
