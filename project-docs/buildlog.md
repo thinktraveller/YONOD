@@ -2035,3 +2035,21 @@ for desc_name in args.descriptors:
 - 在需要正式建模时，后台执行 `different_order/run_different_order_tasks.py`；如只运行新增 31 个任务，使用 `--new-only`。
 
 ---
+
+## [2026-07-05 22:45] 修正：different_order 批量脚本默认 Python 选择
+
+### 背景
+- 复核时发现系统 `/usr/bin/python3` 缺少 `sklearn`，直接用 `python3 main.py --help` 会失败。
+- 项目现有 Conda 环境 `/home/wangzh685/miniconda3/envs/yonod/bin/python` 可以正常加载 `main.py`。
+
+### 修复
+- 更新 `different_order/run_different_order_tasks.py`：
+  - 支持通过 `YONOD_PYTHON` 环境变量覆盖解释器。
+  - 默认优先使用当前解释器；若当前解释器无法导入 `sklearn`，自动尝试常见虚拟环境与本机 `yonod` Conda 环境。
+  - 保留 `--python` 参数用于手动指定解释器。
+
+### 验证
+- `/home/wangzh685/miniconda3/envs/yonod/bin/python main.py --help`：通过。
+- `/home/wangzh685/miniconda3/envs/yonod/bin/python different_order/run_different_order_tasks.py --dry-run --new-only`：通过，输出 31 条新增任务命令。
+
+---

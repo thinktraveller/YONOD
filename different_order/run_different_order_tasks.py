@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -48,6 +49,35 @@ BASELINE_TASK = "1234567"
 DEFAULT_CSV = "different_order/amide-coupling(additive_fixed)_normalized_dataset.csv"
 
 
+def _can_import_sklearn(python_path: str) -> bool:
+    result = subprocess.run(
+        [python_path, "-c", "import sklearn"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def default_python() -> str:
+    env_python = os.environ.get("YONOD_PYTHON")
+    if env_python:
+        return env_python
+
+    if _can_import_sklearn(sys.executable):
+        return sys.executable
+
+    candidates = [
+        Path("venv/bin/python"),
+        Path(".venv/bin/python"),
+        Path("/home/wangzh685/miniconda3/envs/yonod/bin/python"),
+    ]
+    for candidate in candidates:
+        if candidate.exists() and _can_import_sklearn(str(candidate)):
+            return str(candidate)
+
+    return sys.executable
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Batch-run the YONOD different_order task configs."
@@ -70,7 +100,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--python",
-        default=sys.executable,
+        default=default_python(),
         help="Python executable used to invoke main.py.",
     )
     parser.add_argument(
