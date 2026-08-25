@@ -1,0 +1,12 @@
+version: 1
+article:
+  zotero_key: VJETHBKM
+  title: "Yield Smarter, Not Harder: Good Practices for Machine Learning of Reaction Outcomes"
+  doi: "10.1021/jacs.6c02213"
+  si_doi: "10.1021/jacs.6c02213.s001"
+  data_code_doi: "10.3929/ethz-c-000800856"
+audit_status:
+  public_metadata_checked: true
+  zaihub_direct_chunks_checked: false
+  note: "No direct Z-AIHub/Zotero tool was exposed in the current Codex session."
+

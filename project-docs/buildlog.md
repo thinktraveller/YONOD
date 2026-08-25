@@ -2,6 +2,34 @@
 
 ---
 
+## [2026-08-25 13:59] 步骤 20.2 完成：建立 VJETHBKM 隔离复现目录与版本边界
+
+### 执行的任务
+- 在 `reference-proejct/vjethbkm/` 下建立复现区 README、局部 `.gitignore`、配置目录、源码包目录和轻量输出占位。
+- 固化 Stage A/B/C 的数据、描述符、模型、split 与 benchmark stage 配置骨架。
+- 新增 `src/vjethbkm_repro/paths.py`，通过显式路径定位 YONOD 仓库根目录，避免把复现产物写入主项目运行目录。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/.gitignore`：忽略 `.venv/`、raw/interim/processed 数据、cache、runs/logs、大图、模型二进制和 Python 缓存。
+- 新增 `reference-proejct/vjethbkm/README.md`：说明复现区边界、阶段范围、版本管理策略和最小命令入口。
+- 新增 `reference-proejct/vjethbkm/configs/*.yaml`：建立文献审计、数据源、描述符、模型、split 与阶段配置。
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/__init__.py` 与 `paths.py`：提供隔离路径适配层。
+- 新增 `reference-proejct/vjethbkm/data/processed/.gitkeep` 与 `outputs/tables/.gitkeep`：保留可提交轻量目录结构。
+
+### 验证结果
+- `git status --short`：确认本步骤新增文件均位于 `reference-proejct/vjethbkm/`，除 `project-docs/buildlog.md` 外未修改 `project-docs/` 其他文件。
+- 局部 `.gitignore` 已覆盖 `.venv/`、`data/raw/`、`cache/`、`outputs/runs/`、`*.parquet`、`*.joblib` 等计划要求的高风险产物。
+- `paths.py` 的路径规则为 `REPRO_ROOT = reference-proejct/vjethbkm`，`YONOD_ROOT = D:\\大创\\YONOD`，符合隔离复现要求。
+
+### 遇到的问题及解决方案
+- 问题：仓库根 `.gitignore` 中存在通用 `docs/` 与 `tests/` 规则，可能误忽略复现区内的轻量文档和测试。
+- 解决：本轮不修改用户既有 `.gitignore`；对计划要求提交的轻量文件使用明确路径暂存，必要时对被忽略的 `reference-proejct/vjethbkm/docs/*.md` 和后续 `tests/*.py` 使用 `git add -f <明确路径>`。
+
+### 下一步计划
+- 步骤 20.3：校验环境版本，建立 schema、特征来源和数据校验脚本骨架。
+
+---
+
 ## [2026-08-25 13:56] 步骤 20.1 完成：建立 VJETHBKM 文献与复现证据台账
 
 ### 执行的任务
