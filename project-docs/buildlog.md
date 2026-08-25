@@ -2,6 +2,40 @@
 
 ---
 
+## [2026-08-25 15:05] 步骤 20.7A 完成：实现产率不平衡与高产率识别分析骨架
+
+### 执行的任务
+- 实现产率分桶统计，默认分桶为 `[0,0.2)`, `[0.2,0.4)`, `[0.4,0.6)`, `[0.6,0.8)`, `[0.8,1.0]`。
+- 实现按分桶统计预测误差的 helper，可输出每个描述符/模型/产率桶的 MAE 与 RMSE。
+- 实现高产率识别摘要，默认阈值为 `yield >= 0.8`，输出 precision、recall、TP/FP/FN。
+- 实现按产率桶反频率计算 sample weights 的函数，为后续重加权训练做准备，但本步骤不改 RF 训练流程。
+- 使用最新本地 `core_rf_5x5_*` ignored run 的 predictions 生成轻量分析表。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/imbalance.py`：提供 yield bucket、bucket sample weights、bucket error 和 high-yield summary。
+- 新增 `reference-proejct/vjethbkm/scripts/analyze_yield_imbalance.py`：读取 smoke 数据与最新 5×5 predictions，生成不平衡分析表。
+- 新增 `reference-proejct/vjethbkm/tests/test_imbalance.py`：覆盖分桶计数、稀有桶权重和高产率 precision/recall。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/yield_bucket_smoke_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/yield_bucket_error_smoke_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/high_yield_smoke_summary.csv`。
+
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -B reference-proejct/vjethbkm/scripts/analyze_yield_imbalance.py`：通过，基于最新 `core_rf_5x5_20260825_150126` predictions 生成 smoke yield bucket、bucket error 与 high-yield summary。
+- `yield_bucket_smoke_summary.csv`：10 行 smoke 数据中 `[0,0.2)` 为 4 行，`[0.4,0.6)`、`[0.6,0.8)`、`[0.8,1.0]` 各 2 行，`[0.2,0.4)` 为空桶。
+- `high_yield_smoke_summary.csv`：在 repeated-CV predictions 中，高产率真值记录为 10 条（2 个高产率样本 × 5 repeats），OHE/Morgan/PhysChem 当前均未预测出 `y_pred >= 0.8`，precision/recall 均为 0；该现象只用于检查输出链路。
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -m pytest reference-proejct/vjethbkm/tests/test_imbalance.py`：通过，`3 passed in 0.61s`，验证不平衡分析 helper。
+- 输出表只用于 smoke workflow 验证，不作为 VJETHBKM 正式论文结果。
+
+### 遇到的问题及解决方案
+- 问题：本地 smoke 数据只有 10 行，高产率样本很少，precision/recall 数值不具备论文解释意义。
+- 解决：本步骤只提交分析工具和输出 schema；正式结论等待官方数据导入后重新运行。
+- 问题：首次运行 `test_imbalance.py` 时，`bucket_sample_weights()` 因 pandas categorical 保留空桶而在空桶计数上触发除以 0。
+- 解决：改为只按每个样本实际所属桶计算反频率权重，并显式跳过空桶。
+
+### 下一步计划
+- 步骤 20.7B：将 sample weights 接入 RF 训练配置，生成 weighted vs unweighted 对照；或在官方数据可用后先完成 BH1/BH2/SM/SLAP schema。
+
+---
+
 ## [2026-08-25 15:03] 步骤 20.6C 完成：实现 0D/1D/2D component split 骨架与无泄漏验证
 
 ### 执行的任务
