@@ -90,6 +90,14 @@ def merge_targets(repro_root: Path) -> pd.DataFrame:
         "Local compatible benchmark merged against official target. "
         "This is not guaranteed bit-identical to the official code path unless descriptor/model settings are audited separately."
     )
+    sm_ohe = has_local & (merged["dataset"] == "SM") & (merged["descriptor"] == "OHE")
+    merged.loc[sm_ohe, "status"] = "forensic_unresolved_official_artifact_difference"
+    merged.loc[
+        sm_ohe, "explanation"
+    ] = (
+        "SM/OHE forensic audit ruled out row order, labels, split generation, float64 dtype, and 2SM+catalyst columns. "
+        "The bundled official Suzuki OHE RF result appears stale or generated with missing code/dependency/config details."
+    )
     return merged.sort_values(["dataset", "descriptor", "metric"]).reset_index(drop=True)
 
 

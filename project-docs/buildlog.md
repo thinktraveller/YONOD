@@ -2,6 +2,47 @@
 
 ---
 
+## [2026-08-25 18:16] 步骤 20.9A 完成：SM/OHE 偏离定点法证
+
+### 执行的任务
+- 新增 `SM/OHE` 法证脚本，核对 `SM.csv`、`2SM.csv`、官方 OHE summary、官方 OOF predictions 与 KFold split 顺序。
+- 验证官方 OHE OOF 的 `y_true` 与 `fold_id` 是否等于基于 `Data/HTE_datasets/SM/SM.csv`、`KFold(n_splits=5, shuffle=True, random_state=1000..1004)` 生成的序列。
+- 比对 `Data/HTE_datasets/SM/SM.csv` 与 `Results/Compare_Complexity/Suzuki_2018/2SM.csv` 的 schema、hash、共享列和 Yield。
+- 运行两个可疑变体：`float64 OHE` 与 `2SM.csv + catalyst_smiles`，检查是否能解释官方 SM/OHE summary。
+- 更新主差异表，将 `SM/OHE` 四个指标行标注为 `forensic_unresolved_official_artifact_difference`。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/scripts/forensic_sm_ohe.py`：生成 SM/OHE 法证 summary、manifest 与报告。
+- 新增 `reference-proejct/vjethbkm/tests/test_sm_ohe_forensics.py`：验证法证输入文件存在。
+- 生成 `reference-proejct/vjethbkm/data/manifest/sm_ohe_forensics.json`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/sm_ohe_forensics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/sm_ohe_forensics_report.md`。
+- 更新 `reference-proejct/vjethbkm/scripts/merge_official_differences.py`：对 `SM/OHE` 写入法证未解状态与解释。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/table_s3_local_vs_official_differences.csv`。
+
+### 验证结果
+- `SM.csv`：`5760×6`，sha256 `111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a`。
+- `2SM.csv`：`5760×7`，sha256 `feb007f46b94948041e897fca3bf4e7a2ee5bab8dd513af846eab40c028ed8e0`，比 `SM.csv` 多 `catalyst_smiles`；共享列和 Yield 完全一致。
+- 官方 `Suzuki_OHE_oof_predictions_RF.npz`：`y_true/y_pred/fold_id` 长度均为 `28800`，即 `5760×5`。
+- 官方 OHE `y_true` 序列与本地生成 KFold 序列完全一致；`fold_id` 也完全一致，因此行顺序、标签和 split 不是偏离原因。
+- `float64 OHE` 变体：MAE `7.839955389107668`，RMSE `11.165822306155633`，R² `0.8416078818262736`，Kendall tau `0.7513819976006316`，仍无法匹配官方 SM/OHE 目标。
+- `2SM.csv + catalyst_smiles` 变体：MAE `7.869201504815484`，RMSE `11.182777194337973`，R² `0.8411250524236284`，Kendall tau `0.750876009438253`，仍无法匹配官方 SM/OHE 目标。
+- 官方 SM/OHE 目标：MAE `9.362933409146159`，RMSE `13.059287989170132`，R² `0.783424395582564`，Kendall tau `0.7101765501581333`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_sm_ohe_forensics.py -q`：通过，`1 passed in 0.01s`。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，保持 `rows=48`、`matched_local_rows=48`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_sm_ohe_forensics.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py -q`：通过，`2 passed in 0.68s`。
+
+### 遇到的问题及解决方案
+- 问题：`SM/OHE` 官方 summary 无法由包内 README、配置、当前 `Train_OHE.py` 逻辑、float64 OHE 或 `2SM+catalyst` 变体复现。
+- 解决：不硬编码、不伪造数值；将证据链写入 `sm_ohe_forensics.json` 与报告，并在主差异表中将 `SM/OHE` 标注为 `forensic_unresolved_official_artifact_difference`。
+- 问题：`SM/OHE` 的可疑原因不能被完全证明为某一个单点。
+- 解决：采用排除式结论：行顺序、标签、split、dtype、`catalyst_smiles` 均已排除；最受证据支持的解释是官方包内 `Suzuki OHE RF` 结果为不同代码修订、依赖版本或未记录配置生成的 stale artifact。
+
+### 下一步计划
+- 步骤 20.10A：推进 BH2 external validation，审计包内 `13_Products*.csv`、BH2 holdout 脚本与外部 187 条 corrected catalyst smiles 文件，生成 per-product MAE 与官方/本地比较。
+
+---
+
 ## [2026-08-25 18:09] 步骤 20.8I 完成：BH2/SM MFP `.npz` RF 复跑与 Table S3 48/48 全覆盖
 
 ### 执行的任务
