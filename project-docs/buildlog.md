@@ -2,6 +2,37 @@
 
 ---
 
+## [2026-08-25 16:55] 步骤 20.8B 完成：抽取官方 Compare_Complexity RF 指标目标值
+
+### 执行的任务
+- 只读解析 `reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/` 下四个数据集目录的 RF summary JSON。
+- 建立官方目录到本项目数据集 ID 的映射：`Doyle_2018 -> BH/BH1`，`Denmark_2023 -> BH2`，`Suzuki_2018 -> SM`，`Bode_2023 -> SLAP/SL1`。
+- 保留完整官方 RF 指标记录：4 个数据集 × 5 类描述符（DFT/MFP/OHE/PhysChem/SOAP）× train/test × 5 个指标（MAE/RMSE/R²/MedAE/Kendall）。
+- 生成 Table S3 风格目标表：只取 test split 的 OHE/MFP/PhysChem × MAE/RMSE/R²/Kendall，共 48 条，用于后续本地重跑差异比较。
+- 明确标注当前表格状态为 `official_target_extracted_pending_local_rerun`，不把官方已生成结果冒充为本地重跑结果。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/scripts/extract_official_metrics.py`：从官方包内 JSON 抽取 RF 指标目标。
+- 新增 `reference-proejct/vjethbkm/tests/test_official_metrics_extraction.py`：验证记录数量、数据集/描述符覆盖和 Suzuki/MFP/RF MAE 代表值。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_compare_complexity_rf_metrics.csv`：完整官方 RF 指标长表，共 200 条。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/table_s3_official_rf_targets.csv`：Table S3 风格目标表，共 48 条。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/extract_official_metrics.py`：通过，输出 `official_rf_metric_records=200`、`table_s3_target_records=48`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_metrics_extraction.py -q`：通过，`2 passed in 0.05s`。
+- 代表性官方目标值：`SM/Suzuki_2018 + MFP + RF + test MAE = 7.398945621312399`，与官方 summary JSON 一致。
+
+### 遇到的问题及解决方案
+- 问题：官方包同时包含 DFT/SOAP 指标与预计算 `.npz`，但当前项目尚未重建 DFT/SOAP 特征生成链。
+- 解决：完整指标长表保留 DFT/SOAP 官方记录供追溯；Table S3 对齐表当前只纳入已计划本地重跑的 OHE/MFP/PhysChem，避免伪造 DFT/SOAP 本地结果。
+- 问题：本步骤只是从官方包抽取目标值，不等同于本地重跑。
+- 解决：所有 Table S3 目标行均保留空的 `reproduced_value/abs_diff/rel_diff`，并标注 `official_target_extracted_pending_local_rerun`。
+
+### 下一步计划
+- 步骤 20.8C：优先在正式 SL1/SLAP 或 BH1 数据上运行本地 OHE/MFP/PhysChem + RF 5×5 CV，并把结果与官方目标表合并为差异表；若运行耗时过长，先实现可复用合并器与单数据集基线。
+
+---
+
 ## [2026-08-25 16:48] 步骤 20.8A 完成：审计 yieldsmarter 官方数据/代码包并接入 manifest
 
 ### 执行的任务
