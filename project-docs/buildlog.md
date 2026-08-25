@@ -2,6 +2,53 @@
 
 ---
 
+## [2026-08-25 17:07] 步骤 20.8D 完成：四个正式数据集 OHE 5×5 RF 批量基线
+
+### 执行的任务
+- 延续 20.8C 的分批 runner，在正式 `BH`、`BH2`、`SM` 数据集上分别运行 OHE-only 的 5×5 repeated CV。
+- RF 设置保持为 `n_estimators=200`、`random_state=1000`、`folds=5`、`repeats=5`，与官方 summary JSON 中 `splits=5`、`seed=1000` 对齐。
+- 重新运行官方目标差异合并器，将四个正式数据集的 OHE 本地结果全部并入 `table_s3_local_vs_official_differences.csv`。
+- 保持 Morgan/MFP 与 PhysChem 目标行仍为 `official_target_extracted_pending_local_rerun`，避免把尚未运行的结果写成已复现。
+
+### 关键变更
+- 生成 `reference-proejct/vjethbkm/outputs/tables/core_rf_5x5_BH_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/core_rf_5x5_BH2_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/core_rf_5x5_SM_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/table_s3_style_BH_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/table_s3_style_BH2_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/table_s3_style_SM_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/core_rf_5x5_BH_reproduction_report.md`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/core_rf_5x5_BH2_reproduction_report.md`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/core_rf_5x5_SM_reproduction_report.md`。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/table_s3_local_vs_official_differences.csv`：已合并本地结果的行数从 4 增加到 16。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset BH --descriptors ohe --repeats 5 --folds 5 --n-estimators 200 --random-state 1000`：通过，run id 为 `core_rf_5x5_20260825_170555`。
+- `BH/OHE/RF` 本地结果：MAE `5.78660943710009`，RMSE `8.855481635846521`，R² `0.8939356514098532`，Kendall tau `0.8040901594529949`。
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset BH2 --descriptors ohe --repeats 5 --folds 5 --n-estimators 200 --random-state 1000`：通过，run id 为 `core_rf_5x5_20260825_170613`。
+- `BH2/OHE/RF` 本地结果：MAE `14.056940320948`，RMSE `21.392412692886356`，R² `0.6065587778623032`，Kendall tau `0.6213159504747143`。
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset SM --descriptors ohe --repeats 5 --folds 5 --n-estimators 200 --random-state 1000`：通过，run id 为 `core_rf_5x5_20260825_170632`。
+- `SM/OHE/RF` 本地结果：MAE `7.4935232598242125`，RMSE `11.080129955415469`，R² `0.844056146674134`，Kendall tau `0.7534776276087521`。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，差异表共 48 行，其中 16 行已合并本地 OHE 结果，覆盖 `BH`、`BH2`、`SLAP`、`SM`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_difference_merge.py reference-proejct/vjethbkm/tests/test_yieldsmarter_audit.py -q`：通过，`3 passed in 0.63s`。
+
+### 与官方目标的 OHE 差异摘要
+- `BH/OHE/RF`：MAE 差 `0.646056`，RMSE 差 `0.448098`，R² 差 `0.010808`，Kendall tau 差 `0.008879`。
+- `BH2/OHE/RF`：MAE 差 `1.194345`，RMSE 差 `0.462055`，R² 差 `0.016651`，Kendall tau 差 `0.007251`。
+- `SLAP/OHE/RF`：MAE 差 `0.222303`，RMSE 差 `0.976797`，R² 差 `0.021341`，Kendall tau 差 `0.010597`。
+- `SM/OHE/RF`：MAE 差 `1.869410`，RMSE 差 `1.979158`，R² 差 `0.060632`，Kendall tau 差 `0.043301`。
+
+### 遇到的问题及解决方案
+- 问题：本地 OHE 结果与官方目标非常接近但不完全一致，尤其 `SM/OHE` 本地兼容结果明显优于官方目标。
+- 解决：差异表状态保持为 `local_compatible_rerun_compared`，日志中明确这不是逐字节复跑；后续需要审计官方 `Train_OHE.py` 的 split/encoder/模型细节，或直接调用官方训练脚本确认差异来源。
+- 问题：Morgan/MFP 与 PhysChem 全量训练尚未完成。
+- 解决：本步骤只提交 OHE 正式基线；下一步优先接入官方预计算 `.npz` 或继续按单描述符分批运行。
+
+### 下一步计划
+- 步骤 20.8E：审计并接入官方 `Src/Train/Train_OHE.py`、`Train_descriptors.py` 的 split/model 参数；决定是调用官方脚本复跑，还是用官方 `.npz` 适配器完成 MFP/PhysChem 复现。
+
+---
+
 ## [2026-08-25 17:04] 步骤 20.8C 完成：正式 SLAP/OHE 5×5 RF 基线与官方差异表
 
 ### 执行的任务
