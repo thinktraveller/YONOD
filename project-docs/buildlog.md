@@ -2,6 +2,39 @@
 
 ---
 
+## [2026-08-25 18:19] 步骤 20.10A 完成：BH2 external validation 官方输出审计
+
+### 执行的任务
+- 只读审计官方 `yieldsmarter/Src/Train/BH2_holdout_predict.py`、`Data/HTE_datasets/BH2/Per_Product/Product_?.csv`、`Results/BH2/Holdout/MFP/Product_*_preds.csv` 与 `187_with_corrected_catalyst_smiles.csv`。
+- 确认官方 holdout 脚本需要 `yieldsmarter/Results/BH2/Holdout/MFP/model_MFP_RF.pkl`，但该模型文件未包含在当前包内。
+- 在不伪装本地重新预测的前提下，解析包内已有官方 `Product_*_preds.csv`，生成 per-product MAE。
+- 解析 187 条 corrected catalyst smiles 文件，生成 `predict` 与 `ours` 两列相对于真实 Yield 的 MAE 对比。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/scripts/analyze_bh2_external.py`：BH2 外部验证审计与 per-product MAE 生成器。
+- 新增 `reference-proejct/vjethbkm/tests/test_bh2_external.py`：验证 13 个 per-product 输入、13 个官方预测文件和 187 条 corrected 文件。
+- 生成 `reference-proejct/vjethbkm/data/manifest/bh2_external_audit.json`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/bh2_external_per_product_mae.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/bh2_external_187_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/bh2_external_validation_report.md`。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/analyze_bh2_external.py`：通过，确认 `model_file_present=false`，`input_count=13`，`prediction_count=13`，`corrected_187.rows=187`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_bh2_external.py -q`：通过，`1 passed in 1.30s`。
+- 187 corrected 文件摘要：`predict_mae_from_columns=20.240641711229948`，`ours_mae_from_columns=18.610533011401074`，`AE_predict_mean=20.240641711229948`，`AE_ours_mean=18.610533011422458`。
+- per-product 官方 MFP MAE 范围：最低为 product `l` 的 `5.455808726909501`，最高为 product `e` 的 `48.08458963186378`。
+
+### 遇到的问题及解决方案
+- 问题：官方 holdout 复跑脚本要求的 `model_MFP_RF.pkl` 不在数据包中。
+- 解决：本步骤只审计和汇总包内已有官方预测结果，不声称完成本地 reprediction；后续若要本地复跑，需要从 BH2 训练集重训 holdout 模型或找到原始 pickle。
+- 问题：`187_with_corrected_catalyst_smiles.csv` 同时包含 `predict/ours/AE_predict/AE_ours`，语义需要谨慎。
+- 解决：直接按真实 `Yield` 重新计算 MAE，并与已有 AE 均值交叉验证，避免只信列名。
+
+### 下一步计划
+- 步骤 20.11A：在正式数据上运行 0D/1D/2D component split summary 与泄漏检查；如官方包没有精确定义映射，则先提交边界清楚的 split manifest 和 schema 级验证。
+
+---
+
 ## [2026-08-25 18:16] 步骤 20.9A 完成：SM/OHE 偏离定点法证
 
 ### 执行的任务

@@ -1,0 +1,23 @@
+{
+  "official_script": "yieldsmarter/Src/Train/BH2_holdout_predict.py",
+  "official_script_requires_model": "yieldsmarter/Results/BH2/Holdout/MFP/model_MFP_RF.pkl",
+  "model_file_present": false,
+  "per_product_files": {
+    "input_count": 13,
+    "prediction_count": 13
+  },
+  "corrected_187": {
+    "path": "yieldsmarter/Data/HTE_datasets/BH2/csv/187_with_corrected_catalyst_smiles.csv",
+    "sha256": "9003149d7b26e20f963b8940bd6f254adcfc28168a8024d510a6b1fc29cb8c6d",
+    "rows": 187,
+    "predict_mae_from_columns": 20.240641711229948,
+    "ours_mae_from_columns": 18.610533011401074,
+    "ae_predict_mean": 20.240641711229948,
+    "ae_ours_mean": 18.610533011422458
+  },
+  "outputs": {
+    "per_product_mae": "outputs/tables/bh2_external_per_product_mae.csv",
+    "external_187_summary": "outputs/tables/bh2_external_187_summary.csv"
+  },
+  "boundary": "The bundled package contains Product_*_preds.csv but not model_MFP_RF.pkl, so this step audits official holdout outputs instead of claiming a local reprediction."
+}
