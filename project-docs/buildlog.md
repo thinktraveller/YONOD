@@ -2,6 +2,34 @@
 
 ---
 
+## [2026-08-25 18:24] 步骤 20.13A 完成：复现状态总览报告
+
+### 执行的任务
+- 汇总 Table S3 差异表、SM/OHE 法证结果、BH2 external 187 摘要、component split schema 审计和正式不平衡分析。
+- 生成一个面向后续阅读与交接的复现状态总览，明确哪些结果已经复现、哪些是兼容实现、哪些仍为未解差异。
+- 将总览同时写为 JSON manifest 与 Markdown report，便于机器读取和人工阅读。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/scripts/build_reproduction_status_report.py`：复现状态总览报告生成器。
+- 新增 `reference-proejct/vjethbkm/tests/test_reproduction_status_report.py`：验证 Table S3 48/48 覆盖、MFP 精确复现和 SM/OHE 未解行数。
+- 生成 `reference-proejct/vjethbkm/data/manifest/reproduction_status_summary.json`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/reproduction_status_report.md`。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/build_reproduction_status_report.py`：通过，输出 `table_s3_rows=48`、`table_s3_matched_rows=48`、`unresolved_rows=4`。
+- descriptor 最大绝对差：MFP `0.0`，PhysChem `1.7763568394002505e-15`，OHE `1.9006496070565329`。
+- 未解范围仅为：`SM/OHE/kendall_tau`、`SM/OHE/mae`、`SM/OHE/r2`、`SM/OHE/rmse`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_reproduction_status_report.py -q`：通过，`1 passed in 0.77s`。
+
+### 遇到的问题及解决方案
+- 问题：当前结果种类较多，单看某个 CSV 容易混淆官方 `.npz` 复跑、OHE 兼容复跑和法证未解差异。
+- 解决：新增总览报告，在 `boundary` 字段中明确：MFP/PhysChem 通过官方预计算 `.npz` 复现，OHE 是本地兼容复跑，SM/OHE 保留未解 artifact 差异。
+
+### 下一步计划
+- 步骤 20.14A：如继续推进，可优先选择两条路线之一：A) DFT/SOAP 官方 `.npz` 指标复跑；B) 复现官方 reweighting/不平衡实验并与当前 high-yield 分析对照。
+
+---
+
 ## [2026-08-25 18:23] 步骤 20.12A 完成：正式数据产率不平衡与高产率识别分析
 
 ### 执行的任务
