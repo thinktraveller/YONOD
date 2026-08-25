@@ -2008,3 +2008,61 @@ for desc_name in args.descriptors:
 所有测试通过，确认修复有效。
 
 ---
+
+## [2026-08-25 12:32] 步骤 19 完成：文件夹整理与轻量重构审计
+
+### 执行的任务
+- 按步骤 19.1 建立当前目录盘点清单，核对顶层代码、数据、文献、权重、验证材料、IDE 缓存和运行产物边界。
+- 按步骤 19.2 固化轻量目标结构：继续保留 `main.py`、`yonod.py`、`yonod/`、`dataset/`、`WEIGHTS/`、`docs/参考文献/` 的既有位置。
+- 按步骤 19.3 审计 `.gitignore` 与版本管理边界，确认大模型权重、文献附件、IDE 缓存、pytest/Python 缓存、`_verify/`、`results/`、`cache/` 不应纳入普通提交。
+- 按步骤 19.4 逐项判断缓存与临时文件：删除可再生成的 pytest/Python 字节码缓存，保留存在用户配置或历史验证价值的目录。
+- 按步骤 19.5 保护入口路径，运行入口帮助命令和最小数据烟测，确认 `main.py` 建模入口仍可执行。
+- 按步骤 19.6 记录整理结果、验证结果、回滚方案和仍需用户确认事项。
+
+### 关键变更
+- 删除本地忽略缓存：`.pytest_cache/`、根目录 `__pycache__/`、`yonod/__pycache__/`、`yonod/descriptors/__pycache__/`、`yonod/features/__pycache__/`、`yonod/metrics/__pycache__/`、`yonod/models/__pycache__/`、`yonod/universal/__pycache__/`。
+- 保留并不移动：`main.py`、`yonod.py`、`yonod/`、`dataset/`、`WEIGHTS/`、`docs/参考文献/`。
+- 保留：`.vs/`（Visual Studio 状态与 Copilot/索引缓存）、`.vscode/settings.json`（本地编辑器设置）、`_verify/` 下 6 个历史修复验证脚本。
+- 生成但不提交：`results/folder-refactor-smoke建模报告/`，该目录为烟测运行产物，仍由 `.gitignore` 管理。
+- 修改文件：仅 `project-docs/buildlog.md`。
+
+### 目录盘点与处理结论
+- 代码区：`main.py`、`yonod.py`、`yonod/` 均存在且被 Git 跟踪；`yonod/models/xgb_model.py` 有用户既有未提交修改，本步骤未触碰。
+- 数据区：`dataset/` 存在 5 个 CSV，均被 Git 跟踪；本步骤未移动、未重命名、未修改。
+- 文献区：`docs/参考文献/` 存在本地 Markdown/PDF 等材料，未被 Git 跟踪，由 `.gitignore:41 docs/` 管理；按计划保留。
+- 权重区：`WEIGHTS/FISD/` 与 `WEIGHTS/MolMetaLM-base/` 存在，约 420 MB，未被 Git 跟踪，由 `.gitignore:48-49` 管理；按计划保留。
+- 运行产物区：`cache/` 本次审计时不存在；烟测生成 `results/folder-refactor-smoke建模报告/`，由 `.gitignore:32 results/` 管理，保留为本地验证产物但不提交。
+- IDE/缓存区：`.pytest_cache/` 与各级 `__pycache__/` 已确认位于工作区、未跟踪、可再生成并删除；`.vs/` 与 `.vscode/` 因可能包含本地 IDE 状态/设置而保留。
+- 验证材料区：`_verify/` 包含 `fix_descriptor_columns.py`、`fix_integration_test.py`、`fix01_bracket_numeric.py`、`fix01_bracket_parsing.py`、`fix01_column_roles_mismatch.ps1`、`fix01_json_input_flow.py`，对应历史修复验证材料，保留。
+
+### 验证结果
+- `git --version`：2.50.0.windows.2，满足步骤 19 要求。
+- `rg --version`：14.1.1，满足步骤 19 要求。
+- `conda run -n yonod python --version`：Python 3.9.25，符合计划书 conda 环境 `yonod` 约定。
+- `git status --ignored --short`：仅显示用户既有 `M .gitignore`、`D CLAUDE.md`、`M yonod/models/xgb_model.py`，以及被忽略的 `.vs/`、`.vscode/`、`WEIGHTS/`、`_verify/`、`docs/`、`results/`。
+- `git ls-files`：未发现 `docs/`、`WEIGHTS/`、`results/`、`cache/`、`_verify/`、`.vs/`、`.vscode/`、`.pytest_cache/`、`__pycache__/` 被跟踪；`dataset/` 5 个 CSV 被跟踪。
+- `git check-ignore -v`：`.vscode/`、`.pytest_cache/`、`__pycache__/`、`_verify/`、`docs/`、`WEIGHTS/MolMetaLM-base/`、`WEIGHTS/FISD/` 均能匹配本仓库 `.gitignore`；`.vs` 当前由用户既有 `.gitignore` 修改提供忽略规则。
+- `conda run -n yonod python -B main.py --help`：通过，能显示 CLI 帮助。
+- `conda run -n yonod python -B yonod.py --help`：失败；原因是 `yonod.py` 当前 `main()` 直接进入交互向导，未解析 `--help`，非交互环境在 `input()` 处触发 `EOFError`。本步骤仅记录，不越界修复。
+- `conda run -n yonod python -B yonod.py --csv "dataset/test-amide-coupling(additive_fixed).csv" ...`：失败；同样原因是 `yonod.py` 进入交互向导而非解析 CLI 参数。
+- `conda run -n yonod python -B main.py --csv "dataset/test-amide-coupling(additive_fixed).csv" --label-col yield --smiles-cols sub_1_smiles sub_2_smiles --descriptors morgan --models rf --task-name folder-refactor-smoke`：失败于 CSV 全量读取；第 12 行 `,,,,,,,,,` 比 9 列表头多 1 个字段，pandas 报 `Expected 9 fields in line 12, saw 10`。
+- `conda run -n yonod python -B -c "import pandas as pd; ... pd.read_csv(..., nrows=5)"`：通过，前 5 行可正常读取为 9 列。
+- `conda run -n yonod python -B main.py --csv "dataset/test-amide-coupling(additive_fixed).csv" --label-col yield --smiles-cols sub_1_smiles sub_2_smiles --descriptors morgan --models rf --task-name folder-refactor-smoke --nrows 10`：通过，10 行样本完成 Morgan + RF，输出 `metrics_summary.csv`、`report.html`、`report.md` 和运行日志到 `results/folder-refactor-smoke建模报告/`。
+
+### 遇到的问题及解决方案
+- 问题：此前误按通用 Python venv 规则判断环境阻塞。解决：依据计划书 §3.2/T0.2 与用户确认，改用 `C:\ProgramData\anaconda3\Scripts\conda.exe run -n yonod python ...` 执行验证，不创建第二套 venv。
+- 问题：Git 多次提示无法访问 `C:\Users\joyjo/.config/git/ignore`。解决：本仓库 `.gitignore` 匹配结果正常输出，不影响本轮判断；已按步骤 19.1 风险提示处理。
+- 问题：`yonod.py --help` 与 `yonod.py --csv ...` 不解析命令行参数。解决：记录为既有入口行为，不在步骤 19 的文件夹整理范围内修改源码；用 `main.py` 完成建模入口烟测。
+- 问题：测试 CSV 后续空行字段数不一致导致全量读取失败。解决：记录数据文件问题，不改数据；用 `--nrows 10` 跑计划中的有效 10 行样本烟测。
+
+### 回滚方案
+- 已删除的 `.pytest_cache/` 与 `__pycache__/` 均为可再生成缓存；需要恢复时重新运行 pytest 或 Python 入口即可生成。
+- 本次没有移动入口、源码包、数据、权重、文献、`_verify/`、`results/` 或 `cache/`。
+- 本次提交若需撤回，应使用新的修正提交恢复 `project-docs/buildlog.md` 记录，不使用 `git reset --hard`。
+- 用户既有改动 `M .gitignore`、`D CLAUDE.md`、`M yonod/models/xgb_model.py` 未被纳入本步骤提交。
+
+### 下一步计划
+- 用户决定是否另开构建任务处理两个既有问题：`yonod.py` 对 `--help`/CLI 参数的兼容性，以及 `dataset/test-amide-coupling(additive_fixed).csv` 第 12 行及后续空行的字段数问题。
+- 若后续希望清理 `.vs/` 或 `.vscode/`，需先确认本地 IDE 设置是否仍有保留价值。
+
+---
