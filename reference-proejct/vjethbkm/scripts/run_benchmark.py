@@ -17,7 +17,12 @@ def main() -> int:
     )
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--folds", type=int, default=5)
-    parser.add_argument("--n-estimators", type=int, default=200)
+    parser.add_argument("--n-estimators", type=int, default=500)
+    parser.add_argument(
+        "--rf-max-features",
+        default="0.3",
+        help="RandomForest max_features; use none for sklearn default.",
+    )
     parser.add_argument("--random-state", type=int, default=1000)
     parser.add_argument(
         "--allow-smoke-dataset",
@@ -39,6 +44,12 @@ def main() -> int:
         descriptors = None
         if args.descriptors:
             descriptors = [item.strip() for item in args.descriptors.split(",") if item.strip()]
+        rf_max_features = None
+        if args.rf_max_features.lower() != "none":
+            try:
+                rf_max_features = float(args.rf_max_features)
+            except ValueError:
+                rf_max_features = args.rf_max_features
         result = run_core_rf_5x5(
             dataset_id=args.dataset or "smoke_local_yonod",
             allow_smoke_dataset=args.allow_smoke_dataset,
@@ -46,6 +57,7 @@ def main() -> int:
             repeats=args.repeats,
             folds=args.folds,
             n_estimators=args.n_estimators,
+            rf_max_features=rf_max_features,
             random_state=args.random_state,
         )
     else:

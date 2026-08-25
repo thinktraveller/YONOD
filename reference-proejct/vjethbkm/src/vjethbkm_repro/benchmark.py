@@ -97,6 +97,7 @@ def _run_rf_repeated_cv(
     folds: int,
     descriptors: list[str],
     n_estimators: int,
+    rf_max_features: float | int | str | None,
     random_state: int,
     summary_name: str,
     report_name: str,
@@ -141,6 +142,7 @@ def _run_rf_repeated_cv(
                     test_df,
                     dataset_cfg.component_cols,
                 )
+                model_random_state = random_state + repeat - 1
                 feature_records.append(
                     {
                         "run_id": run_id,
@@ -155,8 +157,9 @@ def _run_rf_repeated_cv(
 
                 model = RandomForestRegressor(
                     n_estimators=n_estimators,
-                    random_state=random_state,
+                    random_state=model_random_state,
                     n_jobs=-1,
+                    max_features=rf_max_features,
                     min_samples_leaf=1,
                 )
                 train_start = perf_counter()
@@ -180,6 +183,7 @@ def _run_rf_repeated_cv(
                         "n_test": len(test_ids),
                         "feature_dim": feature.dim,
                         "invalid_smiles": feature.invalid_smiles,
+                        "model_random_state": model_random_state,
                         "feature_elapsed_s": feature.elapsed_s,
                         "train_elapsed_s": train_elapsed_s,
                         "predict_elapsed_s": predict_elapsed_s,
@@ -239,6 +243,7 @@ def _run_rf_repeated_cv(
         "descriptors": descriptors,
         "model": "rf",
         "n_estimators": n_estimators,
+        "rf_max_features": rf_max_features,
         "folds": folds,
         "repeats": repeats,
         "random_state": random_state,
@@ -295,6 +300,7 @@ def run_smoke() -> dict:
         folds=2,
         descriptors=["ohe", "morgan", "physchem"],
         n_estimators=200,
+        rf_max_features=1.0,
         random_state=42,
         summary_name="smoke_metrics_summary.csv",
         report_name="smoke_reproduction_report.md",
@@ -307,7 +313,8 @@ def run_core_rf_5x5(
     descriptors: list[str] | None = None,
     repeats: int = 5,
     folds: int = 5,
-    n_estimators: int = 200,
+    n_estimators: int = 500,
+    rf_max_features: float | int | str | None = 0.3,
     random_state: int = 1000,
 ) -> dict:
     if dataset_id == "smoke_local_yonod" and not allow_smoke_dataset:
@@ -323,6 +330,7 @@ def run_core_rf_5x5(
         folds=folds,
         descriptors=selected_descriptors,
         n_estimators=n_estimators,
+        rf_max_features=rf_max_features,
         random_state=random_state,
         summary_name=f"core_rf_5x5_{dataset_id}_metrics_summary.csv",
         report_name=f"core_rf_5x5_{dataset_id}_reproduction_report.md",
