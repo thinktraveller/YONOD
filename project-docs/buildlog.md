@@ -2,6 +2,38 @@
 
 ---
 
+## [2026-08-25 18:09] 步骤 20.8I 完成：BH2/SM MFP `.npz` RF 复跑与 Table S3 48/48 全覆盖
+
+### 执行的任务
+- 使用官方 `.npz` 适配器继续运行 `BH2/MFP + RF` 与 `SM/MFP + RF` 的 5×5 repeated CV。
+- 重新合并 `table_s3_local_vs_official_differences.csv`，使 Table S3 风格目标表的 OHE/MFP/PhysChem 共 48 行全部具备本地结果。
+- 按描述符检查差异：MFP 全部精确对齐官方目标，PhysChem 仅有浮点尾差；OHE 仍按兼容实现保留差异，尤其 SM/OHE。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/outputs/tables/official_npz_rf_5x5_BH2_metrics_summary.csv`：新增 `BH2/MFP`，保留 `BH2/PhysChem`。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/official_npz_rf_5x5_SM_metrics_summary.csv`：新增 `SM/MFP`，保留 `SM/PhysChem`。
+- 更新 `reference-proejct/vjethbkm/outputs/reports/official_npz_rf_5x5_BH2_report.md`。
+- 更新 `reference-proejct/vjethbkm/outputs/reports/official_npz_rf_5x5_SM_report.md`。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/table_s3_local_vs_official_differences.csv`：已合并本地结果行数从 40 增加到 48。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset BH2 --descriptors MFP`：通过，run id 为 `official_npz_rf_5x5_20260825_175846`；MAE `12.05600068639324`，RMSE `17.892543335494505`，R² `0.7250461909827262`，Kendall tau `0.6840725868058348`。
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset SM --descriptors MFP`：通过，run id 为 `official_npz_rf_5x5_20260825_180439`；MAE `7.398945621312399`，RMSE `11.008577405453288`，R² `0.8527994807980537`，Kendall tau `0.7615115880573682`。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，输出 `rows=48`、`matched_local_rows=48`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_npz_benchmark.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py reference-proejct/vjethbkm/tests/test_official_metrics_extraction.py -q`：通过，`4 passed in 1.58s`。
+- 差异摘要：MFP 最大绝对差 `0.0`；PhysChem 最大绝对差 `1.7763568394002505e-15`；OHE 最大绝对差 `1.900650`，来自 `SM/OHE/RF RMSE`。
+
+### 遇到的问题及解决方案
+- 问题：`BH2/MFP` 与 `SM/MFP` 训练耗时较长，平均每 fold 训练约 `13.62s` 与 `11.80s`。
+- 解决：保持逐数据集分批执行并单独记录成本；不并行堆叠大 RF 训练任务，避免资源不可控。
+- 问题：Table S3 已 48/48 覆盖，但 OHE 是本地兼容实现，不是直接调用官方 `Train_OHE.py`。
+- 解决：差异表保留 OHE 差异；下一步对 `SM/OHE` 做定点法证，必要时用官方脚本在隔离输出路径复跑或复刻其数据选择逻辑。
+
+### 下一步计划
+- 步骤 20.9A：对 `SM/OHE` 偏离做定点法证，核对 SM.csv、2SM.csv、OHE 官方 summary/oof predictions、官方脚本 split 和样本索引；得出证据支持的原因。
+
+---
+
 ## [2026-08-25 17:24] 步骤 20.8H 完成：BH MFP `.npz` RF 复跑与 summary 合并修正
 
 ### 执行的任务
