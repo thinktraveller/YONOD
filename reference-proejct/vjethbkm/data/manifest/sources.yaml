@@ -1,0 +1,65 @@
+version: 1
+last_updated: "2026-08-25"
+project: vjethbkm
+policy:
+  commit_raw_articles: false
+  commit_raw_data: false
+  commit_large_outputs: false
+  commit_manifests_and_small_summaries: true
+sources:
+  - id: vjethbkm-main
+    kind: article
+    title: "Yield Smarter, Not Harder: Good Practices for Machine Learning of Reaction Outcomes"
+    doi: "10.1021/jacs.6c02213"
+    url: "https://doi.org/10.1021/jacs.6c02213"
+    publisher: "American Chemical Society"
+    access_checked: "2026-08-25"
+    license_note: "ACS landing page states the article is open access under CC BY 4.0; store citation and checksums, not PDFs, by default."
+    local_path: "data/raw/articles/VJETHBKM-main.pdf"
+    local_status: missing
+    sha256: pending
+    used_for:
+      - method_summary
+      - figure_table_target_mapping
+  - id: vjethbkm-si
+    kind: supporting_information
+    doi: "10.1021/jacs.6c02213.s001"
+    url: "https://doi.org/10.1021/jacs.6c02213.s001"
+    access_checked: "2026-08-25"
+    local_path: "data/raw/articles/VJETHBKM-si.pdf"
+    local_status: missing
+    sha256: pending
+    used_for:
+      - dataset_details
+      - descriptor_parameters
+      - training_details
+      - reweighting_experiments
+  - id: vjethbkm-data-code
+    kind: data_and_code
+    doi: "10.3929/ethz-c-000800856"
+    url: "https://doi.org/10.3929/ethz-c-000800856"
+    access_checked: "2026-08-25"
+    local_path: "data/raw/ethz-c-000800856/"
+    local_status: missing
+    sha256: pending
+    used_for:
+      - official_datasets
+      - official_feature_files
+      - official_scripts
+  - id: vjethbkm-zaihub
+    kind: zotero_item
+    zotero_key: "VJETHBKM"
+    access_checked: "2026-08-25"
+    local_status: connector_unavailable_in_current_codex_session
+    note: "Goal document records main article 11 pages and SI 13 pages in Z-AIHub. Direct chunk reader was not exposed after tool discovery."
+datasets:
+  - id: BH
+    reaction_class: Buchwald-Hartwig amination
+    status: pending_official_package_inspection
+  - id: SM
+    reaction_class: Suzuki-Miyaura coupling
+    status: pending_official_package_inspection
+  - id: SLAP
+    reaction_class: silicon-ligand amine protocol
+    status: pending_official_package_inspection
+
