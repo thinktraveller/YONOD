@@ -1,0 +1,6 @@
+dataset_id,relative_path,rows,columns,column_names,target_col,target_missing,target_min,target_max,target_mean
+BH1,Data/HTE_datasets/BH1/BH1.csv,3955,5,Aryl_halide_SMILES|Additive_SMILES|Base_SMILES|Ligand_SMILES|Yield,Yield,0,0.0,99.99999,33.08525887932819
+BH2,Data/HTE_datasets/BH2/BH2.csv,3359,6,Amine_SMILES|Bromide_SMILES|Ligand_SMILES|Solvent_SMILES|Base_SMILES|Yield,Yield,0,0.0,101.0,26.240988010248586
+BH2_187_external,Data/HTE_datasets/BH2/csv/187_with_corrected_catalyst_smiles.csv,187,16,Amine|Bromide|Catalysts|Solvent|Base|product|Yield|predict|ours|AE_predict|AE_ours|Amine_SMILES|Bromide_SMILES|Catalysts_SMILES|Base_SMILES|Solvent_SMILES,Yield,0,0.0,100.0,43.41711229946524
+SM,Data/HTE_datasets/SM/SM.csv,5760,6,reactant_1_smiles|reactant_2_smiles|ligand_smiles|reagent_1_smiles|solvent_1_smiles|Yield,Yield,0,0.0,100.0,40.10945768153987
+SL1,Data/HTE_datasets/SL1/SL1.csv,1150,4,Aldehyde_1|bifunctional_reagent|Aldehyde_2|Yield,Yield,0,0.0,630.473598,31.514673429291307

@@ -39,9 +39,9 @@ sources:
     doi: "10.3929/ethz-c-000800856"
     url: "https://doi.org/10.3929/ethz-c-000800856"
     access_checked: "2026-08-25"
-    local_path: "data/raw/ethz-c-000800856/"
-    local_status: missing
-    sha256: pending
+    local_path: "yieldsmarter/"
+    local_status: present_untracked_ignored
+    sha256: see_yieldsmarter_key_file_checksums
     used_for:
       - official_datasets
       - official_feature_files
@@ -62,4 +62,3 @@ datasets:
   - id: SLAP
     reaction_class: silicon-ligand amine protocol
     status: pending_official_package_inspection
-
