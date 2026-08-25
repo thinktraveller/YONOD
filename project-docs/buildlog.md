@@ -2,6 +2,42 @@
 
 ---
 
+## [2026-08-25 18:23] 步骤 20.12A 完成：正式数据产率不平衡与高产率识别分析
+
+### 执行的任务
+- 使用官方 RF OOF predictions，对 `BH`、`BH2`、`SM`、`SLAP` 的 OHE/MFP/PhysChem 进行产率分桶误差分析。
+- 生成 dataset-level yield bucket summary，分桶为 `<20`、`20-40`、`40-60`、`60-80`、`80-100`、`>100`。
+- 生成 OOF bucket error summary，按 dataset/descriptor/bucket 统计 MAE 与 RMSE。
+- 生成 high-yield summary，阈值设为 `Yield >= 80`，统计 precision、recall、TP/FP/FN。
+- 明确该分析使用官方 OOF predictions；`SM/OHE` 仍沿用 20.9A 的法证未解 artifact 标记，不作为可完全解释的本地复现结果。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/scripts/analyze_official_imbalance.py`：正式数据产率分桶、分桶误差和高产率识别分析。
+- 新增 `reference-proejct/vjethbkm/tests/test_official_imbalance.py`：验证输出行数和覆盖范围。
+- 生成 `reference-proejct/vjethbkm/data/manifest/official_imbalance_audit.json`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_yield_bucket_dataset_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_oof_bucket_error_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_oof_high_yield_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/official_imbalance_report.md`。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/analyze_official_imbalance.py`：通过，输出 `dataset_bucket_rows=24`、`bucket_error_rows=69`、`high_yield_rows=12`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_imbalance.py -q`：通过，`1 passed in 1.42s`。
+- 数据集分布示例：`BH2` 的 `<20` 产率样本为 `2106/3359`，占 `0.6269723131884489`；`SLAP` 的 `>100` 样本为 `87/1150`，提示该数据集产率尺度存在高值尾部。
+- 高产率识别示例：`BH2/OHE` precision `0.6995305164319249`、recall `0.06195426195426196`；`BH2/MFP` precision `0.8990228013029316`、recall `0.22952182952182953`。
+- `SM/MFP` 高产率识别：precision `0.8821979676326684`、recall `0.6997014925373134`；`SM/PhysChem` precision `0.8966469428007889`、recall `0.6785074626865671`。
+
+### 遇到的问题及解决方案
+- 问题：不同数据集产率尺度不完全一致，`SLAP` 出现 `>100` 甚至最大值 `630.473598`。
+- 解决：分桶显式加入 `>100`，不强行截断或归一化；后续若要比较高产率识别，需要按数据集确认阈值语义。
+- 问题：`SM/OHE` 官方 OOF predictions 已知有法证未解差异。
+- 解决：本步骤仍可用于官方 artifact 的分桶误差描述，但在 manifest/report 中标注边界，不把它当作已解释的本地复现。
+
+### 下一步计划
+- 步骤 20.13A：整理自动报告入口，把 Table S3 差异、SM/OHE 法证、BH2 external、component split 和不平衡分析汇总为一个复现状态总览；随后评估是否继续 DFT/SOAP 或重加权实验。
+
+---
+
 ## [2026-08-25 18:21] 步骤 20.11A 完成：正式数据 0D/1D/2D component split schema 审计
 
 ### 执行的任务
