@@ -1,0 +1,26 @@
+{
+  "table_s3_rows": 48,
+  "table_s3_matched_rows": 48,
+  "descriptor_max_abs_diff": {
+    "MFP": 0.0,
+    "OHE": 1.9006496070565329,
+    "PhysChem": 1.7763568394002505e-15
+  },
+  "unresolved_rows": 4,
+  "unresolved_scope": [
+    "SM/OHE/kendall_tau",
+    "SM/OHE/mae",
+    "SM/OHE/r2",
+    "SM/OHE/rmse"
+  ],
+  "bh2_external_187": {
+    "rows": 187.0,
+    "predict_mae_from_columns": 20.240641711229948,
+    "ours_mae_from_columns": 18.610533011401078,
+    "ae_predict_mean": 20.240641711229948,
+    "ae_ours_mean": 18.610533011422454
+  },
+  "high_yield_rows": 12,
+  "component_split_schema_rows": 25,
+  "boundary": "MFP and PhysChem RF Table S3 targets are reproduced through official precomputed NPZ features. OHE is a local compatibility rerun; SM/OHE remains a documented unresolved official artifact difference."
+}
