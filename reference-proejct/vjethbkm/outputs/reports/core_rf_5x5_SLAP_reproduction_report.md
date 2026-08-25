@@ -1,6 +1,6 @@
 # VJETHBKM core_rf_5x5 reproduction report
 
-Run id: `core_rf_5x5_20260825_170314`
+Run id: `core_rf_5x5_20260825_171023`
 
 This run validates `core_rf_5x5` on dataset `SLAP`.
 It is not a claim of numerical reproduction of the JACS paper.
@@ -9,7 +9,7 @@ It is not a claim of numerical reproduction of the JACS paper.
 
 | stage | dataset | descriptor | model | mae_mean | rmse_mean | r2_mean | kendall_tau_mean | feature_dim | folds | train_elapsed_s_mean | feature_elapsed_s_mean |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| core_rf_5x5 | SLAP | ohe | rf | 21.751944 | 46.837901 | 0.584487 | 0.471108 | 115 | 25 | 0.217512 | 0.004006 |
+| core_rf_5x5 | SLAP | ohe | rf | 21.932843 | 45.751583 | 0.607472 | 0.481132 | 115 | 25 | 0.41945 | 0.003369 |
 
 ## Evidence status
 

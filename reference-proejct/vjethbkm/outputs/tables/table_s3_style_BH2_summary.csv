@@ -1,5 +1,5 @@
 paper_target_id,dataset,descriptor,model,split,metric,paper_value,reproduced_value,abs_diff,rel_diff,status,explanation
-si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,mae,,14.056940320948,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
-si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,rmse,,21.392412692886356,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
-si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,r2,,0.6065587778623032,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
-si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,kendall_tau,,0.6213159504747143,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,mae,,15.244271976876268,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,rmse,,21.86197202460156,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,r2,,0.5896292918209074,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+si_table_s3_rf_cv,BH2,ohe,rf,5x5_repeated_cv,kendall_tau,,0.6142798324082527,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."

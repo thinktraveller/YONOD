@@ -1,6 +1,6 @@
 # VJETHBKM core_rf_5x5 reproduction report
 
-Run id: `core_rf_5x5_20260825_170555`
+Run id: `core_rf_5x5_20260825_170935`
 
 This run validates `core_rf_5x5` on dataset `BH`.
 It is not a claim of numerical reproduction of the JACS paper.
@@ -9,7 +9,7 @@ It is not a claim of numerical reproduction of the JACS paper.
 
 | stage | dataset | descriptor | model | mae_mean | rmse_mean | r2_mean | kendall_tau_mean | feature_dim | folds | train_elapsed_s_mean | feature_elapsed_s_mean |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| core_rf_5x5 | BH | ohe | rf | 5.786609 | 8.855482 | 0.893936 | 0.80409 | 44 | 25 | 0.286088 | 0.005854 |
+| core_rf_5x5 | BH | ohe | rf | 6.434927 | 9.310481 | 0.882968 | 0.795097 | 44 | 25 | 0.521053 | 0.00548 |
 
 ## Evidence status
 

@@ -2,6 +2,52 @@
 
 ---
 
+## [2026-08-25 17:12] 步骤 20.8E 完成：对齐官方 RF 参数并刷新 OHE 正式复现
+
+### 执行的任务
+- 只读审计官方 `yieldsmarter/Src/Train/Train_OHE.py`、`Train_descriptors.py`、`train_weighting.py` 与 `Src/Train/*.json`。
+- 识别官方 OHE/RF 关键设置：`OneHotEncoder` 每折仅在训练集 fit，`KFold(n_splits=5, shuffle=True, random_state=seed+outer_fold)`，RF 默认 `n_estimators=500, max_features=0.3, n_jobs=-1`。
+- 将本地 `core_rf_5x5` runner 默认 RF 参数更新为 `n_estimators=500`、`rf_max_features=0.3`、`random_state=1000`，并让 RF 模型随机种子按 repeat 变为 `seed+repeat_index`。
+- 用官方参数重新运行四个正式数据集的 OHE 5×5 RF，并刷新 summary/report/Table S3 style/difference 表。
+- 只读比对 `SM` 官方数据线索，发现 `Results/Compare_Complexity/Suzuki_2018/2SM.csv` 与 `Data/HTE_datasets/SM/SM.csv` schema/hash 不一致：前者多 `catalyst_smiles` 列；但官方 `SM_OHE.json` 与 `Suzuki_OHE_metrics_summaries_RF.json` 均记录 OHE 使用 5 个 categorical columns，不含 catalyst。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/src/vjethbkm_repro/benchmark.py`：对齐官方 RF 默认参数和 repeat 级随机种子。
+- 更新 `reference-proejct/vjethbkm/scripts/run_benchmark.py`：新增 `--rf-max-features` 参数，并将 core 默认树数改为 500。
+- 新增 `reference-proejct/vjethbkm/scripts/audit_official_training_params.py`：生成官方训练参数审计。
+- 新增 `reference-proejct/vjethbkm/tests/test_official_training_params_audit.py`：验证官方 RF 默认参数和 BH1_OHE 配置。
+- 生成 `reference-proejct/vjethbkm/data/manifest/official_training_params_audit.json`。
+- 刷新四个 OHE summary/report/table_s3_style 输出与 `table_s3_local_vs_official_differences.csv`。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/audit_official_training_params.py`：通过，确认官方 RF 默认参数为 `n_estimators=500, max_features=0.3, n_jobs=-1`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_smoke_pipeline.py reference-proejct/vjethbkm/tests/test_official_training_params_audit.py -q`：通过，`6 passed in 1.26s`。
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset BH --descriptors ohe`：通过，run id 为 `core_rf_5x5_20260825_170935`；MAE `6.4349265080668365`，RMSE `9.310481141486761`，R² `0.8829680158424921`，Kendall tau `0.7950973158372747`。
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset BH2 --descriptors ohe`：通过，run id 为 `core_rf_5x5_20260825_170958`；MAE `15.244271976876268`，RMSE `21.86197202460156`，R² `0.5896292918209074`，Kendall tau `0.6142798324082527`。
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset SLAP --descriptors ohe`：通过，run id 为 `core_rf_5x5_20260825_171023`；MAE `21.932843351855208`，RMSE `45.75158305563138`，R² `0.6074715340950232`，Kendall tau `0.48113236619071353`。
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset SM --descriptors ohe`：通过，run id 为 `core_rf_5x5_20260825_171156`；MAE `7.841605969172474`，RMSE `11.1586383821136`，R² `0.84181192957582`，Kendall tau `0.751534823224437`。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，差异表共 48 行，其中 16 行已合并本地 OHE 结果。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_smoke_pipeline.py reference-proejct/vjethbkm/tests/test_official_training_params_audit.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py -q`：通过，`7 passed in 1.39s`。
+
+### 与官方目标的 official-like OHE 差异摘要
+- `BH/OHE/RF`：MAE 差 `0.002261`，RMSE 差 `0.006902`，R² 差 `0.000160`，Kendall tau 差 `0.000114`。
+- `BH2/OHE/RF`：MAE 差 `0.007013`，RMSE 差 `0.007504`，R² 差 `0.000279`，Kendall tau 差 `0.000215`。
+- `SLAP/OHE/RF`：MAE 差 `0.041403`，RMSE 差 `0.109521`，R² 差 `0.001643`，Kendall tau 差 `0.000573`。
+- `SM/OHE/RF`：MAE 差 `1.521327`，RMSE 差 `1.900650`，R² 差 `0.058388`，Kendall tau 差 `0.041358`。
+
+### 遇到的问题及解决方案
+- 问题：20.8D 使用 200 棵树和 sklearn 默认 `max_features=1.0`，与官方 RF 默认不一致。
+- 解决：依据官方 `Train_OHE.py` 对齐为 500 棵树、`max_features=0.3`，并刷新 OHE 正式结果；BH/BH2/SLAP 已接近官方 summary。
+- 问题：`SM/OHE` 仍显著偏离官方目标。
+- 解决：记录包内证据：`Data/HTE_datasets/SM/SM.csv` 为 `5760×6`，sha256 `111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a`；`Results/Compare_Complexity/Suzuki_2018/2SM.csv` 为 `5760×7`，sha256 `feb007f46b94948041e897fca3bf4e7a2ee5bab8dd513af846eab40c028ed8e0`，多出 `catalyst_smiles`。但官方 OHE summary 自身记录的 categorical columns 不含 catalyst，因此暂不擅自切换数据源。
+- 问题：MFP/PhysChem 仍未正式复跑。
+- 解决：下一步优先接入官方 `.npz` 特征适配器和官方 `Train_descriptors.py` 参数，而不是继续用本地 Morgan/PhysChem 兼容特征硬跑。
+
+### 下一步计划
+- 步骤 20.8F：实现官方预计算 `.npz` 特征适配器，先复跑 MFP/PhysChem + RF 并与官方目标合并；随后处理 SM/OHE 数据源差异的定点复核。
+
+---
+
 ## [2026-08-25 17:07] 步骤 20.8D 完成：四个正式数据集 OHE 5×5 RF 批量基线
 
 ### 执行的任务
