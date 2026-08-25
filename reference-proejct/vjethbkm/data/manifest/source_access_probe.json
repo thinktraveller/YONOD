@@ -1,0 +1,62 @@
+[
+  {
+    "source_id": "vjethbkm-main",
+    "kind": "article",
+    "url": "https://doi.org/10.1021/jacs.6c02213",
+    "checked_at": "2026-08-25T06:58:56Z",
+    "ok": false,
+    "status": 403,
+    "final_url": "https://pubs.acs.org/jacsat/article/148/30/31593/5226793/Yield-Smarter-Not-Harder-Good-Practices-for",
+    "content_type": "text/html; charset=UTF-8",
+    "content_length": "5725",
+    "local_path": "data/raw/articles/VJETHBKM-main.pdf",
+    "local_exists": false,
+    "local_sha256": null,
+    "error": "HTTP Error 403: Forbidden"
+  },
+  {
+    "source_id": "vjethbkm-si",
+    "kind": "supporting_information",
+    "url": "https://doi.org/10.1021/jacs.6c02213.s001",
+    "checked_at": "2026-08-25T06:58:57Z",
+    "ok": false,
+    "status": 403,
+    "final_url": "https://pubs.acs.org/doi/suppl/10.1021/jacs.6c02213/suppl_file/ja6c02213_si_001.pdf",
+    "content_type": "text/html; charset=UTF-8",
+    "content_length": "5631",
+    "local_path": "data/raw/articles/VJETHBKM-si.pdf",
+    "local_exists": false,
+    "local_sha256": null,
+    "error": "HTTP Error 403: Forbidden"
+  },
+  {
+    "source_id": "vjethbkm-data-code",
+    "kind": "data_and_code",
+    "url": "https://doi.org/10.3929/ethz-c-000800856",
+    "checked_at": "2026-08-25T06:58:59Z",
+    "ok": false,
+    "status": 500,
+    "final_url": "https://www.research-collection.ethz.ch/handle/20.500.11850/800856",
+    "content_type": "text/html; charset=utf-8",
+    "content_length": "494390",
+    "local_path": "data/raw/ethz-c-000800856/",
+    "local_exists": false,
+    "local_sha256": null,
+    "error": "HTTP Error 500: Internal Server Error"
+  },
+  {
+    "source_id": "vjethbkm-zaihub",
+    "kind": "zotero_item",
+    "url": "",
+    "checked_at": "2026-08-25T06:58:59Z",
+    "ok": false,
+    "status": null,
+    "final_url": null,
+    "content_type": null,
+    "content_length": null,
+    "local_path": null,
+    "local_exists": false,
+    "local_sha256": null,
+    "error": "No URL configured; likely a local Zotero item."
+  }
+]
