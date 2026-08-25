@@ -2,6 +2,39 @@
 
 ---
 
+## [2026-08-25 17:24] 步骤 20.8H 完成：BH MFP `.npz` RF 复跑与 summary 合并修正
+
+### 执行的任务
+- 使用官方 `.npz` 适配器运行 `BH/MFP + RF` 5×5 repeated CV。
+- 发现 `run_official_npz_benchmark.py` 对同一数据集再次运行不同描述符时会覆盖该数据集已有 summary。
+- 修正 `.npz` runner：写入 `official_npz_rf_5x5_{dataset}_metrics_summary.csv` 时按 descriptor 合并已有结果，重复 descriptor 则替换，避免丢失同数据集其他描述符。
+- 重新运行 `BH/PhysChem`，恢复 `official_npz_rf_5x5_BH_metrics_summary.csv` 为 `MFP + PhysChem` 两行。
+- 重新合并差异表，Table S3 目标 48 行中已有 40 行具备本地结果。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py`：同数据集多描述符 summary 改为增量合并。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/official_npz_rf_5x5_BH_metrics_summary.csv`：包含 `BH/MFP` 与 `BH/PhysChem` 两行。
+- 更新 `reference-proejct/vjethbkm/outputs/reports/official_npz_rf_5x5_BH_report.md`。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/table_s3_local_vs_official_differences.csv`：已合并本地结果行数从 36 增加到 40。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset BH --descriptors MFP`：通过，run id 为 `official_npz_rf_5x5_20260825_172004`；MAE `4.531535492347868`，RMSE `6.851955627322502`，R² `0.9364555872923422`，Kendall tau `0.8484259715085937`。
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset BH --descriptors PhysChem`：通过，run id 为 `official_npz_rf_5x5_20260825_172353`；恢复 BH PhysChem summary。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，输出 `matched_local_rows=40`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_npz_benchmark.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py -q`：通过，`2 passed in 1.46s`。
+- `BH/MFP/RF` 的 MAE/RMSE/R²/Kendall tau 与官方目标表差异均为 `0.0`。
+
+### 遇到的问题及解决方案
+- 问题：同一数据集分批运行 MFP 与 PhysChem 时，原脚本会覆盖已有 summary，导致差异合并表暂时读不到前一个描述符。
+- 解决：将 summary 写入改为“按 descriptor 增量合并/替换”，并重新运行 BH PhysChem 恢复完整 summary。
+- 问题：BH/MFP 单数据集训练耗时约 3 分钟，明显高于 PhysChem 与 OHE。
+- 解决：本步骤只完成 BH/MFP 并记录耗时；BH2/SM 的 MFP 作为下一步分批执行，避免长任务一次性堆叠。
+
+### 下一步计划
+- 步骤 20.8I：继续运行 BH2/MFP 与 SM/MFP `.npz` RF 5×5，完成 Table S3 OHE/MFP/PhysChem 48 行本地结果全覆盖；随后进入 BH2 external validation 与不平衡/重加权分析。
+
+---
+
 ## [2026-08-25 17:18] 步骤 20.8G 完成：四个正式数据集 PhysChem `.npz` RF 复跑
 
 ### 执行的任务

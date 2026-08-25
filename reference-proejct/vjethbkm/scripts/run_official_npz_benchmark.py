@@ -122,12 +122,19 @@ def run_npz_benchmark(
         )
         metrics.to_csv(run_dir / f"{dataset}_{descriptor}_fold_metrics.csv", index=False)
 
-    summary = pd.DataFrame(rows)
     table_dir = repro_root / "outputs" / "tables"
     report_dir = repro_root / "outputs" / "reports"
     table_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
     summary_path = table_dir / f"official_npz_rf_5x5_{dataset}_metrics_summary.csv"
+    new_summary = pd.DataFrame(rows)
+    if summary_path.exists():
+        previous = pd.read_csv(summary_path)
+        previous = previous.loc[~previous["descriptor"].isin(new_summary["descriptor"])]
+        summary = pd.concat([previous, new_summary], ignore_index=True)
+    else:
+        summary = new_summary
+    summary = summary.sort_values(["dataset", "descriptor"]).reset_index(drop=True)
     summary.to_csv(summary_path, index=False)
     manifest = {
         "run_id": run_id,
