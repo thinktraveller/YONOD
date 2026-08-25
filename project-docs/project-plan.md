@@ -6183,4 +6183,411 @@ python yonod.py --csv data.csv --label-col yield --smiles-cols R1 R2 --descripto
 
 ---
 
+## 十九、文件夹整理与轻量重构计划（VJETHBKM 复现配套）
+
+> 本节基于 `project-docs/goal.md` 中“文件夹整理目标补充”追加，属于现有计划书的增量更新。执行原则是：先盘点、再分类、后清理；先保证 `main.py`、`yonod.py`、`dataset/`、`WEIGHTS/` 等入口路径不被破坏，再考虑移动、归档或删除。
+
+### 19.1 项目概述
+
+#### 19.1.1 整理目标
+
+本轮文件夹整理不是一次性大搬迁，而是为 `VJETHBKM` 复现和 YONOD benchmark 工具化建立清晰的科研工程边界：
+
+- **代码区**：保留 `yonod/` 作为核心源码包，保留 `main.py` 与 `yonod.py` 作为现有运行入口。
+- **数据区**：保留 `dataset/` 作为数据集目录，不重命名、不移动已被 README、示例配置或脚本引用的数据文件。
+- **文献区**：保留 `docs/参考文献/` 作为 Zotero 文献、主文、SI、补充材料和人工整理资料的本地目录；若需要入库共享，应另写轻量索引或复现说明到 `project-docs/`。
+- **实验产物区**：继续使用 `results/` 和 `cache/` 存放可再生成的运行输出与特征缓存；重要基线快照另行确认后再选择是否固化。
+- **项目文档区**：继续使用 `project-docs/` 记录目标、计划、构建日志、教学说明和复现决策。
+- **本地缓存区**：`.vs`、`.vscode`、`.pytest_cache`、`__pycache__` 等优先由 `.gitignore` 管理；只有确认不影响恢复后才删除。
+- **验证材料区**：`_verify/` 不能默认视为垃圾目录，应先确认脚本用途、Git 跟踪状态、是否仍能解释历史修复，再决定保留、归档或删除。
+
+#### 19.1.2 当前已知现状
+
+只读检查显示当前项目根目录已有以下主要分区：
+
+```text
+YONOD/
+├── main.py                    # 现有建模入口之一，被 yonod.py 和帮助信息引用
+├── yonod.py                   # 现有统一入口，被 README 和计划书大量引用
+├── yonod/                     # 核心源码包
+├── dataset/                   # 已入库样例/研究数据
+├── docs/                      # 本地文献与参考材料，当前被 .gitignore 忽略
+├── project-docs/              # 目标、计划、日志、教学说明
+├── WEIGHTS/                   # 本地模型权重，当前按子目录忽略
+├── results/                   # 运行输出，当前被忽略
+├── cache/                     # 运行缓存，当前被忽略
+├── _verify/                   # 本地验证脚本，当前被忽略
+├── .vs/ .vscode/              # IDE 配置/缓存，当前被忽略
+├── .pytest_cache/ __pycache__/ # Python/测试缓存，当前被忽略
+└── .gitignore
+```
+
+`.gitignore` 已覆盖 `.vs`、`.vscode`、`.pytest_cache`、`__pycache__`、`_verify`、`docs/`、`WEIGHTS/MolMetaLM-base/`、`WEIGHTS/FISD/`、`results/`、`cache/` 等目录。后续执行阶段的重点不是“马上改 ignore 规则”，而是确认这些规则是否符合论文复现与协作共享需求。
+
+### 19.2 可行性分析
+
+#### 19.2.1 技术可行性
+
+本轮整理高度可行，因为目标以轻量治理为主，不要求立刻改源码导入路径或数据路径。只要遵循以下约束，就能把风险控制在较低水平：
+
+- 不移动 `main.py`、`yonod.py`、`yonod/`、`dataset/`、`WEIGHTS/`。
+- 不直接删除 `_verify/`、`docs/参考文献/`、权重目录或任何被引用的实验产物。
+- 对缓存和 IDE 文件先做 Git 跟踪检查、引用检查和可再生成性判断。
+- 对确需保留但不适合入库的材料，用 `project-docs/` 记录索引、来源和用途，而不是把大文件强行纳入 Git。
+
+#### 19.2.2 主要风险与应对
+
+| 风险 | 影响 | 应对策略 |
+|---|---|---|
+| 移动入口脚本导致 README、示例命令、配置文件失效 | 高 | 本轮不移动 `main.py`、`yonod.py`；若未来迁移，必须同步更新引用并做端到端烟测 |
+| 删除 `_verify/` 后丢失历史修复依据 | 中 | 先逐项记录脚本用途、最后运行时间、是否仍可复现问题，再决定归档或删除 |
+| `docs/` 被整体忽略导致文献整理成果无法共享 | 中 | PDF/SI 可继续本地保存，关键文献信息、引用、复现依据写入 `project-docs/` 的轻量 Markdown |
+| `results/` 全部忽略导致基线结果不可追溯 | 中 | 可再生成结果继续忽略；论文/答辩用关键快照需单独确认固化位置与脱敏规则 |
+| 批量删除缓存误删用户配置 | 中 | 删除前执行路径解析、Git 跟踪检查和用户确认；禁止按名称盲删 |
+
+#### 19.2.3 工作量估算
+
+| 阶段 | 预计耗时 | 产出 |
+|---|---:|---|
+| 盘点与分类 | 0.5 天 | 当前目录职责表、引用关系检查结果 |
+| 忽略规则审计 | 0.5 天 | `.gitignore` 调整建议或确认无需调整 |
+| 缓存/临时文件清理 | 0.5 天 | 可删除、应保留、需确认清单 |
+| 文献与实验结果分区说明 | 0.5 天 | VJETHBKM 复现材料索引与结果快照策略 |
+| 验证与提交 | 0.5 天 | 烟测记录、Git 状态确认、整理日志 |
+
+### 19.3 技术选型
+
+#### 19.3.1 工具与运行环境
+
+- `git >= 2.40`：检查跟踪状态、差异、回滚点。
+- `ripgrep >= 14.0`：快速检索路径引用。
+- `python >= 3.9`：运行现有 YONOD 脚本与必要的路径检查脚本。
+- `PowerShell >= 5.1`：Windows 本地文件检查与受控清理命令。
+
+#### 19.3.2 不新增运行依赖
+
+本轮是目录治理和文档化计划，不需要安装新的 Python 包、Node 包或系统工具。若当前环境没有 `rg`，可退回 PowerShell `Select-String`，但正式执行阶段仍建议安装 `ripgrep` 以减少漏检。
+
+```powershell
+# 1. 首先尝试确认本机已有工具
+git --version
+rg --version
+python --version
+
+# 2. 若 rg 不存在，可临时使用 PowerShell 原生命令替代
+Get-ChildItem -Recurse -File | Select-String -Pattern "dataset/|WEIGHTS/|yonod.py|main.py"
+```
+
+### 19.4 开发计划
+
+### 步骤19.1：建立目录盘点清单
+
+#### 目标说明
+
+先把当前项目目录按“代码 / 数据 / 文献 / 实验结果 / 项目文档 / 本地缓存 / 待确认验证材料”分类，形成后续整理的事实依据。这样可以避免只凭目录名判断用途。
+
+#### 具体操作
+
+执行只读检查，输出目录、Git 跟踪状态和忽略规则匹配情况：
+
+```powershell
+git status --short
+git ls-files
+git check-ignore -v .vs .vscode .pytest_cache __pycache__ _verify docs WEIGHTS/MolMetaLM-base WEIGHTS/FISD cache results
+rg -n "main\.py|yonod\.py|dataset/|dataset\\|WEIGHTS/|WEIGHTS\\|docs/参考文献|_verify|results/|cache/" README.md project-docs yonod.py main.py example.json .gitignore
+```
+
+建议形成如下清单：
+
+| 分类 | 当前目录/文件 | 默认处理 |
+|---|---|---|
+| 代码 | `yonod/`, `main.py`, `yonod.py` | 保留原位 |
+| 数据 | `dataset/` | 保留原位，禁止未同步引用时重命名 |
+| 文献 | `docs/参考文献/` | 本地保留；重要索引写入项目文档 |
+| 权重 | `WEIGHTS/` | 本地保留，不入库 |
+| 运行产物 | `results/`, `cache/` | 可再生成，默认忽略 |
+| IDE/缓存 | `.vs`, `.vscode`, `.pytest_cache`, `__pycache__` | 确认可恢复后可删除 |
+| 验证材料 | `_verify/` | 需逐项确认，不默认删除 |
+
+#### 验证方法
+
+- 清单中每个顶层目录都有分类和处理建议。
+- `git ls-files` 能说明哪些文件已被 Git 跟踪。
+- `git check-ignore -v` 能说明哪些目录由哪条 `.gitignore` 规则管理。
+- `rg` 结果能定位关键路径引用，尤其是 `main.py`、`yonod.py`、`dataset/`、`WEIGHTS/`。
+
+#### 风险提示
+
+`git check-ignore` 在部分 Windows 环境可能提示全局 ignore 文件权限问题；只要本仓库 `.gitignore` 的匹配结果正常输出，不影响本轮判断。若命令完全失败，应改用 `git status --ignored --short` 补充确认。
+
+---
+
+### 步骤19.2：固化轻量目标结构
+
+#### 目标说明
+
+在不大搬迁的前提下，为团队建立一致的目录理解，使后续 `VJETHBKM` 复现、benchmark 实验和答辩材料都知道“该放哪里”。
+
+#### 具体操作
+
+推荐采用以下目标结构语义：
+
+```text
+YONOD/
+├── yonod/                 # 核心源码包：描述符、模型、特征、报告等模块
+├── main.py                # 建模执行入口：保持现状
+├── yonod.py               # 交互/统一入口：保持现状
+├── dataset/               # 数据集：保留被示例与 README 引用的文件名
+├── docs/参考文献/          # 文献主文、SI、补充材料、本地笔记
+├── project-docs/          # 项目目标、计划、日志、教学文档、复现决策
+├── WEIGHTS/               # 本地权重，不随 Git 分发
+├── results/               # 可再生成实验输出
+├── cache/                 # 可再生成特征缓存
+└── _verify/               # 临时/回归验证脚本，待确认后归档或删除
+```
+
+如果需要新增“可共享的实验结果快照”，优先采用轻量文本或小体积 CSV，并在执行前确认位置。例如：
+
+```text
+project-docs/
+└── benchmark-snapshots/   # 可选：仅存可共享、脱敏、体积小的关键结果摘要
+```
+
+注意：该目录是否创建应交给后续构建阶段处理，本计划阶段只提出规则，不创建目录。
+
+#### 验证方法
+
+- README、示例命令和配置文件中的现有路径仍然成立。
+- 团队成员能根据目标结构判断新文件应该放入哪个分区。
+- 文献 PDF、大模型权重、缓存和完整运行结果不会被误认为必须提交到 Git。
+
+#### 风险提示
+
+`docs/` 当前被 `.gitignore` 整体忽略。如果未来希望共享文献清单，不能简单取消忽略整个 `docs/`，否则可能把 PDF、补充材料或版权受限内容纳入仓库。更稳妥的做法是：保留本地文献目录，另在 `project-docs/` 写可共享索引。
+
+---
+
+### 步骤19.3：审计 `.gitignore` 与版本管理边界
+
+#### 目标说明
+
+确认 Git 只跟踪应共享的源码、轻量数据、项目文档和配置，不误纳入 IDE 缓存、运行缓存、大模型权重或可能涉及版权的文献附件。
+
+#### 具体操作
+
+执行以下只读命令：
+
+```powershell
+git status --short
+git status --ignored --short
+git ls-files dataset docs WEIGHTS results cache _verify .vs .vscode .pytest_cache __pycache__
+git check-ignore -v docs WEIGHTS/MolMetaLM-base WEIGHTS/FISD results cache _verify .vs .vscode .pytest_cache __pycache__
+```
+
+判断规则：
+
+- `dataset/`：已入库的样例数据可保留；新增私有或大体积数据应先确认许可证与体积。
+- `WEIGHTS/`：默认不入库；README 说明下载方式即可。
+- `docs/参考文献/`：PDF/SI 本地保留；可共享的文献信息写到 `project-docs/`。
+- `results/` 与 `cache/`：默认忽略；只有精选基线摘要在确认后才固化。
+- `.vs`、`.vscode`、`.pytest_cache`、`__pycache__`：默认忽略；删除前确认不含用户自定义配置。
+- `_verify/`：默认忽略但不默认删除；若保留价值高，可考虑迁移为正式测试，但这是后续构建任务。
+
+#### 验证方法
+
+- `git status --ignored --short` 能清楚显示被忽略的缓存/产物。
+- `git ls-files` 中不出现大模型权重、IDE 缓存和运行缓存。
+- 若发现误跟踪文件，应先记录清单，再由用户确认是否通过后续 builder 任务调整。
+
+#### 风险提示
+
+不要使用 `git add .`、`git add -A` 或全目录拖拽提交来整理仓库。YONOD 当前同时包含数据、权重、文献和运行产物，粗粒度提交很容易把不该入库的内容带进去。
+
+---
+
+### 步骤19.4：制定缓存与临时文件清理流程
+
+#### 目标说明
+
+满足用户选择的“确认无用后删除”策略，同时保留可恢复、可审计的判断依据。
+
+#### 具体操作
+
+删除前必须逐项检查四件事：
+
+1. **用途**：这个目录/文件是 IDE 缓存、Python 缓存、测试缓存、运行结果，还是历史验证材料？
+2. **Git 状态**：是否被 Git 跟踪？是否存在未提交修改？
+3. **引用关系**：README、脚本、配置或计划书是否引用它？
+4. **可再生成性**：删除后是否可通过运行脚本重新生成，或是否会丢失人工整理信息？
+
+可使用如下检查片段：
+
+```powershell
+$target = Resolve-Path -LiteralPath ".pytest_cache" -ErrorAction SilentlyContinue
+if ($null -eq $target) {
+    Write-Host "目标不存在，无需处理"
+} else {
+    git ls-files -- "$target"
+    rg -n "\.pytest_cache" README.md project-docs yonod.py main.py .gitignore
+    Write-Host "确认该路径为缓存且无需保留后，再进入删除步骤"
+}
+```
+
+真正删除必须放到后续执行阶段，并采用明确路径：
+
+```powershell
+# 仅示例：执行前必须替换为已确认的具体路径
+$confirmedTarget = Resolve-Path -LiteralPath ".pytest_cache"
+if ($confirmedTarget.Path.StartsWith((Get-Location).Path)) {
+    Remove-Item -LiteralPath $confirmedTarget.Path -Recurse -Force
+} else {
+    throw "目标路径不在当前项目内，停止删除"
+}
+```
+
+#### 验证方法
+
+- 删除清单中每一项都有“用途 / Git 状态 / 引用关系 / 可再生成性 / 处理结论”。
+- 删除后 `git status --short` 不出现意外源码或文档变更。
+- `python yonod.py --help` 或等价入口检查仍可运行。
+- 示例数据路径仍能被脚本读取。
+
+#### 风险提示
+
+`.vscode/` 可能保存用户本地调试配置，`.vs/` 可能保存 Visual Studio 状态；它们通常可删除，但如果用户依赖本地调试任务，删除会影响使用体验。`_verify/` 更需要谨慎，因为它可能是历史 bug 的最短复现材料。
+
+---
+
+### 步骤19.5：保护入口路径与代码引用
+
+#### 目标说明
+
+确保整理动作不破坏现有运行入口、导入路径和 benchmark pipeline。这个步骤是整个目录整理的安全阀。
+
+#### 具体操作
+
+执行引用检查：
+
+```powershell
+rg -n "python yonod\.py|python main\.py|dataset/|WEIGHTS/|results/|cache/|docs/参考文献" README.md project-docs yonod.py main.py example.json
+```
+
+建立“不可直接移动”清单：
+
+| 路径 | 原因 | 后续策略 |
+|---|---|---|
+| `main.py` | 被 `yonod.py` 和帮助信息引用 | 本轮不移动 |
+| `yonod.py` | README 与计划书中的统一入口 | 本轮不移动 |
+| `yonod/` | 核心源码包 | 本轮不移动 |
+| `dataset/` | README、示例配置和命令引用 | 本轮不重命名 |
+| `WEIGHTS/` | 描述符代码和 README 约定路径 | 本轮不移动 |
+| `results/`、`cache/` | 运行流程默认输出/缓存目录 | 可清理内容，但不改变语义 |
+
+如果未来确实需要移动入口或目录，必须作为独立构建任务处理，并同步更新：
+
+- README 示例命令。
+- `example.json` 或其他示例配置。
+- `yonod.py`、`main.py` 中的路径定位逻辑。
+- `project-docs/buildlog.md` 中的实际执行记录。
+- 端到端烟测命令。
+
+#### 验证方法
+
+至少完成以下检查：
+
+```powershell
+python yonod.py --help
+python main.py --help
+python yonod.py --csv dataset/test-amide-coupling(additive_fixed).csv --label-col yield --smiles-cols sub_1_smiles sub_2_smiles --descriptors morgan --models rf --task-name folder-refactor-smoke
+```
+
+如果烟测耗时或依赖环境不满足，可先执行 `--help` 和 CSV 读取级别检查，并在构建日志中明确说明未运行完整建模的原因。
+
+#### 风险提示
+
+Windows PowerShell 对含括号的路径有解析差异，示例中的 `dataset/test-amide-coupling(additive_fixed).csv` 在实际执行时建议加引号。若命令失败，优先判断是路径转义问题还是代码问题。
+
+---
+
+### 步骤19.6：形成整理结果记录与回滚方案
+
+#### 目标说明
+
+把每次整理变成可审计的小步提交，避免“清爽了但没人知道删了什么”的情况。对于复现实验项目，可追溯性本身就是成果的一部分。
+
+#### 具体操作
+
+后续执行 agent 应在 `project-docs/buildlog.md` 记录：
+
+- 执行日期和操作者。
+- 删除/保留/归档清单。
+- 每一项处理依据。
+- 关键验证命令和结果摘要。
+- 若未执行某些验证，说明原因。
+
+建议提交粒度：
+
+```powershell
+git status --short
+git add .gitignore README.md project-docs/buildlog.md
+git commit -m "chore: 整理项目目录与忽略规则"
+```
+
+如果只是删除被忽略的本地缓存，通常不产生 Git 提交，但仍应在构建日志中记录本地处理结果。
+
+回滚策略：
+
+- 已提交的文档或 `.gitignore` 改动：用新的修正提交回滚，不使用 `git reset --hard`。
+- 被忽略缓存删除：通常可由 IDE、pytest 或 YONOD 重新生成。
+- `_verify/` 删除：只有在确认无历史价值后才允许；若仍有价值，优先归档或转为正式测试。
+- 文献和权重：默认不删除，只整理索引和说明。
+
+#### 验证方法
+
+- 每次整理后 `git status --short` 只显示预期变更。
+- 关键入口命令仍可执行。
+- 文献、数据、权重和重要结果快照能够根据文档定位。
+- 若产生提交，提交内容不包含大模型权重、IDE 缓存、PDF/SI 附件或临时产物。
+
+#### 风险提示
+
+本项目已有未提交的工作区变更时，执行 agent 不能回滚或覆盖它们。若整理需要修改同一文件，应先读清楚当前 diff，再只追加必要内容。
+
+### 19.5 验收标准
+
+本轮目录整理计划完成后，后续执行应满足：
+
+1. 项目根目录能一眼区分代码、数据、文献、实验产物、项目文档和本地缓存。
+2. `main.py`、`yonod.py`、`dataset/`、`WEIGHTS/` 的现有引用不被破坏。
+3. `.vs`、`.vscode`、`.pytest_cache`、`__pycache__` 等缓存类目录要么继续被忽略，要么在确认可恢复后删除。
+4. `_verify/` 的每个文件都有处理结论，不能仅凭目录名批量删除。
+5. `docs/参考文献/` 中的文献与补充材料保留本地边界；可共享复现依据写入 `project-docs/`。
+6. 任何实际移动、归档或删除都有检查记录和回滚思路。
+7. 整理完成后至少通过入口帮助命令或轻量烟测。
+
+### 19.6 Q&A 记录
+
+### 通用问题
+
+**Q：为什么不直接把 `.vs`、`.pytest_cache`、`__pycache__` 全删掉？**  
+**A：** 它们大概率是可删除缓存，但项目整理不能只看名字。`.vs` 和 `.vscode` 可能包含本地调试配置，`_verify/` 可能保存历史 bug 的最短复现脚本；因此要先确认用途、Git 状态、引用关系和可再生成性。
+
+**Q：`docs/参考文献/` 被 `.gitignore` 忽略，会不会影响 VJETHBKM 复现？**  
+**A：** 不影响本地复现，但会影响团队共享。因此建议 PDF、SI、Zotero 导出等版权或体积敏感材料继续本地保存；把 DOI、官方数据代码链接、实验参数、复现差异和结论摘要写入 `project-docs/`。
+
+**Q：为什么暂时不移动 `main.py`、`yonod.py`、`dataset/`、`WEIGHTS/`？**  
+**A：** 它们已经被 README、示例配置、脚本和计划书多处引用。移动这些路径不是“整理文件夹”，而是入口兼容性重构，应交给后续 builder 任务单独实现和验证。
+
+**Q：实验结果到底放 `results/` 还是 `project-docs/`？**  
+**A：** 可再生成的完整运行输出放 `results/`，继续忽略；论文/答辩需要引用的轻量结果摘要、表格结论和复现说明写入 `project-docs/`。如果未来要保存精选 CSV 或图片快照，应先确认体积、隐私、许可证和是否适合入库。
+
+### 19.7 下一步行动建议
+
+1. 由 `project-builder-cn` 按步骤19.1 生成目录盘点清单，不做删除。
+2. 基于清单让用户确认 `.vs`、`.vscode`、`.pytest_cache`、`__pycache__`、`_verify/` 的处理策略。
+3. 用户确认后，再执行受控清理，并把实际处理结果写入 `project-docs/buildlog.md`。
+4. 清理后运行入口帮助命令和最小数据烟测，确认现有 workflow 未被破坏。
+
+---
+
 **文档结束**
