@@ -2,6 +2,38 @@
 
 ---
 
+## [2026-08-25 18:21] 步骤 20.11A 完成：正式数据 0D/1D/2D component split schema 审计
+
+### 执行的任务
+- 将 0D/1D/2D 从 smoke 层推进到正式数据 schema 层，覆盖 `BH`、`BH2`、`SM`、`SLAP` 四个数据集。
+- 避免生成正式数据的巨大逐样本 2D manifest，只计算 fold/group 数、测试组大小范围与泄漏检查边界。
+- 对 0D random KFold 记录测试 fold size；对 1D leave-component-value-out 统计每个组件列的唯一值组；对 2D leave-component-pair-out 统计前两个配置组件列的 pair 组。
+- 明确本步骤是 `schema_summary_only_not_paper_exact_training_result`，不声称完成论文精确 0D/1D/2D 泛化训练。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/scripts/audit_official_component_splits.py`：正式数据 component split schema 审计器。
+- 新增 `reference-proejct/vjethbkm/tests/test_official_component_splits.py`：验证四个正式数据集均覆盖且包含 0D/1D/2D。
+- 生成 `reference-proejct/vjethbkm/data/manifest/official_component_split_audit.json`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_component_split_schema_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/official_component_split_audit_report.md`。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/audit_official_component_splits.py`：通过，输出 `rows=25`，覆盖 `BH`、`BH2`、`SM`、`SLAP`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_component_splits.py -q`：通过，`1 passed in 1.53s`。
+- 示例 0D fold size：BH 每折 `791`；BH2 每折 `671–672`；SM 每折 `1152`；SLAP 每折 `230`。
+- 示例 2D pair holdout：BH `Aryl_halide_SMILES+Additive_SMILES` 为 `330` 组；BH2 `Amine_SMILES+Bromide_SMILES` 为 `123` 组；SM `reactant_1_smiles+reactant_2_smiles` 为 `15` 组；SLAP `Aldehyde_1+bifunctional_reagent` 为 `71` 组。
+
+### 遇到的问题及解决方案
+- 问题：正式数据逐样本 2D leave-pair-out manifest 可能变得很大，且论文精确 0D/1D/2D 映射仍需 SI/官方绘图脚本进一步核定。
+- 解决：本步骤只提交轻量 schema summary，不生成爆炸型 manifest；状态明确标注为 schema 级审计。
+- 问题：当前 2D 默认使用配置中的前两个 component columns，未必等于论文每个任务使用的所有 2D 泛化定义。
+- 解决：在输出中写明 `leakage_check_scope` 和边界，后续若读取到更精确映射再扩展配置。
+
+### 下一步计划
+- 步骤 20.12A：在正式数据上运行产率分布不平衡、高产率识别与分桶误差分析，优先复用已生成的 Table S3/OHE/NPZ predictions 或 summary；若缺少逐样本 prediction，则先输出 dataset-level bucket summary。
+
+---
+
 ## [2026-08-25 18:19] 步骤 20.10A 完成：BH2 external validation 官方输出审计
 
 ### 执行的任务

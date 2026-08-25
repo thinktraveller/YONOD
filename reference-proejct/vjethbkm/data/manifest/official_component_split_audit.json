@@ -1,0 +1,12 @@
+{
+  "datasets": [
+    "BH",
+    "BH2",
+    "SM",
+    "SLAP"
+  ],
+  "rows": 25,
+  "status": "schema_summary_only_not_paper_exact_training_result",
+  "boundary": "This audit avoids materializing large 2D manifests. It verifies formal dataset schema and holdout group sizes; paper-exact 0D/1D/2D training still requires the exact component mapping from the SI or official plotting scripts.",
+  "output": "outputs/tables/official_component_split_schema_summary.csv"
+}
