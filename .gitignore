@@ -79,6 +79,7 @@ hf_token
 .DS_Store
 Thumbs.db
 desktop.ini
+.vs
 
 # Claude Code agent metadata (if you keep this in a separate tooling repo)
 .claude/
