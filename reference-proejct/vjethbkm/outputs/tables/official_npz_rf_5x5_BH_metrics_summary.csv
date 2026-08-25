@@ -1,2 +1,3 @@
 stage,dataset,descriptor,model,mae_mean,rmse_mean,r2_mean,kendall_tau_mean,feature_dim,folds,train_elapsed_s_mean,feature_elapsed_s_mean,source_npz
-official_npz_rf_5x5,BH,PhysChem,rf,6.044628226709068,8.75070591617427,0.8965145816418639,0.8108863707524345,15,25,0.41459664,0.0,yieldsmarter/Results/Compare_Complexity/Doyle_2018/PhysChem/Doyle_PhysChem.npz
+official_npz_rf_5x5,BH,MFP,rf,4.531535492347868,6.851955627322502,0.9364555872923422,0.8484259715085937,4096,25,8.13427156,0.0,yieldsmarter/Results/Compare_Complexity/Doyle_2018/MFP/Doyle_MFP.npz
+official_npz_rf_5x5,BH,PhysChem,rf,6.044628226709068,8.75070591617427,0.8965145816418639,0.8108863707524345,15,25,0.42458152000000005,0.0,yieldsmarter/Results/Compare_Complexity/Doyle_2018/PhysChem/Doyle_PhysChem.npz
