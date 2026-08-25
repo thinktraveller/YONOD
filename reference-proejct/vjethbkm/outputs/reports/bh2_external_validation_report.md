@@ -1,0 +1,29 @@
+# BH2 external validation audit
+
+The bundled package contains Product_*_preds.csv but not model_MFP_RF.pkl, so this step audits official holdout outputs instead of claiming a local reprediction.
+
+## 187 corrected catalyst smiles summary
+
+```csv
+rows,predict_mae_from_columns,ours_mae_from_columns,ae_predict_mean,ae_ours_mean
+187,20.240641711229948,18.610533011401074,20.240641711229948,18.610533011422458
+```
+
+## Per-product MAE
+
+```csv
+product,input_rows,prediction_rows,true_yield_mean,official_mfp_mae,dft_mae,official_prediction_file,input_file
+a,10,10,39.8,31.3063802230674,26.7,yieldsmarter/Results/BH2/Holdout/MFP/Product_a_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_a.csv
+b,11,11,33.18181818181818,30.154725522260904,14.363636363636363,yieldsmarter/Results/BH2/Holdout/MFP/Product_b_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_b.csv
+c,11,11,49.0,29.75921502326054,25.181818181818183,yieldsmarter/Results/BH2/Holdout/MFP/Product_c_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_c.csv
+d,24,24,17.541666666666668,13.258443544592723,9.083333333333334,yieldsmarter/Results/BH2/Holdout/MFP/Product_d_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_d.csv
+e,9,9,54.888888888888886,48.08458963186378,30.88888888888889,yieldsmarter/Results/BH2/Holdout/MFP/Product_e_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_e.csv
+f,9,9,12.11111111111111,14.354322157661557,4.222222222222222,yieldsmarter/Results/BH2/Holdout/MFP/Product_f_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_f.csv
+g,24,24,53.833333333333336,40.686091462901864,12.458333333333334,yieldsmarter/Results/BH2/Holdout/MFP/Product_g_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_g.csv
+h,5,5,5.0,12.7881783321664,14.0,yieldsmarter/Results/BH2/Holdout/MFP/Product_h_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_h.csv
+i,24,24,49.0,39.15571575151922,30.958333333333332,yieldsmarter/Results/BH2/Holdout/MFP/Product_i_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_i.csv
+j,24,24,63.333333333333336,47.50652674180875,19.875,yieldsmarter/Results/BH2/Holdout/MFP/Product_j_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_j.csv
+k,24,24,58.791666666666664,43.00672189136736,20.375,yieldsmarter/Results/BH2/Holdout/MFP/Product_k_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_k.csv
+l,4,4,6.75,5.455808726909501,56.5,yieldsmarter/Results/BH2/Holdout/MFP/Product_l_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_l.csv
+m,8,8,42.75,31.892508203686084,30.625,yieldsmarter/Results/BH2/Holdout/MFP/Product_m_preds.csv,yieldsmarter/Data/HTE_datasets/BH2/Per_Product/Product_m.csv
+```
