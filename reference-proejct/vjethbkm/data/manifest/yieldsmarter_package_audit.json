@@ -1,0 +1,23 @@
+{
+  "package_root": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\yieldsmarter",
+  "readme": "README.txt",
+  "license": "MIT License, Copyright (c) 2025 ETH Zurich",
+  "official_evidence": "README title matches the paper and package contains Data/Src/Results/yieldsmarter.yml described by README.",
+  "file_count": 904,
+  "total_size_bytes": 351207591,
+  "extension_counts": {
+    ".csv": 147,
+    ".dat": 1,
+    ".json": 287,
+    ".npz": 149,
+    ".py": 23,
+    ".txt": 9,
+    ".xyz": 287,
+    ".yml": 1
+  },
+  "git_policy": {
+    "raw_package_ignored": true,
+    "commit_raw_package": false,
+    "commit_generated_manifests": true
+  }
+}

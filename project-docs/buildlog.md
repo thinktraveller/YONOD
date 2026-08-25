@@ -2,6 +2,49 @@
 
 ---
 
+## [2026-08-25 16:48] 步骤 20.8A 完成：审计 yieldsmarter 官方数据/代码包并接入 manifest
+
+### 执行的任务
+- 按用户新增数据包路径 `reference-proejct/vjethbkm/yieldsmarter/` 只读完整阅读 `README.txt`、`LICENSE.txt` 和 `yieldsmarter.yml`。
+- 确认数据包根目录包含 `Data/`、`Src/`、`Results/`、`README.txt`、`LICENSE.txt`、`yieldsmarter.yml`，README 标题对应论文 "Yield Smarter, Not Harder: Good Practices for Machine Learning of Reaction Outcomes"。
+- 记录许可证为 MIT License，版权方为 ETH Zurich 2025。
+- 盘点包内文件类型与核心数据集：BH1、BH2、SM、SL1/SLAP，以及 BH2 的 187 条 corrected catalyst smiles 外部验证文件。
+- 更新复现区 `.gitignore` 忽略整个 `yieldsmarter/` 原始包，避免误提交 Data/Results/Src 大量原始文件。
+- 更新 `configs/10_data_sources.yaml` 与 `data/manifest/sources.yaml`，以用户实际放置的 `yieldsmarter/` 路径作为官方数据/代码本地来源，不强制迁移到 `data/raw/`。
+- 新增审计脚本，生成轻量 package audit、key file checksum 与 dataset schema。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/.gitignore`：新增 `yieldsmarter/` 忽略规则。
+- 更新 `reference-proejct/vjethbkm/configs/10_data_sources.yaml`：接入 BH1、BH2、SM、SL1/SLAP 的正式数据路径和组件列。
+- 更新 `reference-proejct/vjethbkm/data/manifest/sources.yaml`：将 `vjethbkm-data-code` 的 `local_path` 改为 `yieldsmarter/`，状态为 `present_untracked_ignored`。
+- 新增 `reference-proejct/vjethbkm/scripts/audit_yieldsmarter_package.py`：生成数据包审计、关键文件 sha256 与 schema 摘要。
+- 新增 `reference-proejct/vjethbkm/tests/test_yieldsmarter_audit.py`：验证数据包 README、LICENSE 与核心数据集存在。
+- 生成 `reference-proejct/vjethbkm/data/manifest/yieldsmarter_package_audit.json`。
+- 生成 `reference-proejct/vjethbkm/data/manifest/yieldsmarter_key_file_checksums.csv`。
+- 生成 `reference-proejct/vjethbkm/data/manifest/yieldsmarter_dataset_schema.csv`。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/audit_yieldsmarter_package.py`：通过，生成 package audit、关键文件 checksum 与 dataset schema。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_yieldsmarter_audit.py -q`：通过，`2 passed in 0.02s`。
+- `README.txt`：说明 `yieldsmarter.yml` 用于构建复现环境，`Data/` 包含 source structural/activity data 与 SOAP conformer xyz，`Src/` 包含描述符生成、ML 验证和绘图代码，`Results/` 包含已生成描述符和模型验证结果。
+- `LICENSE.txt`：MIT License，Copyright (c) 2025 ETH Zurich。
+- `yieldsmarter.yml`：官方环境以 Python 3.10、RDKit 2025.03.6、ase、crest、xtb、openbabel、lightgbm、dscribe、R/rpy2 等为核心；本轮不创建新 conda 环境。
+- 核心 CSV schema：BH1 `3955×5`，BH2 `3359×6`，SM `5760×6`，SL1 `1150×4`，BH2 187 external 文件存在。
+- 包内文件统计：共 `904` 个文件，约 `351207591` bytes；扩展名统计为 `.json 287`、`.xyz 287`、`.npz 149`、`.csv 147`、`.py 23`、`.txt 9`、`.dat 1`、`.yml 1`。
+
+### 遇到的问题及解决方案
+- 问题：用户说明 README.md，但实际包内文件为 `README.txt`。
+- 解决：按实际文件名完整读取 `README.txt`，并在日志中记录差异。
+- 问题：当前 `.venv` 缺少 `pandas` 与 `pytest`，无法运行本步审计脚本和测试；但系统 Python 3.13 中存在 `pandas 2.3.3` 与 `pytest 8.4.2`。
+- 解决：本步使用系统 Python 完成只读审计与测试，并把 `.venv` 缺包作为后续正式复现的环境风险记录；不自动安装依赖。
+- 问题：数据包包含大量原始数据、预计算特征、结果和源码，且当前 Git 会将 `yieldsmarter/` 显示为未跟踪目录。
+- 解决：不移动、不改写、不删除原始包；在复现区 `.gitignore` 中忽略整个 `yieldsmarter/`，只提交轻量 manifest、checksum、schema 和适配代码。
+
+### 下一步计划
+- 步骤 20.8B：按官方包内已生成的 Compare_Complexity RF metrics summaries 提取 Table S3 风格论文目标值，并接入我们的 Table S3 差异比较表。
+
+---
+
 ## [2026-08-25 15:05] 步骤 20.7A 完成：实现产率不平衡与高产率识别分析骨架
 
 ### 执行的任务

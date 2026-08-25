@@ -4,6 +4,7 @@ venv/
 env/
 
 # Copyright-sensitive or large source artifacts
+yieldsmarter/
 data/raw/
 data/interim/
 data/processed/*
