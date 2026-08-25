@@ -14,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
 
 
 from vjethbkm_repro.features import build_ohe
+from vjethbkm_repro.benchmark import table_s3_style_summary
 from vjethbkm_repro.metrics import regression_metrics
 from vjethbkm_repro.splits import repeated_kfold_manifest
 
@@ -39,3 +40,23 @@ def test_regression_metrics_are_finite_for_regular_case() -> None:
     assert np.isfinite(metrics["rmse"])
     assert np.isfinite(metrics["r2"])
 
+
+def test_table_s3_style_summary_has_four_metrics_per_row() -> None:
+    summary = pd.DataFrame(
+        [
+            {
+                "stage": "core_rf_5x5",
+                "dataset": "smoke_local_yonod",
+                "descriptor": "ohe",
+                "model": "rf",
+                "mae_mean": 0.1,
+                "rmse_mean": 0.2,
+                "r2_mean": 0.3,
+                "kendall_tau_mean": 0.4,
+            }
+        ]
+    )
+    table = table_s3_style_summary(summary, status="smoke_validation_only", explanation="test")
+    assert len(table) == 4
+    assert set(table["metric"]) == {"mae", "rmse", "r2", "kendall_tau"}
+    assert set(table["split"]) == {"5x5_repeated_cv"}

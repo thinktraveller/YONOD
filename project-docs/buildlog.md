@@ -2,6 +2,37 @@
 
 ---
 
+## [2026-08-25 14:59] 步骤 20.6B 完成：实现正式 5×5 CV 与 Table S3 风格汇总
+
+### 执行的任务
+- 将 `benchmark.py` 从 smoke-only 扩展为通用 RF repeated-CV runner。
+- 保留 `smoke` 的 1×2 快速验证，同时新增 `core_rf_5x5` 阶段，执行 5 repeats × 5 folds。
+- 固定同一 split manifest，对 OHE、Morgan、PhysChem 三类 Stage A 描述符使用同一组 train/test 划分比较 RF。
+- 新增 Table S3 风格汇总输出，列包含 `paper_target_id, dataset, descriptor, model, split, metric, paper_value, reproduced_value, abs_diff, rel_diff, status, explanation`。
+- 在官方数据暂不可用时，使用 `--allow-smoke-dataset` 显式声明当前只是 5×5 workflow 验证，不把 smoke 数值冒充论文数值。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/src/vjethbkm_repro/benchmark.py`：新增 `_run_rf_repeated_cv()`、`run_core_rf_5x5()` 和 `table_s3_style_summary()`。
+- 更新 `reference-proejct/vjethbkm/scripts/run_benchmark.py`：新增 `--stage core_rf_5x5`、`--dataset` 和 `--allow-smoke-dataset` 参数。
+- 更新 `reference-proejct/vjethbkm/tests/test_smoke_pipeline.py`：新增 Table S3 风格汇总结构测试。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/core_rf_5x5_smoke_local_yonod_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/table_s3_style_smoke_local_yonod_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/core_rf_5x5_smoke_local_yonod_reproduction_report.md`。
+
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -B reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset smoke_local_yonod --allow-smoke-dataset`：通过，run id 为 `core_rf_5x5_20260825_150126`，完成 3 个描述符 × 25 folds 的 RF 5×5 workflow 验证。
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -m pytest reference-proejct/vjethbkm/tests/test_smoke_pipeline.py`：通过，`4 passed in 2.12s`，覆盖 split、OHE、指标和 Table S3 风格输出结构。
+- `core_rf_5x5_smoke_local_yonod_metrics_summary.csv`：在 10 行 smoke 数据上，PhysChem/RF 平均 MAE `0.3323`、Morgan/RF 平均 MAE `0.3560`、OHE/RF 平均 MAE `0.3965`；这些数值只用于验证固定 split 比较流程。
+- Table S3 风格输出中的 `paper_value/abs_diff/rel_diff` 保持空值，`status=smoke_validation_only`，避免将本地 10 行 smoke 结果误写为论文复现结果。
+
+### 遇到的问题及解决方案
+- 问题：官方 VJETHBKM 数据包仍未可用，无法真正计算 BH1/BH2/SM/SLAP 的 Table S3 复现数值。
+- 解决：先完成正式 5×5 CV 的工具化与输出 schema；当前结果仅作为 workflow 验证，后续官方数据导入后复用同一入口产出正式表。
+
+### 下一步计划
+- 步骤 20.6C：实现 0D/1D/2D component split 骨架与无泄漏验证；若官方数据仍不可用，继续使用 synthetic/smoke 数据验证 split 逻辑，不声称论文数值复现。
+
+---
+
 ## [2026-08-25 14:56] 步骤 20.6A 完成：建立官方数据源 probe 与 checksum manifest 流程
 
 ### 执行的任务
