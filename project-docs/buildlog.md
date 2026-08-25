@@ -2,6 +2,47 @@
 
 ---
 
+## [2026-08-25 14:05] 步骤 20.4-20.5 完成：实现低成本描述符与 RF smoke benchmark 基线
+
+### 执行的任务
+- 实现 Stage A 低成本描述符：OHE、Morgan count fingerprint、RDKit PhysChem。
+- 实现可复现 repeated KFold split manifest、回归指标计算、RF 训练与预测输出。
+- 新增 `scripts/run_benchmark.py --stage smoke`，在本地 10 行 smoke 数据上跑通 OHE/Morgan/PhysChem + RF + 2-fold smoke benchmark。
+- 生成 smoke 级 metrics、predictions、feature summary、split manifest、run manifest 和 Markdown 报告；仅提交轻量摘要表与报告，完整 run 目录继续由 `.gitignore` 忽略。
+- 根据 20.3 的数据审计结果，将 smoke schema 中 `yield` 单位从 `percent` 修正为 `fraction`。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/features.py`：实现 OHE、Morgan 和 PhysChem 特征构建。
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/splits.py`：实现 repeated KFold split manifest。
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/metrics.py`：实现 MAE、RMSE、R2、Kendall tau。
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/benchmark.py`：串联数据、特征、split、RF、输出和报告。
+- 新增 `reference-proejct/vjethbkm/scripts/run_benchmark.py`：提供 smoke benchmark CLI。
+- 新增 `reference-proejct/vjethbkm/tests/test_smoke_pipeline.py`：覆盖 split、OHE 未见类别和指标基本行为。
+- 更新 `reference-proejct/vjethbkm/data/manifest/schema.yaml`：修正 smoke target 单位为 `fraction`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/smoke_metrics_summary.csv` 与 `reference-proejct/vjethbkm/outputs/reports/smoke_reproduction_report.md`。
+- 保留成功 ignored run：`reference-proejct/vjethbkm/outputs/runs/smoke_20260825_140758/`；删除首次失败留下的半成品 ignored run：`smoke_20260825_140715/`。
+
+### 验证结果
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -B reference-proejct/vjethbkm/scripts/run_benchmark.py --stage smoke`：通过，run id 为 `smoke_20260825_140758`，完成 3 个描述符 × 2 个 fold 的 RF smoke run。
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -m pytest reference-proejct/vjethbkm/tests`：通过，`3 passed in 1.89s`，验证 split、OHE 与指标 helper。
+- `outputs/tables/smoke_metrics_summary.csv`：生成 OHE、Morgan、PhysChem 三组 RF 汇总指标、特征维度和耗时字段；在 10 行 smoke 数据上，PhysChem/RF 平均 MAE `0.3719`、Morgan/RF 平均 MAE `0.3837`、OHE/RF 平均 MAE `0.4334`。这些数值仅用于流程 smoke，不用于论文结论。
+- `outputs/reports/smoke_reproduction_report.md`：生成第一版 smoke 报告，并明确说明这只是 pipeline smoke，不代表主文数值复现。
+
+### 遇到的问题及解决方案
+- 问题：当前只有本地 10 行 smoke 数据可直接使用，官方 BH/SM/SLAP 数据尚未校验。
+- 解决：将本步骤定位为 Stage A 工程闭环 smoke，只验证 workflow 形状、输出结构和可追溯性；正式论文数值仍等待官方数据/代码与 Z-AIHub SI 数值审计。
+- 问题：首次运行 `run_benchmark.py --stage smoke` 在生成 Markdown 报告时失败，原因是 `pandas.to_markdown()` 依赖未安装的可选包 `tabulate`。
+- 解决：不新增安装要求，改为项目内置 `_markdown_table()` 渲染轻量 Markdown 表格。
+- 问题：首次运行 Morgan 特征时 RDKit 提示旧接口弃用。
+- 解决：改用 `rdFingerprintGenerator.GetMorganGenerator(...).GetCountFingerprint(...)` 生成 count fingerprint。
+- 问题：根 `.gitignore` 忽略 `tests/`，复现区测试文件会被默认忽略。
+- 解决：本轮不修改用户既有根忽略规则；提交时对 `reference-proejct/vjethbkm/tests/test_smoke_pipeline.py` 使用明确路径强制暂存。
+
+### 下一步计划
+- 步骤 20.6：在官方数据可用后实现严格的 5×5 CV、BH2 外部验证和 0D/1D/2D 组件留出 split；当前需优先获取并校验 ETH Research Collection 数据/代码包，或恢复 Z-AIHub/Zotero 直接附件读取。
+
+---
+
 ## [2026-08-25 14:01] 步骤 20.3 完成：建立环境与数据 manifest 校验骨架
 
 ### 执行的任务

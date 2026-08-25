@@ -13,8 +13,8 @@ datasets:
       - yield
     target:
       column: yield
-      unit: percent
-      expected_range: [0, 100]
+      unit: fraction
+      expected_range: [0, 1]
     components:
       - name: reactant_1
         column: sub_1_smiles
@@ -29,4 +29,3 @@ datasets:
       - Buchwald-Hartwig amination
       - Suzuki-Miyaura coupling
       - silicon-ligand amine protocol
-
