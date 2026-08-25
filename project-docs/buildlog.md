@@ -2,6 +2,34 @@
 
 ---
 
+## [2026-08-25 13:56] 步骤 20.1 完成：建立 VJETHBKM 文献与复现证据台账
+
+### 执行的任务
+- 读取 `project-docs/goal.md` 与 `project-docs/project-plan.md` 第 20 章，确认本轮复现边界为 `reference-proejct/vjethbkm/`。
+- 尝试通过工具发现定位 Z-AIHub/Zotero 文献读取接口；当前会话未暴露直接可调用的 Z-AIHub/Zotero chunk reader。
+- 使用 Crossref 与 ACS 公开 DOI 页面核对 `VJETHBKM` 的题名、作者、DOI、SI DOI、发表信息、数据/代码 DOI 和方法主题。
+- 建立主文、SI、ETH 数据代码资源、Z-AIHub 附件状态与后续图表复现目标台账。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/docs/literature-ledger.md`：记录文献元数据、证据来源、Z-AIHub 访问状态、SI 目标章节和本地附件占位。
+- 新增 `reference-proejct/vjethbkm/docs/figure-table-targets.md`：记录主文/SI 复现目标、优先级、指标与验收状态词表。
+- 新增 `reference-proejct/vjethbkm/data/manifest/sources.yaml`：记录文章、SI、官方数据/代码 DOI、Z-AIHub item 与原始文件入库策略。
+
+### 验证结果
+- `rg --hidden "Z-AIHub|zaihub|Zotero|VJETHBKM|10\\.1021/jacs\\.6c02213|10\\.3929/ethz-c-000800856"`：确认本地项目文档包含 VJETHBKM 与 DOI 线索，但未发现可直接读取 Z-AIHub 附件的本地脚本。
+- `tool_search` 检索 `zaihub/Z-AIHub/Zotero/document chunks/knowledge base`：仅暴露通用文献检索、文档控制等工具，未暴露 Z-AIHub/Zotero 专用接口。
+- Crossref 查询 `10.1021/jacs.6c02213`：返回主文 DOI 与 SI DOI `10.1021/jacs.6c02213.s001`。
+- ACS 公开页面：核对文章 Open Access、JACS 2026、数据与代码可用性声明指向 `10.3929/ethz-c-000800856`。
+
+### 遇到的问题及解决方案
+- 问题：当前 Codex 工具面未提供直接 Z-AIHub/Zotero 文档读取命令，无法在本步骤提取 Zotero 附件 chunk、页码级图表数值或 PDF hash。
+- 解决：按计划书风险预案先记录访问限制、来源 DOI、SI DOI、官方数据/代码 DOI 和待补审计状态；第一阶段只推进 workflow 工具化，不声称已完成主文/SI 精确数值复现。
+
+### 下一步计划
+- 步骤 20.2：建立 `reference-proejct/vjethbkm/` 隔离目录、`.gitignore`、README、配置文件和版本边界。
+
+---
+
 ## [2026-05-16] v1.0.0 首个公开发布：酰胺缩合反应产率预测专题
 
 ### 执行的任务
