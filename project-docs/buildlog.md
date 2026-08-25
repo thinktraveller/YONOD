@@ -2,6 +2,37 @@
 
 ---
 
+## [2026-08-25 14:56] 步骤 20.6A 完成：建立官方数据源 probe 与 checksum manifest 流程
+
+### 执行的任务
+- 新增官方来源 probe 脚本，读取 `data/manifest/sources.yaml` 中的 ACS 主文、SI、ETH 数据/代码 DOI 与 Z-AIHub 本地 item。
+- 对公开 URL 执行 HEAD probe，记录 HTTP 状态、最终跳转地址、content type、content length 与错误信息。
+- 对已存在的本地 raw 文件计算 sha256；当前 raw PDF/SI/ETH 包均未提交且未落盘，因此记录为 `local_exists=false`。
+- 对 Z-AIHub 本地 item 保持诚实记录：它没有 URL，不能由当前脚本 probe，但此前主线程的 documentId/chunk 证据已在 `literature-ledger.md` 中记录。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/sources.py`：封装 source probe、local checksum 和 JSON manifest 写入。
+- 新增 `reference-proejct/vjethbkm/scripts/probe_official_sources.py`：提供可复现的官方来源探测入口。
+- 新增 `reference-proejct/vjethbkm/tests/test_sources.py`：验证本地 Z-AIHub item 会被明确记录为不可 URL probe，而不是静默跳过。
+- 生成 `reference-proejct/vjethbkm/data/manifest/source_access_probe.json`：记录本次 source probe 结果。
+
+### 验证结果
+- 普通沙箱下运行 `probe_official_sources.py --timeout 20`：失败于 Windows socket 权限，错误为 `[WinError 10013] 以一种访问权限不允许的方式做了一个访问套接字的尝试。`。
+- 提权后运行 `reference-proejct/vjethbkm/.venv/Scripts/python.exe -B reference-proejct/vjethbkm/scripts/probe_official_sources.py --timeout 20`：可到达公开 DOI 跳转链并写入 `source_access_probe.json`；ACS 主文与 SI HEAD 返回 `403 Forbidden`，ETH DOI 最终跳转到 `https://www.research-collection.ethz.ch/handle/20.500.11850/800856` 后返回 `500 Internal Server Error`，Z-AIHub 本地 item 记录为无 URL。
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -m pytest reference-proejct/vjethbkm/tests/test_sources.py`：验证本地 Zotero/Z-AIHub item 的不可 URL probe 状态。
+- `git status --short`：确认本步骤只新增/修改 `reference-proejct/vjethbkm/` 内复现文件和 `project-docs/buildlog.md`。
+
+### 遇到的问题及解决方案
+- 问题：正式数据/代码文件尚未下载，且 ETH Research Collection 记录未在本步骤解析出具体文件列表。
+- 解决：先提交 source probe 与 checksum manifest 流程；后续可在网络与许可允许时扩展为显式下载器或由用户手动放入 `data/raw/ethz-c-000800856/` 后重新计算 checksum。
+- 问题：公开 DOI probe 存在站点级限制，ACS 返回 403，ETH Research Collection 返回 500。
+- 解决：脚本默认记录 blocker 并退出 0，避免 transient/站点策略导致构建中断；如需 CI 强约束，可加 `--strict` 让公开来源不可访问时返回非零退出码。
+
+### 下一步计划
+- 步骤 20.6B：实现正式 5×5 CV 汇总模式，用固定 split 比较 OHE/Morgan/PhysChem + RF，并输出 Table S3 风格指标表。
+
+---
+
 ## [2026-08-25 14:11] 证据来源修正：区分此前 Z-AIHub 附件读取与本轮公开复核
 
 ### 执行的任务
