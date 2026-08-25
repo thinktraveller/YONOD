@@ -1,0 +1,21 @@
+version: 1
+datasets:
+  smoke_local_yonod:
+    kind: local_smoke
+    path: "../../dataset/test-amide-coupling(additive_fixed).csv"
+    label_col: yield
+    component_cols:
+      - sub_1_smiles
+      - sub_2_smiles
+    nrows: 10
+    status: available_for_smoke_only
+  BH:
+    kind: official_vjethbkm_dataset
+    status: pending_eth_research_collection_inspection
+  SM:
+    kind: official_vjethbkm_dataset
+    status: pending_eth_research_collection_inspection
+  SLAP:
+    kind: official_vjethbkm_dataset
+    status: pending_eth_research_collection_inspection
+

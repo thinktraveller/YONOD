@@ -1,0 +1,23 @@
+version: 1
+splits:
+  random_5x5:
+    stage: A
+    type: repeated_kfold
+    n_repeats: 5
+    n_splits: 5
+    random_state: 42
+  bh2_external:
+    stage: B
+    type: external_holdout
+    train_dataset: BH1
+    test_dataset: BH2
+    status: pending_official_dataset_mapping
+  holdout_1d:
+    stage: B
+    type: leave_component_out
+    status: pending_component_schema
+  holdout_2d:
+    stage: B
+    type: leave_component_pair_out
+    status: pending_component_schema
+
