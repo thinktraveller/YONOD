@@ -1,0 +1,32 @@
+version: 1
+last_updated: "2026-08-25"
+datasets:
+  smoke_local_yonod:
+    source_config: configs/10_data_sources.yaml
+    path: "../../dataset/test-amide-coupling(additive_fixed).csv"
+    read_policy:
+      nrows: 10
+      reason: "The full local smoke CSV has a known malformed blank row recorded in buildlog step 19; use first 10 valid rows for non-invasive smoke validation."
+    required_columns:
+      - sub_1_smiles
+      - sub_2_smiles
+      - yield
+    target:
+      column: yield
+      unit: percent
+      expected_range: [0, 100]
+    components:
+      - name: reactant_1
+        column: sub_1_smiles
+        type: smiles
+      - name: reactant_2
+        column: sub_2_smiles
+        type: smiles
+    status: smoke_ready
+  official_vjethbkm:
+    status: pending_eth_research_collection_inspection
+    expected_reaction_classes:
+      - Buchwald-Hartwig amination
+      - Suzuki-Miyaura coupling
+      - silicon-ligand amine protocol
+

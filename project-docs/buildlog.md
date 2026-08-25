@@ -2,6 +2,42 @@
 
 ---
 
+## [2026-08-25 14:01] 步骤 20.3 完成：建立环境与数据 manifest 校验骨架
+
+### 执行的任务
+- 新增 schema 与 feature source manifest，明确本地 smoke 数据、官方 VJETHBKM 数据和 Stage A/B 特征来源状态。
+- 新增 `manifest.py`，提供 YAML 读取、路径解析、文件 sha256、数据读取和数据统计能力。
+- 新增 `check_environment.py` 与 `audit_data_sources.py`，用于只读检查复现环境和生成轻量数据统计。
+- 使用本地 10 行 smoke 数据生成 `data/manifest/dataset_stats.csv`，避免触碰第 19 步已记录的完整 CSV 空行问题。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/data/manifest/schema.yaml`：记录 smoke 数据列、目标单位、组件列和读取策略。
+- 新增 `reference-proejct/vjethbkm/data/manifest/feature_sources.yaml`：记录 OHE、Morgan、PhysChem、DFT、SOAP 的来源、阶段和泄漏风险。
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/manifest.py`：提供 manifest 与数据审计 helper。
+- 新增 `reference-proejct/vjethbkm/scripts/check_environment.py`：输出 Python、YONOD 路径和关键包版本。
+- 新增 `reference-proejct/vjethbkm/scripts/audit_data_sources.py`：校验 smoke 数据并输出轻量统计。
+- 新增 `reference-proejct/vjethbkm/data/manifest/dataset_stats.csv`：记录 smoke 数据样本数、列数、hash、yield 范围和组分唯一值。
+
+### 验证结果
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -B reference-proejct/vjethbkm/scripts/check_environment.py`：通过，Python `3.13.9`，YONOD 根目录定位为 `D:\大创\YONOD`，`yonod/` 包存在。
+- Stage A 必需依赖均可导入：`pandas 3.0.5`、`numpy 2.5.2`、`scipy 1.18.1`、`scikit-learn 1.9.0`、`rdkit 2026.3.5`、`matplotlib 3.11.1`、`seaborn 0.13.2`、`PyYAML 6.0.3`、`joblib 1.5.3`、`tqdm 4.70.0`、`pyarrow 25.0.1`、`pytest 9.1.1`。
+- 扩展依赖也已安装：`lightgbm 4.7.0`、`dscribe 2.1.2`、`ase 3.29.0`，后续 DFT/SOAP 或模型矩阵扩展不再受安装状态阻塞。
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -B reference-proejct/vjethbkm/scripts/audit_data_sources.py`：成功读取 `dataset/test-amide-coupling(additive_fixed).csv` 前 10 行，生成 `data/manifest/dataset_stats.csv`。
+- `data/manifest/dataset_stats.csv`：记录 `n_rows_read=10`、`n_columns=9`、目标列 `yield` 范围 `0.0218646..0.8727948`、均值 `0.4387687149`、`sub_1_smiles` 唯一值 9、`sub_2_smiles` 唯一值 8，并附原始 CSV sha256 `576da87557334f2c30b0b65fcc82ac8c138b8da84dfea70b9245f11871e9f732`。
+
+### 遇到的问题及解决方案
+- 问题：官方 ETH Research Collection 数据/代码包尚未下载和校验，因此无法生成正式 BH/SM/SLAP schema。
+- 解决：先提交官方数据占位 manifest 与 smoke 数据校验脚本；后续获取官方包后补充 checksum、schema 与完整数据统计。
+- 问题：本地 smoke CSV 全量读取在第 19 步已发现第 12 行空字段数异常。
+- 解决：本步骤不修改数据文件，按计划只读前 10 行作为 smoke 验证样本，并在 schema 中记录原因。
+- 问题：环境检查导入 matplotlib 时提示无法写入 `C:\Users\joyjo\.matplotlib\fontlist-v3.11.0.json.matplotlib-lock`。
+- 解决：脚本退出码仍为 0，说明该警告只影响用户目录字体缓存写入，不影响当前复现区的环境验证；后续若生成图表，可把 `MPLCONFIGDIR` 指向 `reference-proejct/vjethbkm/cache/matplotlib` 避免写用户目录。
+
+### 下一步计划
+- 步骤 20.4：实现 OHE/Morgan/PhysChem 统一描述符与 RF smoke benchmark 基线。
+
+---
+
 ## [2026-08-25 13:59] 步骤 20.2 完成：建立 VJETHBKM 隔离复现目录与版本边界
 
 ### 执行的任务
