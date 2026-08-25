@@ -14,7 +14,7 @@ if str(SRC_DIR) not in sys.path:
 
 
 from vjethbkm_repro.features import build_ohe
-from vjethbkm_repro.benchmark import table_s3_style_summary
+from vjethbkm_repro.benchmark import run_core_rf_5x5, table_s3_style_summary
 from vjethbkm_repro.metrics import regression_metrics
 from vjethbkm_repro.splits import repeated_kfold_manifest
 
@@ -60,3 +60,12 @@ def test_table_s3_style_summary_has_four_metrics_per_row() -> None:
     assert len(table) == 4
     assert set(table["metric"]) == {"mae", "rmse", "r2", "kendall_tau"}
     assert set(table["split"]) == {"5x5_repeated_cv"}
+
+
+def test_core_runner_rejects_smoke_without_explicit_flag() -> None:
+    try:
+        run_core_rf_5x5("smoke_local_yonod", descriptors=["ohe"], repeats=1, folds=2, n_estimators=2)
+    except ValueError as exc:
+        assert "--allow-smoke-dataset" in str(exc)
+    else:
+        raise AssertionError("Expected smoke dataset guard to reject unflagged core run")

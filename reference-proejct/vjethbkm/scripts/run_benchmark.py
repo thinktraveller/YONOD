@@ -11,6 +11,15 @@ def main() -> int:
     parser.add_argument("--stage", default="smoke", choices=["smoke", "core_rf_5x5"])
     parser.add_argument("--dataset", default=None)
     parser.add_argument(
+        "--descriptors",
+        default=None,
+        help="Comma-separated descriptors for core_rf_5x5, e.g. ohe,morgan,physchem.",
+    )
+    parser.add_argument("--repeats", type=int, default=5)
+    parser.add_argument("--folds", type=int, default=5)
+    parser.add_argument("--n-estimators", type=int, default=200)
+    parser.add_argument("--random-state", type=int, default=1000)
+    parser.add_argument(
         "--allow-smoke-dataset",
         action="store_true",
         help="Allow formal 5x5 workflow validation on the local smoke dataset.",
@@ -27,9 +36,17 @@ def main() -> int:
     if args.stage == "smoke":
         result = run_smoke()
     elif args.stage == "core_rf_5x5":
+        descriptors = None
+        if args.descriptors:
+            descriptors = [item.strip() for item in args.descriptors.split(",") if item.strip()]
         result = run_core_rf_5x5(
             dataset_id=args.dataset or "smoke_local_yonod",
             allow_smoke_dataset=args.allow_smoke_dataset,
+            descriptors=descriptors,
+            repeats=args.repeats,
+            folds=args.folds,
+            n_estimators=args.n_estimators,
+            random_state=args.random_state,
         )
     else:
         raise ValueError(f"Unsupported stage: {args.stage}")

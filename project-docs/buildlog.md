@@ -2,6 +2,45 @@
 
 ---
 
+## [2026-08-25 17:04] 步骤 20.8C 完成：正式 SLAP/OHE 5×5 RF 基线与官方差异表
+
+### 执行的任务
+- 将 `core_rf_5x5` runner 参数化，支持指定描述符、repeats、folds、RF 树数量和 random seed，便于正式数据按批次复现。
+- 先尝试 `SLAP` 全描述符 OHE/Morgan/PhysChem + RF 5×5；运行约 5 分钟仍未完成且无错误输出后中断，改为分批执行以避免长任务不可控。
+- 在正式 `SLAP/SL1` 数据上运行 OHE-only 的 5×5 repeated CV，RF 使用 `n_estimators=200`、`random_state=1000`。
+- 新增官方目标合并器，将本地 `core_rf_5x5_*_metrics_summary.csv` 与 `table_s3_official_rf_targets.csv` 对齐，生成差异表。
+- 明确本地结果为 `local_compatible_rerun_compared`，不是官方代码路径的逐字节复跑结果。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/src/vjethbkm_repro/benchmark.py`：新增可配置 descriptors/repeats/folds/n_estimators/random_state，并修正报告里的证据状态说明。
+- 更新 `reference-proejct/vjethbkm/scripts/run_benchmark.py`：新增 `--descriptors`、`--repeats`、`--folds`、`--n-estimators`、`--random-state` 参数。
+- 更新 `reference-proejct/vjethbkm/tests/test_smoke_pipeline.py`：新增 smoke 数据保护测试，避免正式 runner 无标记地跑 smoke 数据。
+- 新增 `reference-proejct/vjethbkm/scripts/merge_official_differences.py`：合并官方目标表和本地重跑 summary。
+- 新增 `reference-proejct/vjethbkm/tests/test_official_difference_merge.py`：验证本地 `ohe/rf` 到官方 `OHE/RF` 的映射。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/core_rf_5x5_SLAP_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/table_s3_style_SLAP_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/table_s3_local_vs_official_differences.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/core_rf_5x5_SLAP_reproduction_report.md`。
+
+### 验证结果
+- `python -m pytest reference-proejct/vjethbkm/tests/test_smoke_pipeline.py -q`：通过，`5 passed in 1.99s`。
+- `python reference-proejct/vjethbkm/scripts/run_benchmark.py --stage core_rf_5x5 --dataset SLAP --descriptors ohe --repeats 5 --folds 5 --n-estimators 200 --random-state 1000`：通过，run id 为 `core_rf_5x5_20260825_170314`。
+- `SLAP/OHE/RF` 本地兼容重跑结果：MAE `21.751943810777856`，RMSE `46.8379009646408`，R² `0.584487041830977`，Kendall tau `0.47110836160415603`，feature dim `115`，folds `25`。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，差异表共 48 行，其中 4 行已合并本地 `SLAP/OHE` 结果。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_smoke_pipeline.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py -q`：通过，`6 passed in 1.92s`。
+- 与官方目标差异：`SLAP/OHE/RF` MAE 差 `0.222303`，RMSE 差 `0.976797`，R² 差 `0.021341`，Kendall tau 差 `0.010597`。
+
+### 遇到的问题及解决方案
+- 问题：一次性运行 `SLAP` 的 OHE/Morgan/PhysChem 全描述符 5×5 RF 超过约 5 分钟仍未完成，长任务不可控。
+- 解决：中断长跑并实现 runner 参数化；本步骤先完成 OHE-only 正式基线，后续可按描述符/数据集分批运行 Morgan 与 PhysChem。
+- 问题：本地 `morgan/physchem` 实现与官方 `MFP/PhysChem` 生成链尚未逐项审计，直接做数值宣称风险较高。
+- 解决：差异表中只把实际完成的 `SLAP/OHE` 标为 `local_compatible_rerun_compared`；其他目标仍保持 `official_target_extracted_pending_local_rerun`。
+
+### 下一步计划
+- 步骤 20.8D：继续按批次运行正式数据的 OHE 5×5（BH/BH2/SM），或先为 Morgan/PhysChem 接入官方预计算 `.npz` 适配器以缩短全数据复现时间。
+
+---
+
 ## [2026-08-25 16:55] 步骤 20.8B 完成：抽取官方 Compare_Complexity RF 指标目标值
 
 ### 执行的任务

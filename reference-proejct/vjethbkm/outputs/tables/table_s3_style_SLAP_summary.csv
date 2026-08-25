@@ -1,0 +1,5 @@
+paper_target_id,dataset,descriptor,model,split,metric,paper_value,reproduced_value,abs_diff,rel_diff,status,explanation
+si_table_s3_rf_cv,SLAP,ohe,rf,5x5_repeated_cv,mae,,21.751943810777856,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+si_table_s3_rf_cv,SLAP,ohe,rf,5x5_repeated_cv,rmse,,46.8379009646408,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+si_table_s3_rf_cv,SLAP,ohe,rf,5x5_repeated_cv,r2,,0.584487041830977,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+si_table_s3_rf_cv,SLAP,ohe,rf,5x5_repeated_cv,kendall_tau,,0.47110836160415603,,,pending_paper_value_materialization,"Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
