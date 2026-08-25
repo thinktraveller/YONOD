@@ -1,4 +1,4 @@
-"""Stage A smoke benchmark for the VJETHBKM reproduction."""
+"""Repeated-CV benchmarks for the VJETHBKM reproduction."""
 
 from __future__ import annotations
 
@@ -43,16 +43,69 @@ def _markdown_table(df: pd.DataFrame) -> str:
     return "\n".join("| " + " | ".join(values) + " |" for values in rows)
 
 
-def run_smoke() -> dict:
-    dataset_cfg = dataset_config_from_sources("smoke_local_yonod")
+def _summarize_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
+    return (
+        metrics.groupby(["stage", "dataset", "descriptor", "model"], as_index=False)
+        .agg(
+            mae_mean=("mae", "mean"),
+            rmse_mean=("rmse", "mean"),
+            r2_mean=("r2", "mean"),
+            kendall_tau_mean=("kendall_tau", "mean"),
+            feature_dim=("feature_dim", "first"),
+            folds=("fold", "count"),
+            train_elapsed_s_mean=("train_elapsed_s", "mean"),
+            feature_elapsed_s_mean=("feature_elapsed_s", "mean"),
+        )
+        .sort_values(["mae_mean", "rmse_mean"])
+    )
+
+
+def table_s3_style_summary(summary: pd.DataFrame, status: str, explanation: str) -> pd.DataFrame:
+    records: list[dict] = []
+    metric_map = {
+        "mae": "mae_mean",
+        "rmse": "rmse_mean",
+        "r2": "r2_mean",
+        "kendall_tau": "kendall_tau_mean",
+    }
+    for _, row in summary.iterrows():
+        for metric, column in metric_map.items():
+            records.append(
+                {
+                    "paper_target_id": "si_table_s3_rf_cv",
+                    "dataset": row["dataset"],
+                    "descriptor": row["descriptor"],
+                    "model": row["model"],
+                    "split": "5x5_repeated_cv" if row["stage"] == "core_rf_5x5" else row["stage"],
+                    "metric": metric,
+                    "paper_value": "",
+                    "reproduced_value": row[column],
+                    "abs_diff": "",
+                    "rel_diff": "",
+                    "status": status,
+                    "explanation": explanation,
+                }
+            )
+    return pd.DataFrame.from_records(records)
+
+
+def _run_rf_repeated_cv(
+    *,
+    stage: str,
+    dataset_id: str,
+    repeats: int,
+    folds: int,
+    descriptors: list[str],
+    summary_name: str,
+    report_name: str,
+    table_s3_name: str | None = None,
+) -> dict:
+    dataset_cfg = dataset_config_from_sources(dataset_id)
     df = read_dataset(dataset_cfg).reset_index(drop=True)
     y = pd.to_numeric(df[dataset_cfg.label_col], errors="raise")
 
-    descriptors = ["ohe", "morgan", "physchem"]
-    repeats = 1
-    folds = 2
     random_state = 42
-    run_id = _run_id("smoke")
+    run_id = _run_id(stage)
     run_dir = REPRO_ROOT / "outputs" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -116,7 +169,7 @@ def run_smoke() -> dict:
                 metrics_records.append(
                     {
                         "run_id": run_id,
-                        "stage": "smoke",
+                        "stage": stage,
                         "dataset": dataset_cfg.dataset_id,
                         "descriptor": descriptor,
                         "model": "rf",
@@ -157,26 +210,25 @@ def run_smoke() -> dict:
     report_dir = REPRO_ROOT / "outputs" / "reports"
     table_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
-    summary = (
-        metrics.groupby(["stage", "dataset", "descriptor", "model"], as_index=False)
-        .agg(
-            mae_mean=("mae", "mean"),
-            rmse_mean=("rmse", "mean"),
-            r2_mean=("r2", "mean"),
-            kendall_tau_mean=("kendall_tau", "mean"),
-            feature_dim=("feature_dim", "first"),
-            folds=("fold", "count"),
-            train_elapsed_s_mean=("train_elapsed_s", "mean"),
-            feature_elapsed_s_mean=("feature_elapsed_s", "mean"),
-        )
-        .sort_values(["mae_mean", "rmse_mean"])
-    )
-    summary_path = table_dir / "smoke_metrics_summary.csv"
+    summary = _summarize_metrics(metrics)
+    summary_path = table_dir / summary_name
     summary.to_csv(summary_path, index=False)
+
+    table_s3_path = None
+    if table_s3_name:
+        status = "smoke_validation_only" if dataset_id == "smoke_local_yonod" else "pending_paper_value_materialization"
+        explanation = (
+            "Pipeline shape validated on local smoke data; official VJETHBKM data and Table S3 values are not yet materialized."
+            if dataset_id == "smoke_local_yonod"
+            else "Official data run completed, but paper values still need to be filled from tracked Table S3 targets."
+        )
+        table_s3 = table_s3_style_summary(summary, status=status, explanation=explanation)
+        table_s3_path = table_dir / table_s3_name
+        table_s3.to_csv(table_s3_path, index=False)
 
     manifest = {
         "run_id": run_id,
-        "stage": "smoke",
+        "stage": stage,
         "git_commit": _git_commit(),
         "python": platform.python_version(),
         "platform": platform.platform(),
@@ -191,6 +243,7 @@ def run_smoke() -> dict:
         "outputs": {
             "run_dir": str(run_dir),
             "summary": str(summary_path),
+            "table_s3_style_summary": str(table_s3_path) if table_s3_path else None,
         },
     }
     (run_dir / "run_manifest.json").write_text(
@@ -198,13 +251,13 @@ def run_smoke() -> dict:
         encoding="utf-8",
     )
 
-    report_path = report_dir / "smoke_reproduction_report.md"
+    report_path = report_dir / report_name
     report_lines = [
-        "# VJETHBKM smoke reproduction report",
+        f"# VJETHBKM {stage} reproduction report",
         "",
         f"Run id: `{run_id}`",
         "",
-        "This smoke run validates the Stage A pipeline shape on a small local YONOD dataset.",
+        f"This run validates `{stage}` on dataset `{dataset_id}`.",
         "It is not a claim of numerical reproduction of the JACS paper.",
         "",
         "## Metric summary",
@@ -217,6 +270,8 @@ def run_smoke() -> dict:
         "- Official ETH data/code package inspection is pending.",
         "- Outputs were kept under `reference-proejct/vjethbkm/outputs/`.",
     ]
+    if table_s3_path:
+        report_lines.extend(["", f"Table S3 style summary: `{table_s3_path}`"])
     report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
 
     return {
@@ -224,5 +279,36 @@ def run_smoke() -> dict:
         "run_dir": str(run_dir),
         "summary_path": str(summary_path),
         "report_path": str(report_path),
+        "table_s3_style_summary": str(table_s3_path) if table_s3_path else None,
         "summary": summary.to_dict(orient="records"),
     }
+
+
+def run_smoke() -> dict:
+    return _run_rf_repeated_cv(
+        stage="smoke",
+        dataset_id="smoke_local_yonod",
+        repeats=1,
+        folds=2,
+        descriptors=["ohe", "morgan", "physchem"],
+        summary_name="smoke_metrics_summary.csv",
+        report_name="smoke_reproduction_report.md",
+    )
+
+
+def run_core_rf_5x5(dataset_id: str, allow_smoke_dataset: bool = False) -> dict:
+    if dataset_id == "smoke_local_yonod" and not allow_smoke_dataset:
+        raise ValueError(
+            "core_rf_5x5 on smoke_local_yonod requires --allow-smoke-dataset "
+            "so the output is not confused with official VJETHBKM reproduction."
+        )
+    return _run_rf_repeated_cv(
+        stage="core_rf_5x5",
+        dataset_id=dataset_id,
+        repeats=5,
+        folds=5,
+        descriptors=["ohe", "morgan", "physchem"],
+        summary_name=f"core_rf_5x5_{dataset_id}_metrics_summary.csv",
+        report_name=f"core_rf_5x5_{dataset_id}_reproduction_report.md",
+        table_s3_name=f"table_s3_style_{dataset_id}_summary.csv",
+    )

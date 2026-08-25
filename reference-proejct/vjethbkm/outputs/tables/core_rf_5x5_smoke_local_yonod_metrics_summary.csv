@@ -1,0 +1,4 @@
+stage,dataset,descriptor,model,mae_mean,rmse_mean,r2_mean,kendall_tau_mean,feature_dim,folds,train_elapsed_s_mean,feature_elapsed_s_mean
+core_rf_5x5,smoke_local_yonod,physchem,rf,0.33227828955219985,0.36869473294843536,-86.42982152162287,0.12,434,25,0.20043328,0.11168272
+core_rf_5x5,smoke_local_yonod,morgan,rf,0.35596457741979975,0.38180599038785074,-75.95820668554329,0.12,4096,25,0.2093324,0.00402476
+core_rf_5x5,smoke_local_yonod,ohe,rf,0.39651660957569956,0.42518935940079955,-132.31391377371685,-0.125,13,25,0.20344456,0.00459868
