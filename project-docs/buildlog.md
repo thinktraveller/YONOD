@@ -2,6 +2,35 @@
 
 ---
 
+## [2026-08-25 14:11] 证据来源修正：区分此前 Z-AIHub 附件读取与本轮公开复核
+
+### 执行的任务
+- 修正 `reference-proejct/vjethbkm/docs/literature-ledger.md` 中的 Z-AIHub 证据表述，避免误解为本轮完全未有附件级依据。
+- 明确区分两类证据：此前主线程已通过 Z-AIHub 对 Zotero item `VJETHBKM` 做过附件级读取；本轮 builder 仅完成 ACS/Crossref/ETH DOI 公开来源复核，未能重新调用 Z-AIHub。
+- 保留当前工具限制说明：本轮 `tool_search` 未暴露可调用的 Z-AIHub/Zotero document chunk reader，因此不能声称本轮重新读取成功。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/docs/literature-ledger.md`：
+  - 记录此前 Z-AIHub 主文 `documentId=doc_9c01f86b3093`，11 页，43 chunks。
+  - 记录此前 Z-AIHub SI `documentId=doc_a270fcc24f77`，13 页，37 chunks。
+  - 记录此前附件级读取已识别 DFT、SOAP、PhysChem、MFP、OHE、RF 主模型、LightGBM/KNN/Ridge 补充模型、5×5 CV、MAE/RMSE/R2/Kendall tau、0D/1D/2D component splits、BH2 187 条外部验证、产率不平衡与重加权分析、Table S3 四数据集精确指标等复现线索。
+  - 明确 Table S3 的精确数值仍需落到 tracked target table 后，才能用于“数值复现”声明。
+- 更新 `project-docs/buildlog.md`：追加本次证据来源修正记录。
+
+### 验证结果
+- `Select-String literature-ledger.md "doc_9c01f86b3093|doc_a270fcc24f77|Current builder-turn Z-AIHub access|Previous main-thread Z-AIHub"`：可定位到新增的证据分层与 documentId。
+- `git diff --name-only`：仅显示 `project-docs/buildlog.md` 与 `reference-proejct/vjethbkm/docs/literature-ledger.md`。
+- 未修改 `project-docs/goal.md`、`project-docs/project-plan.md`、`reference-proejct/vjethbkm/docs/figure-table-targets.md` 或其他源码/配置文件。
+
+### 遇到的问题及解决方案
+- 问题：前一版台账只写了“本轮未暴露 Z-AIHub 工具”，容易掩盖此前主线程已经完成过附件级读取这一事实。
+- 解决：将证据拆为“此前主线程 Z-AIHub 附件级读取”和“本轮公开来源复核”两层，同时保留“本轮无法重新调用 Z-AIHub”的限制说明。
+
+### 下一步计划
+- 步骤 20.6 前，优先把此前 Z-AIHub 读到的 Table S3 精确指标和官方数据/代码包中的实际文件 schema 落成 tracked target table 与 manifest；随后再实现严格 5×5 CV、BH2 外部验证和 0D/1D/2D split。
+
+---
+
 ## [2026-08-25 14:05] 步骤 20.4-20.5 完成：实现低成本描述符与 RF smoke benchmark 基线
 
 ### 执行的任务
