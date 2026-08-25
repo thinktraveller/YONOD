@@ -1,0 +1,2 @@
+stage,dataset,descriptor,model,mae_mean,rmse_mean,r2_mean,kendall_tau_mean,feature_dim,folds,train_elapsed_s_mean,feature_elapsed_s_mean
+core_rf_5x5,BH2,ohe,rf,14.056940320948,21.392412692886356,0.6065587778623032,0.6213159504747143,95,25,0.38675075999999997,0.00719316
