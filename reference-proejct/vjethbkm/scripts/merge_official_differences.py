@@ -50,7 +50,9 @@ def merge_targets(repro_root: Path) -> pd.DataFrame:
     targets = pd.read_csv(targets_path)
 
     local_frames = []
-    for summary_path in sorted(table_dir.glob("core_rf_5x5_*_metrics_summary.csv")):
+    summary_paths = sorted(table_dir.glob("core_rf_5x5_*_metrics_summary.csv"))
+    summary_paths += sorted(table_dir.glob("official_npz_rf_5x5_*_metrics_summary.csv"))
+    for summary_path in summary_paths:
         summary = pd.read_csv(summary_path)
         if summary.empty:
             continue

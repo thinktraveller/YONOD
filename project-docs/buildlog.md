@@ -2,6 +2,44 @@
 
 ---
 
+## [2026-08-25 17:16] 步骤 20.8F 完成：官方 `.npz` 预计算特征适配器与 SLAP MFP/PhysChem 复跑
+
+### 执行的任务
+- 只读盘点官方 Compare_Complexity `.npz` 特征形状：BH/BH2/SM/SLAP 的 MFP 与 PhysChem 均存在。
+- 发现 `Suzuki_2018` 的 MFP/PhysChem `.npz` 为 `4620` 行，而 `Data/HTE_datasets/SM/SM.csv` 为 `5760` 行，进一步支持 SM/OHE 差异需要单独复核。
+- 新增官方预计算 `.npz` 特征 runner：从 `yieldsmarter/Results/Compare_Complexity/.../*.npz` 读取 `X/y`，按官方 `KFold(seed+repeat)` 与 RF 默认参数复跑。
+- 更新差异合并器，让它同时读取 `core_rf_5x5_*_metrics_summary.csv` 与 `official_npz_rf_5x5_*_metrics_summary.csv`。
+- 先在最小正式数据集 `SLAP/Bode_2023` 上复跑 `MFP` 与 `PhysChem`，验证 `.npz` 适配路径能复现官方目标。
+
+### 关键变更
+- 更新 `reference-proejct/vjethbkm/scripts/merge_official_differences.py`：纳入 `official_npz_rf_5x5_*_metrics_summary.csv`。
+- 新增 `reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py`：官方 `.npz` 特征复跑入口。
+- 新增 `reference-proejct/vjethbkm/tests/test_official_npz_benchmark.py`：验证 `.npz` runner 的数据集映射。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_npz_rf_5x5_SLAP_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/official_npz_rf_5x5_SLAP_report.md`。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/table_s3_local_vs_official_differences.csv`：已合并本地结果行数从 16 增加到 24。
+
+### 验证结果
+- `.npz` 形状盘点：`Bode_2023/MFP (1150,3072)`，`Bode_2023/PhysChem (1150,39)`，`Doyle_2018/MFP (3955,4096)`，`Doyle_2018/PhysChem (3955,15)`，`Denmark_2023/MFP (3359,5120)`，`Denmark_2023/PhysChem (3359,36)`，`Suzuki_2018/MFP (4620,5120)`，`Suzuki_2018/PhysChem (4620,20)`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_npz_benchmark.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py -q`：通过，`2 passed in 2.71s`。
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset SLAP --descriptors MFP,PhysChem`：通过，run id 为 `official_npz_rf_5x5_20260825_171526`。
+- `SLAP/MFP/RF` `.npz` 复跑结果：MAE `18.04338125379474`，RMSE `35.122995676523296`，R² `0.7681948782217961`，Kendall tau `0.5095152925758325`。
+- `SLAP/PhysChem/RF` `.npz` 复跑结果：MAE `18.42531887194204`，RMSE `34.68712752455971`，R² `0.7735727663222332`，Kendall tau `0.4900958359932593`。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，差异表共 48 行，其中 24 行已合并本地结果。
+- `SLAP/MFP` 与 `SLAP/PhysChem` 的 MAE/RMSE/R²/Kendall tau 与官方目标表差异均为 `0.0`。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_npz_benchmark.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py reference-proejct/vjethbkm/tests/test_official_metrics_extraction.py -q`：通过，`4 passed in 1.39s`。
+
+### 遇到的问题及解决方案
+- 问题：官方 `.npz` 是大文件，不能复制或提交。
+- 解决：runner 只引用 ignored 的 `yieldsmarter/` 原始包，提交小型 summary/report/difference 输出；详细 fold metrics 保存在 ignored `outputs/runs/`。
+- 问题：`Suzuki_2018` 的 `.npz` 行数为 4620，与 SM CSV 5760 不一致。
+- 解决：记录为后续 SM 定点复核事项；当前只在 SLAP 上证明 `.npz` 适配器能逐指标复现官方目标。
+
+### 下一步计划
+- 步骤 20.8G：按同一 `.npz` 适配器继续复跑 BH、BH2、SM 的 MFP/PhysChem；若耗时可控，再考虑 DFT/SOAP 或 BH2 external validation。
+
+---
+
 ## [2026-08-25 17:12] 步骤 20.8E 完成：对齐官方 RF 参数并刷新 OHE 正式复现
 
 ### 执行的任务
