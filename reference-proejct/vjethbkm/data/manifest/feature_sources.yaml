@@ -1,0 +1,29 @@
+version: 1
+last_updated: "2026-08-25"
+feature_sources:
+  ohe:
+    stage: A
+    availability: implemented_for_smoke
+    source: "sklearn OneHotEncoder over configured reaction component columns"
+    leakage_note: "Encoder must be fit inside each training fold."
+  morgan:
+    stage: A
+    availability: planned_for_benchmark_script
+    source: "RDKit Morgan count fingerprint or YONOD adapter"
+    leakage_note: "No fold-level fitting required, but invalid SMILES must be tracked."
+  physchem:
+    stage: A
+    availability: planned_for_benchmark_script
+    source: "RDKit 2D physicochemical descriptors or YONOD adapter"
+    leakage_note: "Any imputation/scaling must be fit inside each training fold."
+  dft:
+    stage: B
+    availability: pending_official_precomputed_features
+    source: "ETH Research Collection package preferred"
+    leakage_note: "Do not recompute or select features using test-fold labels."
+  soap:
+    stage: B
+    availability: pending_official_precomputed_features_or_geometry_pipeline
+    source: "ETH Research Collection package preferred; ASE/DScribe only for extension"
+    leakage_note: "Geometry generation assumptions must be recorded with random seeds."
+
