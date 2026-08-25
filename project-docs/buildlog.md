@@ -2,6 +2,34 @@
 
 ---
 
+## [2026-08-25 15:03] 步骤 20.6C 完成：实现 0D/1D/2D component split 骨架与无泄漏验证
+
+### 执行的任务
+- 实现 0D random split、1D leave-component-out split、2D leave-component-pair-out split。
+- 实现 split manifest 无泄漏检查：1D 检查测试折组件值不出现在训练折同组件列；2D 检查测试折组件对不出现在训练折组件对。
+- 使用本地 10 行 smoke 数据生成 component split manifests，并输出轻量 summary。
+- 当前只验证 split 逻辑，不训练泛化模型，也不声称匹配论文 0D/1D/2D 定义；正式定义仍等待官方数据 schema 与 SI 数值表落盘。
+
+### 关键变更
+- 新增 `reference-proejct/vjethbkm/src/vjethbkm_repro/component_splits.py`：提供 0D/1D/2D split 生成、无泄漏检查和 summary。
+- 新增 `reference-proejct/vjethbkm/scripts/build_component_splits.py`：在 smoke 数据上生成 component split manifest 与 summary。
+- 新增 `reference-proejct/vjethbkm/tests/test_component_splits.py`：覆盖 0D、1D、2D split 的基本无泄漏行为。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/component_split_smoke_summary.csv`。
+
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -B reference-proejct/vjethbkm/scripts/build_component_splits.py`：通过，run id 为 `component_splits_20260825_150430`，生成 smoke component split summary，所有 split 的 `leakage_ok=True`。
+- `component_split_smoke_summary.csv`：0D random split 为 5 folds、每折 2 个测试样本；1D `sub_1_smiles` holdout 为 9 folds；2D `sub_1_smiles + sub_2_smiles` pair holdout 为 10 folds。
+- `reference-proejct/vjethbkm/.venv/Scripts/python.exe -m pytest reference-proejct/vjethbkm/tests/test_component_splits.py`：通过，`3 passed in 1.61s`，验证 0D/1D/2D split helper。
+- 详细 split manifest 保存在 ignored run 目录下，轻量 summary 提交到 `outputs/tables/`。
+
+### 遇到的问题及解决方案
+- 问题：论文 0D/1D/2D split 的精确定义依赖官方数据列语义，当前 smoke 数据只有两个底物 SMILES 列。
+- 解决：先实现通用 component split 与无泄漏检查；后续导入官方 BH/SM/SLAP schema 后，再把具体 component mapping 写入 config，并标注是否完全匹配论文定义。
+
+### 下一步计划
+- 步骤 20.7：加入产率分布不平衡分析与高产率识别/分桶误差的轻量实现。
+
+---
+
 ## [2026-08-25 14:59] 步骤 20.6B 完成：实现正式 5×5 CV 与 Table S3 风格汇总
 
 ### 执行的任务

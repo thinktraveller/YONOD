@@ -1,0 +1,4 @@
+split_name,holdout_dim,folds,n_rows,test_assignments,min_test_size,max_test_size,leakage_ok,violations,message
+random_5x5_smoke,0d,5,10,10,2,2,True,0,no leakage detected
+holdout_1d_sub_1_smiles,1d,9,10,10,1,2,True,0,no leakage detected
+holdout_2d_sub_1_smiles__sub_2_smiles,2d,10,10,10,1,1,True,0,no leakage detected
