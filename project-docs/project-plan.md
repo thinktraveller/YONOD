@@ -6590,4 +6590,663 @@ git commit -m "chore: 整理项目目录与忽略规则"
 
 ---
 
+## 二十、VJETHBKM 分层复现与 YONOD benchmark 工具化计划
+
+> 本节基于 `project-docs/goal.md` 中“项目复现”的要求追加。用户已确认复现策略为“先复现核心工作流和趋势，再逐步逼近主文表图与 SI 矩阵”，创新重点为“自动化报告 / 可复现实验工具化”，最终价值证明以“可复用 benchmark pipeline + 答辩/论文可直接使用的图表和结论”为主。
+>
+> 路径边界：所有复现阶段新增或生成的代码、配置、数据清单、缓存、日志、图表、报告、环境文件和测试，均规划放入 `reference-proejct/` 下。这里保留用户当前指定拼写 `reference-proejct`，不擅自改为 `reference-project`。项目治理文档 `project-docs/goal.md`、`project-docs/project-plan.md` 仍保留在 `project-docs/`。
+
+### 20.1 项目概述
+
+#### 20.1.1 复现目标
+
+本轮不是立刻改造 YONOD 主程序，而是在 `reference-proejct/vjethbkm/` 中建立一个隔离、可审计、可逐步升级的论文复现实验区。它的目标有三层：
+
+- 第一层：复现 `VJETHBKM` 的核心 workflow，包括反应组件特征化、描述符拼接、RF 主基线、5×5 CV、指标统计和趋势结论。
+- 第二层：尽量逼近主文关键表图，包括描述符复杂度对比、BH2 外部验证、0D/1D/2D split 泛化验证、不平衡产率分布分析与重加权。
+- 第三层：把复现过程沉淀为 YONOD 可复用 benchmark 能力，输出可追溯报告、图表、差异说明、运行成本和答辩/论文结论摘要。
+
+#### 20.1.2 预期成果
+
+| 成果 | 规划位置 | 说明 |
+|---|---|---|
+| 文献与补充材料证据台账 | `reference-proejct/vjethbkm/docs/` | 记录 DOI、SI、官方数据/代码链接、版本、下载日期、许可证和复现证据 |
+| 数据 manifest 与 checksum | `reference-proejct/vjethbkm/data/manifest/` | 记录原始数据路径、哈希、样本量、列映射、是否可入库 |
+| 复现配置 | `reference-proejct/vjethbkm/configs/` | 描述符、模型、split、指标、随机种子、运行阶段 |
+| 适配层代码 | `reference-proejct/vjethbkm/src/` | 只在隔离目录中写复现代码；必要时通过适配器调用 `yonod/` 现有模块 |
+| 运行脚本 | `reference-proejct/vjethbkm/scripts/` | 拉取/登记数据、生成特征、运行 benchmark、生成报告 |
+| 测试与验收脚本 | `reference-proejct/vjethbkm/tests/` | 校验数据、split、指标、输出结构和结果容差 |
+| 运行输出 | `reference-proejct/vjethbkm/outputs/` | metrics、predictions、figures、reports、logs、cost records |
+| 本地缓存 | `reference-proejct/vjethbkm/cache/` | 特征缓存、临时中间件；默认不纳入 Git |
+
+建议目标结构如下，后续由 `project-builder-cn` 创建：
+
+```text
+reference-proejct/
+└── vjethbkm/
+    ├── README.md
+    ├── pyproject.toml
+    ├── configs/
+    │   ├── 00_literature_audit.yaml
+    │   ├── 10_data_sources.yaml
+    │   ├── 20_descriptors.yaml
+    │   ├── 30_models.yaml
+    │   ├── 40_splits.yaml
+    │   └── 50_benchmark_stages.yaml
+    ├── data/
+    │   ├── raw/              # 原始数据本地放置区，默认不入库
+    │   ├── interim/          # 清洗中间结果，默认不入库
+    │   ├── processed/        # 可再生成的建模表，按体积决定是否入库
+    │   └── manifest/         # 数据来源、checksum、schema、许可证说明
+    ├── docs/
+    │   ├── literature-ledger.md
+    │   ├── reproduction-map.md
+    │   └── figure-table-targets.md
+    ├── src/
+    │   └── vjethbkm_repro/
+    ├── scripts/
+    ├── tests/
+    ├── notebooks/
+    ├── cache/                # 特征缓存，默认不入库
+    └── outputs/
+        ├── runs/
+        ├── tables/
+        ├── figures/
+        ├── reports/
+        └── logs/
+```
+
+### 20.2 可行性分析
+
+#### 20.2.1 技术可行性
+
+可行，但必须分阶段推进。`goal.md` 已记录 `VJETHBKM` 的主文、SI 和官方数据/代码资源线索：DOI `10.1021/jacs.6c02213`，官方数据与代码资源 `10.3929/ethz-c-000800856`。当前 YONOD 已有 Morgan、MACCS/ATMOMACCS、RDKit2D、DRFP、FISD、MolMetaLM、RF、XGBoost、SVM、AutoGluon 和 HTML/Markdown 报告能力，因此第一层“核心 workflow 与趋势复现”具备工程基础。
+
+主要难点不在“能否训练模型”，而在以下三点：
+
+- 文献原始数据、补充特征、代码和 split 细节是否完整可获得。
+- DFT 与 SOAP 这类高成本描述符是否能复用论文预计算数据；若必须从零计算，会显著增加时间、软件许可证和算力风险。
+- 主文和 SI 的数值不一定能 bitwise 复现，应以“数据版本、split、随机种子、依赖版本、指标定义全部可审计”为更现实的标准。
+
+#### 20.2.2 工作量估算
+
+| 阶段 | 预计耗时 | 产出 |
+|---|---:|---|
+| 文献与补充材料台账 | 0.5-1 天 | DOI、SI、数据/代码链接、复现目标表 |
+| 数据与 schema 校验 | 1-2 天 | manifest、checksum、列映射、样本统计 |
+| 最小闭环复现 | 2-4 天 | OHE/MFP/PhysChem + RF + 5×5 CV + 基础报告 |
+| 主文关键表图逼近 | 4-8 天 | DFT/SOAP 接入、BH2 外部验证、0D/1D/2D split |
+| SI 扩展与报告工具化 | 5-10 天 | 完整实验矩阵、自动化报告、差异说明 |
+
+#### 20.2.3 主要风险与应对
+
+| 风险 | 影响 | 应对策略 |
+|---|---|---|
+| 官方数据或代码下载失败 | 无法完整复现论文数值 | 先记录访问日期、URL、错误信息；使用 Zotero 附件和本地副本；必要时只复现 workflow 与趋势 |
+| 原始数据许可证或版权限制 | 不能直接入库共享 | 原始 PDF/SI/数据默认放 `data/raw/` 且不入库，只提交 manifest、checksum 和引用信息 |
+| DFT/SOAP 需昂贵计算 | 延误主文数值逼近 | 优先使用论文预计算特征；若无预计算，先以 MFP/OHE/PhysChem 完成核心趋势，再把 DFT/SOAP 作为扩展 |
+| 0D/1D/2D split 规则理解错误 | 泛化结论失真 | 将 split manifest 持久化，记录每个样本的 split id、组件留出维度和随机种子 |
+| 产率分布不平衡导致指标偏乐观 | 高产率识别能力被掩盖 | 同时报告 MAE/RMSE/R2/Kendall tau，并加入产率分桶误差、重加权对照和高产率召回分析 |
+| YONOD 主程序被复现代码侵入 | 影响现有项目稳定性 | 复现阶段只在 `reference-proejct/vjethbkm/` 写适配层，主程序改造另开 builder 任务 |
+
+### 20.3 技术选型
+
+#### 20.3.1 编程语言与运行环境
+
+- `python >= 3.10`：复现实验区推荐使用较新的 Python，便于使用现代数据科学包；若要直接复用当前 YONOD 的 Python 3.9 环境，可在 `pyproject.toml` 中降级声明并记录原因。
+- `git >= 2.40`：记录数据 manifest、配置、代码和复现报告版本。
+- `PowerShell >= 5.1`：Windows 本地执行脚本与路径检查。
+- `uv >= 0.4` 或 `pip >= 23.0`：管理隔离环境；优先官方源，失败后再切换镜像。
+
+#### 20.3.2 核心库
+
+- `pandas >= 2.0`、`numpy >= 1.26`、`scipy >= 1.11`：数据处理、统计检验、bootstrap/置信区间。
+- `scikit-learn >= 1.4`：RF、KNN、Ridge、KFold/GroupKFold、指标。
+- `rdkit >= 2023.9`：MFP/Morgan、MACCS、RDKit 2D PhysChem 描述符。
+- `matplotlib >= 3.8`、`seaborn >= 0.13`：主文/答辩图表。
+- `pyyaml >= 6.0`、`joblib >= 1.3`、`tqdm >= 4.66`：配置、缓存和进度。
+- `lightgbm >= 4.3`：补充树模型对照；若本机安装困难，可先跳过并记录。
+- `dscribe >= 2.1`、`ase >= 3.22`：SOAP 描述符扩展阶段使用。
+- `pyarrow >= 15.0`：保存 predictions、features、metrics 为 parquet，减少 CSV 精度和体积问题。
+- `pytest >= 8.0`：数据、split、指标和报告输出测试。
+
+DFT 不建议一开始从零计算。若必须独立生成 DFT 特征，应另行确认可用软件和许可证，例如 ORCA、Gaussian、xtb、CREST、Open Babel 等，并在计划书或构建日志中单独记录版本与许可边界。
+
+#### 20.3.3 依赖安装
+
+官方源优先：
+
+```powershell
+cd reference-proejct/vjethbkm
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade "pip>=23.0"
+pip install "pandas>=2.0" "numpy>=1.26" "scipy>=1.11" "scikit-learn>=1.4" "rdkit>=2023.9"
+pip install "matplotlib>=3.8" "seaborn>=0.13" "pyyaml>=6.0" "joblib>=1.3" "tqdm>=4.66" "pyarrow>=15.0" "pytest>=8.0"
+pip install "lightgbm>=4.3"
+```
+
+若官方 PyPI 下载失败或超时，再临时使用清华镜像：
+
+```powershell
+pip install "pandas>=2.0" "numpy>=1.26" "scipy>=1.11" "scikit-learn>=1.4" "rdkit>=2023.9" -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+pip install "matplotlib>=3.8" "seaborn>=0.13" "pyyaml>=6.0" "joblib>=1.3" "tqdm>=4.66" "pyarrow>=15.0" "pytest>=8.0" -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+pip install "lightgbm>=4.3" -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+SOAP 扩展阶段再安装：
+
+```powershell
+pip install "dscribe>=2.1" "ase>=3.22"
+```
+
+若失败，再使用镜像：
+
+```powershell
+pip install "dscribe>=2.1" "ase>=3.22" -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+### 20.4 开发计划
+
+### 步骤20.1：建立文献、补充材料与复现证据台账
+
+#### 目标说明
+
+先把 `VJETHBKM` 的主文、SI、官方数据和代码资源整理成可审计台账，明确每个实验结果来自主文哪张图、SI 哪个表、哪个数据文件和哪段脚本。这样后续不是“凭印象复现”，而是有证据链地复现。
+
+#### 具体操作
+
+后续 builder 应在 `reference-proejct/vjethbkm/docs/literature-ledger.md` 和 `reference-proejct/vjethbkm/docs/figure-table-targets.md` 中记录：
+
+- 文献 DOI：`10.1021/jacs.6c02213`。
+- 官方数据/代码资源：`10.3929/ethz-c-000800856`。
+- Zotero/Z-AIHub 附件状态：主文 11 页、SI 13 页。
+- 主文与 SI 的目标图表清单：数据集、描述符、模型、split、指标、是否必须复现。
+- 每个附件的来源 URL、下载日期、文件哈希、许可证或再分发限制。
+
+建议台账条目格式：
+
+```yaml
+id: vjethbkm-main
+type: article
+doi: 10.1021/jacs.6c02213
+local_path: data/raw/articles/VJETHBKM-main.pdf
+redistributable: false
+sha256: "<download-or-local-checksum>"
+used_for:
+  - figure_target_mapping
+  - method_summary
+notes: "只记录引用与哈希，不把受版权限制 PDF 默认提交到 Git。"
+```
+
+#### 验证方法
+
+- 每个计划复现的主文图表或 SI 表格都有来源、页码/表号、目标指标和优先级。
+- `data/raw/` 中若存在 PDF、SI、zip 或原始数据，均有 checksum 记录。
+- Git 中只应提交轻量台账，不默认提交版权受限 PDF/SI 或大体积数据。
+
+#### 风险提示
+
+如果官方链接暂时不可访问，不应卡死整个复现。先把访问失败记录到台账，再用 Zotero 本地附件和已知方法描述完成最小闭环。
+
+---
+
+### 步骤20.2：设计 `reference-proejct/vjethbkm/` 隔离目录和版本边界
+
+#### 目标说明
+
+把论文复现从 YONOD 主程序中隔离出来。复现代码可以读取或适配现有 `yonod/` 模块，但所有复现新增文件和运行产物都留在 `reference-proejct/` 中，避免污染当前核心功能。
+
+#### 具体操作
+
+后续 builder 创建目录时，应同时准备 `.gitignore` 与 manifest 规则。建议忽略：
+
+```gitignore
+# reference-proejct/vjethbkm/.gitignore
+data/raw/
+data/interim/
+data/processed/*.parquet
+cache/
+outputs/runs/
+outputs/logs/
+outputs/figures/*.png
+outputs/figures/*.pdf
+*.pkl
+*.joblib
+*.npy
+*.npz
+```
+
+可提交的轻量文件包括：
+
+- `configs/*.yaml`
+- `docs/*.md`
+- `src/vjethbkm_repro/*.py`
+- `scripts/*.ps1` 或 `scripts/*.py`
+- `tests/*.py`
+- `data/manifest/*.yaml`
+- 小体积、脱敏、许可证允许的摘要表，如 `outputs/tables/*_summary.csv`
+
+适配 YONOD 时采用显式路径配置：
+
+```python
+from pathlib import Path
+import sys
+
+REPRO_ROOT = Path(__file__).resolve().parents[2]
+YONOD_ROOT = REPRO_ROOT.parents[1]
+if not (YONOD_ROOT / "yonod").exists():
+    raise RuntimeError(f"Cannot find YONOD package at {YONOD_ROOT}")
+
+sys.path.insert(0, str(YONOD_ROOT))
+```
+
+#### 验证方法
+
+- 运行 `git status --short --ignored` 能看到大数据、缓存和日志被忽略。
+- `reference-proejct/vjethbkm/src/` 可以导入必要的 YONOD 模块。
+- 未修改 `yonod/`、`main.py`、`yonod.py`、`dataset/` 或 `WEIGHTS/`。
+
+#### 风险提示
+
+不要在复现阶段直接把全局 `results/`、`cache/` 作为默认输出目录。否则复现结果会和 YONOD 原有实验混在一起，后续很难解释哪个结果对应哪篇论文、哪组配置。
+
+---
+
+### 步骤20.3：获取并校验数据、schema 与特征来源
+
+#### 目标说明
+
+确认 `VJETHBKM` 使用的数据集、列含义、反应组件、目标值单位和可用特征。复现结果的可信度首先来自数据一致，而不是模型分数相近。
+
+#### 具体操作
+
+在 `reference-proejct/vjethbkm/data/manifest/` 中维护：
+
+- `sources.yaml`：原始数据来源、许可证、下载方式、checksum。
+- `schema.yaml`：每个数据文件的列名、类型、单位、缺失值规则。
+- `dataset_stats.csv`：样本数、反应组分唯一值数量、yield 分布、重复记录数量。
+- `feature_sources.yaml`：OHE/MFP/PhysChem/DFT/SOAP 是本地计算、论文预计算还是缺失待补。
+
+建议校验脚本逻辑：
+
+```python
+from pathlib import Path
+import hashlib
+import pandas as pd
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def validate_dataset(path: Path, required_cols: list[str]) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"missing dataset: {path}")
+    df = pd.read_csv(path)
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"missing columns: {missing}")
+    if df.empty:
+        raise ValueError("dataset is empty")
+    return df
+```
+
+#### 验证方法
+
+- 每个 raw 文件都有 sha256、样本量和 schema 记录。
+- 目标列的单位明确，例如产率是 `0-1`、`0-100`，还是分类/排序目标。
+- 清楚标注哪些特征可立即复现，哪些需要预计算数据或额外软件。
+
+#### 风险提示
+
+如果数据文件含有论文作者预先划分的 train/test 或外部验证集，不能重新随机划分覆盖原定义。应保留原始 split 字段，并另建 YONOD 自定义 split 做对照。
+
+---
+
+### 步骤20.4：实现统一描述符与反应特征拼接基线
+
+#### 目标说明
+
+优先建立低成本、可快速跑通的描述符 baseline，再接入高成本特征。这样能尽快验证论文核心结论：复杂描述符不必然优于简单 2D 特征，必须通过公平对照证明增益。
+
+#### 具体操作
+
+第一批描述符：
+
+- `OHE`：反应组件类别 one-hot，作为最简单但很强的基线。
+- `MFP`：Morgan/ECFP 类 2D 指纹，优先使用 RDKit。
+- `PhysChem`：RDKit 2D 物化描述符。
+
+第二批描述符：
+
+- `DFT`：优先使用论文预计算特征；若无预计算，先登记缺口。
+- `SOAP`：优先使用论文或官方代码中的构象与参数；独立计算需记录 ASE/DScribe 参数、构象来源和随机种子。
+
+统一特征拼接建议：
+
+```python
+import numpy as np
+
+def concat_reaction_features(blocks: dict[str, np.ndarray], order: list[str]) -> np.ndarray:
+    missing = [name for name in order if name not in blocks]
+    if missing:
+        raise KeyError(f"missing feature blocks: {missing}")
+    arrays = [np.asarray(blocks[name], dtype=np.float32) for name in order]
+    n_rows = {arr.shape[0] for arr in arrays}
+    if len(n_rows) != 1:
+        raise ValueError(f"inconsistent row counts: {[arr.shape for arr in arrays]}")
+    return np.concatenate(arrays, axis=1)
+```
+
+#### 验证方法
+
+- 每类描述符输出维度、缺失率、计算耗时和缓存路径写入 manifest。
+- 同一数据、同一配置重复运行时，特征矩阵 shape 和 checksum 一致。
+- 对训练折的标准化、缺失值填补、PCA 等预处理必须在 fold 内 fit，避免数据泄漏。
+
+#### 风险提示
+
+OHE 对随机 CV 可能很强，但在新底物或新条件留出时会明显下降。报告中必须同时展示随机划分与留出划分，不能只挑高分。
+
+---
+
+### 步骤20.5：复现 RF 主基线与补充模型矩阵
+
+#### 目标说明
+
+以 Random Forest 作为主复现基线，先稳定得到论文核心 workflow 的趋势；再用 Ridge、KNN、LightGBM 等补充模型检查结论是否依赖单一算法。
+
+#### 具体操作
+
+建议模型配置：
+
+```yaml
+rf:
+  class: RandomForestRegressor
+  n_estimators: 500
+  random_state: 42
+  n_jobs: -1
+  min_samples_leaf: 1
+ridge:
+  class: Ridge
+  alpha_grid: [0.1, 1.0, 10.0]
+knn:
+  class: KNeighborsRegressor
+  n_neighbors_grid: [3, 5, 11]
+lightgbm:
+  class: LGBMRegressor
+  n_estimators: 500
+  random_state: 42
+```
+
+训练函数应统一输出：
+
+- `metrics.csv`：MAE、RMSE、R2、Kendall tau、训练时间、预测时间。
+- `predictions.parquet`：样本 id、真实值、预测值、fold、split、描述符、模型。
+- `run_manifest.json`：git commit、依赖版本、配置文件哈希、随机种子、运行机器信息。
+
+#### 验证方法
+
+- `OHE + RF + 5×5 CV` 能在小样本 smoke 数据上完成。
+- 完整数据运行后，每个描述符/模型组合都有 25 个 fold 结果或明确失败记录。
+- 指标计算脚本对常量预测、缺失值、单样本 fold 都能给出可解释错误。
+
+#### 风险提示
+
+不同 scikit-learn 或 LightGBM 版本会导致数值有小幅差异。复现报告应同时写“趋势是否一致”和“数值偏差范围”，不要把轻微版本差异误判为方法失败。
+
+---
+
+### 步骤20.6：实现 5×5 CV、BH2 外部验证和 0D/1D/2D split
+
+#### 目标说明
+
+把 `VJETHBKM` 最重要的评估思想落到工具里：随机 CV 只能说明同分布拟合能力，外部验证和不同维度留出更能说明模型能否泛化到新底物、新条件或新组合。
+
+#### 具体操作
+
+split 配置建议：
+
+```yaml
+random_5x5:
+  type: repeated_kfold
+  n_repeats: 5
+  n_splits: 5
+  seed_start: 42
+bh2_external:
+  type: external_holdout
+  train_dataset: BH1
+  test_dataset: BH2
+holdout_0d:
+  type: random_kfold
+  n_splits: 5
+holdout_1d:
+  type: leave_component_out
+  component: substrate_or_condition
+holdout_2d:
+  type: leave_component_pair_out
+  components: [substrate, condition]
+```
+
+每个 split 必须保存为 `data/processed/splits/<split_name>.parquet` 或 `outputs/runs/<run_id>/splits/`，至少包含：
+
+- `sample_id`
+- `dataset_id`
+- `fold`
+- `repeat`
+- `split_name`
+- `is_train`
+- `heldout_component`
+
+#### 验证方法
+
+- 同一 split 配置重复生成时，样本分配完全一致。
+- train/test 不共享被留出的组件或组件组合。
+- BH2 外部验证不参与任何 scaler、PCA、特征选择或模型调参的 fit。
+
+#### 风险提示
+
+0D/1D/2D split 的定义容易因论文术语理解不同而偏移。第一版应把实现假设写入 `docs/reproduction-map.md`，并在结果表里标注“完全匹配论文定义”或“YONOD 近似实现”。
+
+---
+
+### 步骤20.7：加入不平衡产率分析、重加权和成本记录
+
+#### 目标说明
+
+响应用户对创新点的选择：YONOD 的价值不只是复现分数，而是能自动生成“性能、稳定性、计算成本、适用边界”的复现报告。产率分布不平衡和高产率识别是很适合答辩展示的分析点。
+
+#### 具体操作
+
+新增分析：
+
+- 产率分桶：例如 `[0,20)`, `[20,40)`, `[40,60)`, `[60,80)`, `[80,100]` 或归一化对应区间。
+- 分桶 MAE/RMSE：观察模型是否只在中低产率样本表现好。
+- 高产率识别：把 `yield >= 80%` 作为高产率候选，报告 precision、recall、top-k hit rate。
+- 样本重加权：按产率分桶频率设置 sample weight，与不重加权结果对比。
+- 成本记录：特征计算时间、训练时间、峰值内存、磁盘缓存大小、是否使用 GPU。
+
+成本记录示例：
+
+```python
+from contextlib import contextmanager
+from time import perf_counter
+
+@contextmanager
+def timed_step(records: list[dict], name: str):
+    start = perf_counter()
+    try:
+        yield
+    finally:
+        records.append({"step": name, "elapsed_s": round(perf_counter() - start, 3)})
+```
+
+#### 验证方法
+
+- 报告中每个描述符/模型组合都有总体指标、分桶指标和成本指标。
+- 重加权实验不会覆盖原始未加权结果，而是作为独立配置保存。
+- 高产率阈值、分桶边界和样本权重公式写入配置。
+
+#### 风险提示
+
+重加权可能降低总体 R2，却提高高产率识别能力。报告应把它解释为目标权衡，而不是简单判定“分数变差”。
+
+---
+
+### 步骤20.8：生成自动化复现报告和论文差异说明
+
+#### 目标说明
+
+把实验结果自动转化为可读、可审计、可展示的报告，这是 YONOD 相比单次复现脚本的核心创新点。
+
+#### 具体操作
+
+报告生成器应至少输出：
+
+- `outputs/reports/reproduction_report.html`
+- `outputs/reports/reproduction_report.md`
+- `outputs/tables/metrics_summary.csv`
+- `outputs/tables/figure_table_comparison.csv`
+- `outputs/figures/descriptor_model_matrix.svg`
+- `outputs/figures/split_generalization.svg`
+- `outputs/figures/yield_bucket_error.svg`
+- `outputs/figures/cost_benefit_tradeoff.svg`
+
+`figure_table_comparison.csv` 建议字段：
+
+```text
+paper_target_id, dataset, descriptor, model, split, metric,
+paper_value, reproduced_value, abs_diff, rel_diff,
+status, explanation
+```
+
+报告结论模板应区分三种状态：
+
+- `matched`：趋势一致且数值在容差内。
+- `trend_only`：趋势一致但数值有偏差，需解释数据/版本/split 差异。
+- `not_reproduced`：趋势和数值都不一致，需要回查数据、特征或 split。
+
+#### 验证方法
+
+- 报告能从一次 `run_id` 自动生成，不需要手工复制指标。
+- 每张图都能追溯到输入 metrics/predictions 文件。
+- 与论文差异说明不空缺，且包含“可能原因”和“下一步排查”。
+
+#### 风险提示
+
+不要在报告里直接声称“复现成功”，除非目标表图、split、数据版本和指标定义都已核对。更严谨的表述是“核心趋势复现”“主要表图逼近”或“完整矩阵复现”。
+
+---
+
+### 步骤20.9：设置分层验收阈值与运行清单
+
+#### 目标说明
+
+把复现任务拆成可验收的里程碑，避免陷入“还差一点才算完成”的长期模糊状态。
+
+#### 具体操作
+
+建议验收分三档：
+
+| 层级 | 验收目标 | 通过标准 |
+|---|---|---|
+| A：核心 workflow | OHE/MFP/PhysChem + RF + 5×5 CV + 自动报告 | 小样本 smoke 和至少一个完整数据集成功；指标、预测、split、报告全部落盘 |
+| B：主文关键表图 | 主文核心描述符/模型/split 与 BH2 外部验证 | 趋势一致；关键指标相对偏差建议控制在 10%-20% 内，超出需有差异说明 |
+| C：SI 矩阵扩展 | 更多描述符、模型、split、重加权和成本分析 | 每个失败项有失败原因；成功项均有 run manifest 和报告 |
+
+运行清单建议：
+
+```powershell
+# smoke
+python scripts/run_benchmark.py --config configs/50_benchmark_stages.yaml --stage smoke
+
+# 核心 workflow
+python scripts/run_benchmark.py --config configs/50_benchmark_stages.yaml --stage core_rf_5x5
+
+# 主文目标
+python scripts/run_benchmark.py --config configs/50_benchmark_stages.yaml --stage main_figures
+
+# 报告
+python scripts/build_report.py --run-id <run_id>
+```
+
+#### 验证方法
+
+- 每个 stage 都有明确输入、输出和退出码。
+- `pytest tests` 至少覆盖数据校验、split 无泄漏、指标计算和报告文件存在性。
+- `outputs/runs/<run_id>/run_manifest.json` 足以让别人复查结果。
+
+#### 风险提示
+
+不要把 B/C 层级卡在 DFT 或 SOAP 上。只要 A 层级稳定，项目已经能展示“可复现实验工具化”的创新价值；高成本描述符可作为阶段性增强。
+
+---
+
+### 步骤20.10：回流到 YONOD 主线前的决策门
+
+#### 目标说明
+
+复现实验成熟后，再判断哪些能力应回流到 YONOD 主程序。这样可以避免为了复现一篇论文而把主项目接口改复杂。
+
+#### 具体操作
+
+在 `reference-proejct/vjethbkm/docs/reproduction-map.md` 末尾维护“可回流能力清单”：
+
+- 可直接回流：split manifest、run manifest、Kendall tau、分桶误差、成本记录、差异说明模板。
+- 需要重构后回流：0D/1D/2D split 抽象、外部验证集接口、统一 report schema。
+- 暂不回流：论文专用数据格式、一次性下载脚本、版权受限附件处理逻辑。
+
+回流前必须由 planner 重新拆分构建任务；builder 执行时再修改 `yonod/` 或入口脚本。
+
+#### 验证方法
+
+- 复现区完整运行不依赖未提交的主程序改动。
+- 可回流项都能用一两句话说明对 YONOD 长期价值。
+- 回流任务能明确列出要修改的主程序模块和验证命令。
+
+#### 风险提示
+
+论文复现代码通常带有强烈的特定数据集假设。没有抽象清楚前，不应直接合并到主程序，否则会让 YONOD 的通用数据输入能力变脆。
+
+### 20.5 验收标准
+
+本轮复现计划完成后，后续执行应满足：
+
+1. 所有复现相关新增文件均位于 `reference-proejct/` 下，除 `project-docs/` 中的项目治理文档外不向其他目录写入复现产物。
+2. 文献、SI、官方数据/代码资源均有台账、来源和 checksum；版权或体积敏感文件默认不提交。
+3. A 层级至少跑通一个完整 benchmark 闭环，输出 metrics、predictions、split、run manifest 和报告。
+4. B 层级优先复现主文关键表图与 BH2 外部验证；若数值无法接近，必须给出数据、split、特征或版本层面的差异说明。
+5. C 层级扩展 SI 矩阵时，所有失败组合都要有失败原因，而不是静默跳过。
+6. 报告必须同时覆盖性能、稳定性、成本、产率分布不平衡和泛化边界。
+7. 复现实验在回流 YONOD 主线前，不修改 `yonod/`、`main.py`、`yonod.py`、`dataset/`、`WEIGHTS/`。
+
+### 20.6 Q&A 记录
+
+### 通用问题
+
+**Q：为什么所有复现文件都放在 `reference-proejct/`，而不是继续放 `docs/`、`results/`、`cache/`？**  
+**A：** 这是为了把“复现一篇论文”的材料和 YONOD 主线实验隔离开。`reference-proejct/` 里会有自己的 `data/`、`cache/`、`outputs/` 和 `docs/`，这样每个结果都能追溯到 VJETHBKM 的复现配置，不会和当前 YONOD 的普通运行结果混在一起。
+
+**Q：`reference-proejct` 拼写像是错的，要改吗？**  
+**A：** 本轮不改。用户明确指定的是 `reference-proejct/`，计划书按当前项目约定保留这个路径。若未来要统一拼写，应作为单独目录重命名任务处理，并同步更新所有引用。
+
+**Q：是否必须完整复现 DFT 和 SOAP 才算有价值？**  
+**A：** 不必须。第一价值是把 `VJETHBKM` 的评估范式转成 YONOD 可运行、可审计、可报告的 benchmark workflow。DFT/SOAP 能增强主文数值逼近，但不应阻塞 OHE/MFP/PhysChem + RF + 5×5 CV 的核心闭环。
+
+**Q：YONOD 的创新点应该怎么表达？**  
+**A：** 推荐表述为：YONOD 不只是复现单篇论文，而是把反应产率预测中的数据版本、描述符、模型、split、指标、成本和差异说明统一进自动化 benchmark 报告，使复现实验更容易复查、比较和迁移到新反应数据集。
+
+### 20.7 下一步行动建议
+
+1. 由 `project-builder-cn` 创建 `reference-proejct/vjethbkm/` 目录骨架和本地 `.gitignore`。
+2. 先完成 `docs/literature-ledger.md`、`docs/figure-table-targets.md` 与 `data/manifest/sources.yaml`。
+3. 用 OHE/MFP/PhysChem + RF + 5×5 CV 跑通 A 层级 smoke 与核心 workflow。
+4. A 层级稳定后，再接入 DFT/SOAP、BH2 外部验证、0D/1D/2D split 和不平衡/重加权分析。
+5. 最后生成自动化复现报告，并把成熟的通用能力规划回流到 YONOD 主线。
+
+---
+
 **文档结束**
