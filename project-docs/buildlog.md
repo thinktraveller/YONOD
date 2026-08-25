@@ -2,6 +2,42 @@
 
 ---
 
+## [2026-08-25 17:18] 步骤 20.8G 完成：四个正式数据集 PhysChem `.npz` RF 复跑
+
+### 执行的任务
+- 使用 20.8F 新增的官方 `.npz` 适配器，继续复跑 `BH`、`BH2`、`SM` 的 `PhysChem + RF` 5×5 repeated CV。
+- 复用官方 RF 参数：`n_estimators=500`、`max_features=0.3`、`seed=1000`，并按 repeat 使用 `seed+repeat_index`。
+- 重新合并 `table_s3_local_vs_official_differences.csv`，将所有四个正式数据集的 PhysChem 结果纳入差异表。
+- 保持 MFP 除 `SLAP` 外仍未运行，不生成虚假本地结果。
+
+### 关键变更
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_npz_rf_5x5_BH_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_npz_rf_5x5_BH2_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/tables/official_npz_rf_5x5_SM_metrics_summary.csv`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/official_npz_rf_5x5_BH_report.md`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/official_npz_rf_5x5_BH2_report.md`。
+- 生成 `reference-proejct/vjethbkm/outputs/reports/official_npz_rf_5x5_SM_report.md`。
+- 更新 `reference-proejct/vjethbkm/outputs/tables/table_s3_local_vs_official_differences.csv`：已合并本地结果行数从 24 增加到 36。
+
+### 验证结果
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset BH --descriptors PhysChem`：通过，run id 为 `official_npz_rf_5x5_20260825_171743`；MAE `6.044628226709068`，RMSE `8.75070591617427`，R² `0.8965145816418639`，Kendall tau `0.8108863707524345`。
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset BH2 --descriptors PhysChem`：通过，run id 为 `official_npz_rf_5x5_20260825_171801`；MAE `13.861131699450207`，RMSE `19.480151413460412`，R² `0.6742941253951183`，Kendall tau `0.661055732771205`。
+- `python reference-proejct/vjethbkm/scripts/run_official_npz_benchmark.py --dataset SM --descriptors PhysChem`：通过，run id 为 `official_npz_rf_5x5_20260825_171821`；MAE `7.373780112389281`，RMSE `10.860895796525364`，R² `0.8567238122304681`，Kendall tau `0.7653699300843917`。
+- `python reference-proejct/vjethbkm/scripts/merge_official_differences.py`：通过，差异表共 48 行，其中 36 行已合并本地结果。
+- `python -m pytest reference-proejct/vjethbkm/tests/test_official_npz_benchmark.py reference-proejct/vjethbkm/tests/test_official_difference_merge.py -q`：通过，`2 passed in 1.32s`。
+- 四个正式数据集 `PhysChem/RF` 的 MAE/RMSE/R²/Kendall tau 与官方目标最大绝对差为 `1.7763568394002505e-15`，属于浮点舍入误差。
+
+### 遇到的问题及解决方案
+- 问题：官方 `.npz` 文件体积较大，不能提交；完整 fold metrics 也可能累积变大。
+- 解决：继续只引用 ignored 原始包；提交小型 summary/report/difference 表，详细 run 目录保持 ignored。
+- 问题：MFP 大矩阵尚未在 BH/BH2/SM 上复跑。
+- 解决：本步骤先完成成本较低的 PhysChem 全覆盖；下一步分批运行 MFP，必要时逐数据集提交。
+
+### 下一步计划
+- 步骤 20.8H：继续运行 BH/BH2/SM 的 MFP `.npz` RF 5×5；完成后 Table S3 的 OHE/MFP/PhysChem 目标行将全部具备本地结果，除 SM/OHE 差异需保留复核说明。
+
+---
+
 ## [2026-08-25 17:16] 步骤 20.8F 完成：官方 `.npz` 预计算特征适配器与 SLAP MFP/PhysChem 复跑
 
 ### 执行的任务
