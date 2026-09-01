@@ -2,6 +2,32 @@
 
 ---
 
+## [2026-09-01 15:05] 步骤 21.3 完成：建立外部 fold 执行契约与逐折预测库
+
+### 执行的任务
+- 新增由外部 split manifest 驱动的单折执行器，RF、XGBoost 和 SVM 均只在 manifest 指定训练集上拟合并预测对应验证集。
+- 对数值特征在训练折内拟合 `StandardScaler`，验证折仅执行 transform；SVM 的既有折内 scaler/PCA 管线保持不变。
+- 为每个 `(descriptor, model, repeat, fold)` 写入不可覆盖的 Parquet 样本级预测分片及 JSON 折级元数据；已有完整且可读的输出会被复用，不重新训练。
+- 对半成品预测/元数据、重复 sample_id、manifest 不一致、空折及非有限特征/预测进行明确拒绝。
+
+### 关键变更
+- 新增 `yonod/benchmark/executor.py`：单折估计器适配、训练折内预处理、原子预测/元数据写入与已完成折复用。
+- 更新 `yonod/benchmark/__init__.py`：公开 `execute_fold`、结果类型及执行异常。
+
+### 验证结果
+- 用户已在 conda `yonod` 环境运行 `conda run -n yonod python .\_verify\step21_3_fold_executor.py` 并通过。
+- 验证覆盖：RF、XGBoost、SVM 各执行同一 manifest 的一折；三者验证 `sample_id` 集合一致；预测分片与验证集一一对应且无重复键；数值 scaler 仅由训练行拟合；完整折重复调用会复用；缺失元数据的半成品输出会被拒绝。
+- 临时验证脚本 `_verify/step21_3_fold_executor.py` 已在验证后删除，未纳入提交。
+
+### 遇到的问题及解决方案
+- 问题：首次直接执行 `_verify` 脚本时，Python 仅将脚本目录加入模块搜索路径，导致 `ModuleNotFoundError: yonod`。
+- 解决：按既有验证脚本惯例显式将项目根目录加入临时脚本的 `sys.path`，随后验证通过；生产代码无需为该测试入口改变导入行为。
+
+### 下一步计划
+- 步骤 21.4：建立单进程可恢复任务状态库，首先覆盖成功跳过、失败/中断保留、输出损坏检测与选择性重跑。
+
+---
+
 ## [2026-09-01 14:51] 步骤 21.2 完成：实现可配置反应分组与可复用 split manifest
 
 ### 执行的任务

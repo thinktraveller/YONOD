@@ -7,6 +7,7 @@ from .config import (
     create_benchmark_contract,
     write_run_manifest,
 )
+from .executor import FoldExecutionError, FoldExecutionResult, execute_fold
 
 __all__ = [
     "BenchmarkConfig",
@@ -14,4 +15,7 @@ __all__ = [
     "BenchmarkConfigError",
     "create_benchmark_contract",
     "write_run_manifest",
+    "FoldExecutionError",
+    "FoldExecutionResult",
+    "execute_fold",
 ]
