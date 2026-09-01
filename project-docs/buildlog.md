@@ -2,6 +2,33 @@
 
 ---
 
+## [2026-09-01 14:51] 步骤 21.2 完成：实现可配置反应分组与可复用 split manifest
+
+### 执行的任务
+- 实现反应指纹聚类、底物骨架和组分留出三种可配置的 `group_id` 生成策略。
+- 实现由步骤 21.1 run contract 驱动的分组重复交叉验证 manifest；默认参数可生成 5×5，smoke 可配置为 2×2。
+- 增加无组泄漏、每个样本每次重复恰好一次验证集、折数完整性和空训练/验证集检查。
+- 采用临时 Parquet 文件校验后原子替换，且拒绝以不同内容覆盖已有 split manifest。
+
+### 关键变更
+- 新增 `yonod/splits/grouping.py`：`reaction_fingerprint_cluster`、`substrate_scaffold` 与 `component_holdout` 策略及明确 fallback 标识。
+- 新增 `yonod/splits/manifest.py`：可复用 split manifest 的生成、审计和安全落盘。
+- 新增 `yonod/splits/__init__.py`：公开分组与 manifest 接口。
+
+### 验证结果
+- 用户已在 conda `yonod` 环境运行 `python .\_verify\step21_2_split_manifest.py` 并通过。
+- 验证覆盖：三种分组策略、2 次重复 × 2 折 manifest、每折 train/valid group 零交集、Parquet 重复安全写入，以及 group 数量不足时明确失败且不回退到普通 KFold。
+- 临时验证脚本 `_verify/step21_2_split_manifest.py` 已在验证后删除，未纳入提交。
+
+### 遇到的问题及解决方案
+- 问题：分组交叉验证中若组数不足或单组覆盖过多样本，普通 KFold 会给出看似可运行但存在相似反应泄漏的结果。
+- 解决：实现前置可行性检查；组数少于折数、`max_group_fraction` 超限、空折或任何 group 泄漏均直接失败并给出可操作的调整方向。
+
+### 下一步计划
+- 步骤 21.3：建立由外部 split manifest 驱动的单折执行契约与样本级预测分片，先用 RF 跑通最小闭环并保留旧内部 KFold 接口。
+
+---
+
 ## [2026-09-01 14:47] 步骤 21.1 完成：定义 benchmark 配置、运行标识与数据版本契约
 
 ### 执行的任务
