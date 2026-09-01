@@ -8,6 +8,14 @@ from .config import (
     write_run_manifest,
 )
 from .executor import FoldExecutionError, FoldExecutionResult, execute_fold
+from .task_state import (
+    ClaimedTask,
+    TaskSpec,
+    TaskStateError,
+    TaskStateStore,
+    collect_output_record,
+    verify_output_record,
+)
 
 __all__ = [
     "BenchmarkConfig",
@@ -18,4 +26,10 @@ __all__ = [
     "FoldExecutionError",
     "FoldExecutionResult",
     "execute_fold",
+    "ClaimedTask",
+    "TaskSpec",
+    "TaskStateError",
+    "TaskStateStore",
+    "collect_output_record",
+    "verify_output_record",
 ]
