@@ -16,6 +16,15 @@ from .task_state import (
     collect_output_record,
     verify_output_record,
 )
+from .metrics import (
+    MetricRebuildError,
+    MetricRebuildResult,
+    paired_comparisons,
+    rebuild_fold_metrics,
+    summarize_combinations,
+    tukey_hsd_comparisons,
+    write_metric_tables,
+)
 
 __all__ = [
     "BenchmarkConfig",
@@ -32,4 +41,11 @@ __all__ = [
     "TaskStateStore",
     "collect_output_record",
     "verify_output_record",
+    "MetricRebuildError",
+    "MetricRebuildResult",
+    "paired_comparisons",
+    "rebuild_fold_metrics",
+    "summarize_combinations",
+    "tukey_hsd_comparisons",
+    "write_metric_tables",
 ]
