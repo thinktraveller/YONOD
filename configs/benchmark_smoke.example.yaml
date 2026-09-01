@@ -1,0 +1,17 @@
+# 将本文件复制到项目配置目录并替换为你的可追溯数据列；不要以 CSV 行号作为 sample_id。
+benchmark:
+  dataset_path: ../dataset/your_dataset.csv
+  sample_id_col: reaction_id
+  label_col: yield
+  smiles_cols: [reactant_1_smiles, reactant_2_smiles]
+  descriptors: [morgan]
+  models: [rf, xgb, lightgbm]
+  grouping:
+    strategy: component_holdout
+    component_cols: [reactant_1_smiles]
+  cv:
+    n_repeats: 2
+    n_splits: 2
+    seed: 42
+  outputs:
+    root: ../results
