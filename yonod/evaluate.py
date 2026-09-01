@@ -41,6 +41,7 @@ from .models.autogluon_model import AutoGluonYieldModel
 from .models.rf_model import RFYieldModel
 from .models.svm_model import SVMYieldModel
 from .models.xgb_model import XGBYieldModel
+from .models.lightgbm_model import LightGBMYieldModel
 
 
 DESCRIPTOR_REGISTRY: Dict[str, Type[BaseDescriptor]] = {
@@ -58,6 +59,7 @@ MODEL_REGISTRY: Dict[str, Type[Any]] = {
     "rf": RFYieldModel,
     "svm": SVMYieldModel,
     "autogluon": AutoGluonYieldModel,
+    "lightgbm": LightGBMYieldModel,
 }
 
 

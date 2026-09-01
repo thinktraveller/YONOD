@@ -2,6 +2,33 @@
 
 ---
 
+## [2026-09-01 15:18] 步骤 21.5 完成：接入 LightGBM 公平比较基线
+
+### 执行的任务
+- 新增 CPU 固定参数的 LightGBM 回归适配器，默认显式记录 `n_estimators`、学习率、叶节点数、最小叶节点样本数、随机种子和线程数。
+- 将 LightGBM 注册到通用模型注册表，并接入既有外部 fold 执行器；不新增独立 CV 或专用结果路径。
+- 在折级元数据的软件版本清单中增加 `lightgbm`，使后续比较报告可追溯具体运行版本。
+- 明确 NaN/inf 由严格执行器在训练前拒绝；常量/稀疏特征由 LightGBM 正常处理；非法超参数和缺少 LightGBM 依赖给出明确错误。
+
+### 关键变更
+- 新增 `yonod/models/lightgbm_model.py`：LightGBM 回归适配器及兼容旧接口的内部 CV 方法。
+- 更新 `yonod/benchmark/executor.py`：`lightgbm` 走统一外部 fold 估计器和同一预测分片协议。
+- 更新 `yonod/evaluate.py`：在模型注册表公开 `lightgbm`。
+
+### 验证结果
+- 用户已在 conda `yonod` 环境运行 `conda run -n yonod python .\\_verify\\step21_5_lightgbm_executor.py` 并通过（仅有 sklearn FutureWarning）。
+- 验证覆盖 2 个外部 fold：RF、XGBoost、LightGBM 的每折验证 `sample_id` 集合一致，均写出预测分片，`split_id` 一致且预测均为有限值。
+- 临时验证脚本 `_verify/step21_5_lightgbm_executor.py` 已在验证后删除，未纳入提交。
+
+### 遇到的问题及解决方案
+- 问题：LightGBM 是可选依赖，若在非目标环境直接导入会使不使用该模型的原有流程受影响。
+- 解决：延迟到构建 LightGBM 估计器时检查依赖；未安装时只在实际选择该模型时给出明确安装/环境提示。
+
+### 下一步计划
+- 步骤 21.6：从预测分片独立重建折级指标、组合级置信区间与模型/描述符双维统计比较。
+
+---
+
 ## [2026-09-01 15:15] 步骤 21.4 完成：实现单进程可恢复任务状态库
 
 ### 执行的任务

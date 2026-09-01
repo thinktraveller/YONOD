@@ -40,7 +40,7 @@ def _software_versions() -> Dict[str, str]:
         "python": sys.version,
         "platform": platform.platform(),
     }
-    for distribution in ("numpy", "pandas", "scikit-learn", "pyarrow", "xgboost"):
+    for distribution in ("numpy", "pandas", "scikit-learn", "pyarrow", "xgboost", "lightgbm"):
         try:
             versions[distribution] = importlib.metadata.version(distribution)
         except importlib.metadata.PackageNotFoundError:
@@ -70,6 +70,9 @@ def _build_estimator(model_name: str, model_kwargs: Mapping[str, Any], n_feature
         from ..models.svm_model import SVMYieldModel
         adapter = SVMYieldModel(**dict(model_kwargs))
         return adapter._build(n_features=n_features, n_train=n_train)
+    if model_name == "lightgbm":
+        from ..models.lightgbm_model import LightGBMYieldModel
+        return LightGBMYieldModel(**dict(model_kwargs))._build()
     raise FoldExecutionError(
         "模型 {0!r} 尚未具备严格外部 fold 适配器；AutoGluon 在其内部 holdout "
         "行为被验证前不得进入公平比较矩阵。".format(model_name)
