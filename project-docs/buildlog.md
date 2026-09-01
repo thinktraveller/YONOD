@@ -2,6 +2,34 @@
 
 ---
 
+## [2026-09-01 15:23] 步骤 21.6 完成：构建独立指标、置信区间与统计比较模块
+
+### 执行的任务
+- 新增只读取运行清单、split manifest、预测分片和折级元数据的指标重建模块，不依赖训练过程中的内存对象。
+- 重建每个 `(descriptor, model, repeat, fold)` 的 R²、RMSE、MAE、有效样本数和训练/预测时间；对缺失 fold、无效分片、单样本验证折、常量标签、NaN/inf 预测保留可追溯排除记录。
+- 实现组合级均值、中位数、标准差、分位数与以 fold 为单位的 bootstrap 95% CI；bootstrap 次数与随机种子写入输出表。
+- 实现固定描述符的模型配对比较、固定模型的描述符配对比较，包含效应差、差值 CI、原始/ Holm 校正 p 值、指标方向和显著性标签；另输出 Tukey HSD 多重比较表。
+- 组合只要有任一缺失或排除 fold 即被标记不完整，不与完整组合静默混合比较。
+
+### 关键变更
+- 新增 `yonod/benchmark/metrics.py`：预测库审计、折级指标重建、组合汇总、bootstrap CI、双维配对统计、Tukey HSD 与原子表落盘。
+- 更新 `yonod/benchmark/__init__.py`：公开指标重建、统计比较和派生表写入接口。
+
+### 验证结果
+- 用户已在 conda `yonod` 环境运行 `conda run -n yonod python .\\_verify\\step21_6_metrics_statistics.py` 并通过。
+- 验证覆盖预测库重建、bootstrap CI、模型/描述符两种比较维度、Tukey HSD、统计表原子写入，以及将含 `inf` 的分片转为显式排除且使组合不可比较。
+- SciPy 对近乎相同合成数据出现 Precision loss RuntimeWarning；验证断言和输出均通过，未将该警告视为结果。
+- 临时验证脚本 `_verify/step21_6_metrics_statistics.py` 已在验证后删除，未纳入提交。
+
+### 遇到的问题及解决方案
+- 问题：完全相同且非零的配对折差会使常规 t 统计量退化为无穷大，SciPy 在合成相近 fixture 中可能产生精度损失警告。
+- 解决：对常量配对差显式处理：零差异为无显著差异，非零常量差对应极限 p 值；正常非恒定数据仍使用 `ttest_rel` 并经 Holm 校正。
+
+### 下一步计划
+- 步骤 21.7：由已保存的 manifest、状态、指标与统计表重建 HTML/Markdown benchmark 报告，不重新训练模型。
+
+---
+
 ## [2026-09-01 15:18] 步骤 21.5 完成：接入 LightGBM 公平比较基线
 
 ### 执行的任务
