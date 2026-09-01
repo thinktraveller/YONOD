@@ -2,6 +2,33 @@
 
 ---
 
+## [2026-09-01 14:47] 步骤 21.1 完成：定义 benchmark 配置、运行标识与数据版本契约
+
+### 执行的任务
+- 根据用户确认，停止沿用旧的 20.14A DFT/SOAP 或重加权路线，改按新版“严谨模型比较架构升级计划”从步骤 21.1 重新构建。
+- 新建 benchmark 配置与运行契约模块：在训练前校验稳定样本标识、标签列和 SMILES 列，计算数据 SHA-256 与确定性配置哈希。
+- 实现由配置哈希派生的 run_id 与 run manifest；同一配置可安全复用以支持后续恢复，不同配置不会静默覆盖已有运行目录。
+- 增加 YAML smoke 配置模板；模板要求数据源提供真实、稳定的 reaction_id，明确禁止使用 CSV 行号。
+
+### 关键变更
+- 新增 `yonod/benchmark/config.py`：配置解析、数据契约校验、数据/配置哈希与 `run_manifest.json` 写入。
+- 新增 `yonod/benchmark/__init__.py`：公开 benchmark 基础接口。
+- 新增 `configs/benchmark_smoke.example.yaml`：2×2 smoke 配置模板。
+
+### 验证结果
+- 用户已在 conda `yonod` 环境运行 `python .\_verify\step21_1_benchmark_contract.py` 并通过。
+- 验证覆盖：同一配置的确定性 `config_hash`/`run_id`、manifest 的可重复写入、数据 SHA-256 写入，以及重复 `sample_id` 在训练前被拒绝。
+- 临时验证脚本 `_verify/step21_1_benchmark_contract.py` 已在验证后删除，未纳入提交。
+
+### 遇到的问题及解决方案
+- 问题：现有酰胺 CSV 未提供适合作为长期审计键的 `row_id`，不能安全地把行号直接作为 benchmark 的样本标识。
+- 解决：步骤 21.1 强制配置显式声明且数据实际提供唯一 `sample_id_col`；真实数据接入前需先由调用方提供稳定 `reaction_id` 或等价键。
+
+### 下一步计划
+- 步骤 21.2：实现反应分组策略与统一的分组重复交叉验证 split manifest，并以合成数据验证分组无泄漏与组数不足时的明确失败。
+
+---
+
 ## [2026-08-25 18:24] 步骤 20.13A 完成：复现状态总览报告
 
 ### 执行的任务
