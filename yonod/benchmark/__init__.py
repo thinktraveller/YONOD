@@ -25,6 +25,7 @@ from .metrics import (
     tukey_hsd_comparisons,
     write_metric_tables,
 )
+from .report import BenchmarkReportError, BenchmarkReportResult, generate_benchmark_report
 
 __all__ = [
     "BenchmarkConfig",
@@ -48,4 +49,7 @@ __all__ = [
     "summarize_combinations",
     "tukey_hsd_comparisons",
     "write_metric_tables",
+    "BenchmarkReportError",
+    "BenchmarkReportResult",
+    "generate_benchmark_report",
 ]
