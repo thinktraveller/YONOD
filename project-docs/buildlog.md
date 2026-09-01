@@ -2,6 +2,36 @@
 
 ---
 
+## [2026-09-01 15:34] 步骤 21.8 完成：建立 smoke/默认 5×5 验收与回归门禁
+
+### 执行的任务
+- 新增版本化 `configs/benchmark_smoke.yaml`、可提交的 `dataset/benchmark_smoke_fixture.csv` 和正式 `configs/benchmark_default_5x5.example.yaml` 模板。
+- 新增 `scripts/run_benchmark.py` 单进程编排器：创建运行/切分清单、登记 SQLite 任务、恢复成功输出、执行缺失 fold、重建指标/统计、生成报告并依据状态返回退出码。
+- smoke 使用 1 描述符 × 3 模型 × 2 repeats × 2 folds，共 12 个统一外部 fold 任务；第二次启动验证状态库复用成功输出而不重复训练。
+- 正式 5×5 模板使用 reaction fingerprint 分组并声明理论任务结构；由于当前真实数据缺少可长期审计的稳定 `reaction_id`，模板要求用户提供版本化数据后才可运行，不将 CSV 行号替代为样本标识。
+- 修复 metrics 消费层的 manifest 契约：沿用既有权威 `run_id + dataset_sha256 + split_id`，不再错误要求 split manifest 重复存储 `config_hash`。
+
+### 关键变更
+- 更新 `yonod/benchmark/config.py`：将 `model_params` 纳入配置哈希，避免不同超参数复用同一 run_id。
+- 更新 `yonod/benchmark/metrics.py`：按 split manifest 实际审计字段关联运行清单。
+- 新增 `scripts/run_benchmark.py`：严格外部 fold 的串行可恢复端到端入口。
+- 新增 `configs/benchmark_smoke.yaml`、`configs/benchmark_default_5x5.example.yaml` 与 `dataset/benchmark_smoke_fixture.csv`。
+
+### 验证结果
+- 用户已在 conda `yonod` 环境运行 `conda run -n yonod python .\\_verify\\step21_8_smoke_gate.py` 并通过。
+- 首次 smoke：12 个任务全部 `succeeded`，生成 run/split manifest、任务状态库、预测分片、指标/统计表与 HTML/Markdown 报告。
+- 第二次 smoke：成功输出通过哈希/元数据审计并复用，未出现 `[succeeded]` 训练日志，证明可恢复逻辑不会盲目重复训练。
+- 临时验证脚本 `_verify/step21_8_smoke_gate.py` 已在验证后删除，未纳入提交。
+
+### 遇到的问题及解决方案
+- 问题：12 个模型任务虽完成，指标重建却因误要求 split manifest 含 `config_hash` 而失败，不能误报端到端通过。
+- 解决：检查 manifest 生成方后确认其权威字段为 `run_id`、`dataset_sha256`、`split_id`；指标层改按该契约校验，随后完整 smoke 与恢复验证通过。
+
+### 下一步计划
+- ✅ 新版“严谨模型比较架构升级计划”21.1–21.8 已完成。真实正式 5×5 运行前，用户需提供含稳定 `reaction_id` 的版本化数据集，并选择正式描述符/模型矩阵与资源预算。
+
+---
+
 ## [2026-09-01 15:29] 步骤 21.7 完成：升级可追溯 HTML/Markdown benchmark 报告
 
 ### 执行的任务

@@ -1,0 +1,20 @@
+# 正式研究模板：替换 dataset_path 和真实稳定 reaction_id 后再运行。
+benchmark:
+  dataset_path: ../dataset/your_versioned_reaction_dataset.csv
+  sample_id_col: reaction_id
+  label_col: yield
+  smiles_cols: [reactant_1_smiles, reactant_2_smiles]
+  descriptors: [morgan, rdkit2d]
+  models: [rf, xgb, lightgbm]
+  model_params:
+    rf: {n_estimators: 300, n_jobs: 1, random_state: 42}
+    xgb: {n_estimators: 300, device: cpu, random_state: 42}
+    lightgbm: {n_estimators: 500, n_jobs: 1, random_state: 42}
+  grouping:
+    strategy: reaction_fingerprint_cluster
+    reaction_cols: [reactant_1_smiles, reactant_2_smiles]
+    similarity_threshold: 0.7
+    max_group_fraction: 0.5
+  cv: {n_repeats: 5, n_splits: 5, seed: 42}
+  outputs:
+    root: ../results/benchmark-default-5x5
