@@ -2,6 +2,37 @@
 
 ---
 
+## [2026-09-01 15:29] 步骤 21.7 完成：升级可追溯 HTML/Markdown benchmark 报告
+
+### 执行的任务
+- 新增独立 benchmark 报告模块，只读取 `manifests/`、预测分片、折级元数据、状态库和步骤 21.6 写出的指标/统计表；报告重建不触发模型训练。
+- 生成实验追溯性、切分审计、性能矩阵与完成度、预测/稳定性图、模型与描述符双维统计、Tukey HSD、成本/状态/排除记录及统计限制章节。
+- 新增 `scripts/rebuild_benchmark_report.py --run-dir <run_dir>`，可在新 Python 进程只凭已有 run 目录重建 HTML、Markdown 和图表。
+- 报告将不完整组合、指标排除和比较排除显式展示；统计结论包含折级差、CI、Holm 校正 p 值与标签，不把无显著差异表述为性能完全相同。
+
+### 关键变更
+- 新增 `yonod/benchmark/report.py`：派生表读取、切分/成本审计、折稳定性/残差图、HTML/Markdown 章节渲染和原子写入。
+- 新增 `scripts/rebuild_benchmark_report.py`：独立进程报告重建 CLI。
+- 更新 `yonod/benchmark/__init__.py`：公开 benchmark 报告接口。
+
+### 验证结果
+- 用户已在 conda `yonod` 环境运行 `conda run -n yonod python .\\_verify\\step21_7_report_rebuild.py` 并通过。
+- 验证在新 Python 进程中只提供临时 run 目录重建报告，确认 HTML 与 Markdown 均含追溯性、切分、性能、双维统计、Tukey HSD、成本与统计限制章节。
+- 临时验证脚本 `_verify/step21_7_report_rebuild.py` 已在验证后删除，未纳入提交。
+
+### 遇到的问题及解决方案
+- 问题：CLI 从 `scripts/` 启动时默认搜索路径不含项目根，导致无法导入 `yonod`。
+- 解决：入口脚本显式将项目根加入 `sys.path`，不改变报告逻辑。
+- 问题：Python 3.9 的 `Path.write_text()` 不支持 `newline` 参数。
+- 解决：改用显式 `open(..., newline="\\n")` 写临时文件后原子替换，保持换行和原子写入语义。
+- 问题：Markdown 已有两种比较表，但缺少“二者合并为双维比较”的总章节标题。
+- 解决：补齐“双维统计比较”总标题，使 HTML/Markdown 契约一致。
+
+### 下一步计划
+- 步骤 21.8：补齐版本化 smoke/默认 5×5 配置、端到端单进程编排、恢复/完整性/统计/报告四项门禁及回归验证。
+
+---
+
 ## [2026-09-01 15:23] 步骤 21.6 完成：构建独立指标、置信区间与统计比较模块
 
 ### 执行的任务
