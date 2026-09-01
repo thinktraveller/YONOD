@@ -169,6 +169,7 @@ class BenchmarkConfig:
             "smiles_cols": list(self.smiles_cols),
             "descriptors": list(self.descriptors),
             "models": list(self.models),
+            "model_params": self.raw.get("model_params", {}),
             "grouping": self.grouping,
             "cv": self.cv,
             "outputs_root": str(self.outputs_root),

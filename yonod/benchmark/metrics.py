@@ -104,7 +104,10 @@ def rebuild_fold_metrics(run_dir: Path | str) -> MetricRebuildResult:
     if not split_path.is_file():
         raise MetricRebuildError("缺少 split manifest：{0}".format(split_path))
     split_manifest = pd.read_parquet(split_path)
-    required_split = {"run_id", "config_hash", "split_id", "sample_id", "role", "repeat", "fold"}
+    # The split manifest is intentionally data/split-centric: its immutable
+    # identity is run_id + dataset_sha256 + split_id.  config_hash belongs to
+    # the run manifest and prediction shards, not to every split row.
+    required_split = {"run_id", "dataset_sha256", "split_id", "sample_id", "role", "repeat", "fold"}
     if required_split.difference(split_manifest.columns):
         raise MetricRebuildError("split manifest 缺少审计字段")
     run_id = str(run_manifest.get("run_id", ""))
@@ -113,8 +116,9 @@ def rebuild_fold_metrics(run_dir: Path | str) -> MetricRebuildResult:
         raise MetricRebuildError("run manifest 缺少 run_id 或 config_hash")
     if set(split_manifest["run_id"].astype(str)) != {run_id}:
         raise MetricRebuildError("split manifest 的 run_id 与 run manifest 不一致")
-    if set(split_manifest["config_hash"].astype(str)) != {config_hash}:
-        raise MetricRebuildError("split manifest 的 config_hash 与 run manifest 不一致")
+    expected_dataset_sha = str(run_manifest.get("dataset_sha256", ""))
+    if not expected_dataset_sha or set(split_manifest["dataset_sha256"].astype(str)) != {expected_dataset_sha}:
+        raise MetricRebuildError("split manifest 的 dataset_sha256 与 run manifest 不一致")
 
     expected = _expected_tasks(run_manifest, split_manifest)
     expected_keys = {
