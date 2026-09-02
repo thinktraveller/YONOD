@@ -26,6 +26,34 @@
 
 ---
 
+## [2026-09-02 18:47] 步骤 22.2 完成：在 HTML/Markdown 报告展示组合耗时与柱状图
+
+### 执行的任务
+- 严格 benchmark 报告新增“建模耗时与成本对比”章节：展示组合时间表、训练/预测堆叠横向柱状图、完成度与不可比较原因；HTML 使用图像文件，Markdown 使用有效相对链接。
+- 已有运行缺少时间摘要表时，报告重建仅从既有折级指标与完整性表派生并原子写入该表，不触发模型拟合。
+- 通用报告在提供 `train_time_s` 时生成同一 PNG 的 HTML 内嵌和 Markdown 相对链接；旧调用方未提供时间时明确说明无法绘图，不伪造零耗时。
+- 为柱状图优先选择本机可用的中文字体；短耗时 smoke 图按实际量级缩放横轴。
+
+### 关键变更
+- 更新 `yonod/benchmark/report.py`：增加组合建模耗时图、HTML/Markdown 同步章节、旧 artefact 时间表派生与可比较性说明。
+- 更新 `yonod/universal/report.py`：增加兼容的训练时间汇总、柱状图、无数据状态与 Markdown 章节。
+- 新增 `tests/test_benchmark_timing.py`：覆盖时间汇总、异常时间、严格报告无重训重建及通用报告的新旧输入兼容。
+
+### 验证结果
+- `python -m unittest discover -s tests -p test_benchmark_timing.py -v`：3/3 通过。
+- `python scripts/rebuild_benchmark_report.py --run-dir results/benchmark-smoke/benchmark-smoke-fixture-c0713db56490`：通过；重建 HTML、Markdown 和 `combination_modeling_time.png`，未执行训练。
+- 实际 smoke 汇总显示 morgan × LightGBM、RF、XGB 均为 `4/4` complete；累计建模时间分别约 0.0316 s、0.0334 s、0.0891 s，图中排序、堆叠分量与表格一致。
+- 已目视检查实际生成柱状图：中文标签可读，训练/预测颜色堆叠和短耗时坐标范围正常。
+
+### 遇到的问题及解决方案
+- 问题：默认 DejaVu Sans 缺少中文字体，图像生成时会出现缺字警告；短 smoke 耗时在 1 秒横轴内难以区分。
+- 解决：优先选择已安装的 Microsoft YaHei/SimHei/SimSun 等字体，并将横轴最小范围从 1 秒调整为 0.01 秒，使短任务差距可读。
+
+### 下一步计划
+- ✅ 第 22 节全部完成；后续正式 5×5 运行时将自动生成组合级耗时表和报告图表。
+
+---
+
 ## [2026-09-01 15:34] 步骤 21.8 完成：建立 smoke/默认 5×5 验收与回归门禁
 
 ### 执行的任务
@@ -3113,3 +3141,11 @@ for desc_name in args.descriptors:
 - 若后续希望清理 `.vs/` 或 `.vscode/`，需先确认本地 IDE 设置是否仍有保留价值。
 
 ---
+
+## [2026-09-02 18:47] 🎉 项目构建完成
+
+### 完成情况
+- 本次“报告建模耗时与组合柱状图”构建步骤 22.1–22.2 已执行完毕，端到端报告重建验证通过。
+
+### 下一步计划
+- ✅ 构建已全部完成，无待执行步骤
