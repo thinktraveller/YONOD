@@ -7696,3 +7696,143 @@ smoke 数据如果只含很少分组，可能无法覆盖 2 折以上；fixture 
 ---
 
 **文档结束**
+
+---
+
+## 二十二、报告建模耗时与组合柱状图增量计划
+
+> 本节响应“在 HTML 和 Markdown 报告中记录建模时间，并用柱状图比较不同模型与描述符组合耗时”的需求追加。适用范围包括严格、可追溯的 `scripts/run_benchmark.py` → `yonod/benchmark/report.py` 路径，以及仍会由 `main.py` 使用的 `yonod/universal/report.py` 路径；两条路径必须采用相同的时间术语和展示原则。
+
+### 22.1 可行性结论与时间口径
+
+可行，且严格 benchmark 的逐折训练时间已经由 `yonod/benchmark/executor.py` 以单调计时器写入预测分片和折级 JSON：`train_time_s`（仅 `estimator.fit`）与 `predict_time_s`（仅验证集 `predict`）。现有报告只汇总了全部任务的总时间，尚未按 `descriptor × model` 输出可比较时间表或图，因此可从已保存 artefacts 派生，**不需要重训历史完整运行**。
+
+为避免将不同含义的耗时混在一个数字中，报告必须使用下列固定口径：
+
+| 字段/展示名 | 定义 | 是否用于组合柱状图 |
+|---|---|---|
+| `train_time_s` / 单折训练时间 | 一个外部 CV fold 内 `estimator.fit` 的单调时钟耗时 | 是，先按组合累加 |
+| `predict_time_s` / 单折预测时间 | 同一 fold 中验证集 `predict` 的单调时钟耗时 | 是，作为训练外的单独分量 |
+| `total_train_time_s` / 累计 CV 训练时间 | 某 `(descriptor, model)` 全部**有效且已完成** fold 的 `train_time_s` 之和 | 是，主柱高 |
+| `total_predict_time_s` / 累计 CV 预测时间 | 同一组合的 `predict_time_s` 之和 | 可堆叠/另色段，不与训练混淆 |
+| `total_model_time_s` / 累计 CV 建模时间 | `total_train_time_s + total_predict_time_s` | 是，图表排序、柱顶标注和报告比较的总值 |
+| 描述符特征化时间 | 构造一个描述符特征矩阵的一次性共享成本 | 否；后续单列记录，不得完整重复摊入每个模型组合 |
+| 端到端墙钟时间 | 一次 CLI 启动至退出所经历的时间，包含特征化、排队、报告和可能的恢复等待 | 否；只能作为运行级说明，不能用于组合横向比较 |
+
+严格 benchmark 当前在同一进程内对每个描述符缓存特征矩阵，所以特征化成本由多个模型共享。若把这一整段时间重复加到每个“描述符 × 模型”柱上，会夸大成本；第一版柱状图只比较累计 CV 建模时间。后续若需要端到端成本，应另写 descriptor 级 `feature_time_s` artifact，并清楚展示为共享前置成本，而非隐式均摊。
+
+### 22.2 开发计划
+
+### 步骤22.1：派生可审计的组合级时间汇总表
+
+#### 目标说明
+
+将逐折的、可追溯时间元数据转换为每个模型与描述符组合都能直接比较的时间摘要，同时保留完整性信息，防止缺折组合因为“少跑几折”而被误写成更快。
+
+#### 具体操作
+
+在 `yonod/benchmark/metrics.py` 的指标重建流程中，从已审计的 `fold_metrics` 和 `completeness` 生成并原子写入 `metrics/combination_time_summary.parquet`。每行至少包含：
+
+```text
+run_id, config_hash, split_id, descriptor, model,
+expected_folds, completed_folds, is_complete,
+total_train_time_s, mean_train_time_s, median_train_time_s, max_train_time_s,
+total_predict_time_s, total_model_time_s
+```
+
+聚合逻辑应等价于：
+
+```python
+valid = fold_metrics.groupby(["run_id", "config_hash", "split_id", "descriptor", "model"])
+summary = valid.agg(
+    completed_folds=("fold", "count"),
+    total_train_time_s=("train_time_s", "sum"),
+    mean_train_time_s=("train_time_s", "mean"),
+    median_train_time_s=("train_time_s", "median"),
+    max_train_time_s=("train_time_s", "max"),
+    total_predict_time_s=("predict_time_s", "sum"),
+)
+summary["total_model_time_s"] = summary["total_train_time_s"] + summary["total_predict_time_s"]
+```
+
+实现须额外校验 `train_time_s`、`predict_time_s` 均为有限、非负浮点数；异常时间不得静默参与 `sum()`。时间缺失/非法时保留明确排除或 `time_status`，性能指标仍可保留，但该组合在耗时排名与柱状图中标为“时间不可比较”。`expected_folds`、`completed_folds` 与 `is_complete` 必须同时渲染；默认只按完整组合排序，未完成组合可显示为灰色/斜线并附缺失原因，不可与完整组合比较快慢。
+
+#### 验证方法
+
+- 用两个描述符、两个模型、每组合两个 fold 的小 fixture 写入已知时间，断言总值、均值、中位数、最大值与手工计算完全一致。
+- 删除一个 fold 或让一个时间为 `NaN`/负数，断言该组合保留完成度/排除原因，且不进入完整组合的耗时排序。
+- 只提供已有 `run_id` 的 artefacts 重新运行 `rebuild_benchmark_report.py`，断言不会调用模型训练且能重建时间表。
+
+#### 风险提示
+
+累计 CV 时间会随 repeats/folds 的数量线性增长；它只适合在同一 `run_id`、相同 `split_id`、相同折数和相同硬件/线程设置下做横向比较。报告必须带出这些条件，不能把不同机器或不同 CV 配置下的秒数写成绝对性能结论。
+
+---
+
+### 步骤22.2：生成组合建模耗时柱状图并接入两种报告
+
+#### 目标说明
+
+在不改变性能统计的前提下，让读者一眼看出不同“描述符 × 模型”组合的累计 CV 建模成本及其差距，并让 HTML 与 Markdown 提供同一张可追溯图和同一份结构化表。
+
+#### 具体操作
+
+1. 在 `yonod/benchmark/report.py` 读取 `combination_time_summary.parquet`，生成 `figures/combination_modeling_time.png`。建议按 `total_model_time_s` 降序的横向柱状图：
+   - y 轴：`<descriptor> × <model>`；x 轴：`累计 CV 建模时间（秒，训练 + 预测）`；
+   - 训练、预测使用两种颜色堆叠，柱顶显示总秒数（超过 60 秒时同时给出易读的分/秒）；
+   - 图注写明 `completed_folds / expected_folds`、`run_id` 与“仅可在相同硬件/CV 设置下比较”；
+   - `is_complete=False`、时间异常或没有可比较数据时，不伪造零高柱，改为明确的文本/灰色状态和结构化表记录。
+2. 在严格 benchmark 的 HTML 增加“建模耗时与成本对比”章节：时间摘要表、图及口径说明；Markdown 在相同章节输出该表和 `figures/combination_modeling_time.png` 的相对链接。二者均保留现有运行级总训练/预测时间，但更名为“所有有效 fold 的累计值”，避免被误读为墙钟时间。
+3. 为通用报告路径增加同名章节和图。`yonod/universal/report.py` 仅在 `metrics_df` 含有限的 `train_time_s` 时输出；若旧调用方未提供该字段，报告继续生成，并在该章节明确写“未提供组合级建模耗时，无法绘图”，不能使用空值或零值冒充耗时。通用路径若当前没有 `predict_time_s`，只画并标明“训练时间”，不伪造总建模时间。
+4. 图像生成必须使用已有 `matplotlib >= 3.8`；HTML 继续使用自包含/现有嵌入策略，Markdown 只引用同一 PNG，避免两种报告因独立计算产生不一致数值。
+
+#### 验证方法
+
+- 对严格 benchmark 的合成 run 重建报告，断言 HTML 出现“建模耗时与成本对比”、时间表和 `combination_modeling_time.png`；Markdown 出现相同章节、字段及相对图片链接。
+- 用不同量级的固定耗时验证柱高排序和柱顶总值；训练/预测堆叠之和必须与时间汇总表的 `total_model_time_s` 一致。
+- 对旧格式 `metrics_df`（无时间列）生成通用 HTML/Markdown，断言报告仍成功且不生成虚假的零耗时柱；对有 `train_time_s` 的输入断言两份报告均生成训练时间图。
+- 在新的 Python 进程执行 `scripts/rebuild_benchmark_report.py --run-dir <smoke-run>`，检查报告重建不触发 `estimator.fit`，且图和表只来自 `metrics/`、`folds/`、`predictions/`。
+
+#### 风险提示
+
+- 折数不等或不完整任务会使累计时间不可直接比较；图表和表必须显式显示完成度。
+- 并行模式下，“各任务时间之和”可能大于实际墙钟时间；本功能首先报告可加总的 CPU/GPU 任务成本，不把它标成整次运行等待时间。
+- GPU 首次加载、缓存命中、线程数和系统负载会影响秒数。报告需保留依赖版本、硬件/线程配置及运行时间戳；正式论文比较宜在同一机器、同一配置下重复测量。
+
+### 22.3 影响范围、验收门与 Q&A
+
+#### 计划影响文件
+
+| 范围 | 预期职责 |
+|---|---|
+| `yonod/benchmark/metrics.py` | 组合级时间派生、非法时间审计、Parquet 原子写入 |
+| `scripts/run_benchmark.py`、`yonod/benchmark/__init__.py` | 向指标表写入和报告重建暴露时间摘要，不改变模型训练参数 |
+| `yonod/benchmark/report.py` | 严格报告的时间表、PNG 图、HTML/Markdown 同步章节 |
+| `yonod/universal/report.py` | 常规 HTML/Markdown 的兼容时间表和训练时间图 |
+| `tests/`（或现有可提交回归测试位置） | 时间聚合、异常时间、图表契约、旧调用兼容和无重训重建测试 |
+
+#### 完成判定
+
+只有同时满足以下条件才可认为本需求完成：
+
+1. 组合级表可从既有完整 run 重建，并能追溯到 `fold_metrics`/折级 JSON；
+2. HTML 和 Markdown 都展示一致的字段、时间口径和同一张柱状图（Markdown 为有效相对链接）；
+3. 不完整、异常时间或缺时间的组合不会以零秒或“最快”形式出现；
+4. 至少一份 smoke artefact 和一组旧格式通用报告测试通过，且报告重建过程未重新训练模型；
+5. 没有改变模型、描述符、split manifest、性能指标或既有结果目录的不可覆盖语义。
+
+#### Q&A 记录
+
+**Q：图中的“建模时间”是否包含描述符计算和整次程序等待时间？**
+**A：** 第一版不包含。它是所有完成 CV fold 的训练加预测时间之和，适合比较模型拟合成本。描述符特征化是按描述符共享的一次性成本，必须单列记录；命令行端到端墙钟时间还会受缓存、排队、报告生成和并行策略影响，不能与组合累计任务时间混称。
+
+**Q：为什么不把缺折组合按已完成折的平均时间直接放进“最快”排名？**
+**A：** 可在表中显示平均每折时间供诊断，但若任务数量、训练集/验证集规模或完成度不同，累计成本和正式可用性都不可直接比较。默认柱状图只排序完整组合；不完整组合必须显式标注。
+
+### 22.4 下一步行动建议
+
+由 **project-builder-cn** 按步骤22.1–22.2 实现时间摘要、图表和回归测试；先用现有 smoke run 验证“无需重训的报告重建”，再执行一次新的 smoke 来验证完整 CLI 路径。若用户希望把描述符特征化、GPU 加载或整次端到端墙钟时间也纳入成本分析，应先新增独立 descriptor/run 级计时 artifact，再回到本计划扩展口径，避免向每个模型组合重复计费。
+
+---
+
+**文档结束**
