@@ -17,12 +17,15 @@ from .task_state import (
     verify_output_record,
 )
 from .metrics import (
+    COMBINATION_TIME_SUMMARY_COLUMNS,
     MetricRebuildError,
     MetricRebuildResult,
     paired_comparisons,
     rebuild_fold_metrics,
+    summarize_combination_times,
     summarize_combinations,
     tukey_hsd_comparisons,
+    write_combination_time_summary,
     write_metric_tables,
 )
 from .report import BenchmarkReportError, BenchmarkReportResult, generate_benchmark_report
@@ -42,12 +45,15 @@ __all__ = [
     "TaskStateStore",
     "collect_output_record",
     "verify_output_record",
+    "COMBINATION_TIME_SUMMARY_COLUMNS",
     "MetricRebuildError",
     "MetricRebuildResult",
     "paired_comparisons",
     "rebuild_fold_metrics",
+    "summarize_combination_times",
     "summarize_combinations",
     "tukey_hsd_comparisons",
+    "write_combination_time_summary",
     "write_metric_tables",
     "BenchmarkReportError",
     "BenchmarkReportResult",

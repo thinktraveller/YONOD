@@ -36,6 +36,12 @@ COMPLETENESS_COLUMNS = [
     "run_id", "config_hash", "split_id", "descriptor", "model", "expected_folds",
     "available_folds", "valid_metric_folds", "is_complete", "missing_or_excluded_reason",
 ]
+COMBINATION_TIME_SUMMARY_COLUMNS = [
+    "run_id", "config_hash", "split_id", "descriptor", "model",
+    "expected_folds", "completed_folds", "is_complete", "time_status", "time_status_detail",
+    "is_time_comparable", "total_train_time_s", "mean_train_time_s", "median_train_time_s",
+    "max_train_time_s", "total_predict_time_s", "total_model_time_s",
+]
 
 
 @dataclass(frozen=True)
@@ -57,6 +63,20 @@ def _read_json(path: Path) -> Dict[str, Any]:
 
 def _empty(columns: Sequence[str]) -> pd.DataFrame:
     return pd.DataFrame(columns=list(columns))
+
+
+def _fold_time_value(metadata: Mapping[str, Any], field: str) -> float:
+    """Return a fold time when it is a valid duration, otherwise ``NaN``.
+
+    A bad timing value must not invalidate otherwise auditable prediction
+    metrics.  It is carried forward as ``NaN`` and made explicit in the
+    combination-level timing table instead of being silently summed as zero.
+    """
+    try:
+        value = float(metadata.get(field))
+    except (TypeError, ValueError):
+        return float("nan")
+    return value if np.isfinite(value) and value >= 0.0 else float("nan")
 
 
 def _expected_tasks(run_manifest: Mapping[str, Any], split_manifest: pd.DataFrame) -> pd.DataFrame:
@@ -173,8 +193,8 @@ def rebuild_fold_metrics(run_dir: Path | str) -> MetricRebuildResult:
                 "n_valid": int(len(y_true)), "r2": float(r2_score(y_true, y_pred)),
                 "rmse": float(np.sqrt(mean_squared_error(y_true, y_pred))),
                 "mae": float(mean_absolute_error(y_true, y_pred)),
-                "train_time_s": float(metadata["train_time_s"]),
-                "predict_time_s": float(metadata["predict_time_s"]),
+                "train_time_s": _fold_time_value(metadata, "train_time_s"),
+                "predict_time_s": _fold_time_value(metadata, "predict_time_s"),
                 "prediction_path": str(prediction_path), "metadata_path": str(metadata_path),
             })
         except ValueError as exc:
@@ -248,6 +268,99 @@ def summarize_combinations(fold_metrics: pd.DataFrame, *, n_bootstrap: int = 200
                 "bootstrap_n": int(n_bootstrap), "bootstrap_seed": int(seed + len(rows) - 1),
             })
     return pd.DataFrame.from_records(rows)
+
+
+def summarize_combination_times(
+    fold_metrics: pd.DataFrame,
+    completeness: pd.DataFrame,
+) -> pd.DataFrame:
+    """Aggregate auditable fold durations by descriptor/model combination.
+
+    The output deliberately includes incomplete and invalid-time combinations.
+    They retain partial diagnostic values when possible, but
+    ``is_time_comparable`` is false so neither report charts nor rankings can
+    mistake a partially executed job for a faster complete one.
+    """
+    required_completeness = {
+        "run_id", "config_hash", "split_id", "descriptor", "model",
+        "expected_folds", "valid_metric_folds", "is_complete", "missing_or_excluded_reason",
+    }
+    if missing := required_completeness.difference(completeness.columns):
+        raise MetricRebuildError("完整性表缺少组合耗时汇总字段：{0}".format(sorted(missing)))
+    required_metrics = {
+        "run_id", "config_hash", "split_id", "descriptor", "model",
+        "train_time_s", "predict_time_s",
+    }
+    if not fold_metrics.empty and (missing := required_metrics.difference(fold_metrics.columns)):
+        raise MetricRebuildError("折级指标表缺少组合耗时字段：{0}".format(sorted(missing)))
+
+    rows: List[Dict[str, Any]] = []
+    group_columns = ["run_id", "config_hash", "split_id", "descriptor", "model"]
+    for _, complete_row in completeness.sort_values(group_columns).iterrows():
+        keys = {column: complete_row[column] for column in group_columns}
+        if fold_metrics.empty:
+            part = _empty(FOLD_METRIC_COLUMNS)
+        else:
+            mask = np.ones(len(fold_metrics), dtype=bool)
+            for column, value in keys.items():
+                mask &= fold_metrics[column].astype(str).to_numpy() == str(value)
+            part = fold_metrics.loc[mask]
+
+        expected_folds = int(complete_row["expected_folds"])
+        completed_folds = int(len(part))
+        is_complete = bool(complete_row["is_complete"])
+        train_times = pd.to_numeric(part.get("train_time_s", pd.Series(dtype=float)), errors="coerce").to_numpy(dtype=float)
+        predict_times = pd.to_numeric(part.get("predict_time_s", pd.Series(dtype=float)), errors="coerce").to_numpy(dtype=float)
+        valid_times = (
+            completed_folds > 0
+            and np.isfinite(train_times).all()
+            and np.isfinite(predict_times).all()
+            and (train_times >= 0.0).all()
+            and (predict_times >= 0.0).all()
+        )
+        is_time_comparable = bool(is_complete and completed_folds == expected_folds and valid_times)
+        status_parts: List[str] = []
+        detail_parts: List[str] = []
+        if not is_complete or completed_folds != expected_folds:
+            status_parts.append("incomplete_folds")
+            reason = str(complete_row.get("missing_or_excluded_reason", "")).strip()
+            detail_parts.append(reason or "completed_folds={0}/{1}".format(completed_folds, expected_folds))
+        if completed_folds == 0:
+            status_parts.append("no_valid_metric_folds")
+        elif not valid_times:
+            status_parts.append("invalid_or_missing_fold_time")
+            detail_parts.append("train_time_s/predict_time_s 必须均为有限且非负的秒数")
+        if not status_parts:
+            status_parts.append("complete_and_comparable")
+
+        # Never let pandas' default ``sum(skipna=True)`` turn a missing or
+        # invalid duration into an apparently valid total.
+        if valid_times:
+            total_train = float(np.sum(train_times))
+            mean_train = float(np.mean(train_times))
+            median_train = float(np.median(train_times))
+            max_train = float(np.max(train_times))
+            total_predict = float(np.sum(predict_times))
+            total_model = float(total_train + total_predict)
+        else:
+            total_train = mean_train = median_train = max_train = float("nan")
+            total_predict = total_model = float("nan")
+        rows.append({
+            **keys,
+            "expected_folds": expected_folds,
+            "completed_folds": completed_folds,
+            "is_complete": is_complete,
+            "time_status": "; ".join(status_parts),
+            "time_status_detail": "; ".join(part for part in detail_parts if part),
+            "is_time_comparable": is_time_comparable,
+            "total_train_time_s": total_train,
+            "mean_train_time_s": mean_train,
+            "median_train_time_s": median_train,
+            "max_train_time_s": max_train,
+            "total_predict_time_s": total_predict,
+            "total_model_time_s": total_model,
+        })
+    return pd.DataFrame.from_records(rows, columns=COMBINATION_TIME_SUMMARY_COLUMNS)
 
 
 def _holm_adjust(p_values: Sequence[float]) -> np.ndarray:
@@ -384,6 +497,28 @@ def tukey_hsd_comparisons(fold_metrics: pd.DataFrame, *, dimension: str, alpha: 
     return pd.DataFrame.from_records(records)
 
 
+def _atomic_write_parquet(path: Path, frame: pd.DataFrame, table_name: str) -> Path:
+    """Write and read back a derived table before atomically publishing it."""
+    temporary = path.with_suffix(".parquet.tmp")
+    frame.to_parquet(temporary, index=False)
+    if len(pd.read_parquet(temporary)) != len(frame):
+        temporary.unlink(missing_ok=True)
+        raise MetricRebuildError("派生指标表临时文件校验失败：{0}".format(table_name))
+    temporary.replace(path)
+    return path
+
+
+def write_combination_time_summary(run_dir: Path | str, summary: pd.DataFrame) -> Path:
+    """Atomically persist the descriptor/model timing summary for a run."""
+    missing = set(COMBINATION_TIME_SUMMARY_COLUMNS).difference(summary.columns)
+    if missing:
+        raise MetricRebuildError("组合耗时汇总表缺少字段：{0}".format(sorted(missing)))
+    root = Path(run_dir) / "metrics"
+    root.mkdir(parents=True, exist_ok=True)
+    ordered = summary.loc[:, COMBINATION_TIME_SUMMARY_COLUMNS]
+    return _atomic_write_parquet(root / "combination_time_summary.parquet", ordered, "combination_time_summary")
+
+
 def write_metric_tables(
     run_dir: Path | str,
     rebuilt: MetricRebuildResult,
@@ -407,11 +542,7 @@ def write_metric_tables(
     paths: Dict[str, Path] = {}
     for name, frame in tables.items():
         path = root / (name + ".parquet")
-        temporary = path.with_suffix(".parquet.tmp")
-        frame.to_parquet(temporary, index=False)
-        if len(pd.read_parquet(temporary)) != len(frame):
-            temporary.unlink(missing_ok=True)
-            raise MetricRebuildError("派生指标表临时文件校验失败：{0}".format(name))
-        temporary.replace(path)
-        paths[name] = path
+        paths[name] = _atomic_write_parquet(path, frame, name)
+    combination_time_summary = summarize_combination_times(rebuilt.fold_metrics, rebuilt.completeness)
+    paths["combination_time_summary"] = write_combination_time_summary(run_dir, combination_time_summary)
     return paths
