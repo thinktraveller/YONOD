@@ -2,6 +2,30 @@
 
 ---
 
+## [2026-09-02 18:46] 步骤 22.1 完成：派生可审计的组合级时间汇总表
+
+### 执行的任务
+- 从已审计的 `fold_metrics` 与 `completeness` 聚合每个 `descriptor × model` 的累计/均值/中位数/最大训练时间、累计预测时间及累计建模时间。
+- 在正常 benchmark 指标落盘时，原子写入 `metrics/combination_time_summary.parquet`；对旧运行保留可由已有折级表派生该表的接口。
+- 对缺 fold、缺失/非有限/负的训练或预测时间写入明确 `time_status`，并标为不可比较，不参与耗时排序。
+
+### 关键变更
+- 更新 `yonod/benchmark/metrics.py`：增加组合耗时摘要、时间合法性审计及原子 Parquet 写入。
+- 更新 `yonod/benchmark/__init__.py`：公开时间摘要与写入接口。
+
+### 验证结果
+- `python -m unittest discover -s tests -p test_benchmark_timing.py -v`：通过；覆盖已知累计值、缺 fold、NaN 和负耗时的不可比较状态。
+- 语法检查与 `git diff --check` 均通过。
+
+### 遇到的问题及解决方案
+- 问题：Pandas 默认求和会跳过 NaN，可能把异常时间伪装成有效的较短耗时。
+- 解决：只有组合内所有折的训练/预测时间均为有限非负值时才计算总和；否则总时间为缺失并记录原因。
+
+### 下一步计划
+- 步骤 22.2：在严格 benchmark 与通用 HTML/Markdown 报告中接入同一时间表和柱状图，并验证旧 smoke 运行无需重训即可重建。
+
+---
+
 ## [2026-09-01 15:34] 步骤 21.8 完成：建立 smoke/默认 5×5 验收与回归门禁
 
 ### 执行的任务
