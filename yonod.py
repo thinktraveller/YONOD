@@ -1981,7 +1981,7 @@ def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
     valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
     fixed_df = df.iloc[valid_row_indices]
 
-    fixed_path = os.path.join(project_folder, 'docs', f"{project_name}_修复后数据集.csv")
+    fixed_path = os.path.join(project_folder, 'docs', f"{project_name}_fixed_dataset.csv")
     os.makedirs(os.path.dirname(fixed_path), exist_ok=True)
     fixed_df.to_csv(fixed_path, index=False, encoding='utf-8')
 

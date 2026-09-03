@@ -3240,3 +3240,26 @@ for desc_name in args.descriptors:
 ### 验证
 - `conda run -n yonod python -B -c "import numpy as np, pandas as pd, scipy, lightgbm; ..."`：通过，版本分别为 1.26.4、2.0.3、1.12.0、4.3.0，且 Pandas DataFrame 运算正常。
 - 以模块方式加载 `yonod.py`：通过，确认已越过 Pandas 导入阶段。
+
+---
+
+## [2026-09-03 17:45] 修复：修复后数据集文件名使用 ASCII 后缀
+
+### 问题描述
+- 现象：向导在选择生成修复后数据集时，输出文件名为 `{project_name}_修复后数据集.csv`，路径含简体中文。
+- 影响范围：在编码环境不一致的系统或工具中，生成文件的定位和后续引用可能受文件名编码影响。
+
+### 根本原因
+`yonod.py` 的 `generate_fixed_dataset()` 直接将简体中文文本拼接进输出文件名；对应回归测试也固化了该旧路径。
+
+### 修复方案
+将文件名统一改为 ASCII 安全格式 `{project_name}_fixed_dataset.csv`，保留既有 `docs/` 输出目录、CSV 编码和数据清洗逻辑，并同步更新路径断言。
+
+### 变更文件
+- `yonod.py`：修复后数据集的文件名后缀改为 `fixed_dataset`。
+- `tests/test_wizard_model_selection.py`：断言新输出路径。
+
+### 验证方法
+`python -m unittest tests.test_wizard_model_selection -v` 通过 3/3；实际生成路径为 `docs/layout_fixed_dataset.csv`。
+
+---

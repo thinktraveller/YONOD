@@ -75,7 +75,7 @@ class WizardModelSelectionTests(unittest.TestCase):
             )
 
             self.assertEqual(Path(invalid_report), root / "report" / "layout_invalid_report.md")
-            self.assertEqual(Path(fixed_dataset), root / "docs" / "layout_修复后数据集.csv")
+            self.assertEqual(Path(fixed_dataset), root / "docs" / "layout_fixed_dataset.csv")
             self.assertEqual(Path(config_path), root / "docs" / "layout_yonod_config.json")
             self.assertEqual(json.loads(Path(config_path).read_text(encoding="utf-8"))["project_name"], "layout")
 
