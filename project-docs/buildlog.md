@@ -3152,24 +3152,16 @@ for desc_name in args.descriptors:
 
 ---
 
-## [2026-09-03 10:36] 修复：主建模脚本入口说明与实际执行不一致
+## [2026-09-03] 修复：向导模型说明与可执行模型矩阵同步
 
-### 问题描述
-- 现象：`main.py` 顶部说明称无参数运行会启动交互向导，并把 `python main.py` 列为向导用法；实际执行无参数时仅打印使用提示。
-- 影响范围：直接阅读主建模脚本文档字符串的用户可能误以为 `main.py` 会进入交互配置流程，且无法从说明中得知 HTML/Markdown 报告与散点图的实际输出。
+### 问题与根因
+- `yonod.py` 的步骤 5 仅展示 XGBoost、Random Forest、SVM、AutoGluon，遗漏已实现并注册到严格 benchmark 的 LightGBM 基线。
+- 旧 `main.py` 的 JSON 配置映射和普通 CLI 模型工厂也未接入 LightGBM；仅修改向导文案会使用户选择的模型在自动启动时被过滤，造成新的不一致。
 
-### 根本原因
-交互向导已由 `yonod.py` 实现，`main.py` 只负责配置文件或 CLI 参数驱动的建模；顶部历史说明未随入口职责调整而更新。
+### 修复
+- 撤回提交 `31d95f70` 对 `main.py` 顶部说明的修改，恢复该提交之前的内容。
+- 向导模型列表新增 LightGBM，并说明其为 CPU 树模型基线及需要可选 `lightgbm` 依赖。
+- 将 LightGBM 加入 `main.py` 的 CLI 可选模型、JSON 显示名称映射、模型工厂与含数值列的折内训练分支，使向导生成的 `"LightGBM"` 配置可以实际执行。
 
-### 修复方案
-仅更新 `main.py` 的模块文档字符串：明确无参数行为、`yonod.py` 的向导职责和 `main.py` 的建模触发条件，并补充报告与散点图输出说明；不修改任何运行逻辑。
-
-### 变更文件
-- `main.py`：更正入口职责、交互向导命令和实际输出清单。
-
-### 验证方法
-- `python -B -m py_compile main.py`：通过。
-- `python -B main.py`：输出用法提示，且将交互向导正确指向 `python yonod.py`。
-- `python -B main.py --help`：通过，显示实际支持的 CLI 参数和 HTML/Markdown 输出格式选项。
-
----
+### 验证
+- 新增 `tests/test_wizard_model_selection.py`，验证向导展示 LightGBM，且配置名称可映射到主脚本支持的 `lightgbm`。
