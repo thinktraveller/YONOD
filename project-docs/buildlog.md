@@ -3165,3 +3165,35 @@ for desc_name in args.descriptors:
 
 ### 验证
 - 新增 `tests/test_wizard_model_selection.py`，验证向导展示 LightGBM，且配置名称可映射到主脚本支持的 `lightgbm`。
+
+---
+
+## [2026-09-03 10:58] 步骤 22.3 完成：扩展组合、描述符与建模方法三维耗时对比
+
+### 执行的任务
+- 在已有 `descriptor × model` 累计 CV 耗时表的基础上，派生按描述符与按建模方法的两张汇总表，并在严格 benchmark 的 HTML/Markdown 中展示三类表格和三张堆叠柱状图。
+- 通用报告路径同步生成组合、描述符、建模方法三张训练时间图；该路径没有预测时间契约，因此仍明确只展示 `train_time_s`。
+- 对旧 benchmark 运行，报告重建只从已有组合/折级指标派生缺失的维度汇总表，不触发模型拟合。
+
+### 关键变更
+- 更新 `yonod/benchmark/metrics.py`：新增描述符/建模方法汇总的可审计 Parquet 表 `descriptor_time_summary.parquet`、`model_time_summary.parquet`；只有该维度内所有组合完整且时间有效时才给出可比较的累计值。
+- 更新 `yonod/benchmark/report.py`：新增 `descriptor_modeling_time.png`、`model_modeling_time.png`，并把三种视图嵌入 HTML、以有效相对链接写入 Markdown；调整底部留白，避免运行条件说明与横轴标签在短耗时图中重叠。
+- 更新 `yonod/universal/report.py`：新增 `descriptor_training_time.png`、`model_training_time.png` 及对应报告章节。
+- 更新 `tests/test_benchmark_timing.py`：覆盖维度累计值、含不完整组合时不伪造总耗时、严格报告兼容重建和通用报告三图契约。
+
+### 时间口径与比较边界
+- 描述符图的每根柱是该描述符下所有完整、时间可比较的“描述符 × 模型”组合的训练与预测累计；建模方法图按相反维度汇总。
+- 三张图是同一组合成本的不同观察角度，不能互相相加。
+- 共享的描述符特征化时间仍未被计入组合或维度总值，避免将一次缓存成本重复归因给多个模型；CLI 端到端墙钟时间同样不参与横向比较。
+
+### 验证结果
+- `python -m unittest discover -s tests -p test_benchmark_timing.py -v`：3/3 通过。
+- `python scripts/rebuild_benchmark_report.py --run-dir results/benchmark-smoke/benchmark-smoke-fixture-c0713db56490`：通过；未重新训练，生成组合、描述符、建模方法三张严格报告耗时图。
+- 实际 smoke 汇总：`morgan` 描述符累计建模时间约 `0.15413 s`；模型视图中 LightGBM、RF、XGB 分别约 `0.03155 s`、`0.03345 s`、`0.08913 s`，与组合表的训练/预测分量之和一致。
+
+### 遇到的问题及解决方案
+- 问题：短耗时横向柱状图的运行条件脚注与横轴标签发生视觉重叠。
+- 解决：为严格报告图保留专用底部脚注区域，重建 smoke 图后已目视确认标签与脚注分离且中文字体可读。
+
+### 下一步计划
+- ✅ 本次耗时图增量优化已完成；正式 5×5 运行将自动写出并展示三类耗时视图。

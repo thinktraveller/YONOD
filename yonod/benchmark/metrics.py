@@ -42,6 +42,12 @@ COMBINATION_TIME_SUMMARY_COLUMNS = [
     "is_time_comparable", "total_train_time_s", "mean_train_time_s", "median_train_time_s",
     "max_train_time_s", "total_predict_time_s", "total_model_time_s",
 ]
+DIMENSION_TIME_SUMMARY_COLUMNS = [
+    "run_id", "config_hash", "split_id", "aggregation_dimension", "item",
+    "expected_combinations", "comparable_combinations", "noncomparable_combinations",
+    "is_time_comparable", "time_status", "time_status_detail",
+    "total_train_time_s", "total_predict_time_s", "total_model_time_s",
+]
 
 
 @dataclass(frozen=True)
@@ -363,6 +369,70 @@ def summarize_combination_times(
     return pd.DataFrame.from_records(rows, columns=COMBINATION_TIME_SUMMARY_COLUMNS)
 
 
+def summarize_dimension_times(
+    combination_time_summary: pd.DataFrame,
+    dimension: str,
+) -> pd.DataFrame:
+    """Aggregate complete combination costs by descriptor or model.
+
+    A descriptor-level value is the sum of all of its descriptor × model
+    *modelling* costs; a model-level value is the equivalent sum across
+    descriptors.  These are alternative views of the same combination-level
+    data, not additive stages of one workflow.  In particular, descriptor
+    featurisation is deliberately absent because it is a cached, shared cost
+    and assigning it to every model would double-count it.
+
+    A grouped value is comparable only when every source combination is
+    complete and has valid timing.  This prevents a descriptor/model with a
+    failed combination from looking cheaper merely because part of its work is
+    missing.
+    """
+    if dimension not in {"descriptor", "model"}:
+        raise MetricRebuildError("时间汇总维度必须是 descriptor 或 model")
+    missing = set(COMBINATION_TIME_SUMMARY_COLUMNS).difference(combination_time_summary.columns)
+    if missing:
+        raise MetricRebuildError("组合耗时汇总表缺少维度聚合字段：{0}".format(sorted(missing)))
+
+    group_columns = ["run_id", "config_hash", "split_id", dimension]
+    rows: List[Dict[str, Any]] = []
+    for keys, part in combination_time_summary.groupby(group_columns, sort=True, dropna=False):
+        expected = int(len(part))
+        comparable_mask = part["is_time_comparable"].fillna(False).astype(bool)
+        comparable_count = int(comparable_mask.sum())
+        noncomparable = part.loc[~comparable_mask]
+        is_comparable = bool(expected > 0 and comparable_count == expected)
+        if is_comparable:
+            total_train = float(part["total_train_time_s"].sum())
+            total_predict = float(part["total_predict_time_s"].sum())
+            total_model = float(part["total_model_time_s"].sum())
+            status = "complete_and_comparable"
+            detail = ""
+        else:
+            total_train = total_predict = total_model = float("nan")
+            status = "contains_noncomparable_combination"
+            other_dimension = "model" if dimension == "descriptor" else "descriptor"
+            detail = "; ".join(
+                "{0}={1}".format(
+                    row[other_dimension], row.get("time_status", "时间不可比较"),
+                )
+                for _, row in noncomparable.iterrows()
+            )
+        rows.append({
+            "run_id": keys[0], "config_hash": keys[1], "split_id": keys[2],
+            "aggregation_dimension": dimension, "item": str(keys[3]),
+            "expected_combinations": expected,
+            "comparable_combinations": comparable_count,
+            "noncomparable_combinations": expected - comparable_count,
+            "is_time_comparable": is_comparable,
+            "time_status": status,
+            "time_status_detail": detail,
+            "total_train_time_s": total_train,
+            "total_predict_time_s": total_predict,
+            "total_model_time_s": total_model,
+        })
+    return pd.DataFrame.from_records(rows, columns=DIMENSION_TIME_SUMMARY_COLUMNS)
+
+
 def _holm_adjust(p_values: Sequence[float]) -> np.ndarray:
     values = np.asarray(p_values, dtype=float)
     order = np.argsort(values)
@@ -519,6 +589,27 @@ def write_combination_time_summary(run_dir: Path | str, summary: pd.DataFrame) -
     return _atomic_write_parquet(root / "combination_time_summary.parquet", ordered, "combination_time_summary")
 
 
+def write_dimension_time_summaries(
+    run_dir: Path | str,
+    combination_time_summary: pd.DataFrame,
+) -> Dict[str, Path]:
+    """Atomically persist descriptor and model views of combination timings."""
+    root = Path(run_dir) / "metrics"
+    root.mkdir(parents=True, exist_ok=True)
+    paths: Dict[str, Path] = {}
+    for dimension, table_name in (
+        ("descriptor", "descriptor_time_summary"),
+        ("model", "model_time_summary"),
+    ):
+        summary = summarize_dimension_times(combination_time_summary, dimension)
+        paths[table_name] = _atomic_write_parquet(
+            root / (table_name + ".parquet"),
+            summary.loc[:, DIMENSION_TIME_SUMMARY_COLUMNS],
+            table_name,
+        )
+    return paths
+
+
 def write_metric_tables(
     run_dir: Path | str,
     rebuilt: MetricRebuildResult,
@@ -545,4 +636,5 @@ def write_metric_tables(
         paths[name] = _atomic_write_parquet(path, frame, name)
     combination_time_summary = summarize_combination_times(rebuilt.fold_metrics, rebuilt.completeness)
     paths["combination_time_summary"] = write_combination_time_summary(run_dir, combination_time_summary)
+    paths.update(write_dimension_time_summaries(run_dir, combination_time_summary))
     return paths
