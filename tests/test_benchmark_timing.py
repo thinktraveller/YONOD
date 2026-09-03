@@ -13,6 +13,7 @@ import pandas as pd
 from yonod.benchmark.metrics import (
     MetricRebuildResult,
     summarize_combination_times,
+    summarize_dimension_times,
     write_metric_tables,
 )
 from yonod.benchmark.report import generate_benchmark_report
@@ -102,6 +103,21 @@ class BenchmarkTimingTests(unittest.TestCase):
         self.assertFalse(negative_rf["is_time_comparable"])
         self.assertIn("invalid_or_missing_fold_time", negative_rf["time_status"])
 
+        descriptor_totals = summarize_dimension_times(summary, "descriptor")
+        model_totals = summarize_dimension_times(summary, "model")
+        morgan = descriptor_totals[descriptor_totals["item"] == "morgan"].iloc[0]
+        rf_model = model_totals[model_totals["item"] == "rf"].iloc[0]
+        xgb_model = model_totals[model_totals["item"] == "xgb"].iloc[0]
+        # morgan includes an incomplete SVM combination.  Its one valid RF
+        # timing must not be presented as a complete descriptor total.
+        self.assertFalse(morgan["is_time_comparable"])
+        self.assertEqual(morgan["comparable_combinations"], 1)
+        self.assertTrue(np.isnan(morgan["total_model_time_s"]))
+        self.assertTrue(rf_model["is_time_comparable"])
+        self.assertEqual(rf_model["total_model_time_s"], 7.0)
+        self.assertTrue(xgb_model["is_time_comparable"])
+        self.assertEqual(xgb_model["total_model_time_s"], 33.0)
+
     def test_strict_report_rebuilds_timing_table_without_training(self) -> None:
         fold_metrics = _fold_metrics()
         completeness = _completeness()
@@ -131,11 +147,19 @@ class BenchmarkTimingTests(unittest.TestCase):
             report = generate_benchmark_report(root)
 
             self.assertTrue((root / "metrics" / "combination_time_summary.parquet").is_file())
+            self.assertTrue((root / "metrics" / "descriptor_time_summary.parquet").is_file())
+            self.assertTrue((root / "metrics" / "model_time_summary.parquet").is_file())
             self.assertTrue((root / "figures" / "combination_modeling_time.png").is_file())
+            self.assertTrue((root / "figures" / "descriptor_modeling_time.png").is_file())
+            self.assertTrue((root / "figures" / "model_modeling_time.png").is_file())
             self.assertIn("建模耗时与成本对比", report.html_path.read_text(encoding="utf-8"))
             markdown = report.markdown_path.read_text(encoding="utf-8")
             self.assertIn("组合级建模耗时柱状图", markdown)
             self.assertIn("../figures/combination_modeling_time.png", markdown)
+            self.assertIn("描述符累计建模耗时柱状图", markdown)
+            self.assertIn("../figures/descriptor_modeling_time.png", markdown)
+            self.assertIn("建模方法累计建模耗时柱状图", markdown)
+            self.assertIn("../figures/model_modeling_time.png", markdown)
 
     def test_universal_reports_handle_present_and_absent_train_time(self) -> None:
         base = pd.DataFrame.from_records([
@@ -155,8 +179,13 @@ class BenchmarkTimingTests(unittest.TestCase):
             html_with = generate_report(timed, task_info, root, "with.html")
             markdown_with = generate_markdown_report(timed, task_info, root, "with.md")
             self.assertTrue((root / "combination_training_time.png").is_file())
+            self.assertTrue((root / "descriptor_training_time.png").is_file())
+            self.assertTrue((root / "model_training_time.png").is_file())
             self.assertIn("建模耗时与成本对比", html_with.read_text(encoding="utf-8"))
-            self.assertIn("组合训练时间柱状图", markdown_with.read_text(encoding="utf-8"))
+            markdown = markdown_with.read_text(encoding="utf-8")
+            self.assertIn("组合训练时间柱状图", markdown)
+            self.assertIn("描述符累计训练时间柱状图", markdown)
+            self.assertIn("建模方法累计训练时间柱状图", markdown)
 
 
 if __name__ == "__main__":

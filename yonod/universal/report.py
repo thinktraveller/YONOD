@@ -155,6 +155,11 @@ _UNIVERSAL_TIME_COLUMNS = [
     "descriptor", "model", "reported_rows", "total_train_time_s",
     "is_time_comparable", "time_status",
 ]
+_UNIVERSAL_DIMENSION_TIME_COLUMNS = [
+    "aggregation_dimension", "item", "expected_combinations",
+    "comparable_combinations", "noncomparable_combinations",
+    "is_time_comparable", "time_status", "total_train_time_s",
+]
 
 
 def _universal_time_summary(metrics_df: pd.DataFrame) -> pd.DataFrame:
@@ -191,6 +196,44 @@ def _universal_time_summary(metrics_df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _universal_dimension_time_summary(
+    combination_summary: pd.DataFrame,
+    dimension: str,
+) -> pd.DataFrame:
+    """Summarise complete universal-report combinations by one dimension.
+
+    These are two alternative roll-ups of the reported combination training
+    times, not extra elapsed stages.  The universal path has no descriptor
+    featurisation timing contract, so it is excluded rather than duplicated
+    across every model.
+    """
+    if dimension not in {"descriptor", "model"}:
+        raise ValueError("dimension 必须是 descriptor 或 model")
+    required = set(_UNIVERSAL_TIME_COLUMNS)
+    if required.difference(combination_summary.columns):
+        return pd.DataFrame(columns=_UNIVERSAL_DIMENSION_TIME_COLUMNS)
+    rows: List[Dict[str, Any]] = []
+    for item, part in combination_summary.groupby(dimension, sort=True, dropna=False):
+        expected = int(len(part))
+        comparable = part["is_time_comparable"].fillna(False).astype(bool)
+        comparable_count = int(comparable.sum())
+        is_comparable = bool(expected > 0 and comparable_count == expected)
+        rows.append({
+            "aggregation_dimension": dimension,
+            "item": str(item),
+            "expected_combinations": expected,
+            "comparable_combinations": comparable_count,
+            "noncomparable_combinations": expected - comparable_count,
+            "is_time_comparable": is_comparable,
+            "time_status": "complete_and_comparable" if is_comparable else "contains_noncomparable_combination",
+            "total_train_time_s": float(part["total_train_time_s"].sum()) if is_comparable else float("nan"),
+        })
+    result = pd.DataFrame.from_records(rows, columns=_UNIVERSAL_DIMENSION_TIME_COLUMNS)
+    if not result.empty:
+        result = result.sort_values(["is_time_comparable", "total_train_time_s"], ascending=[False, False], kind="stable")
+    return result
+
+
 def _configure_chinese_matplotlib(plt: Any) -> None:
     """Use an installed CJK font when available for Chinese plot labels."""
     try:
@@ -206,8 +249,13 @@ def _configure_chinese_matplotlib(plt: Any) -> None:
             return
 
 
-def _write_universal_time_figure(summary: pd.DataFrame, out_dir: Path) -> Optional[Path]:
-    """Create the shared PNG used by the universal HTML and Markdown reports."""
+def _write_universal_time_figure(
+    summary: pd.DataFrame,
+    out_dir: Path,
+    *,
+    dimension: str,
+) -> Optional[Path]:
+    """Create one named universal-report training-time comparison PNG."""
     comparable = summary.loc[summary["is_time_comparable"].fillna(False).astype(bool)].copy() if not summary.empty else summary
     if comparable.empty:
         return None
@@ -217,22 +265,35 @@ def _write_universal_time_figure(summary: pd.DataFrame, out_dir: Path) -> Option
         return None
     _configure_chinese_matplotlib(plt)
     comparable = comparable.sort_values("total_train_time_s", ascending=False, kind="stable")
-    labels = (comparable["descriptor"] + " × " + comparable["model"]).tolist()
+    if dimension == "combination":
+        labels = (comparable["descriptor"].astype(str) + " × " + comparable["model"].astype(str)).tolist()
+        filename = "combination_training_time.png"
+        title = "描述符 × 模型：报告提供的训练时间"
+    elif dimension == "descriptor":
+        labels = comparable["item"].astype(str).tolist()
+        filename = "descriptor_training_time.png"
+        title = "描述符：各模型组合累计训练时间"
+    elif dimension == "model":
+        labels = comparable["item"].astype(str).tolist()
+        filename = "model_training_time.png"
+        title = "建模方法：各描述符组合累计训练时间"
+    else:  # pragma: no cover - internal callers use fixed dimensions
+        raise ValueError("未知的耗时图维度：{0}".format(dimension))
     figure, axis = plt.subplots(figsize=(10, max(3.6, 0.62 * len(comparable) + 1.0)), constrained_layout=True)
     positions = list(range(len(comparable)))
     totals = comparable["total_train_time_s"].to_numpy(dtype=float)
     axis.barh(positions, totals, color="#2563eb")
     axis.set_yticks(positions, labels)
     axis.invert_yaxis()
-    axis.set_xlabel("组合训练时间（秒）")
-    axis.set_title("描述符 × 模型：报告提供的训练时间")
+    axis.set_xlabel("累计训练时间（秒）")
+    axis.set_title(title)
     axis.grid(axis="x", alpha=0.2)
     max_total = float(totals.max()) if len(totals) else 0.0
     axis.set_xlim(0.0, max(0.01, max_total * 1.18))
     for position, total in zip(positions, totals):
         axis.annotate(_fmt_time(total), xy=(total, position), xytext=(5, 0), textcoords="offset points", va="center", fontsize=8)
     figure.text(0.01, 0.01, "仅含 metrics_df.train_time_s；未提供预测时间，不能解释为端到端墙钟时间。", fontsize=7, color="#56657a")
-    path = out_dir / "combination_training_time.png"
+    path = out_dir / filename
     figure.savefig(path, dpi=160)
     plt.close(figure)
     return path
@@ -247,22 +308,38 @@ def _section_modeling_time(metrics_df: pd.DataFrame, out_dir: Path) -> str:
 <h2>5 · 建模耗时与成本对比</h2>
 <p class="note">未提供组合级 <code>train_time_s</code>，无法绘制建模耗时图；报告未使用空值或零值代替耗时。</p>
 </section>"""
-    figure_path = _write_universal_time_figure(summary, out_dir)
-    shown = summary.copy()
-    if not shown.empty:
-        shown["total_train_time_s"] = shown["total_train_time_s"].map(_fmt_time)
-    table = shown.to_html(index=False, escape=True) if not shown.empty else "<p class='note'>没有可用的组合耗时记录。</p>"
-    figure = ""
-    if figure_path:
-        image = _b64_png(figure_path)
-        if image:
-            figure = "<figure style='text-align:center'><img src='data:image/png;base64,{0}' alt='组合训练时间柱状图' style='max-width:100%'/><figcaption class='note'>同一 PNG 由 Markdown 报告相对引用。</figcaption></figure>".format(image)
+    dimension_summaries = {
+        "descriptor": _universal_dimension_time_summary(summary, "descriptor"),
+        "model": _universal_dimension_time_summary(summary, "model"),
+    }
+    figure_paths = {
+        "combination": _write_universal_time_figure(summary, out_dir, dimension="combination"),
+        "descriptor": _write_universal_time_figure(dimension_summaries["descriptor"], out_dir, dimension="descriptor"),
+        "model": _write_universal_time_figure(dimension_summaries["model"], out_dir, dimension="model"),
+    }
+    def table_for(frame: pd.DataFrame) -> str:
+        shown = frame.copy()
+        if not shown.empty:
+            shown["total_train_time_s"] = shown["total_train_time_s"].map(_fmt_time)
+        return shown.to_html(index=False, escape=True) if not shown.empty else "<p class='note'>没有可用耗时记录。</p>"
+    def figure_for(key: str, caption: str) -> str:
+        path = figure_paths[key]
+        image = _b64_png(path) if path else None
+        if not image:
+            return "<p class='note'>没有可比较的有限非负训练时间，因此未生成零高柱状图。</p>"
+        return "<figure style='text-align:center'><img src='data:image/png;base64,{0}' alt='{1}' style='max-width:100%'/><figcaption class='note'>{1}；同一 PNG 由 Markdown 报告相对引用。</figcaption></figure>".format(image, _esc(caption))
     return """
 <section>
 <h2>5 · 建模耗时与成本对比</h2>
-<p class="note">本路径仅汇总输入 <code>metrics_df.train_time_s</code>，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。异常或缺失时间标为不可比较，不以零秒显示。</p>
-{table}{figure}
-</section>""".format(table=table, figure=figure)
+<p class="note">本路径仅汇总输入 <code>metrics_df.train_time_s</code>，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。描述符和建模方法图是组合时间的两种汇总视图，不与组合图相加；共享描述符特征化时间未提供，因此不重复归因。异常或缺失时间标为不可比较，不以零秒显示。</p>
+<h3>描述符 × 建模方法组合</h3>{combination_table}{combination_figure}
+<h3>按描述符汇总</h3><p class="note">每根柱为该描述符下所有完整且时间可比较模型组合的累计训练时间。</p>{descriptor_table}{descriptor_figure}
+<h3>按建模方法汇总</h3><p class="note">每根柱为该建模方法在所有描述符下完整且时间可比较组合的累计训练时间。</p>{model_table}{model_figure}
+</section>""".format(
+        combination_table=table_for(summary), combination_figure=figure_for("combination", "组合训练时间柱状图"),
+        descriptor_table=table_for(dimension_summaries["descriptor"]), descriptor_figure=figure_for("descriptor", "描述符累计训练时间柱状图"),
+        model_table=table_for(dimension_summaries["model"]), model_figure=figure_for("model", "建模方法累计训练时间柱状图"),
+    )
 
 
 # ─────────────────────────────── HTML 段落 ──────────────────────────────────── #
@@ -876,13 +953,21 @@ def generate_markdown_report(
 
     # ── 建模耗时与成本对比 ───────────────────────────────────────────────────
     time_summary = _universal_time_summary(metrics_df)
-    time_figure = _write_universal_time_figure(time_summary, out_dir) if "train_time_s" in metrics_df.columns else None
+    descriptor_time_summary = _universal_dimension_time_summary(time_summary, "descriptor")
+    model_time_summary = _universal_dimension_time_summary(time_summary, "model")
+    time_figures = {
+        "combination": _write_universal_time_figure(time_summary, out_dir, dimension="combination") if "train_time_s" in metrics_df.columns else None,
+        "descriptor": _write_universal_time_figure(descriptor_time_summary, out_dir, dimension="descriptor") if "train_time_s" in metrics_df.columns else None,
+        "model": _write_universal_time_figure(model_time_summary, out_dir, dimension="model") if "train_time_s" in metrics_df.columns else None,
+    }
     lines += ["---", "", "## 建模耗时与成本对比", ""]
     if "train_time_s" not in metrics_df.columns:
         lines += ["未提供组合级 `train_time_s`，无法绘制建模耗时图；报告未使用空值或零值代替耗时。", ""]
     else:
         lines += [
-            "本路径仅汇总输入 `metrics_df.train_time_s`，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。异常或缺失时间标为不可比较，不以零秒显示。",
+            "本路径仅汇总输入 `metrics_df.train_time_s`，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。描述符和建模方法图是组合时间的两种汇总视图，不与组合图相加；共享描述符特征化时间未提供，因此不重复归因。异常或缺失时间标为不可比较，不以零秒显示。",
+            "",
+            "### 描述符 × 建模方法组合",
             "",
             "| 描述符 | 模型 | 报告记录数 | 组合训练时间 | 可比较 | 时间状态 |",
             "|---|---|---|---|---|---|",
@@ -898,10 +983,36 @@ def generate_markdown_report(
                         row["time_status"],
                     )
                 )
-        if time_figure:
-            lines += ["", "![组合训练时间柱状图]({0})".format(time_figure.name)]
+        if time_figures["combination"]:
+            lines += ["", "![组合训练时间柱状图]({0})".format(time_figures["combination"].name)]
         else:
             lines += ["", "> 没有可比较的有限非负训练时间，因此未生成零高柱状图。"]
+        for title, frame, figure, label in (
+            ("按描述符汇总", descriptor_time_summary, time_figures["descriptor"], "描述符累计训练时间柱状图"),
+            ("按建模方法汇总", model_time_summary, time_figures["model"], "建模方法累计训练时间柱状图"),
+        ):
+            lines += [
+                "", "### {0}".format(title), "",
+                "每根柱为该维度下所有完整且时间可比较组合的累计训练时间。",
+                "",
+                "| 项目 | 预期组合数 | 可比较组合数 | 不可比较组合数 | 累计训练时间 | 可比较 | 时间状态 |",
+                "|---|---|---|---|---|---|---|",
+            ]
+            if frame.empty:
+                lines += ["| — | — | — | — | — | 否 | 无可用记录 |"]
+            else:
+                for _, row in frame.iterrows():
+                    lines.append(
+                        "| {0} | {1} | {2} | {3} | {4} | {5} | {6} |".format(
+                            row["item"], int(row["expected_combinations"]), int(row["comparable_combinations"]),
+                            int(row["noncomparable_combinations"]), _fmt_time(row["total_train_time_s"]),
+                            "是" if bool(row["is_time_comparable"]) else "否", row["time_status"],
+                        )
+                    )
+            if figure:
+                lines += ["", "![{0}]({1})".format(label, figure.name)]
+            else:
+                lines += ["", "> 没有可比较的有限非负训练时间，因此未生成零高柱状图。"]
         lines.append("")
 
     # ── 列映射与分类 ─────────────────────────────────────────────────────────

@@ -16,8 +16,10 @@ import pandas as pd
 
 from .metrics import (
     COMBINATION_TIME_SUMMARY_COLUMNS,
+    DIMENSION_TIME_SUMMARY_COLUMNS,
     summarize_combination_times,
     write_combination_time_summary,
+    write_dimension_time_summaries,
 )
 
 
@@ -61,8 +63,8 @@ def _load_tables(root: Path) -> Dict[str, pd.DataFrame]:
     return tables
 
 
-def _load_or_rebuild_time_summary(root: Path, tables: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
-    """Load the timing table, deriving it from saved fold artefacts if needed.
+def _load_or_rebuild_time_summaries(root: Path, tables: Mapping[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+    """Load all timing tables, deriving them from saved fold artefacts if needed.
 
     Runs generated before the timing feature did not have this derived table.
     Rebuilding it here is intentionally a metrics-only operation: it reads
@@ -70,16 +72,41 @@ def _load_or_rebuild_time_summary(root: Path, tables: Mapping[str, pd.DataFrame]
     fitting.
     """
     path = root / "metrics" / "combination_time_summary.parquet"
+    combination_summary: Optional[pd.DataFrame] = None
+    combination_rebuilt = False
     if path.is_file():
         try:
             summary = pd.read_parquet(path)
         except (OSError, ValueError) as exc:
             raise BenchmarkReportError("无法读取组合耗时汇总表：{0}".format(path)) from exc
         if set(COMBINATION_TIME_SUMMARY_COLUMNS).issubset(summary.columns):
-            return summary.loc[:, COMBINATION_TIME_SUMMARY_COLUMNS]
-    summary = summarize_combination_times(tables["fold_metrics"], tables["completeness"])
-    write_combination_time_summary(root, summary)
-    return summary
+            combination_summary = summary.loc[:, COMBINATION_TIME_SUMMARY_COLUMNS]
+    if combination_summary is None:
+        combination_summary = summarize_combination_times(tables["fold_metrics"], tables["completeness"])
+        write_combination_time_summary(root, combination_summary)
+        combination_rebuilt = True
+
+    result = {"combination_time_summary": combination_summary}
+    expected_columns = set(DIMENSION_TIME_SUMMARY_COLUMNS)
+    need_rebuild = combination_rebuilt
+    for table_name in ("descriptor_time_summary", "model_time_summary"):
+        table_path = root / "metrics" / (table_name + ".parquet")
+        if not table_path.is_file():
+            need_rebuild = True
+            continue
+        try:
+            table = pd.read_parquet(table_path)
+        except (OSError, ValueError) as exc:
+            raise BenchmarkReportError("无法读取维度耗时汇总表：{0}".format(table_path)) from exc
+        if expected_columns.issubset(table.columns):
+            result[table_name] = table.loc[:, DIMENSION_TIME_SUMMARY_COLUMNS]
+        else:
+            need_rebuild = True
+    if need_rebuild:
+        write_dimension_time_summaries(root, combination_summary)
+        for table_name in ("descriptor_time_summary", "model_time_summary"):
+            result[table_name] = pd.read_parquet(root / "metrics" / (table_name + ".parquet"))
+    return result
 
 
 def _split_audit(split_manifest: pd.DataFrame) -> pd.DataFrame:
@@ -259,8 +286,17 @@ def _write_figures(root: Path, fold_metrics: pd.DataFrame) -> tuple[Path, ...]:
     return tuple(paths)
 
 
-def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: str) -> Path:
-    """Render the one authoritative descriptor × model timing comparison chart."""
+def _write_time_figure(
+    root: Path,
+    summary: pd.DataFrame,
+    run_id: str,
+    *,
+    filename: str,
+    title: str,
+    label_for_row: Any,
+    coverage_for_row: Any,
+) -> Path:
+    """Render one non-overlapping view of the auditable timing summaries."""
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:  # pragma: no cover - environment dependency
@@ -270,21 +306,24 @@ def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: st
 
     figures_dir = root / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
-    figure_path = figures_dir / "combination_modeling_time.png"
+    figure_path = figures_dir / filename
     comparable_mask = summary["is_time_comparable"].fillna(False).astype(bool)
     comparable = summary.loc[comparable_mask].copy()
     noncomparable = summary.loc[~comparable_mask].copy()
     comparable = comparable.sort_values("total_model_time_s", ascending=False, kind="stable")
     display = pd.concat([comparable, noncomparable], ignore_index=True)
     height = max(3.8, 0.62 * max(1, len(display)) + 1.1)
-    figure, axis = plt.subplots(figsize=(10.5, height), constrained_layout=True)
+    # Reserve a footer band for the run/CV comparability note.  Letting the
+    # automatic layout use the full canvas makes that note collide with the
+    # x-axis label on short smoke charts.
+    figure, axis = plt.subplots(figsize=(10.5, height))
 
     if display.empty:
         axis.set_axis_off()
         axis.text(0.5, 0.5, "没有可用的组合级建模耗时记录", ha="center", va="center", color="#56657a")
     else:
         positions = np.arange(len(display))
-        labels = (display["descriptor"].astype(str) + " × " + display["model"].astype(str)).tolist()
+        labels = [str(label_for_row(row)) for _, row in display.iterrows()]
         for position, (_, row) in zip(positions, display.iterrows()):
             if bool(row["is_time_comparable"]):
                 train = float(row["total_train_time_s"])
@@ -299,7 +338,7 @@ def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: st
             else:
                 status = str(row.get("time_status", "时间不可比较"))
                 detail = str(row.get("time_status_detail", "")).strip()
-                completed = "{0}/{1} folds".format(row.get("completed_folds", "—"), row.get("expected_folds", "—"))
+                completed = str(coverage_for_row(row))
                 text = "不可比较（{0}; {1}{2}）".format(
                     completed, status, "; " + detail if detail else "",
                 )
@@ -312,7 +351,7 @@ def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: st
         axis.set_yticks(positions, labels)
         axis.invert_yaxis()
         axis.set_xlabel("累计 CV 建模时间（秒，训练 + 预测）")
-        axis.set_title("描述符 × 模型：组合级建模耗时")
+        axis.set_title(title)
         axis.grid(axis="x", alpha=0.2)
         if not comparable.empty:
             axis.legend(loc="lower right")
@@ -321,9 +360,49 @@ def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: st
         "run_id={0}；仅可在相同硬件、线程设置与 CV 配置下横向比较。".format(run_id),
         fontsize=7, color="#56657a",
     )
+    figure.subplots_adjust(left=0.14, right=0.98, top=0.90, bottom=0.16)
     figure.savefig(figure_path, dpi=160)
     plt.close(figure)
     return figure_path
+
+
+def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: str) -> Path:
+    """Render the descriptor × model comparison chart."""
+    return _write_time_figure(
+        root, summary, run_id,
+        filename="combination_modeling_time.png",
+        title="描述符 × 模型：组合级建模耗时",
+        label_for_row=lambda row: "{0} × {1}".format(row["descriptor"], row["model"]),
+        coverage_for_row=lambda row: "{0}/{1} folds".format(
+            row.get("completed_folds", "—"), row.get("expected_folds", "—"),
+        ),
+    )
+
+
+def _write_dimension_time_figure(
+    root: Path,
+    summary: pd.DataFrame,
+    run_id: str,
+    dimension: str,
+) -> Path:
+    """Render descriptor or model totals from complete combination costs only."""
+    if dimension == "descriptor":
+        filename = "descriptor_modeling_time.png"
+        title = "描述符：各模型组合累计建模耗时"
+    elif dimension == "model":
+        filename = "model_modeling_time.png"
+        title = "建模方法：各描述符组合累计建模耗时"
+    else:  # pragma: no cover - internal callers use the two fixed dimensions
+        raise BenchmarkReportError("未知的耗时图维度：{0}".format(dimension))
+    return _write_time_figure(
+        root, summary, run_id,
+        filename=filename,
+        title=title,
+        label_for_row=lambda row: row["item"],
+        coverage_for_row=lambda row: "{0}/{1} combinations".format(
+            row.get("comparable_combinations", "—"), row.get("expected_combinations", "—"),
+        ),
+    )
 
 
 def _sum_valid_fold_times(fold_metrics: pd.DataFrame, column: str) -> float:
@@ -349,15 +428,18 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     run_manifest = _read_json(root / "manifests" / "run_manifest.json")
     split_manifest = pd.read_parquet(root / "manifests" / "split_manifest.parquet")
     tables = _load_tables(root)
-    tables["combination_time_summary"] = _load_or_rebuild_time_summary(root, tables)
+    tables.update(_load_or_rebuild_time_summaries(root, tables))
     split_audit = _split_audit(split_manifest)
     performance = _performance_matrix(tables["combination_summary"], tables["completeness"])
     state = _state_summary(root)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     run_id = str(run_manifest.get("run_id", "—"))
     stability_figures = _write_figures(root, tables["fold_metrics"])
-    time_figure = _write_combination_time_figure(root, tables["combination_time_summary"], run_id)
-    figures = stability_figures + (time_figure,)
+    combination_time_figure = _write_combination_time_figure(root, tables["combination_time_summary"], run_id)
+    descriptor_time_figure = _write_dimension_time_figure(root, tables["descriptor_time_summary"], run_id, "descriptor")
+    model_time_figure = _write_dimension_time_figure(root, tables["model_time_summary"], run_id, "model")
+    time_figures = (combination_time_figure, descriptor_time_figure, model_time_figure)
+    figures = stability_figures + time_figures
     config = run_manifest.get("benchmark_config", {})
     traceability = pd.DataFrame([{
         "run_id": run_id, "config_hash": run_manifest.get("config_hash"),
@@ -383,11 +465,26 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     def section(title: str, body: str) -> str:
         return "<section><h2>{0}</h2>{1}</section>".format(html.escape(title), body)
     figures_html = "".join("<figure><img src='../figures/{0}' alt='{0}'/><figcaption>{0}</figcaption></figure>".format(html.escape(path.name)) for path in stability_figures)
-    time_figure_html = "<figure><img src='../figures/{0}' alt='组合级建模耗时柱状图'/><figcaption>组合级建模耗时柱状图（训练与预测堆叠）。</figcaption></figure>".format(html.escape(time_figure.name))
+    def time_figure_html(path: Path, caption: str) -> str:
+        return "<figure><img src='../figures/{0}' alt='{1}'/><figcaption>{1}（训练与预测堆叠）。</figcaption></figure>".format(
+            html.escape(path.name), html.escape(caption),
+        )
     time_note_html = (
         "<p>时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，"
         "均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；"
-        "不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。</p>"
+        "不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，"
+        "不应与组合图相加，也不把共享特征化时间重复归因给模型。</p>"
+    )
+    time_section_html = (
+        time_note_html
+        + "<h3>描述符 × 建模方法组合</h3>" + _table_html(tables["combination_time_summary"])
+        + time_figure_html(combination_time_figure, "组合级建模耗时柱状图")
+        + "<h3>按描述符汇总</h3><p class='note'>每根柱为该描述符下所有完整且时间可比较模型组合的累计时间。</p>"
+        + _table_html(tables["descriptor_time_summary"])
+        + time_figure_html(descriptor_time_figure, "描述符累计建模耗时柱状图")
+        + "<h3>按建模方法汇总</h3><p class='note'>每根柱为该建模方法在所有描述符下完整且时间可比较组合的累计时间。</p>"
+        + _table_html(tables["model_time_summary"])
+        + time_figure_html(model_time_figure, "建模方法累计建模耗时柱状图")
     )
     conclusion_html = "<ul>" + "".join("<li>{0}</li>".format(html.escape(line)) for line in model_conclusions + descriptor_conclusions) + "</ul>"
     html_content = """<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>YONOD Benchmark {run}</title>{css}</head><body>
@@ -398,7 +495,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         trace=section("实验可追溯性", _table_html(traceability)),
         split=section("切分审计", _table_html(split_audit)),
         performance=section("性能矩阵与完成度", _table_html(performance) + _table_html(tables["completeness"])),
-        time=section("建模耗时与成本对比", time_note_html + _table_html(tables["combination_time_summary"]) + time_figure_html),
+        time=section("建模耗时与成本对比", time_section_html),
         figures=section("预测与稳定性", figures_html or "<p class='empty'>没有可用预测图；请检查 fold_metrics 中的预测路径。</p>"),
         statistics=section("双维统计比较", conclusion_html + "<h3>固定描述符比较模型</h3>" + _table_html(tables["model_comparisons"]) + "<h3>固定模型比较描述符</h3>" + _table_html(tables["descriptor_comparisons"]) + "<h3>不可比较记录</h3>" + _table_html(tables["comparison_exclusions"])),
         tukey=section("Tukey HSD 多重比较", "<h3>模型维度</h3>" + _table_html(tables["model_tukey_hsd"]) + "<h3>描述符维度</h3>" + _table_html(tables["descriptor_tukey_hsd"])),
@@ -411,9 +508,15 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "## 实验可追溯性", "", _table_markdown(traceability), "", "## 切分审计", "", _table_markdown(split_audit),
         "", "## 性能矩阵与完成度", "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
         "", "## 建模耗时与成本对比", "",
-        "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。",
-        "", _table_markdown(tables["combination_time_summary"]),
-        "", "![组合级建模耗时柱状图](../figures/{0})".format(time_figure.name),
+        "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",
+        "", "### 描述符 × 建模方法组合", "", _table_markdown(tables["combination_time_summary"]),
+        "", "![组合级建模耗时柱状图](../figures/{0})".format(combination_time_figure.name),
+        "", "### 按描述符汇总", "", "每根柱为该描述符下所有完整且时间可比较模型组合的累计时间。",
+        "", _table_markdown(tables["descriptor_time_summary"]),
+        "", "![描述符累计建模耗时柱状图](../figures/{0})".format(descriptor_time_figure.name),
+        "", "### 按建模方法汇总", "", "每根柱为该建模方法在所有描述符下完整且时间可比较组合的累计时间。",
+        "", _table_markdown(tables["model_time_summary"]),
+        "", "![建模方法累计建模耗时柱状图](../figures/{0})".format(model_time_figure.name),
         "", "## 预测与稳定性", "",
     ]
     markdown.extend(["- [{0}](../figures/{0})".format(path.name) for path in stability_figures] or ["没有可用预测图。"])
