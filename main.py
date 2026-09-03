@@ -1,10 +1,11 @@
-"""YONOD 通用入口（向导 + CLI 合并版）。
+"""YONOD 建模 CLI 入口。
 
-双击或不带参数运行时启动交互向导；带 --csv 等参数直接进入 CLI pipeline。
+不带参数运行时打印用法提示；带 --json、--config 或 --csv 等参数时执行建模。
+交互式配置向导由 ``yonod.py`` 提供，并会调用本脚本执行建模。
 
 交互向导用法
 ------------
-    python main.py
+    python yonod.py
 
 CLI 用法示例
 ------------
@@ -24,6 +25,8 @@ CLI 用法示例
 -------------------------------------
   metrics_summary.csv   所有 (描述符, 模型) 组合的指标
   run_<timestamp>.log   控制台镜像日志
+  report.html / report.md  依据 --output-format 生成的报告
+  pictures/              各组合的预测散点图（若可生成）
 """
 
 from __future__ import annotations
