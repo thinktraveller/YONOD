@@ -21,6 +21,7 @@ from .metrics import (
     write_combination_time_summary,
     write_dimension_time_summaries,
 )
+from .layout import BenchmarkOutputLayout, resolve_benchmark_output_layout
 
 
 class BenchmarkReportError(RuntimeError):
@@ -51,10 +52,10 @@ def _read_json(path: Path) -> Dict[str, Any]:
     return value
 
 
-def _load_tables(root: Path) -> Dict[str, pd.DataFrame]:
+def _load_tables(layout: BenchmarkOutputLayout) -> Dict[str, pd.DataFrame]:
     tables: Dict[str, pd.DataFrame] = {}
     for name in _REQUIRED_TABLES:
-        path = root / "metrics" / (name + ".parquet")
+        path = layout.metrics / (name + ".parquet")
         if not path.is_file():
             raise BenchmarkReportError(
                 "缺少派生指标表 {0}。请先从预测库运行指标重建，而不是重新训练模型。".format(path)
@@ -63,7 +64,10 @@ def _load_tables(root: Path) -> Dict[str, pd.DataFrame]:
     return tables
 
 
-def _load_or_rebuild_time_summaries(root: Path, tables: Mapping[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+def _load_or_rebuild_time_summaries(
+    layout: BenchmarkOutputLayout,
+    tables: Mapping[str, pd.DataFrame],
+) -> Dict[str, pd.DataFrame]:
     """Load all timing tables, deriving them from saved fold artefacts if needed.
 
     Runs generated before the timing feature did not have this derived table.
@@ -71,7 +75,7 @@ def _load_or_rebuild_time_summaries(root: Path, tables: Mapping[str, pd.DataFram
     existing fold metrics and completeness records and never invokes model
     fitting.
     """
-    path = root / "metrics" / "combination_time_summary.parquet"
+    path = layout.metrics / "combination_time_summary.parquet"
     combination_summary: Optional[pd.DataFrame] = None
     combination_rebuilt = False
     if path.is_file():
@@ -83,14 +87,14 @@ def _load_or_rebuild_time_summaries(root: Path, tables: Mapping[str, pd.DataFram
             combination_summary = summary.loc[:, COMBINATION_TIME_SUMMARY_COLUMNS]
     if combination_summary is None:
         combination_summary = summarize_combination_times(tables["fold_metrics"], tables["completeness"])
-        write_combination_time_summary(root, combination_summary)
+        write_combination_time_summary(layout.run_dir, combination_summary)
         combination_rebuilt = True
 
     result = {"combination_time_summary": combination_summary}
     expected_columns = set(DIMENSION_TIME_SUMMARY_COLUMNS)
     need_rebuild = combination_rebuilt
     for table_name in ("descriptor_time_summary", "model_time_summary"):
-        table_path = root / "metrics" / (table_name + ".parquet")
+        table_path = layout.metrics / (table_name + ".parquet")
         if not table_path.is_file():
             need_rebuild = True
             continue
@@ -103,9 +107,9 @@ def _load_or_rebuild_time_summaries(root: Path, tables: Mapping[str, pd.DataFram
         else:
             need_rebuild = True
     if need_rebuild:
-        write_dimension_time_summaries(root, combination_summary)
+        write_dimension_time_summaries(layout.run_dir, combination_summary)
         for table_name in ("descriptor_time_summary", "model_time_summary"):
-            result[table_name] = pd.read_parquet(root / "metrics" / (table_name + ".parquet"))
+            result[table_name] = pd.read_parquet(layout.metrics / (table_name + ".parquet"))
     return result
 
 
@@ -224,8 +228,8 @@ def _comparison_conclusions(frame: pd.DataFrame, dimension_label: str) -> list[s
     return lines
 
 
-def _state_summary(root: Path) -> pd.DataFrame:
-    state_path = root / "state" / "tasks.sqlite"
+def _state_summary(layout: BenchmarkOutputLayout) -> pd.DataFrame:
+    state_path = layout.state / "tasks.sqlite"
     if not state_path.is_file():
         return pd.DataFrame([{"state_store": "not_created", "count": 0}])
     try:
@@ -239,14 +243,14 @@ def _disk_usage_bytes(root: Path) -> int:
     return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
-def _write_figures(root: Path, fold_metrics: pd.DataFrame) -> tuple[Path, ...]:
+def _write_figures(layout: BenchmarkOutputLayout, fold_metrics: pd.DataFrame) -> tuple[Path, ...]:
     """Generate stability/OOF figures from saved tables and shards only."""
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:  # pragma: no cover - environment dependency
         raise BenchmarkReportError("需要 matplotlib 才能生成 benchmark 稳定性图") from exc
-    figures_dir = root / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
+    pictures_dir = layout.pictures
+    pictures_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
     if not fold_metrics.empty:
         labels = (fold_metrics["descriptor"].astype(str) + " × " + fold_metrics["model"].astype(str)).unique().tolist()
@@ -256,7 +260,7 @@ def _write_figures(root: Path, fold_metrics: pd.DataFrame) -> tuple[Path, ...]:
             axis.boxplot(data, tick_labels=labels, showmeans=True)
             axis.set_title(metric.upper() + " across folds")
             axis.tick_params(axis="x", rotation=45, labelsize=8)
-        stability = figures_dir / "fold_metric_stability.png"
+        stability = pictures_dir / "fold_metric_stability.png"
         figure.savefig(stability, dpi=150)
         plt.close(figure)
         paths.append(stability)
@@ -279,7 +283,7 @@ def _write_figures(root: Path, fold_metrics: pd.DataFrame) -> tuple[Path, ...]:
         axes[1].hist(residuals, bins=min(30, max(5, int(np.sqrt(len(residuals))))), color="#2563eb", alpha=0.8)
         axes[1].axvline(0, color="black", linestyle="--", linewidth=1)
         axes[1].set(xlabel="y_pred − y_true", ylabel="count", title="Residual distribution")
-        scatter = figures_dir / "prediction_residuals.png"
+        scatter = pictures_dir / "prediction_residuals.png"
         figure.savefig(scatter, dpi=150)
         plt.close(figure)
         paths.append(scatter)
@@ -287,7 +291,7 @@ def _write_figures(root: Path, fold_metrics: pd.DataFrame) -> tuple[Path, ...]:
 
 
 def _write_time_figure(
-    root: Path,
+    layout: BenchmarkOutputLayout,
     summary: pd.DataFrame,
     run_id: str,
     *,
@@ -304,9 +308,9 @@ def _write_time_figure(
 
     _configure_chinese_matplotlib(plt)
 
-    figures_dir = root / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
-    figure_path = figures_dir / filename
+    pictures_dir = layout.pictures
+    pictures_dir.mkdir(parents=True, exist_ok=True)
+    figure_path = pictures_dir / filename
     comparable_mask = summary["is_time_comparable"].fillna(False).astype(bool)
     comparable = summary.loc[comparable_mask].copy()
     noncomparable = summary.loc[~comparable_mask].copy()
@@ -366,10 +370,10 @@ def _write_time_figure(
     return figure_path
 
 
-def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: str) -> Path:
+def _write_combination_time_figure(layout: BenchmarkOutputLayout, summary: pd.DataFrame, run_id: str) -> Path:
     """Render the descriptor × model comparison chart."""
     return _write_time_figure(
-        root, summary, run_id,
+        layout, summary, run_id,
         filename="combination_modeling_time.png",
         title="描述符 × 模型：组合级建模耗时",
         label_for_row=lambda row: "{0} × {1}".format(row["descriptor"], row["model"]),
@@ -380,7 +384,7 @@ def _write_combination_time_figure(root: Path, summary: pd.DataFrame, run_id: st
 
 
 def _write_dimension_time_figure(
-    root: Path,
+    layout: BenchmarkOutputLayout,
     summary: pd.DataFrame,
     run_id: str,
     dimension: str,
@@ -395,7 +399,7 @@ def _write_dimension_time_figure(
     else:  # pragma: no cover - internal callers use the two fixed dimensions
         raise BenchmarkReportError("未知的耗时图维度：{0}".format(dimension))
     return _write_time_figure(
-        root, summary, run_id,
+        layout, summary, run_id,
         filename=filename,
         title=title,
         label_for_row=lambda row: row["item"],
@@ -425,19 +429,20 @@ def _atomic_write(path: Path, content: str) -> Path:
 def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     """Rebuild benchmark HTML and Markdown reports without any model fitting."""
     root = Path(run_dir)
-    run_manifest = _read_json(root / "manifests" / "run_manifest.json")
-    split_manifest = pd.read_parquet(root / "manifests" / "split_manifest.parquet")
-    tables = _load_tables(root)
-    tables.update(_load_or_rebuild_time_summaries(root, tables))
+    layout = resolve_benchmark_output_layout(root)
+    run_manifest = _read_json(layout.manifests / "run_manifest.json")
+    split_manifest = pd.read_parquet(layout.manifests / "split_manifest.parquet")
+    tables = _load_tables(layout)
+    tables.update(_load_or_rebuild_time_summaries(layout, tables))
     split_audit = _split_audit(split_manifest)
     performance = _performance_matrix(tables["combination_summary"], tables["completeness"])
-    state = _state_summary(root)
+    state = _state_summary(layout)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     run_id = str(run_manifest.get("run_id", "—"))
-    stability_figures = _write_figures(root, tables["fold_metrics"])
-    combination_time_figure = _write_combination_time_figure(root, tables["combination_time_summary"], run_id)
-    descriptor_time_figure = _write_dimension_time_figure(root, tables["descriptor_time_summary"], run_id, "descriptor")
-    model_time_figure = _write_dimension_time_figure(root, tables["model_time_summary"], run_id, "model")
+    stability_figures = _write_figures(layout, tables["fold_metrics"])
+    combination_time_figure = _write_combination_time_figure(layout, tables["combination_time_summary"], run_id)
+    descriptor_time_figure = _write_dimension_time_figure(layout, tables["descriptor_time_summary"], run_id, "descriptor")
+    model_time_figure = _write_dimension_time_figure(layout, tables["model_time_summary"], run_id, "model")
     time_figures = (combination_time_figure, descriptor_time_figure, model_time_figure)
     figures = stability_figures + time_figures
     config = run_manifest.get("benchmark_config", {})
@@ -445,7 +450,10 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "run_id": run_id, "config_hash": run_manifest.get("config_hash"),
         "dataset_sha256": run_manifest.get("dataset_sha256"), "code_git_commit": run_manifest.get("code_git_commit"),
         "dataset_path": run_manifest.get("dataset_path"), "grouping": json.dumps(config.get("grouping", {}), ensure_ascii=False),
-        "cv": json.dumps(config.get("cv", {}), ensure_ascii=False), "derived_from": "manifests/, predictions/, folds/, metrics/",
+        "cv": json.dumps(config.get("cv", {}), ensure_ascii=False),
+        "derived_from": ", ".join(
+            layout.artifact_reference(name) + "/" for name in ("manifests", "predictions", "folds", "metrics")
+        ),
     }])
     costs = pd.DataFrame([{
         "run_dir": str(root), "disk_bytes": _disk_usage_bytes(root),
@@ -464,10 +472,15 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
 """
     def section(title: str, body: str) -> str:
         return "<section><h2>{0}</h2>{1}</section>".format(html.escape(title), body)
-    figures_html = "".join("<figure><img src='../figures/{0}' alt='{0}'/><figcaption>{0}</figcaption></figure>".format(html.escape(path.name)) for path in stability_figures)
+    figures_html = "".join(
+        "<figure><img src='{0}/{1}' alt='{1}'/><figcaption>{1}</figcaption></figure>".format(
+            layout.picture_relative_to_report, html.escape(path.name),
+        )
+        for path in stability_figures
+    )
     def time_figure_html(path: Path, caption: str) -> str:
-        return "<figure><img src='../figures/{0}' alt='{1}'/><figcaption>{1}（训练与预测堆叠）。</figcaption></figure>".format(
-            html.escape(path.name), html.escape(caption),
+        return "<figure><img src='{0}/{1}' alt='{2}'/><figcaption>{2}（训练与预测堆叠）。</figcaption></figure>".format(
+            layout.picture_relative_to_report, html.escape(path.name), html.escape(caption),
         )
     time_note_html = (
         "<p>时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，"
@@ -504,22 +517,27 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     )
     markdown = [
         "# YONOD 严谨模型比较报告", "", "生成时间：`{0}`  ".format(now), "run_id：`{0}`".format(run_id),
-        "", "> 本报告只读取 `manifests/`、`predictions/`、`folds/` 和 `metrics/`，不重新训练模型。", "",
+        "", "> 本报告只读取 `{0}/`、`{1}/`、`{2}/` 和 `{3}/`，不重新训练模型。".format(
+            *(layout.artifact_reference(name) for name in ("manifests", "predictions", "folds", "metrics"))
+        ), "",
         "## 实验可追溯性", "", _table_markdown(traceability), "", "## 切分审计", "", _table_markdown(split_audit),
         "", "## 性能矩阵与完成度", "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
         "", "## 建模耗时与成本对比", "",
         "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",
         "", "### 描述符 × 建模方法组合", "", _table_markdown(tables["combination_time_summary"]),
-        "", "![组合级建模耗时柱状图](../figures/{0})".format(combination_time_figure.name),
+        "", "![组合级建模耗时柱状图]({0}/{1})".format(layout.picture_relative_to_report, combination_time_figure.name),
         "", "### 按描述符汇总", "", "每根柱为该描述符下所有完整且时间可比较模型组合的累计时间。",
         "", _table_markdown(tables["descriptor_time_summary"]),
-        "", "![描述符累计建模耗时柱状图](../figures/{0})".format(descriptor_time_figure.name),
+        "", "![描述符累计建模耗时柱状图]({0}/{1})".format(layout.picture_relative_to_report, descriptor_time_figure.name),
         "", "### 按建模方法汇总", "", "每根柱为该建模方法在所有描述符下完整且时间可比较组合的累计时间。",
         "", _table_markdown(tables["model_time_summary"]),
-        "", "![建模方法累计建模耗时柱状图](../figures/{0})".format(model_time_figure.name),
+        "", "![建模方法累计建模耗时柱状图]({0}/{1})".format(layout.picture_relative_to_report, model_time_figure.name),
         "", "## 预测与稳定性", "",
     ]
-    markdown.extend(["- [{0}](../figures/{0})".format(path.name) for path in stability_figures] or ["没有可用预测图。"])
+    markdown.extend([
+        "- [{0}]({1}/{0})".format(path.name, layout.picture_relative_to_report)
+        for path in stability_figures
+    ] or ["没有可用预测图。"])
     markdown += [
         "", "## 双维统计比较", "", "### 模型维度统计比较（固定描述符）", "", *["- " + line for line in model_conclusions], "", _table_markdown(tables["model_comparisons"]),
         "", "## 描述符维度统计比较（固定模型）", "", *["- " + line for line in descriptor_conclusions], "", _table_markdown(tables["descriptor_comparisons"]),
@@ -527,7 +545,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "", "## 成本、任务状态与失败", "", _table_markdown(costs), "", _table_markdown(state), "", _table_markdown(tables["metric_exclusions"]),
         "", "## 统计限制", "", "比较单位是 CV fold。折之间并非完全独立，p 值不是唯一证据；必须结合差值、bootstrap CI、稳定性图和缺失任务解读。`no_significant_difference` 不代表性能完全相同。Tukey HSD 与配对检验并列呈现，不可任选有利结果。", "",
     ]
-    reports_dir = root / "reports"
+    reports_dir = layout.report
     return BenchmarkReportResult(
         html_path=_atomic_write(reports_dir / "benchmark_report.html", html_content),
         markdown_path=_atomic_write(reports_dir / "benchmark_report.md", "\n".join(markdown)),

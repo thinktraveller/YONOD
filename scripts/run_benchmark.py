@@ -28,6 +28,7 @@ from yonod.benchmark import (
     write_metric_tables,
     write_run_manifest,
 )
+from yonod.benchmark.layout import resolve_benchmark_output_layout
 from yonod.splits import create_split_manifest, write_split_manifest
 from yonod.universal.feature_builder import build_universal_features
 
@@ -72,7 +73,9 @@ def main() -> int:
         for descriptor, model in itertools.product(config.descriptors, config.models)
         for repeat, fold in split_manifest[["repeat", "fold"]].drop_duplicates().itertuples(index=False, name=None)
     ]
-    state = TaskStateStore(contract.run_dir / "state" / "tasks.sqlite")
+    state = TaskStateStore(
+        resolve_benchmark_output_layout(contract.run_dir).state / "tasks.sqlite"
+    )
     state.sync_tasks(specs)
     requeued = state.audit_succeeded_outputs()
     interrupted = state.recover_stale_running(args.stale_seconds)

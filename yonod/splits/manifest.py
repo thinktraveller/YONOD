@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from ..benchmark.config import BenchmarkConfigError, BenchmarkContract
+from ..benchmark.layout import resolve_benchmark_output_layout
 from .grouping import build_group_ids
 
 
@@ -145,7 +146,7 @@ def write_split_manifest(contract: BenchmarkContract, manifest: pd.DataFrame) ->
     split_ids = manifest["split_id"].drop_duplicates().tolist()
     if len(split_ids) != 1:
         raise SplitManifestError("一个运行只能写入一个 split_id")
-    path = contract.run_dir / "manifests" / "split_manifest.parquet"
+    path = resolve_benchmark_output_layout(contract.run_dir).manifests / "split_manifest.parquet"
     if path.exists():
         previous = pd.read_parquet(path)
         if previous.equals(manifest):

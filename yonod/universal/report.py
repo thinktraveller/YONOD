@@ -293,7 +293,9 @@ def _write_universal_time_figure(
     for position, total in zip(positions, totals):
         axis.annotate(_fmt_time(total), xy=(total, position), xytext=(5, 0), textcoords="offset points", va="center", fontsize=8)
     figure.text(0.01, 0.01, "仅含 metrics_df.train_time_s；未提供预测时间，不能解释为端到端墙钟时间。", fontsize=7, color="#56657a")
-    path = out_dir / filename
+    pictures_dir = out_dir / "pictures"
+    pictures_dir.mkdir(parents=True, exist_ok=True)
+    path = pictures_dir / filename
     figure.savefig(path, dpi=160)
     plt.close(figure)
     return path
@@ -753,7 +755,7 @@ def generate_report(
         task_info:  任务元数据字典，键包括：
                     task_name, csv_path, n_samples,
                     smiles_cols, numeric_cols, label_col, n_combinations。
-        out_dir:    输出目录（同时扫描其中的 scatter_*.png）。
+        out_dir:    输出根目录；图片位于 pictures/，报告位于 report/。
         filename:   输出 HTML 文件名（默认 report.html）。
 
     Returns:
@@ -761,6 +763,9 @@ def generate_report(
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "pictures").mkdir(parents=True, exist_ok=True)
+    report_dir = out_dir / "report"
+    report_dir.mkdir(parents=True, exist_ok=True)
 
     now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ranked = rank_combinations(metrics_df)
@@ -800,7 +805,7 @@ MathJax = {{
 </body>
 </html>"""
 
-    out_path = out_dir / filename
+    out_path = report_dir / filename
     out_path.write_text(html, encoding="utf-8")
     return out_path
 
@@ -817,6 +822,9 @@ def generate_markdown_report(
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "pictures").mkdir(parents=True, exist_ok=True)
+    report_dir = out_dir / "report"
+    report_dir.mkdir(parents=True, exist_ok=True)
 
     now       = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     task_name = str(task_info.get("task_name", "—"))
@@ -984,7 +992,7 @@ def generate_markdown_report(
                     )
                 )
         if time_figures["combination"]:
-            lines += ["", "![组合训练时间柱状图]({0})".format(time_figures["combination"].name)]
+            lines += ["", "![组合训练时间柱状图](../pictures/{0})".format(time_figures["combination"].name)]
         else:
             lines += ["", "> 没有可比较的有限非负训练时间，因此未生成零高柱状图。"]
         for title, frame, figure, label in (
@@ -1010,7 +1018,7 @@ def generate_markdown_report(
                         )
                     )
             if figure:
-                lines += ["", "![{0}]({1})".format(label, figure.name)]
+                lines += ["", "![{0}](../pictures/{1})".format(label, figure.name)]
             else:
                 lines += ["", "> 没有可比较的有限非负训练时间，因此未生成零高柱状图。"]
         lines.append("")
@@ -1100,6 +1108,6 @@ def generate_markdown_report(
         f"*由 YONOD report.py 自动生成 · {now}*",
     ]
 
-    out_path = out_dir / filename
+    out_path = report_dir / filename
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path

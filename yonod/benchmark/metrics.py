@@ -18,6 +18,8 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+from .layout import resolve_benchmark_output_layout
+
 
 class MetricRebuildError(RuntimeError):
     """Raised when saved benchmark artefacts cannot be audited safely."""
@@ -125,8 +127,9 @@ def rebuild_fold_metrics(run_dir: Path | str) -> MetricRebuildResult:
     marked incomplete so it cannot be compared with complete combinations.
     """
     root = Path(run_dir)
-    run_manifest = _read_json(root / "manifests" / "run_manifest.json")
-    split_path = root / "manifests" / "split_manifest.parquet"
+    layout = resolve_benchmark_output_layout(root)
+    run_manifest = _read_json(layout.manifests / "run_manifest.json")
+    split_path = layout.manifests / "split_manifest.parquet"
     if not split_path.is_file():
         raise MetricRebuildError("缺少 split manifest：{0}".format(split_path))
     split_manifest = pd.read_parquet(split_path)
@@ -154,14 +157,14 @@ def rebuild_fold_metrics(run_dir: Path | str) -> MetricRebuildResult:
     rows: List[Dict[str, Any]] = []
     exclusions: List[Dict[str, Any]] = []
     seen: set[Tuple[str, str, str, str, int, int]] = set()
-    prediction_dir = root / "predictions"
+    prediction_dir = layout.predictions
     for prediction_path in sorted(prediction_dir.glob("*.parquet")) if prediction_dir.exists() else []:
         try:
             prediction = pd.read_parquet(prediction_path)
             key = _prediction_key(prediction, prediction_path)
             shard_run_id, shard_hash, split_id, descriptor, model, repeat, fold = key
             compact_key = (split_id, descriptor, model, repeat, fold)
-            metadata_path = root / "folds" / (prediction_path.stem + ".json")
+            metadata_path = layout.folds / (prediction_path.stem + ".json")
             if compact_key not in expected_keys:
                 raise MetricRebuildError("预测分片不属于本运行配置声明的任务")
             if key in seen:
@@ -583,7 +586,7 @@ def write_combination_time_summary(run_dir: Path | str, summary: pd.DataFrame) -
     missing = set(COMBINATION_TIME_SUMMARY_COLUMNS).difference(summary.columns)
     if missing:
         raise MetricRebuildError("组合耗时汇总表缺少字段：{0}".format(sorted(missing)))
-    root = Path(run_dir) / "metrics"
+    root = resolve_benchmark_output_layout(run_dir).metrics
     root.mkdir(parents=True, exist_ok=True)
     ordered = summary.loc[:, COMBINATION_TIME_SUMMARY_COLUMNS]
     return _atomic_write_parquet(root / "combination_time_summary.parquet", ordered, "combination_time_summary")
@@ -594,7 +597,7 @@ def write_dimension_time_summaries(
     combination_time_summary: pd.DataFrame,
 ) -> Dict[str, Path]:
     """Atomically persist descriptor and model views of combination timings."""
-    root = Path(run_dir) / "metrics"
+    root = resolve_benchmark_output_layout(run_dir).metrics
     root.mkdir(parents=True, exist_ok=True)
     paths: Dict[str, Path] = {}
     for dimension, table_name in (
@@ -621,7 +624,7 @@ def write_metric_tables(
     descriptor_tukey: pd.DataFrame,
 ) -> Dict[str, Path]:
     """Atomically persist all derived tables under the run's ``metrics`` directory."""
-    root = Path(run_dir) / "metrics"
+    root = resolve_benchmark_output_layout(run_dir).metrics
     root.mkdir(parents=True, exist_ok=True)
     tables = {
         "fold_metrics": rebuilt.fold_metrics, "metric_exclusions": rebuilt.exclusions,

@@ -21,6 +21,8 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 import pandas as pd
 import yaml
 
+from .layout import resolve_benchmark_output_layout
+
 
 class BenchmarkConfigError(ValueError):
     """Raised when a benchmark cannot be audited safely before training."""
@@ -201,7 +203,7 @@ def create_benchmark_contract(config: BenchmarkConfig) -> BenchmarkContract:
             project_root = parent
             break
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "config_hash": config_hash,
         "dataset_sha256": dataset_sha256,
@@ -212,6 +214,11 @@ def create_benchmark_contract(config: BenchmarkConfig) -> BenchmarkContract:
         "python_version": sys.version,
         "platform": platform.platform(),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "output_layout": {
+            "docs": "docs",
+            "pictures": "pictures",
+            "report": "report",
+        },
     }
     return BenchmarkContract(
         config=config,
@@ -229,7 +236,7 @@ def write_run_manifest(contract: BenchmarkContract) -> Path:
     A repeated invocation for the same config is safe and supports later resume;
     a conflicting file at the deterministic run path is treated as corruption.
     """
-    manifest_path = contract.run_dir / "manifests" / "run_manifest.json"
+    manifest_path = resolve_benchmark_output_layout(contract.run_dir).manifests / "run_manifest.json"
     if manifest_path.exists():
         with manifest_path.open("r", encoding="utf-8") as handle:
             previous = json.load(handle)

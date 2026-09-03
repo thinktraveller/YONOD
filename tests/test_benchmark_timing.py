@@ -161,6 +161,43 @@ class BenchmarkTimingTests(unittest.TestCase):
             self.assertIn("建模方法累计建模耗时柱状图", markdown)
             self.assertIn("../figures/model_modeling_time.png", markdown)
 
+    def test_strict_report_uses_new_docs_pictures_report_layout(self) -> None:
+        fold_metrics = _fold_metrics()
+        completeness = _completeness()
+        rebuilt = MetricRebuildResult(
+            fold_metrics=fold_metrics,
+            exclusions=pd.DataFrame(),
+            completeness=completeness,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifests = root / "docs" / "manifests"
+            manifests.mkdir(parents=True)
+            split = pd.DataFrame.from_records([
+                {"run_id": "timing-fixture", "dataset_sha256": "dataset", "split_id": "split", "sample_id": "a", "role": "train", "repeat": 0, "fold": 0, "group_id": "g1"},
+                {"run_id": "timing-fixture", "dataset_sha256": "dataset", "split_id": "split", "sample_id": "b", "role": "valid", "repeat": 0, "fold": 0, "group_id": "g2"},
+                {"run_id": "timing-fixture", "dataset_sha256": "dataset", "split_id": "split", "sample_id": "c", "role": "train", "repeat": 0, "fold": 1, "group_id": "g2"},
+                {"run_id": "timing-fixture", "dataset_sha256": "dataset", "split_id": "split", "sample_id": "d", "role": "valid", "repeat": 0, "fold": 1, "group_id": "g1"},
+            ])
+            split.to_parquet(manifests / "split_manifest.parquet", index=False)
+            (manifests / "run_manifest.json").write_text(json.dumps({
+                "run_id": "timing-fixture", "config_hash": "config", "dataset_sha256": "dataset",
+                "benchmark_config": {"descriptors": ["morgan", "rdkit2d"], "models": ["rf", "xgb"]},
+            }), encoding="utf-8")
+            empty = pd.DataFrame()
+            write_metric_tables(root, rebuilt, empty, empty, empty, empty, empty, empty)
+
+            report = generate_benchmark_report(root)
+
+            self.assertTrue((root / "docs" / "metrics" / "combination_time_summary.parquet").is_file())
+            self.assertTrue((root / "pictures" / "combination_modeling_time.png").is_file())
+            self.assertTrue((root / "pictures" / "descriptor_modeling_time.png").is_file())
+            self.assertTrue((root / "pictures" / "model_modeling_time.png").is_file())
+            self.assertEqual(report.html_path, root / "report" / "benchmark_report.html")
+            self.assertEqual(report.markdown_path, root / "report" / "benchmark_report.md")
+            markdown = report.markdown_path.read_text(encoding="utf-8")
+            self.assertIn("../pictures/combination_modeling_time.png", markdown)
+
     def test_universal_reports_handle_present_and_absent_train_time(self) -> None:
         base = pd.DataFrame.from_records([
             {"descriptor": "morgan", "model": "rf", "r2": 0.6, "rmse": 0.2, "mae": 0.1},
@@ -173,19 +210,22 @@ class BenchmarkTimingTests(unittest.TestCase):
             markdown_without = generate_markdown_report(base, task_info, root, "without.md")
             self.assertIn("未提供组合级", html_without.read_text(encoding="utf-8"))
             self.assertIn("未提供组合级", markdown_without.read_text(encoding="utf-8"))
-            self.assertFalse((root / "combination_training_time.png").exists())
+            self.assertFalse((root / "pictures" / "combination_training_time.png").exists())
 
             timed = base.assign(train_time_s=[2.0, 12.0])
             html_with = generate_report(timed, task_info, root, "with.html")
             markdown_with = generate_markdown_report(timed, task_info, root, "with.md")
-            self.assertTrue((root / "combination_training_time.png").is_file())
-            self.assertTrue((root / "descriptor_training_time.png").is_file())
-            self.assertTrue((root / "model_training_time.png").is_file())
+            self.assertEqual(html_with, root / "report" / "with.html")
+            self.assertEqual(markdown_with, root / "report" / "with.md")
+            self.assertTrue((root / "pictures" / "combination_training_time.png").is_file())
+            self.assertTrue((root / "pictures" / "descriptor_training_time.png").is_file())
+            self.assertTrue((root / "pictures" / "model_training_time.png").is_file())
             self.assertIn("建模耗时与成本对比", html_with.read_text(encoding="utf-8"))
             markdown = markdown_with.read_text(encoding="utf-8")
             self.assertIn("组合训练时间柱状图", markdown)
             self.assertIn("描述符累计训练时间柱状图", markdown)
             self.assertIn("建模方法累计训练时间柱状图", markdown)
+            self.assertIn("../pictures/combination_training_time.png", markdown)
 
 
 if __name__ == "__main__":

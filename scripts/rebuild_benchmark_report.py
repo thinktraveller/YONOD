@@ -15,7 +15,10 @@ from yonod.benchmark.report import generate_benchmark_report
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="从已落盘 benchmark artefacts 重建报告，不训练模型")
-    parser.add_argument("--run-dir", required=True, type=Path, help="包含 manifests/、metrics/ 和 predictions/ 的 run 目录")
+    parser.add_argument(
+        "--run-dir", required=True, type=Path,
+        help="benchmark 运行目录；新运行从 docs/ 读取 artefacts，历史运行自动兼容根级 artefacts",
+    )
     args = parser.parse_args()
     result = generate_benchmark_report(args.run_dir)
     print("HTML:", result.html_path)
