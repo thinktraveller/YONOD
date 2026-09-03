@@ -18,6 +18,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 from .config import BenchmarkContract
+from .layout import resolve_benchmark_output_layout
 
 
 class FoldExecutionError(RuntimeError):
@@ -208,8 +209,9 @@ def execute_fold(
     if len(train_idx) == 0 or len(valid_idx) == 0:
         raise FoldExecutionError("manifest 当前折存在空训练集或验证集")
     suffix = "{0}__{1}__r{2:02d}__f{3:02d}".format(descriptor, model, repeat, fold)
-    prediction_path = contract.run_dir / "predictions" / (suffix + ".parquet")
-    metadata_path = contract.run_dir / "folds" / (suffix + ".json")
+    layout = resolve_benchmark_output_layout(contract.run_dir)
+    prediction_path = layout.predictions / (suffix + ".parquet")
+    metadata_path = layout.folds / (suffix + ".json")
     try:
         return _result_from_existing(prediction_path, metadata_path)
     except FileNotFoundError:

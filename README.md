@@ -198,18 +198,18 @@ python yonod.py
 [desc] 计算描述符: morgan ...
 [eval] 开始: morgan x xgb (1/1)
 [done] morgan x xgb  R²=0.XXXX  RMSE=0.XXXX  t=X.Xs
-[save] 指标已保存: <项目目录>/result/smoke-test/metrics_summary.csv
-[report] HTML 报告已生成: <项目目录>/result/smoke-test/report.html
+[save] 指标已保存: <项目目录>/result/smoke-test/docs/metrics_summary.csv
+[report] HTML 报告已生成: <项目目录>/result/smoke-test/report/report.html
 [done] 全部完成。
 ```
 
-最后会输出`result/smoke-test/metrics_summary.csv` ，文件中包含 R² 指标。
+每次运行的输出根目录固定分为三类：`docs/` 存放指标 CSV、日志、JSON 与规范化数据集，`pictures/` 存放散点图和训练时间图，`report/` 存放 HTML/Markdown 报告。上例的指标文件为 `result/smoke-test/docs/metrics_summary.csv`。
 
 ### 第八步：完整运行
 
 再次运行 `python yonod.py` 启动向导，使用完整数据集和全量 4×4 建模（约 60 ~ 120 分钟，建议 GPU）。
 
-结果输出将默认到 `results/<task-name>/metrics_summary.csv`，HTML 报告见同目录。
+结果输出默认到 `results/<task-name>建模报告/`：`docs/metrics_summary.csv` 保存指标，`pictures/` 保存全部 PNG，`report/` 保存 HTML 与 Markdown 报告。
 
 > **Windows 用户**：如遇中文路径问题，可将数据集复制到纯英文路径再指定 `--csv`。
 
@@ -226,8 +226,8 @@ python yonod.py
 ...
 [done] molmetalm x autogluon (16/16)  R²=X.XXXX  RMSE=X.XXXX  t=X.Xs
 
-[save] 指标已保存: result/<task-name>/metrics_summary.csv
-[report] HTML 报告已生成: result/<task-name>/report.html
+[save] 指标已保存: results/<task-name>建模报告/docs/metrics_summary.csv
+[report] HTML 报告已生成: results/<task-name>建模报告/report/report.html
 [done] 全部完成。
 ```
 
@@ -493,4 +493,3 @@ python yonod.py \
 - ❌ **限制**：**不得用于商业目的**。
 
 完整协议见 [LICENSE](LICENSE) 文件。
-

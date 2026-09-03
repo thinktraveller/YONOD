@@ -3197,3 +3197,30 @@ for desc_name in args.descriptors:
 
 ### 下一步计划
 - ✅ 本次耗时图增量优化已完成；正式 5×5 运行将自动写出并展示三类耗时视图。
+
+---
+
+## [2026-09-03 12:35] 步骤 23 完成：统一运行产物目录契约
+
+### 执行的任务
+- 将通用主流程的运行产物统一为输出根目录下的 `docs/`、`pictures/`、`report/`：指标 CSV、日志、向导 JSON 与规范化/修复后 CSV 写入 `docs/`；所有 PNG 写入 `pictures/`；HTML、Markdown 与非法输入报告写入 `report/`。
+- 将严格 benchmark 的新运行 artefacts 改为 `docs/manifests/`、`docs/predictions/`、`docs/folds/`、`docs/metrics/`、`docs/state/`，并将图与报告分别写入 `pictures/`、`report/`。
+- 报告 Markdown 的训练时间图链接改为 `../pictures/...`，HTML 和 Markdown 仍指向同一组 PNG。
+
+### 关键变更
+- 更新 `main.py`、`yonod/universal/report.py` 与 `yonod.py`：主 CLI、报告生成器和交互向导共享同一输出层级；向导生成的 `docs/*.json` 配置会让主脚本把其父目录识别为运行根目录。
+- 新增 `yonod/benchmark/layout.py`：按已有根级 `manifests/run_manifest.json` 自动识别历史 benchmark；新运行使用三目录契约，历史运行继续读取并写回原 `figures/`、`reports/` 和根级 artefacts，不迁移已有结果。
+- 更新 benchmark 的 manifest、split、执行器、状态库、指标重建、报告重建及 CLI 提示；新 run manifest 标记 `schema_version: 2` 和输出目录契约。
+- 更新 README 与回归测试，覆盖通用报告图片引用、新严格 benchmark 布局和历史 strict report 重建兼容性。
+
+### 验证结果
+- `python -m unittest discover -s tests -p "test_*.py" -v`：7/7 通过。
+- `python main.py --csv dataset\\benchmark_smoke_fixture.csv --label-col yield --smiles-cols reactant_1_smiles reactant_2_smiles --task-name output-layout-smoke --output-dir results\\output-layout-smoke --descriptors morgan --models rf --cv 2 --nrows 8 --rf-n-estimators 5 --rf-n-jobs 1 --heartbeat 0`：通过；实际产物只落入 `docs/`、`pictures/`、`report/`，且三张耗时图的 Markdown 链接均为 `../pictures/...`。
+- `python scripts\\rebuild_benchmark_report.py --run-dir results\\benchmark-smoke\\benchmark-smoke-fixture-c0713db56490`：通过；历史运行继续使用既有 `figures/` 与 `reports/`，未移动或重训。
+
+### 遇到的问题及解决方案
+- 问题：严格 benchmark 的既有运行不具备新目录标记，直接改路径会导致报告重建找不到 manifest 与指标表。
+- 解决：以根级 `manifests/run_manifest.json` 作为明确的历史布局标记；仅新运行采用 `docs/`，因此保持旧结果可恢复且不发生自动迁移。
+
+### 下一步计划
+- ✅ 输出目录优化已完成；后续新运行将自动遵循三目录契约。

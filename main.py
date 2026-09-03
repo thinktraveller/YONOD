@@ -20,10 +20,12 @@ CLI 用法示例
     # 仅跑 morgan × rf（快速冒烟）：
     python main.py --csv ... --smiles-cols ... --label-col ... --descriptors morgan --models rf
 
-输出（默认到 results/<task-name>/）
--------------------------------------
-  metrics_summary.csv   所有 (描述符, 模型) 组合的指标
-  run_<timestamp>.log   控制台镜像日志
+输出（默认到 results/<task-name>建模报告/）
+----------------------------------------------
+  docs/metrics_summary.csv   所有 (描述符, 模型) 组合的指标
+  docs/run_<timestamp>.log   控制台镜像日志
+  pictures/*.png             散点图与训练时间图
+  report/report.{html,md}    最终报告
 """
 
 from __future__ import annotations
@@ -351,7 +353,10 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
 
     # 解析输出目录
     project_name = config.get('project_name', dataset_path.stem)
-    output_dir = config_path.parent  # 默认输出到配置文件所在目录
+    # 向导将 JSON 与规范化 CSV 放在 <项目目录>/docs/；运行产物则应回到
+    # 项目根目录下的 docs/、pictures/、report/ 三个固定子目录。旧版根级
+    # JSON 保持以其所在目录为输出根，避免移动已有运行结果。
+    output_dir = config_path.parent.parent if config_path.parent.name == "docs" else config_path.parent
 
     args = argparse.Namespace(
         csv=dataset_path,
@@ -555,11 +560,17 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--models", nargs="+", default=_MODEL_NAMES,
         choices=_MODEL_NAMES, help="选用模型"
     )
-    p.add_argument("--output-dir", type=Path, default=None, help="结果输出目录")
+    p.add_argument(
+        "--output-dir", type=Path, default=None,
+        help="结果根目录（内含 docs/、pictures/、report/）",
+    )
     p.add_argument("--cv", type=int, default=5, help="K-Fold 的 K 值")
     p.add_argument("--nrows", type=int, default=None, help="仅读取前 N 行（调试用）")
-    p.add_argument("--append", action="store_true", help="追加写入 metrics_summary.csv")
-    p.add_argument("--log-file", type=Path, default=None, help="日志文件路径")
+    p.add_argument("--append", action="store_true", help="追加写入 docs/metrics_summary.csv")
+    p.add_argument(
+        "--log-file", type=Path, default=None,
+        help="日志文件名（始终写入 <output-dir>/docs/）",
+    )
     p.add_argument("--heartbeat", type=float, default=30.0, help="心跳打印间隔（秒，0 禁用）")
     p.add_argument("--svm-subsample", type=int, default=8000, help="SVM 子采样数量")
     p.add_argument("--rf-n-jobs", type=int, default=-1)
@@ -608,6 +619,23 @@ def _save_metrics(rows: List[dict], out_dir: Path, append: bool) -> Path:
         df = pd.concat([old, df], ignore_index=True)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     return csv_path
+
+
+def _create_output_layout(out_dir: Path) -> tuple[Path, Path, Path]:
+    """Create the user-facing output contract without touching old artefacts."""
+    docs_dir = out_dir / "docs"
+    pictures_dir = out_dir / "pictures"
+    report_dir = out_dir / "report"
+    for directory in (docs_dir, pictures_dir, report_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    return docs_dir, pictures_dir, report_dir
+
+
+def _log_path_in_docs(log_file: Optional[Path], docs_dir: Path) -> Path:
+    """Keep generated logs in docs/, including when a legacy path is supplied."""
+    if log_file is None:
+        return docs_dir / f"run_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    return docs_dir / log_file.name
 
 
 # ─────────────────────────────────── main ─────────────────────────────────── #
@@ -668,10 +696,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     task_name = args.task_name or args.csv.stem
     out_dir = _resolve_output_dir(args.csv, task_name, args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    docs_dir, pictures_dir, report_dir = _create_output_layout(out_dir)
 
-    log_path = args.log_file or (
-        out_dir / f"run_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-    )
+    log_path = _log_path_in_docs(args.log_file, docs_dir)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "w", encoding="utf-8", buffering=1)
     sys.stdout = _Tee(log_fh)
@@ -679,6 +706,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"[init] 任务：{task_name}")
     print(f"[init] CSV：{args.csv}  nrows={args.nrows or 'all'}")
     print(f"[init] 输出目录：{out_dir}")
+    print(f"[init] 文档：{docs_dir}  图片：{pictures_dir}  报告：{report_dir}")
+    if args.log_file is not None and args.log_file != Path(args.log_file.name):
+        print(f"[init] 已将 --log-file 规范为 docs 内文件名：{log_path.name}")
 
     dataset = load_csv_with_roles(
         csv_path=args.csv,
@@ -836,7 +866,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         plot_scatter(
                             oof_y_true[valid], oof_pred[valid],
                             desc_name, model_name,
-                            out_dir / "pictures",
+                            pictures_dir,
                         )
                 except Exception as _exc:
                     print(f"[warn] 散点图生成失败 ({label}): {_exc}", file=sys.stderr)
@@ -844,7 +874,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     _print_table(rows)
 
     if rows:
-        csv_out = _save_metrics(rows, out_dir, args.append)
+        csv_out = _save_metrics(rows, docs_dir, args.append)
         print(f"\n[save] 指标已保存: {csv_out}")
 
         task_info = {
@@ -887,7 +917,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             except Exception as exc:
                 print(f"[warn] Markdown 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
     else:
-        print("\n[warn] 无有效结果，metrics_summary.csv 未写入", file=sys.stderr)
+        print("\n[warn] 无有效结果，docs/metrics_summary.csv 未写入", file=sys.stderr)
 
     print(f"[done] 全部完成。日志: {log_path}")
     return 0

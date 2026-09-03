@@ -6,9 +6,9 @@ YONOD 数据集输入向导 (Dataset Input Wizard)
 核心功能:
 1. 逐列声明列角色(标签、反应物SMILES、产物SMILES、其他组分SMILES、条件数值)
 2. 合法性检验(SMILES合法性、数值合法性)
-3. 生成规范数据集(固定列顺序)
+3. 生成规范数据集(固定列顺序，写入 docs/)
 4. 生成列映射文件(记录原始列名→角色→新列名的对应关系)
-5. 生成非法输入报告(Markdown格式)
+5. 生成非法输入报告(Markdown格式，写入 report/)
 6. 选择已接入主建模流程的模型并生成配置；完成后可自动调用 main.py 建模
 
 作者: YONOD构建专家
@@ -30,6 +30,18 @@ from rdkit import RDLogger
 
 # 静默RDKit警告信息
 RDLogger.DisableLog('rdApp.*')
+
+
+def _create_project_output_layout(project_folder: str) -> Dict[str, str]:
+    """Create the stable output layout for a newly configured project."""
+    layout = {
+        'docs': os.path.join(project_folder, 'docs'),
+        'pictures': os.path.join(project_folder, 'pictures'),
+        'report': os.path.join(project_folder, 'report'),
+    }
+    for path in layout.values():
+        os.makedirs(path, exist_ok=True)
+    return layout
 
 
 def step1_collect_basic_info() -> Dict:
@@ -109,7 +121,11 @@ def step1_collect_basic_info() -> Dict:
 
         if os.path.isdir(project_folder) or not os.path.exists(project_folder):
             os.makedirs(project_folder, exist_ok=True)
+            layout = _create_project_output_layout(project_folder)
             print(f"[OK] 项目文件夹: {project_folder}")
+            print(f"     文档: {layout['docs']}")
+            print(f"     图片: {layout['pictures']}")
+            print(f"     报告: {layout['report']}")
             break
         else:
             print("[X] 路径无效或不是文件夹")
@@ -1106,7 +1122,8 @@ def step3_1_generate_invalid_report(
 
     print(f"\n生成非法输入排除报告... 共 {len(all_invalid_rows)} 行")
 
-    report_path = os.path.join(project_folder, f"{project_name}_invalid_report.md")
+    report_path = os.path.join(project_folder, 'report', f"{project_name}_invalid_report.md")
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(f"# {project_name} 非法输入排除报告\n\n")
@@ -1363,7 +1380,8 @@ def step3_3_generate_normalized_dataset(
     normalized_df = normalized_df.fillna('')
 
     # 保存
-    normalized_path = os.path.join(project_folder, f"{project_name}_normalized_dataset.csv")
+    normalized_path = os.path.join(project_folder, 'docs', f"{project_name}_normalized_dataset.csv")
+    os.makedirs(os.path.dirname(normalized_path), exist_ok=True)
     normalized_df.to_csv(normalized_path, index=False, encoding='utf-8')
 
     print(f"[OK] 规范数据集已生成: {normalized_path}")
@@ -1963,7 +1981,8 @@ def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
     valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
     fixed_df = df.iloc[valid_row_indices]
 
-    fixed_path = os.path.join(project_folder, f"{project_name}_修复后数据集.csv")
+    fixed_path = os.path.join(project_folder, 'docs', f"{project_name}_修复后数据集.csv")
+    os.makedirs(os.path.dirname(fixed_path), exist_ok=True)
     fixed_df.to_csv(fixed_path, index=False, encoding='utf-8')
 
     print(f"[OK] 修复后数据集已生成: {fixed_path}")
@@ -2113,7 +2132,8 @@ def save_config_file(
     }
 
     # 保存配置文件
-    config_path = os.path.join(project_folder, f"{project_name}_yonod_config.json")
+    config_path = os.path.join(project_folder, 'docs', f"{project_name}_yonod_config.json")
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
     with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
@@ -2213,7 +2233,8 @@ def validate_config_file(config_path: str) -> bool:
 
         print("[OK] 配置文件验证通过")
         print(f"    项目名称: {project_name}")
-        print(f"    项目文件夹: {config_dir}")
+        project_folder = os.path.dirname(config_dir) if os.path.basename(config_dir) == 'docs' else config_dir
+        print(f"    项目文件夹: {project_folder}")
         print(f"    规范数据集: {normalized_dataset}")
         return True
 
