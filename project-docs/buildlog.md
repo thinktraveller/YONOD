@@ -3224,3 +3224,19 @@ for desc_name in args.descriptors:
 
 ### 下一步计划
 - ✅ 输出目录优化已完成；后续新运行将自动遵循三目录契约。
+
+---
+
+## [2026-09-03] 修复：yonod conda 环境的 NumPy/Pandas 二进制 ABI 冲突
+
+### 问题与根因
+- 运行 `python yonod.py` 时，Pandas 导入阶段报错 `numpy.dtype size changed`，脚本尚未执行任何 YONOD 逻辑。
+- 根因是安装 Conda 版 LightGBM 后，Conda 的 NumPy、SciPy 被升级到 2.x/1.13.x，而 pip 保留的 Pandas 2.0.3 仍按 NumPy 1.x ABI 构建；同一环境中混合包来源导致二进制组件不兼容。
+
+### 修复
+- 在用户确认的 `yonod` 环境中移除冲突的 Conda 版 `lightgbm`、`numpy`、`scipy`，再通过 pip 固定安装项目兼容版本：NumPy 1.26.4、Pandas 2.0.3、SciPy 1.12.0、LightGBM 4.3.0。
+- 未修改 `yonod.py` 或其他项目源码；该问题属于 Python 环境依赖一致性问题。
+
+### 验证
+- `conda run -n yonod python -B -c "import numpy as np, pandas as pd, scipy, lightgbm; ..."`：通过，版本分别为 1.26.4、2.0.3、1.12.0、4.3.0，且 Pandas DataFrame 运算正常。
+- 以模块方式加载 `yonod.py`：通过，确认已越过 Pandas 导入阶段。
