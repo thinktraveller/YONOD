@@ -1,7 +1,7 @@
 """
 YONOD 数据集输入向导 (Dataset Input Wizard)
 
-完全重构的数据集输入流程,采用向导式、逐列声明的交互方式。
+完全重构的数据集输入与建模配置流程,采用向导式、逐列声明的交互方式。
 
 核心功能:
 1. 逐列声明列角色(标签、反应物SMILES、产物SMILES、其他组分SMILES、条件数值)
@@ -9,10 +9,11 @@ YONOD 数据集输入向导 (Dataset Input Wizard)
 3. 生成规范数据集(固定列顺序)
 4. 生成列映射文件(记录原始列名→角色→新列名的对应关系)
 5. 生成非法输入报告(Markdown格式)
+6. 选择已接入主建模流程的模型并生成配置；完成后可自动调用 main.py 建模
 
 作者: YONOD构建专家
-版本: v1.0
-日期: 2026-06-29
+版本: v1.1
+日期: 2026-09-03
 """
 
 import os
@@ -1806,11 +1807,17 @@ def step5_select_models():
     print("步骤5: 指定建模模型")
     print("=" * 60)
 
-    models = ['XGBoost', 'Random Forest', 'SVM', 'AutoGluon']
+    models = [
+        ('XGBoost', '梯度提升树回归'),
+        ('Random Forest', '随机森林回归'),
+        ('SVM', '支持向量回归'),
+        ('AutoGluon', '自动化集成建模'),
+        ('LightGBM', 'CPU 梯度提升树回归基线（需安装可选 lightgbm 依赖）'),
+    ]
 
     print("\n可用模型:")
-    for idx, model in enumerate(models, 1):
-        print(f"  [{idx}] {model}")
+    for idx, (model, description) in enumerate(models, 1):
+        print(f"  [{idx}] {model}: {description}")
 
     print("\n请选择模型(输入序号,用逗号分隔,如: 1,2,4)")
     print("或直接回车选择全部模型")
@@ -1819,13 +1826,13 @@ def step5_select_models():
         user_input = input("模型序号: ").strip()
 
         if user_input == '':
-            selected = models
+            selected = [model for model, _ in models]
             break
 
         try:
             indices = [int(x.strip()) for x in user_input.split(',')]
             if all(1 <= idx <= len(models) for idx in indices):
-                selected = [models[i-1] for i in indices]
+                selected = [models[i-1][0] for i in indices]
                 break
             else:
                 print("[X] 存在无效的序号")

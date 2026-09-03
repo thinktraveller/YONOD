@@ -1,11 +1,10 @@
-"""YONOD 建模 CLI 入口。
+"""YONOD 通用入口（向导 + CLI 合并版）。
 
-不带参数运行时打印用法提示；带 --json、--config 或 --csv 等参数时执行建模。
-交互式配置向导由 ``yonod.py`` 提供，并会调用本脚本执行建模。
+双击或不带参数运行时启动交互向导；带 --csv 等参数直接进入 CLI pipeline。
 
 交互向导用法
 ------------
-    python yonod.py
+    python main.py
 
 CLI 用法示例
 ------------
@@ -25,8 +24,6 @@ CLI 用法示例
 -------------------------------------
   metrics_summary.csv   所有 (描述符, 模型) 组合的指标
   run_<timestamp>.log   控制台镜像日志
-  report.html / report.md  依据 --output-format 生成的报告
-  pictures/              各组合的预测散点图（若可生成）
 """
 
 from __future__ import annotations
@@ -54,7 +51,7 @@ from yonod.universal.feature_builder import build_universal_features
 from yonod.descriptors.base import split_multi_smiles
 
 _DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"]
-_MODEL_NAMES = ["xgb", "rf", "svm", "autogluon"]
+_MODEL_NAMES = ["xgb", "rf", "svm", "autogluon", "lightgbm"]
 
 DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent / "results"
 
@@ -139,6 +136,9 @@ def _make_model(model_name: str, args: argparse.Namespace) -> Any:
     if model_name == "autogluon":
         from yonod.models.autogluon_model import AutoGluonYieldModel
         return AutoGluonYieldModel()
+    if model_name == "lightgbm":
+        from yonod.models.lightgbm_model import LightGBMYieldModel
+        return LightGBMYieldModel()
     raise ValueError(f"未知模型名称 {model_name!r}")
 
 
@@ -183,7 +183,7 @@ def _cv_with_numeric(
         if model_name == "rf":
             est = model._build()
             est.fit(X_tr, y_tr)
-        elif model_name == "xgb":
+        elif model_name in {"xgb", "lightgbm"}:
             est = model._build()
             est.fit(X_tr, y_tr)
         elif model_name == "svm":
@@ -228,11 +228,13 @@ _MODEL_NAME_MAP = {
     'Random Forest': 'rf',
     'SVM': 'svm',
     'AutoGluon': 'autogluon',
+    'LightGBM': 'lightgbm',
     # 小写版本（向后兼容）
     'xgboost': 'xgb',
     'random forest': 'rf',
     'svm': 'svm',
     'autogluon': 'autogluon',
+    'lightgbm': 'lightgbm',
 }
 
 
@@ -333,7 +335,7 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
     models = [_map_model_name(m) for m in models_raw]
 
     # 过滤无效模型
-    valid_models = {'xgb', 'rf', 'svm', 'autogluon'}
+    valid_models = {'xgb', 'rf', 'svm', 'autogluon', 'lightgbm'}
     models = [m for m in models if m in valid_models]
 
     # 解析元信息
