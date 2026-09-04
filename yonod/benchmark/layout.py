@@ -49,6 +49,11 @@ class BenchmarkOutputLayout:
         return self.docs / "state"
 
     @property
+    def descriptors(self) -> Path:
+        """Persistent descriptor artifacts consumed by every model task."""
+        return self.run_dir / "descriptors"
+
+    @property
     def pictures(self) -> Path:
         return self.run_dir / ("figures" if self.legacy else "pictures")
 

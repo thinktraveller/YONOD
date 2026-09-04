@@ -49,12 +49,17 @@ def _software_versions() -> Dict[str, str]:
     return versions
 
 
-def _feature_schema_hash(X_smiles: np.ndarray, X_numeric: Optional[np.ndarray]) -> str:
+def _feature_schema_hash(
+    X_smiles: Optional[np.ndarray],
+    X_numeric: Optional[np.ndarray],
+    feature_metadata: Optional[Mapping[str, Any]] = None,
+) -> str:
     schema = {
         "smiles_shape": list(X_smiles.shape),
         "smiles_dtype": str(X_smiles.dtype),
         "numeric_shape": list(X_numeric.shape) if X_numeric is not None else None,
         "numeric_dtype": str(X_numeric.dtype) if X_numeric is not None else None,
+        "feature_metadata": dict(feature_metadata or {}),
     }
     return hashlib.sha256(json.dumps(schema, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -98,6 +103,24 @@ def _prepare_fold_features(
     )
 
 
+def _append_fold_numeric_features(
+    X_train: np.ndarray,
+    X_valid: np.ndarray,
+    X_numeric: Optional[np.ndarray],
+    train_idx: np.ndarray,
+    valid_idx: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Append numeric covariates with the same fold-local scaler contract."""
+    if X_numeric is None:
+        return X_train, X_valid
+    scaler = StandardScaler()
+    numeric = np.asarray(X_numeric, dtype=float)
+    return (
+        np.hstack([X_train, scaler.fit_transform(numeric[train_idx])]),
+        np.hstack([X_valid, scaler.transform(numeric[valid_idx])]),
+    )
+
+
 def _atomic_write_parquet(frame: pd.DataFrame, path: Path) -> Path:
     if path.exists():
         existing = pd.read_parquet(path)
@@ -126,6 +149,42 @@ def _atomic_write_json(payload: Dict[str, Any], path: Path) -> Path:
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(path)
     return path
+
+
+def _json_safe_estimator_params(estimator: Any) -> Dict[str, Any]:
+    """Capture fitted-estimator construction parameters in stable JSON form."""
+    try:
+        params = estimator.get_params(deep=True)
+    except AttributeError as exc:  # pragma: no cover - all supported adapters expose sklearn estimators
+        raise FoldExecutionError("估计器不支持 get_params() 审计") from exc
+    return json.loads(json.dumps(params, ensure_ascii=False, sort_keys=True, default=str))
+
+
+def _effective_model_kwargs(
+    contract: BenchmarkContract,
+    part: pd.DataFrame,
+    model: str,
+    requested: Optional[Mapping[str, Any]],
+) -> tuple[Dict[str, Any], Optional[int]]:
+    """Inject the manifest repeat seed only for the explicit paper RF protocol."""
+    requested_kwargs = dict(requested or {})
+    effective_kwargs = dict(requested_kwargs)
+    protocol = contract.config.raw.get("reproduction_protocol", {})
+    protocol_name = str(protocol.get("name", "")) if isinstance(protocol, Mapping) else ""
+    if model != "rf" or protocol_name != "vjethbkm_rf_5x5":
+        return effective_kwargs, None
+
+    seeds = pd.to_numeric(part["seed"], errors="coerce").dropna().astype(int).unique().tolist()
+    if len(seeds) != 1:
+        raise FoldExecutionError("论文 RF 协议的 manifest 当前折必须恰有一个 seed")
+    seed = int(seeds[0])
+    if "random_state" in requested_kwargs and int(requested_kwargs["random_state"]) != seed:
+        raise FoldExecutionError(
+            "论文 RF 协议禁止 model_params.rf.random_state 与 manifest seed 冲突；"
+            "请删除该参数，当前折应使用 {0}".format(seed)
+        )
+    effective_kwargs["random_state"] = seed
+    return effective_kwargs, seed
 
 
 def _result_from_existing(prediction_path: Path, metadata_path: Path) -> FoldExecutionResult:
@@ -171,6 +230,8 @@ def execute_fold(
     fold: int,
     X_numeric: Optional[np.ndarray] = None,
     model_kwargs: Optional[Mapping[str, Any]] = None,
+    component_frame: Optional[pd.DataFrame] = None,
+    fold_transformer: Optional[Any] = None,
 ) -> FoldExecutionResult:
     """Fit exactly one manifest-defined fold and write its prediction shard.
 
@@ -179,18 +240,28 @@ def execute_fold(
     descriptor-specific and already complete before this boundary.
     """
     ids = np.asarray([str(value) for value in sample_ids], dtype=str)
-    X_smiles = np.asarray(X_smiles)
     y_array = np.asarray(y, dtype=float)
-    if len(ids) != len(X_smiles) or len(ids) != len(y_array):
-        raise FoldExecutionError("sample_ids、X_smiles 与 y 的行数必须一致")
+    if len(ids) != len(y_array):
+        raise FoldExecutionError("sample_ids 与 y 的行数必须一致")
+    if X_smiles is not None:
+        X_smiles = np.asarray(X_smiles)
+        if len(ids) != len(X_smiles):
+            raise FoldExecutionError("sample_ids、X_smiles 与 y 的行数必须一致")
+    elif fold_transformer is None:
+        raise FoldExecutionError("必须提供预计算 X_smiles 或 fold_transformer")
     if len(np.unique(ids)) != len(ids):
         raise FoldExecutionError("sample_ids 必须唯一，才能连接 split manifest")
     if X_numeric is not None and len(X_numeric) != len(ids):
         raise FoldExecutionError("X_numeric 与 sample_ids 的行数必须一致")
-    if X_smiles.ndim != 2 or X_smiles.shape[1] == 0:
-        raise FoldExecutionError("X_smiles 必须是至少包含一列特征的二维数组")
-    if not np.isfinite(X_smiles).all() or not np.isfinite(y_array).all():
-        raise FoldExecutionError("特征或标签包含 NaN 或 inf")
+    if fold_transformer is not None and (component_frame is None or len(component_frame) != len(ids)):
+        raise FoldExecutionError("fold_transformer 需要与 sample_ids 等长的 component_frame")
+    if X_smiles is not None:
+        if X_smiles.ndim != 2 or X_smiles.shape[1] == 0:
+            raise FoldExecutionError("X_smiles 必须是至少包含一列特征的二维数组")
+        if not np.isfinite(X_smiles).all():
+            raise FoldExecutionError("特征包含 NaN 或 inf")
+    if not np.isfinite(y_array).all():
+        raise FoldExecutionError("标签包含 NaN 或 inf")
     if X_numeric is not None:
         numeric_array = np.asarray(X_numeric, dtype=float)
         if numeric_array.ndim != 2 or not np.isfinite(numeric_array).all():
@@ -208,6 +279,10 @@ def execute_fold(
     valid_idx = np.flatnonzero(np.isin(ids, list(valid_ids)))
     if len(train_idx) == 0 or len(valid_idx) == 0:
         raise FoldExecutionError("manifest 当前折存在空训练集或验证集")
+    requested_model_kwargs = dict(model_kwargs or {})
+    effective_model_kwargs, protocol_seed = _effective_model_kwargs(
+        contract, part, model, requested_model_kwargs
+    )
     suffix = "{0}__{1}__r{2:02d}__f{3:02d}".format(descriptor, model, repeat, fold)
     layout = resolve_benchmark_output_layout(contract.run_dir)
     prediction_path = layout.predictions / (suffix + ".parquet")
@@ -216,8 +291,29 @@ def execute_fold(
         return _result_from_existing(prediction_path, metadata_path)
     except FileNotFoundError:
         pass
-    X_train, X_valid = _prepare_fold_features(X_smiles, X_numeric, train_idx, valid_idx)
-    estimator = _build_estimator(model, model_kwargs or {}, X_train.shape[1], len(train_idx))
+    feature_metadata: Dict[str, Any] = {}
+    if fold_transformer is not None:
+        try:
+            fold_transformer.fit(component_frame.iloc[train_idx], sample_ids=ids[train_idx])
+            X_train = fold_transformer.transform(component_frame.iloc[train_idx], partition="train")
+            X_valid = fold_transformer.transform(component_frame.iloc[valid_idx], partition="valid")
+            feature_metadata = dict(fold_transformer.metadata())
+        except Exception as exc:
+            raise FoldExecutionError("fold-local 特征转换失败：{0}".format(exc)) from exc
+        if X_train.ndim != 2 or X_valid.ndim != 2 or X_train.shape[1] == 0:
+            raise FoldExecutionError("fold-local 特征转换必须产生非空二维矩阵")
+        if not np.isfinite(X_train).all() or not np.isfinite(X_valid).all():
+            raise FoldExecutionError("fold-local 特征转换产生 NaN 或 inf")
+        X_train, X_valid = _append_fold_numeric_features(
+            X_train, X_valid, X_numeric, train_idx, valid_idx
+        )
+        schema_source = np.vstack([X_train, X_valid])
+    else:
+        assert X_smiles is not None
+        X_train, X_valid = _prepare_fold_features(X_smiles, X_numeric, train_idx, valid_idx)
+        schema_source = X_smiles
+    estimator = _build_estimator(model, effective_model_kwargs, X_train.shape[1], len(train_idx))
+    estimator_params_snapshot = _json_safe_estimator_params(estimator)
     started_at_utc = datetime.now(timezone.utc).isoformat()
     start = time.perf_counter()
     estimator.fit(X_train, y_array[train_idx])
@@ -229,7 +325,7 @@ def execute_fold(
         raise FoldExecutionError("模型预测包含 NaN 或 inf")
     group_by_id = part.drop_duplicates("sample_id").set_index("sample_id")["group_id"].astype(str)
     split_id = str(part["split_id"].iloc[0])
-    schema_hash = _feature_schema_hash(X_smiles, X_numeric)
+    schema_hash = _feature_schema_hash(schema_source, X_numeric, feature_metadata)
     prediction_frame = pd.DataFrame({
         "run_id": contract.run_id,
         "config_hash": contract.config_hash,
@@ -264,8 +360,13 @@ def execute_fold(
         "feature_schema_hash": schema_hash,
         "train_time_s": train_time_s,
         "predict_time_s": predict_time_s,
-        "model_random_seed": dict(model_kwargs or {}).get("random_state", 42),
-        "model_kwargs": dict(model_kwargs or {}),
+        "model_random_seed": estimator_params_snapshot.get("random_state"),
+        "manifest_seed": protocol_seed,
+        "model_kwargs": effective_model_kwargs,
+        "requested_model_kwargs": requested_model_kwargs,
+        "effective_model_kwargs": effective_model_kwargs,
+        "estimator_params_snapshot": estimator_params_snapshot,
+        "feature_transformer": feature_metadata or None,
         "started_at_utc": started_at_utc,
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
         "software_versions": _software_versions(),

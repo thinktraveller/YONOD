@@ -1,0 +1,41 @@
+# 论文式 MFP/OHE/RF 随机 CV 协议的最小端到端验收配置。
+# 此 fixture 仅检验实现契约，不可用于宣称复现 BH1/BH2/SM/SL1 数值结果。
+benchmark:
+  dataset_path: ../dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  label_col: yield
+  smiles_cols: [reactant_1_smiles, reactant_2_smiles]
+  feature_sets:
+    - name: mfp
+      kind: precomputed_descriptor
+      component_cols: [reactant_1_smiles, reactant_2_smiles]
+      params:
+        algorithm: morgan_count
+        radius: 3
+        fp_size: 1024
+        input_normalization: raw_csv_value
+        blank_or_invalid_component: zero_block_keep_row
+        concatenate_in_declared_order: true
+    - name: ohe
+      kind: fold_transform
+      component_cols: [reactant_1_smiles, reactant_2_smiles]
+      params:
+        encoder: OneHotEncoder
+        handle_unknown: ignore
+        missing_component: encode_then_zero_component_block
+  models: [rf]
+  model_params:
+    rf:
+      n_estimators: 500
+      max_features: 0.3
+      n_jobs: -1
+  grouping:
+    strategy: repeated_kfold
+    source_order: raw_csv
+  cv: {n_repeats: 5, n_splits: 5, seed: 1000}
+  reproduction_protocol:
+    name: vjethbkm_rf_5x5
+    literature_doi: 10.1021/jacs.6c02213
+    official_implementation: reference-proejct/vjethbkm/yieldsmarter
+  outputs:
+    root: ../results/vjethbkm-protocol-smoke

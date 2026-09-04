@@ -11,6 +11,7 @@ from .base import BaseDescriptor
 __all__ = [
     "BaseDescriptor",
     "MorganDescriptor",
+    "MFPDescriptor",
     "ATMOMACCSDescriptor",
     "FISDDescriptor",
     "MolMetaLMDescriptor",
@@ -25,6 +26,9 @@ def __getattr__(name: str):
     if name == "MorganDescriptor":
         from .morgan import MorganDescriptor
         return MorganDescriptor
+    elif name == "MFPDescriptor":
+        from .mfp import MFPDescriptor
+        return MFPDescriptor
     elif name == "ATMOMACCSDescriptor":
         from .atmomaccs import ATMOMACCSDescriptor
         return ATMOMACCSDescriptor

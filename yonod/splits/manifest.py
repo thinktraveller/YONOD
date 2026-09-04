@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import KFold
 
 from ..benchmark.config import BenchmarkConfigError, BenchmarkContract
 from ..benchmark.layout import resolve_benchmark_output_layout
@@ -21,7 +22,8 @@ class SplitManifestError(BenchmarkConfigError):
 
 MANIFEST_COLUMNS = [
     "run_id", "split_id", "sample_id", "group_id", "group_strategy",
-    "repeat", "fold", "role", "seed", "dataset_sha256", "grouping_params_json",
+    "repeat", "fold", "role", "seed", "source_row_index", "dataset_sha256",
+    "grouping_params_json",
 ]
 
 
@@ -48,12 +50,66 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
     """Create the sole reusable split plan for every candidate in one run."""
     config = contract.config
     frame = config.validate_dataset().copy()
-    group_ids = build_group_ids(frame, config.sample_id_col, config.grouping, config.smiles_cols)
-    sizes = group_ids.value_counts(sort=False)
     n_samples = len(frame)
     n_splits = int(config.cv["n_splits"])
     n_repeats = int(config.cv["n_repeats"])
     seed_start = int(config.cv["seed"])
+    strategy = str(config.grouping["strategy"])
+    sample_ids = frame[config.sample_id_col].astype(str).reset_index(drop=True)
+    source_row_indices = np.arange(n_samples, dtype=np.int64)
+    if n_samples < n_splits:
+        raise SplitManifestError(
+            "样本数不足：只有 {0} 行，但 n_splits={1}".format(n_samples, n_splits)
+        )
+
+    # The paper's random-CV protocol is deliberately *not* a group split.  It
+    # must consume the raw CSV row order directly, so it lives in an isolated
+    # branch before any grouping construction or balancing validation.
+    if strategy == "repeated_kfold":
+        group_ids = sample_ids.copy()
+        grouping_params_json = _canonical_json(config.grouping)
+        split_payload = {
+            "run_id": contract.run_id,
+            "dataset_sha256": contract.dataset_sha256,
+            "grouping": config.grouping,
+            "cv": config.cv,
+            "source_rows": [
+                {"source_row_index": int(row), "sample_id": sample_id}
+                for row, sample_id in zip(source_row_indices, sample_ids)
+            ],
+        }
+        split_id = "split-" + hashlib.sha256(
+            _canonical_json(split_payload).encode("utf-8")
+        ).hexdigest()[:12]
+        records: List[Dict[str, Any]] = []
+        for repeat in range(1, n_repeats + 1):
+            seed = seed_start + repeat - 1
+            splitter = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
+            for fold, (train_idx, valid_idx) in enumerate(splitter.split(frame), start=1):
+                valid_rows = set(int(index) for index in valid_idx)
+                for source_row_index, sample_id in zip(source_row_indices, sample_ids):
+                    records.append({
+                        "run_id": contract.run_id,
+                        "split_id": split_id,
+                        "sample_id": sample_id,
+                        "group_id": sample_id,
+                        "group_strategy": strategy,
+                        "repeat": repeat,
+                        "fold": fold,
+                        "role": "valid" if int(source_row_index) in valid_rows else "train",
+                        "seed": seed,
+                        "source_row_index": int(source_row_index),
+                        "dataset_sha256": contract.dataset_sha256,
+                        "grouping_params_json": grouping_params_json,
+                    })
+        manifest = pd.DataFrame.from_records(records, columns=MANIFEST_COLUMNS)
+        validate_split_manifest(manifest, n_splits=n_splits, n_repeats=n_repeats)
+        return manifest.sort_values(
+            ["repeat", "fold", "role", "sample_id"], kind="mergesort"
+        ).reset_index(drop=True)
+
+    group_ids = build_group_ids(frame, config.sample_id_col, config.grouping, config.smiles_cols)
+    sizes = group_ids.value_counts(sort=False)
     if len(sizes) < n_splits:
         raise SplitManifestError(
             "分组数量不足：只有 {0} 个 group，但 n_splits={1}。请降低折数或调整分组参数。"
@@ -79,18 +135,22 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
         "sample_group_pairs": sorted(
             zip(frame[config.sample_id_col].astype(str).tolist(), group_ids.astype(str).tolist())
         ),
+        "source_rows": [
+            {"source_row_index": int(row), "sample_id": sample_id}
+            for row, sample_id in zip(source_row_indices, sample_ids)
+        ],
     }
     split_id = "split-" + hashlib.sha256(_canonical_json(split_payload).encode("utf-8")).hexdigest()[:12]
     records: List[Dict[str, Any]] = []
-    sample_ids = frame[config.sample_id_col].astype(str)
-    strategy = str(config.grouping["strategy"])
     for repeat in range(1, n_repeats + 1):
         seed = seed_start + repeat - 1
         assignments = _assign_groups_to_folds(sizes, n_splits, seed)
         fold_for_row = group_ids.astype(str).map(assignments)
         for fold in range(1, n_splits + 1):
             valid_mask = fold_for_row.eq(fold)
-            for sample_id, group_id, is_valid in zip(sample_ids, group_ids, valid_mask):
+            for source_row_index, sample_id, group_id, is_valid in zip(
+                source_row_indices, sample_ids, group_ids, valid_mask
+            ):
                 records.append({
                     "run_id": contract.run_id,
                     "split_id": split_id,
@@ -101,6 +161,7 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
                     "fold": fold,
                     "role": "valid" if bool(is_valid) else "train",
                     "seed": seed,
+                    "source_row_index": int(source_row_index),
                     "dataset_sha256": contract.dataset_sha256,
                     "grouping_params_json": grouping_params_json,
                 })
