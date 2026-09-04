@@ -163,6 +163,11 @@ def _precheck_csv_format(file_path: str, encoding: str = 'utf-8') -> List[Dict]:
             expected_fields = len(header)
 
             for line_num, row in enumerate(reader, start=2):  # 从第2行开始（第1行是表头）
+                # 电子表格有时会把尾部空行写为 `,,,,`。这些记录不含实际数据，
+                # 即使分隔符数量与表头不一致也不应当作为格式错误报告。
+                if not row or all(not field.strip() for field in row):
+                    continue
+
                 actual_fields = len(row)
                 if actual_fields != expected_fields:
                     # 截断过长的内容，避免输出过多
@@ -181,6 +186,22 @@ def _precheck_csv_format(file_path: str, encoding: str = 'utf-8') -> List[Dict]:
         pass
 
     return bad_lines
+
+
+def _find_delimiter_only_empty_rows(file_path: str, encoding: str) -> List[int]:
+    """返回仅含逗号和空白字符的记录在文件中的零基行号。"""
+    empty_row_indices = []
+
+    with open(file_path, 'r', encoding=encoding, newline='') as f:
+        for row_index, line in enumerate(f):
+            if row_index == 0:
+                continue
+
+            stripped_line = line.strip()
+            if ',' in stripped_line and not stripped_line.strip(',').strip():
+                empty_row_indices.append(row_index)
+
+    return empty_row_indices
 
 
 def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
@@ -203,11 +224,17 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
     df = None
     used_encoding = None
     parser_error = None
+    delimiter_only_empty_rows = []
 
     for encoding in encodings_to_try:
         try:
+            delimiter_only_empty_rows = _find_delimiter_only_empty_rows(dataset_path, encoding)
             # 首先尝试严格模式读取
-            df = pd.read_csv(dataset_path, encoding=encoding)
+            df = pd.read_csv(
+                dataset_path,
+                encoding=encoding,
+                skiprows=delimiter_only_empty_rows or None
+            )
             used_encoding = encoding
             if encoding != 'utf-8':
                 print(f"[OK] 使用 {encoding.upper()} 编码成功读取")
@@ -264,6 +291,7 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
             df = pd.read_csv(
                 dataset_path,
                 encoding=used_encoding,
+                skiprows=delimiter_only_empty_rows or None,
                 on_bad_lines='warn'  # 'skip' 静默跳过，'warn' 显示警告
             )
             skipped_count = len(bad_lines) if bad_lines else 0
@@ -276,6 +304,7 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
                 df = pd.read_csv(
                     dataset_path,
                     encoding=used_encoding,
+                    skiprows=delimiter_only_empty_rows or None,
                     error_bad_lines=False,
                     warn_bad_lines=True
                 )
@@ -294,6 +323,9 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
             print(f"\n[X] 无法自动修复 CSV 格式问题: {fallback_error}")
             print(f"    请手动检查并修复上述问题行后重试")
             raise parser_error from fallback_error
+
+    if delimiter_only_empty_rows:
+        print(f"[OK] 已忽略 {len(delimiter_only_empty_rows)} 行仅包含分隔符的空记录")
 
     print(f"\n数据集基本信息:")
     print(f"  总行数: {len(df)}")
