@@ -3263,3 +3263,156 @@ for desc_name in args.descriptors:
 `python -m unittest tests.test_wizard_model_selection -v` 通过 3/3；实际生成路径为 `docs/layout_fixed_dataset.csv`。
 
 ---
+
+## [2026-09-04 13:42] 步骤 24 完成：描述符预计算、持久化与建模解耦
+
+### 执行的任务
+- 将通用向导/CLI 与严格 benchmark 的流程统一改为两阶段：先处理本次配置选中的全部描述符，再从已落盘文件开始建模。
+- 在每个结果根目录新增 `descriptors/`，每个描述符对应一个压缩 `.npz` 文件。
+- 描述符缓存命中由样本标识、描述符输入列内容、列角色、模式和完整描述符配置共同决定；模型、模型超参数及 CV 配置变化不触发重算。
+- 单个描述符失败时只跳过其模型任务，并在机器可读状态表及 HTML/Markdown 报告中保留失败阶段和原因。
+
+### 关键变更
+- 新增 `yonod/universal/descriptor_artifact.py`：实现原子写入、无 pickle 安全读取、schema/形状/sample_id 校验、数据与配置指纹、缓存复用及失效重算。
+- 更新 `main.py`：阶段 A 生成或复用全部所选描述符；阶段 B 强制重新从 `.npz` 读取特征；数值辅助列在读取后按有效掩码拼接；输出 `docs/descriptor_status.csv`。
+- 更新 `scripts/run_benchmark.py` 与 benchmark layout/report：所有外部折任务启动前完成描述符阶段；模型折只消费 `descriptors/*.npz`；严格报告同步展示描述符状态。
+- 更新 `yonod/universal/report.py`：增加“描述符预计算状态”章节；即使所有描述符失败、没有指标行，也生成可诊断报告。
+- 更新 `README.md` 与 `project-docs/goal.md`：记录新产物结构、复用规则、失败隔离及第五轮澄清结论。
+
+### 持久化契约
+- 文件字段：`X_smiles`、完整 `sample_ids`、完整 `valid_mask`、`metadata_json`。
+- 元数据：schema 版本、描述符名称与配置、数据指纹、有效/总样本数、特征维度、特征结构和生成时间。
+- 文件采用临时文件完成写入后原子替换，避免中断产生的半成品被当作有效缓存。
+- 建模前再次校验文件的 schema、矩阵形状、样本顺序、有效掩码、数据指纹和描述符配置。
+
+### 验证结果
+- `python -m unittest discover -s tests -p "test_*.py" -v`：11/11 通过。
+- `python -m py_compile main.py scripts/run_benchmark.py yonod/universal/descriptor_artifact.py yonod/universal/report.py yonod/benchmark/layout.py yonod/benchmark/config.py yonod/benchmark/report.py`：通过。
+- 真实 Morgan + RF 两次端到端 smoke：第一次状态为 `computed`，生成 2048 维 `descriptors/morgan.npz`；第二次状态为 `reused`，报告与状态 CSV 均正常生成。
+- 回归测试覆盖：数据变化自动重算；模型/CV 变化仍复用；描述符失败隔离；无有效模型结果时仍生成失败报告；严格 benchmark 在 fold 执行前完成并复用描述符文件。
+
+### 下一步计划
+- 可在后续正式运行中观察 FISD、MolMetaLM 等大体积描述符文件的磁盘占用，并按实际规模评估是否需要增加可选分块格式；当前 `.npz` 契约已满足本轮功能与审计要求。
+
+---
+
+## [2026-09-04 14:24] 修复：向导读取分隔符占位空行时报 CSV 格式错误
+
+### 问题描述
+- 现象：启动 `yonod.py` 并选择 `dataset/test-amide-coupling(additive_fixed).csv` 时，Pandas 报 `Expected 9 fields in line 12, saw 10`，随后重复打印 89 条跳过警告。
+- 影响范围：向导虽然最终保留了 10 条有效样本，但启动阶段被误报为 CSV 损坏，影响内置 smoke 数据集的正常使用。
+
+### 根本原因
+该测试数据集第 12–100 行是 `,,,,,,,,,` 形式的尾部占位空记录。其 10 个空字段与 9 列表头不匹配；原读取逻辑在严格解析前未识别这种语义为空的记录，因而触发了本应仅用于真实格式错误的恢复分支。
+
+### 修复方案
+读取前仅识别并跳过“只包含逗号和空白字符”的非表头记录，同时让预检查忽略所有字段为空的记录。含实际数据的字段数不一致行仍沿用原有诊断和宽松恢复逻辑，因此不会掩盖真实 CSV 格式错误。
+
+### 变更文件
+- `yonod.py`：新增分隔符占位空记录定位逻辑，并在严格与回退读取路径中传入 `skiprows`。
+- `tests/test_wizard_csv_loading.py`：新增占位空记录回归测试。
+
+### 验证方法
+- `python -B -m py_compile yonod.py tests/test_wizard_csv_loading.py`：通过。
+- `python -B -m unittest discover -s tests -p test_wizard_csv_loading.py -v`：1/1 通过。
+- 直接调用 `load_and_preview_dataset('dataset/test-amide-coupling(additive_fixed).csv')`：输出“已忽略 89 行仅包含分隔符的空记录”，返回数据形状为 `(10, 9)`，不再出现 `CSV 格式错误`。
+
+---
+
+## [2026-09-04 15:57] 步骤 23.1 完成：论文协议配置与逐行重复 KFold
+
+### 执行的任务
+- 在严格 benchmark 配置中新增显式 `feature_sets` 生命周期契约，同时把旧 `descriptors` YAML 自动映射为预计算特征集，保持旧配置兼容。
+- 增加 `grouping.strategy: repeated_kfold`：直接对原 CSV 行顺序执行每 repeat 一个 `KFold(shuffle=True)`，不进入任何分组构建或均衡逻辑。
+- 在 split manifest 中记录 `source_row_index`，将 raw CSV 行顺序纳入 split identity；论文随机切分的 `group_id` 仅设为样本自身 ID 以满足统一 schema。
+
+### 关键变更
+- 更新 `yonod/benchmark/config.py`：规范化并哈希 feature sets、论文协议字段与列顺序。
+- 更新 `yonod/splits/manifest.py`：新增逐行 repeat KFold 分支及行号审计字段，保留原三种分组策略。
+- 新增 `tests/test_repeated_kfold_manifest.py`：逐 repeat/fold 与 sklearn 参考 KFold 对照。
+
+### 验证结果
+- `python -B -m unittest discover -s tests -p test_repeated_kfold_manifest.py -v`：2/2 通过。
+- `python -B -m py_compile yonod/benchmark/config.py yonod/splits/manifest.py tests/test_repeated_kfold_manifest.py`：通过。
+- `git diff --check`：通过。
+
+### 遇到的问题及解决方案
+- 无。
+
+### 下一步计划
+- 步骤 23.2：实现论文式逐组分 Morgan count MFP artifact，并确保空/非法组分零块保行。
+
+---
+
+## [2026-09-04 17:51] 步骤 23.2 完成：论文式 MFP 与可审计 artifact
+
+### 执行的任务
+- 新增独立的 `MFPDescriptor`：使用 RDKit Morgan count API，默认 `radius=3`、`fp_size=1024`；既有二值 `morgan` 描述符未改变。
+- 在通用特征构建器中增加原 CSV 值逐组分拼接分支，空值和非法 SMILES 写零块但不删反应行。
+- 将 MFP 参数、组件顺序和零块原因写入 descriptor artifact，配置变更会触发缓存失效。
+
+### 验证结果
+- `python -B -m unittest discover -s tests -p test_mfp_descriptor.py -v`：3/3 通过，含与 RDKit count reference 逐元素对照。
+
+### 遇到的问题及解决方案
+- RDKit 对刻意构造的非法 SMILES 输出解析警告；测试确认其对应零块和审计计数，非模型错误。
+
+### 下一步计划
+- 步骤 23.3：接入仅在训练折拟合的 OHE 转换器。
+
+---
+
+## [2026-09-04 17:51] 步骤 23.3 完成：fold 内 OHE 与泄漏防护
+
+### 执行的任务
+- 新增 `ReactionComponentOHE`，仅从当前训练折拟合类别；验证折未见类别保持全零。
+- 缺失组件先使用 fold-local sentinel 保证形状，再清零整个组件块；所有输入行均保留。
+- 严格 benchmark 按 feature set 生命周期执行：OHE 不生成全数据 `.npz`，折级 JSON 记录类别哈希、训练样本哈希及缺失/未见计数。
+
+### 验证结果
+- `python -B -m unittest discover -s tests -p test_ohe_fold_preprocessor.py -v`：3/3 通过。
+
+### 遇到的问题及解决方案
+- 无。
+
+### 下一步计划
+- 步骤 23.4：注入论文 RF 参数与 repeat 随机种子。
+
+---
+
+## [2026-09-04 17:51] 步骤 23.4 完成：RF 参数与 repeat seed 审计
+
+### 执行的任务
+- RF 适配器新增 `max_features` 参数，保留原默认行为。
+- 论文协议的每折 RF 从 split manifest 注入 repeat seed；显式冲突的 `random_state` 会被拒绝。
+- 折级 JSON 新增 requested/effective kwargs、manifest/model seed 与 `get_params()` 参数快照。
+
+### 验证结果
+- `python -B -m unittest discover -s tests -p test_rf_paper_protocol.py -v`：2/2 通过，验证 1000–1004 和 500/0.3/-1。
+
+### 遇到的问题及解决方案
+- 无。
+
+### 下一步计划
+- 步骤 23.5：运行 5×5 双特征生命周期 smoke 并重建报告。
+
+---
+
+## [2026-09-04 17:51] 步骤 23.5 完成：论文协议 smoke 与报告证据
+
+### 执行的任务
+- 新增 `configs/benchmark_vjethbkm_protocol_smoke.yaml`，显式声明 MFP、OHE、RF、逐行 5×5 KFold 与论文来源。
+- 报告新增“论文协议对齐状态”章节，展示 feature sets、切分、seed 与 `source_row_index` 证据，并明确流程对齐不等同于数值复现。
+- 端到端 smoke 运行 `mfp × rf` 与 `ohe × rf` 各 25 个折，随后在新 Python 进程重建报告。
+
+### 验证结果
+- `test_vjethbkm_protocol_smoke.py`：通过；50 个外部 fold 完整，MFP artifact 存在、OHE artifact 不存在，折级证据完整，报告重建不训练。
+- 回归：`test_benchmark_timing.py` 4/4、`test_wizard_csv_loading.py` 2/2、`test_wizard_model_selection.py` 7/7 均通过。
+
+### 遇到的问题及解决方案
+- 首次以 `n_jobs=-1` 跑 lifecycle smoke 时，测试宿主的 30 秒回收限制未返回结束码。正式 YAML 仍保留论文 `n_jobs=-1`；smoke 测试仅改为单线程，且 `n_jobs=-1` 已在步骤 23.4 单元测试中独立验证。
+
+### 下一步计划
+- ✅ 第 23 节实现与协议 smoke 已完成；取得论文同版本数据后，可单独开展 BH1/BH2/SM/SL1 数值复现实验。
+
+---

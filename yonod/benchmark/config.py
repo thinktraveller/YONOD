@@ -70,6 +70,79 @@ def _require_string_list(value: Any, field: str) -> tuple[str, ...]:
     return values
 
 
+def _normalise_feature_sets(
+    value: Any,
+    *,
+    descriptors: Sequence[str],
+    smiles_cols: Sequence[str],
+) -> tuple[Dict[str, Any], ...]:
+    """Return a fully explicit feature-set contract.
+
+    ``descriptors`` predates the strict benchmark feature lifecycle.  It is
+    retained as a concise compatibility shorthand for global, precomputed
+    descriptors.  New YAML may declare ``feature_sets`` so fold-local feature
+    transformers (currently the paper-aligned OHE baseline) cannot accidentally
+    be precomputed on all rows.
+    """
+    if value is None:
+        return tuple({
+            "name": descriptor,
+            "kind": "precomputed_descriptor",
+            "component_cols": list(smiles_cols),
+            "params": {},
+        } for descriptor in descriptors)
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value:
+        raise BenchmarkConfigError("feature_sets 必须是非空列表")
+
+    normalised = []
+    names = set()
+    known_columns = set(smiles_cols)
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, Mapping):
+            raise BenchmarkConfigError("feature_sets[{0}] 必须是 mapping".format(index))
+        name = str(item.get("name", "")).strip().lower()
+        if not name:
+            raise BenchmarkConfigError("feature_sets[{0}].name 不能为空".format(index))
+        if name in names:
+            raise BenchmarkConfigError("feature_sets.name 不能重复：{0}".format(name))
+        kind = str(item.get("kind", "")).strip()
+        if kind not in {"precomputed_descriptor", "fold_transform"}:
+            raise BenchmarkConfigError(
+                "feature_sets[{0}].kind 必须为 precomputed_descriptor 或 fold_transform".format(index)
+            )
+        component_cols = _require_string_list(
+            item.get("component_cols", smiles_cols),
+            "feature_sets[{0}].component_cols".format(index),
+        )
+        unknown = [column for column in component_cols if column not in known_columns]
+        if unknown:
+            raise BenchmarkConfigError(
+                "feature_sets[{0}].component_cols 不属于 smiles_cols：{1}".format(
+                    index, ", ".join(unknown)
+                )
+            )
+        params = item.get("params", {})
+        if not isinstance(params, Mapping):
+            raise BenchmarkConfigError("feature_sets[{0}].params 必须是 mapping".format(index))
+        normalised.append({
+            "name": name,
+            "kind": kind,
+            "component_cols": list(component_cols),
+            "params": json.loads(_canonical_json(dict(params))),
+        })
+        names.add(name)
+
+    if descriptors and tuple(names) != tuple(descriptors):
+        # Supplying both fields is intentionally allowed during migration, but
+        # not when their candidate matrices disagree.
+        if set(names) != set(descriptors):
+            raise BenchmarkConfigError(
+                "descriptors 与 feature_sets 的名称集合不一致；请只保留 descriptors，"
+                "或让二者表达同一候选特征集"
+            )
+    return tuple(normalised)
+
+
 @dataclass(frozen=True)
 class BenchmarkConfig:
     """经 schema 校验且路径已解析的 benchmark 配置。"""
@@ -80,6 +153,7 @@ class BenchmarkConfig:
     label_col: str
     smiles_cols: tuple[str, ...]
     descriptors: tuple[str, ...]
+    feature_sets: tuple[Dict[str, Any], ...]
     models: tuple[str, ...]
     grouping: Dict[str, Any]
     cv: Dict[str, Any]
@@ -99,10 +173,12 @@ class BenchmarkConfig:
         if not isinstance(block, Mapping):
             raise BenchmarkConfigError("benchmark 节点必须是 mapping")
 
-        required = ("dataset_path", "sample_id_col", "label_col", "smiles_cols", "descriptors", "models")
+        required = ("dataset_path", "sample_id_col", "label_col", "smiles_cols", "models")
         missing = [key for key in required if not block.get(key)]
         if missing:
             raise BenchmarkConfigError(f"配置缺少必填字段：{', '.join(missing)}")
+        if not block.get("descriptors") and not block.get("feature_sets"):
+            raise BenchmarkConfigError("配置至少需要 descriptors 或 feature_sets")
 
         dataset_path = Path(str(block["dataset_path"]))
         if not dataset_path.is_absolute():
@@ -124,13 +200,30 @@ class BenchmarkConfig:
         if int(cv["n_repeats"]) < 1 or int(cv["n_splits"]) < 2:
             raise BenchmarkConfigError("cv.n_repeats 必须 >= 1，cv.n_splits 必须 >= 2")
 
+        smiles_cols = _require_string_list(block["smiles_cols"], "smiles_cols")
+        descriptors = (
+            _require_string_list(block["descriptors"], "descriptors")
+            if block.get("descriptors")
+            else tuple()
+        )
+        feature_sets = _normalise_feature_sets(
+            block.get("feature_sets"),
+            descriptors=descriptors,
+            smiles_cols=smiles_cols,
+        )
+        # Existing callers use ``descriptors`` as a feature-set identity.  Keep
+        # that public compatibility surface while allowing fold-local sets such
+        # as OHE to join the same benchmark matrix.
+        active_feature_names = tuple(str(item["name"]) for item in feature_sets)
+
         return cls(
             source_path=source_path,
             dataset_path=dataset_path,
             sample_id_col=str(block["sample_id_col"]),
             label_col=str(block["label_col"]),
-            smiles_cols=_require_string_list(block["smiles_cols"], "smiles_cols"),
-            descriptors=_require_string_list(block["descriptors"], "descriptors"),
+            smiles_cols=smiles_cols,
+            descriptors=active_feature_names,
+            feature_sets=feature_sets,
             models=_require_string_list(block["models"], "models"),
             grouping=grouping,
             cv=cv,
@@ -170,8 +263,10 @@ class BenchmarkConfig:
             "label_col": self.label_col,
             "smiles_cols": list(self.smiles_cols),
             "descriptors": list(self.descriptors),
+            "feature_sets": [dict(item) for item in self.feature_sets],
             "models": list(self.models),
             "model_params": self.raw.get("model_params", {}),
+            "reproduction_protocol": self.raw.get("reproduction_protocol", {}),
             "grouping": self.grouping,
             "cv": self.cv,
             "outputs_root": str(self.outputs_root),
@@ -215,6 +310,7 @@ def create_benchmark_contract(config: BenchmarkConfig) -> BenchmarkContract:
         "platform": platform.platform(),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "output_layout": {
+            "descriptors": "descriptors",
             "docs": "docs",
             "pictures": "pictures",
             "report": "report",

@@ -186,6 +186,12 @@ class BenchmarkTimingTests(unittest.TestCase):
             }), encoding="utf-8")
             empty = pd.DataFrame()
             write_metric_tables(root, rebuilt, empty, empty, empty, empty, empty, empty)
+            pd.DataFrame.from_records([{
+                "descriptor": "rdkit2d", "status": "failed", "stage": "precompute",
+                "artifact_path": str(root / "descriptors" / "rdkit2d.npz"),
+                "n_total": 4, "n_valid": None, "feature_dim": None,
+                "skipped_model_count": 2, "reason": "synthetic strict failure",
+            }]).to_csv(root / "docs" / "descriptor_status.csv", index=False)
 
             report = generate_benchmark_report(root)
 
@@ -197,6 +203,8 @@ class BenchmarkTimingTests(unittest.TestCase):
             self.assertEqual(report.markdown_path, root / "report" / "benchmark_report.md")
             markdown = report.markdown_path.read_text(encoding="utf-8")
             self.assertIn("../pictures/combination_modeling_time.png", markdown)
+            self.assertIn("描述符预计算状态", markdown)
+            self.assertIn("synthetic strict failure", markdown)
 
     def test_universal_reports_handle_present_and_absent_train_time(self) -> None:
         base = pd.DataFrame.from_records([

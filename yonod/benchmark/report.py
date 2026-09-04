@@ -210,6 +210,32 @@ def _performance_matrix(summary: pd.DataFrame, completeness: pd.DataFrame) -> pd
     return values.merge(complete, on=["descriptor", "model"], how="left").sort_values(["descriptor", "model"])
 
 
+def _protocol_alignment_table(
+    config: Mapping[str, Any], split_manifest: pd.DataFrame
+) -> pd.DataFrame:
+    """Render auditable protocol facts without claiming numerical reproduction."""
+    protocol = config.get("reproduction_protocol", {})
+    if not isinstance(protocol, Mapping) or not protocol:
+        return pd.DataFrame([{
+            "protocol": "未声明论文协议",
+            "status": "通用 benchmark；不可据此宣称论文流程对齐",
+        }])
+    grouping = config.get("grouping", {})
+    cv = config.get("cv", {})
+    feature_sets = config.get("feature_sets", [])
+    seeds = sorted(pd.to_numeric(split_manifest.get("seed", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique().tolist())
+    return pd.DataFrame([{
+        "protocol": protocol.get("name", "未命名"),
+        "literature_doi": protocol.get("literature_doi", "未声明"),
+        "split_strategy": grouping.get("strategy", "未声明"),
+        "cv": json.dumps(cv, ensure_ascii=False, sort_keys=True),
+        "manifest_seeds": ", ".join(str(seed) for seed in seeds),
+        "source_row_index_recorded": "source_row_index" in split_manifest.columns,
+        "feature_sets": json.dumps(feature_sets, ensure_ascii=False, sort_keys=True),
+        "status": "流程参数证据；不等同于论文数值复现",
+    }])
+
+
 def _comparison_conclusions(frame: pd.DataFrame, dimension_label: str) -> list[str]:
     if frame.empty:
         return ["没有可比较的完整组合；这不是性能排名结论。"]
@@ -437,6 +463,15 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     split_audit = _split_audit(split_manifest)
     performance = _performance_matrix(tables["combination_summary"], tables["completeness"])
     state = _state_summary(layout)
+    descriptor_status_path = layout.docs / "descriptor_status.csv"
+    descriptor_status = (
+        pd.read_csv(descriptor_status_path)
+        if descriptor_status_path.is_file()
+        else pd.DataFrame(columns=[
+            "descriptor", "status", "stage", "artifact_path", "n_total",
+            "n_valid", "feature_dim", "skipped_model_count", "reason",
+        ])
+    )
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     run_id = str(run_manifest.get("run_id", "—"))
     stability_figures = _write_figures(layout, tables["fold_metrics"])
@@ -455,6 +490,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
             layout.artifact_reference(name) + "/" for name in ("manifests", "predictions", "folds", "metrics")
         ),
     }])
+    protocol_alignment = _protocol_alignment_table(config, split_manifest)
     costs = pd.DataFrame([{
         "run_dir": str(root), "disk_bytes": _disk_usage_bytes(root),
         "all_valid_fold_cumulative_train_time_s": _sum_valid_fold_times(tables["fold_metrics"], "train_time_s"),
@@ -502,10 +538,20 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     conclusion_html = "<ul>" + "".join("<li>{0}</li>".format(html.escape(line)) for line in model_conclusions + descriptor_conclusions) + "</ul>"
     html_content = """<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>YONOD Benchmark {run}</title>{css}</head><body>
 <h1>YONOD 严谨模型比较报告</h1><p>生成时间：{now}；本报告只读取已保存 artefacts，不会重新训练模型。</p>
- {trace}{split}{performance}{time}{figures}{statistics}{tukey}{costs}{limits}
+ {trace}{protocol}{descriptors}{split}{performance}{time}{figures}{statistics}{tukey}{costs}{limits}
 </body></html>""".format(
         run=html.escape(run_id), css=css, now=html.escape(now),
         trace=section("实验可追溯性", _table_html(traceability)),
+        protocol=section(
+            "论文协议对齐状态",
+            "<p>此处记录特征、切分与随机种子的运行证据；即使参数匹配，仍需另行核对数据、RDKit/sklearn 版本与指标后才能讨论数值复现。</p>"
+            + _table_html(protocol_alignment),
+        ),
+        descriptors=section(
+            "描述符预计算状态",
+            "<p>建模任务只读取 <code>descriptors/*.npz</code>；失败描述符的模型任务被隔离跳过。</p>"
+            + _table_html(descriptor_status),
+        ),
         split=section("切分审计", _table_html(split_audit)),
         performance=section("性能矩阵与完成度", _table_html(performance) + _table_html(tables["completeness"])),
         time=section("建模耗时与成本对比", time_section_html),
@@ -520,7 +566,12 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "", "> 本报告只读取 `{0}/`、`{1}/`、`{2}/` 和 `{3}/`，不重新训练模型。".format(
             *(layout.artifact_reference(name) for name in ("manifests", "predictions", "folds", "metrics"))
         ), "",
-        "## 实验可追溯性", "", _table_markdown(traceability), "", "## 切分审计", "", _table_markdown(split_audit),
+        "## 实验可追溯性", "", _table_markdown(traceability), "", "## 论文协议对齐状态", "",
+        "此处记录特征、切分与随机种子的运行证据；流程对齐不等同于论文数值复现，仍需核对数据和软件版本。", "",
+        _table_markdown(protocol_alignment), "", "## 切分审计", "", _table_markdown(split_audit),
+        "", "## 描述符预计算状态", "",
+        "建模任务只读取 `descriptors/*.npz`；失败描述符的模型任务被隔离跳过。", "",
+        _table_markdown(descriptor_status),
         "", "## 性能矩阵与完成度", "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
         "", "## 建模耗时与成本对比", "",
         "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",

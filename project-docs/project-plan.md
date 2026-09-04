@@ -7695,7 +7695,238 @@ smoke 数据如果只含很少分组，可能无法覆盖 2 折以上；fixture 
 
 ---
 
-**文档结束**
+## 二十三、VJETHBKM 论文式 MFP / OHE / RF 与逐行重复 KFold 对齐增量计划
+
+> 本节根据已核读的 `VJETHBKM` 文献及其官方 `yieldsmarter` 实现追加。目标是让 YONOD 能以**独立、显式命名的论文对齐协议**运行 MFP、OHE、RF 与随机 CV；不把它误称为现有通用 Morgan 或现有分组 benchmark 的默认行为。除指标口径外，本节范围内的 RF、特征和随机切分应遵循论文实现；本节不承诺在未确认数据版本、RDKit/sklearn 版本前获得逐预测值的位级一致结果。
+
+### 23.1 对齐目标、非目标与兼容边界
+
+#### 目标
+
+新增一个可由配置明确启用的 `vjethbkm_rf_5x5` 协议，具备以下不可分割的契约：
+
+1. `MFP` 是逐反应组分拼接的 **Morgan count fingerprint**：每个配置列独立生成 `radius=3`、`fpSize=1024` 的计数向量，按原始 CSV 中配置声明的列顺序拼接；它不是现有二值 ECFP4。
+2. `OHE` 是逐 fold、仅训练集拟合的反应组分身份基线；验证折只能调用同一 fold 的转换器，不得使用全数据集类别表。
+3. RF 在每个 repeat 使用论文参数 `n_estimators=500`、`max_features=0.3`、`n_jobs=-1` 和对应 `random_state`；未在论文协议中指定的 `RandomForestRegressor` 参数保留当前安装的 sklearn 默认值。
+4. 随机 CV 使用逐行 `KFold(n_splits=5, shuffle=True, random_state=1000..1004)`，共 5 个 repeat、25 个外部 fold；不得走现有的分组贪心均衡算法。
+
+#### 非目标
+
+- 本增量不接入或重算论文的 DFT、SOAP、PhysChem，也不以它们的结果作为此阶段验收前置条件。
+- 本增量不改变既有通用 `main.py` 入口、既有 `morgan` 描述符、既有默认 RF 参数或既有分组 CV 的含义。
+- 本增量不把随机 5×5 结果写成组分留出、BH2 外部验证或 0D/1D/2D 泛化结论；这些评价仍需使用各自的独立 split 配置。
+
+#### 兼容性硬约束
+
+- `morgan` 继续表示当前的二值 Morgan/ECFP4（`radius=2`、1024 bit），不修改其名称、默认值或已有 artifact 语义；论文式指纹使用新的稳定名称 `mfp`。
+- 现有 `grouping.strategy`（`reaction_fingerprint_cluster`、`substrate_scaffold`、`component_holdout`）及其 group 无泄漏校验保持不变。`repeated_kfold` 是新策略，不可隐式替换任何现有策略。
+- 现有仅含 `descriptors: [...]` 的 benchmark YAML 继续按原路径解析。论文协议采用新增的 `feature_sets` 配置；配置规范化层负责把旧字段映射为等价的预计算特征集，禁止要求用户迁移既有配置。
+- 所有新参数、列顺序、随机种子、特征策略和数据哈希都进入 `config_hash`/`run_manifest.json`；同名输出目录遇到不兼容的协议哈希时必须创建新 `run_id` 或失败，不得覆盖旧结果。
+
+### 23.2 论文协议配置与可追溯性契约
+
+#### 配置形状
+
+在 `yonod/benchmark/config.py` 的 schema 中增加可选 `feature_sets`，保留 `descriptors` 作为兼容输入。一个 feature set 只能声明一种特征生命周期：`precomputed_descriptor` 或 `fold_transform`。建议的论文基线 YAML 如下；`component_cols` 必须按官方数据 CSV 的原始列顺序逐项填写，不能由列名排序或集合遍历推断。
+
+```yaml
+benchmark:
+  dataset_path: ../reference-proejct/vjethbkm/data/processed/BH1.csv
+  sample_id_col: sample_id
+  label_col: yield
+  smiles_cols:                       # 同时也是本协议的组件块顺序
+    - Aryl_halide_SMILES
+    - Additive_SMILES
+    - Base_SMILES
+    - Ligand_SMILES
+  feature_sets:
+    - name: mfp
+      kind: precomputed_descriptor
+      component_cols: [Aryl_halide_SMILES, Additive_SMILES, Base_SMILES, Ligand_SMILES]
+      params:
+        algorithm: morgan_count
+        radius: 3
+        fp_size: 1024
+        input_normalization: raw_csv_value
+        blank_or_invalid_component: zero_block_keep_row
+        concatenate_in_declared_order: true
+    - name: ohe
+      kind: fold_transform
+      component_cols: [Aryl_halide_SMILES, Additive_SMILES, Base_SMILES, Ligand_SMILES]
+      params:
+        encoder: OneHotEncoder
+        handle_unknown: ignore
+        missing_component: encode_then_zero_component_block
+  models: [rf]
+  model_params:
+    rf:
+      n_estimators: 500
+      max_features: 0.3
+      n_jobs: -1
+  grouping:
+    strategy: repeated_kfold
+    source_order: raw_csv
+  cv:
+    n_repeats: 5
+    n_splits: 5
+    seed: 1000
+  reproduction_protocol:
+    name: vjethbkm_rf_5x5
+    literature_doi: 10.1021/jacs.6c02213
+    official_implementation: reference-proejct/vjethbkm/yieldsmarter
+```
+
+`smiles_cols`/`component_cols` 在不同论文数据集可不同，但一个运行内的最终组件顺序必须唯一。`feature_sets` 中的每一项均需展开写入已规范化的 run manifest，不得只记录名称。
+
+#### 最低限度的运行证据
+
+每个论文对齐 run 的 `run_manifest.json`、descriptor artifact、split manifest、fold JSON 和预测分片必须共同能回答下列问题：
+
+| 证据对象 | 必填内容 |
+|---|---|
+| 数据证据 | 原始 CSV SHA-256、`sample_id`、原始行号、标签列、组件列及**声明顺序**、原始行顺序策略 |
+| MFP artifact | `algorithm=morgan_count`、RDKit 版本、`radius=3`、`fp_size=1024`、组件顺序、每块维度、有效/零块/非法组件计数、输入与特征哈希 |
+| OHE 折元数据 | 当前 repeat/fold 的训练样本集合哈希、仅由训练集产生的类别/输出列哈希、缺失块清零计数、验证集未见类别计数 |
+| split manifest | `strategy=repeated_kfold`、repeat、fold、seed、每样本原始行号、train/valid 角色、数据哈希和 split 哈希 |
+| RF 折元数据 | 声明参数、实际 `estimator.get_params()` 的规范化快照、repeat seed、sklearn 版本、训练/验证样本数 |
+
+任何配置、列顺序、源数据行顺序、seed、描述符参数或 sklearn/RDKit 版本差异，都必须显示在报告的“论文对齐差异说明”中。这样可区分“严格匹配的流程”和“因运行环境或数据可得性产生的数值差异”。
+
+### 23.3 MFP：无状态描述符与反应组分拼接
+
+#### 架构落点
+
+1. 在 `yonod/descriptors/mfp.py` 新增 `MFPDescriptor`（或语义等价的 `MorganCountDescriptor`），继承 `BaseDescriptor`，仅负责单个组分的、无状态的 count fingerprint 计算。
+2. 在 `yonod/evaluate.py` 的 `DESCRIPTOR_REGISTRY` 与 `yonod/universal/feature_builder.py` 的懒加载映射中注册名称 `mfp`；现有 `morgan` 注册项不得变更。
+3. 在 `yonod/universal/feature_builder.py` 增加论文 MFP 专用的 concat 分支：按 `feature_sets[].component_cols` 的**声明顺序**逐列调用 `MFPDescriptor` 并横向拼接。不得调用通用 `sum` 模式，不得将多个组分合成一个 SMILES 后再指纹化。
+4. 在 `yonod/universal/descriptor_artifact.py` 与 `scripts/run_benchmark.py` 之间传递完整 descriptor params；artifact 的数据/配置指纹必须包含 `mfp` 参数与 component order，不能只因名称相同而复用一个不兼容的 `.npz`。
+
+#### 特征语义
+
+- 对每个非空、可解析组分，使用 RDKit Morgan count API 产生固定 1024 维计数向量；数组类型可为数值 ML 兼容类型，但语义必须保留计数而非转换为 0/1 bit。
+- 配置中有 `k` 个组分列时，特征维度必须是 `k × 1024`；每个 1024 维块可单独追溯至一个列名。
+- 对空值、空字符串和 RDKit 不能解析的组分，写入该组分的全零 1024 维块，**整条反应记录保留**。MFP 专用路径的 `valid_mask` 必须全为 `True`；非法组件数作为诊断字段记录，不能借由通用 mask 静默删行。
+- 论文对齐配置的 `input_normalization=raw_csv_value` 表示不对组分进行逗号/星号/波浪线替换、排序、canonical SMILES 重写或跨列合并。若原始 CSV 值不能被 RDKit 解析，按零块规则处理并计入审计；任何替代规范化必须以另一个协议名称/哈希运行。
+
+#### 验收标准
+
+1. 以固定的公开小分子 fixture，与官方 `Gen_MFP.py` 的单组分 count 向量逐元素比对；维度、非零索引和值均一致，并至少覆盖一个桶计数大于 1 的案例，证明实现不是二值 Morgan。
+2. 两个组件列的 fixture 输出形状为 `(n, 2048)`，前/后 1024 维块分别只随第一/第二列变化；互换 YAML 列顺序必须改变特征 schema hash 和 run/config hash。
+3. 包含空组分、非法 SMILES 和所有组分均为空的行时，输出行数、sample_id 顺序与输入完全一致，相应块全零，`valid_mask` 全 True，审计计数准确。
+4. 相同数据和参数可复用相同 MFP artifact；改变 `radius`、`fp_size`、组件顺序、输入值或任一零块策略时，必须拒绝旧 artifact 并生成新身份。
+
+### 23.4 OHE：fold 内转换器而非全局 Descriptor
+
+#### 架构落点
+
+OHE 不加入 `yonod/descriptors/` 的 `BaseDescriptor.featurize(smiles_list)` 预计算接口。它依赖训练集类别集合，若随全数据 descriptor artifact 预计算，会产生验证信息泄漏。应实施为：
+
+1. 在 `yonod/benchmark/fold_preprocessors.py` 增加 `ReactionComponentOHE`（或等价的 fold transformer），其显式接口为 `fit(train_component_frame)`、`transform(component_frame)` 和 `metadata()`。
+2. `scripts/run_benchmark.py` 在执行前保留一张仅含 `sample_id`、原始行号和 `component_cols` 的不可变组件表；`yonod/benchmark/executor.py` 根据 manifest 的 train/valid 索引把该表传给 OHE，而不是向它传递已预计算的全数据矩阵。
+3. 模型执行器以统一 feature-set 接口处理两种生命周期：MFP 从已验证 artifact 读取；OHE 在当前 `(repeat, fold)` 运行 `fit(train)` 与 `transform(train/valid)`，然后将矩阵交给同一个单折 estimator 接口。
+4. 不持久化可被误用的全数据 OHE `.npz`。折级输出只保存必要的 feature schema/category 哈希、类别数量、训练集哈希和审计计数；若需要可审计类别值，只保存受数据许可证允许的受控 metadata，不默认导出原始化学字符串。
+
+#### 论文式缺失与未知类别处理
+
+- 每个组分列的训练集类别由 `OneHotEncoder(handle_unknown="ignore")` 在该 fold 中拟合；编码器列顺序必须源于声明的 `component_cols`，不是 pandas 的偶然列顺序。
+- 原始缺失/空组件先以临时 fold-local sentinel 输入编码器以保证变换形状稳定，随后将该**原始缺失组件对应的整个 OHE 块清零**；不把“缺失”作为可以被模型学习的独立化学类别。
+- 验证集未见类别由 `handle_unknown="ignore"` 产生全零块，必须计数并写入元数据；不得为验证集扩充训练期类别表，也不得因未见类别丢弃验证样本。
+- 全部组件缺失的反应仍保留，并得到全零 OHE 行。非缺失组件的原始值按数据 CSV 值作为类别身份处理；若要 canonicalize 或映射值，须先获得新的、显式版本化的特征协议。
+
+#### 验收标准
+
+1. 构造“验证集中存在训练集未出现类别”的 fixture，断言验证转换不报错、未见类别块为零，且 train fit 的类别哈希不包含该验证类别。
+2. 构造训练与验证都含缺失值的 fixture，断言缺失组件块为零、矩阵行数不减少、非缺失组件仍可编码；元数据中的 missing-block 计数与输入一致。
+3. 在同一数据不同 fold 中，类别集合和 OHE 输出维度可不同；每个 fold 的 `categories_hash` 必须来自该 fold 训练样本，不能复用前一 fold 或全数据集的哈希。
+4. 静态检查和回归测试证明 OHE 路径不会调用 `prepare_descriptor_artifact()` 生成全数据 OHE，也不会在 split manifest 写入前调用全数据 `fit`。
+
+### 23.5 RF：论文参数与 repeat 级随机种子
+
+#### 架构落点与参数传递
+
+1. 扩展 `yonod/models/rf_model.py` 的构造参数以支持 `max_features`，但保持现有普通路径的默认值不变；论文配置只在 `model_params.rf` 中声明，不改写全局默认。
+2. 在 `yonod/benchmark/executor.py` 读取当前 manifest 分片的唯一 `seed`，复制 `model_kwargs` 后将 `effective_kwargs["random_state"]` 设为该 seed，再构建 RF。一个 repeat 的五个 fold 必须共用同一 seed，下一 repeat 递增 1。
+3. 若用户在 `model_params.rf` 另外提供 `random_state`，论文对齐协议必须拒绝冲突或以明确错误提示其将被 manifest seed 覆盖；不得静默使用固定 42。
+4. 折级 JSON 同时保存 `requested_model_kwargs`、`effective_model_kwargs`、`model_random_seed` 和 `estimator_params_snapshot`。其中 RF 快照应可证明唯一的非默认对齐参数为 `n_estimators=500`、`max_features=0.3`、`n_jobs=-1` 与本 repeat 的 `random_state`；其余参数来自运行时 sklearn 默认值并由版本指纹解释。
+
+#### 验收标准
+
+- 五个 repeat 的实际 seed 恰为 `1000, 1001, 1002, 1003, 1004`；每个 seed 恰对应五个 fold，metadata 与 manifest 一致。
+- 构建后的 `RandomForestRegressor.get_params()` 证明 `n_estimators=500`、`max_features=0.3`、`n_jobs=-1`；未指定参数与同一 sklearn 版本下的 `RandomForestRegressor()` 默认值一致。
+- 现有未提供论文协议的 RF 测试和普通 CLI/向导路径继续使用它们已有的参数与随机种子；新增逻辑不改变其可重复输出。
+
+### 23.6 新增 `repeated_kfold`：逐行、重复、非分组切分
+
+#### 策略定义
+
+在 `yonod/splits/manifest.py` 的 `create_split_manifest()` 中为 `grouping.strategy: repeated_kfold` 增加专门分支。该分支应对经过 dataset schema 校验后的**原始 CSV 行顺序**直接调用 sklearn：
+
+```python
+for repeat, seed in enumerate(range(1000, 1005), start=1):
+    splitter = KFold(n_splits=5, shuffle=True, random_state=seed)
+    for fold, (train_idx, valid_idx) in enumerate(splitter.split(frame), start=1):
+        # 以当前 CSV 行位置取样本，写入外部 manifest
+        ...
+```
+
+在配置化实现中，固定数字应由 `cv.n_repeats=5`、`cv.n_splits=5`、`cv.seed=1000` 推导，故不同协议可以安全地使用别的 seed 区间。不得使用 `_assign_groups_to_folds()`、`build_group_ids()` 的输出或 `max_group_fraction` 规则来近似该策略。
+
+每条 manifest 仍保留通用字段；为便于复核官方切分，新增或明确记录 `source_row_index`（从 0 开始的原 CSV 数据行位置）。`group_id` 可稳定地设为样本自身 ID 以满足统一 schema，`group_strategy` 为 `repeated_kfold`；它不代表分组泛化假设。manifest 最终排序可以用于存储，但切分本身绝不能先按 sample_id 排序。
+
+#### 验收标准
+
+1. 用固定的 10+ 行 fixture 逐 repeat/fold 与 `sklearn.model_selection.KFold` 直接生成的 valid 行位置完全比较，五个 seed 的样本分配一一相同。
+2. 生成的 manifest 恰含 `5 × 5` 个 `(repeat, fold)`，每个 sample 在每个 repeat 恰一次为 valid、四次为 train；每一折训练和验证均非空。
+3. seed 列在 repeat 1–5 分别为 1000–1004；将同一 CSV 重新加载时 manifest 规范化哈希一致。
+4. 现有三个分组策略的 manifest 测试继续通过，且 `repeated_kfold` 不调用组大小校验或分组贪心平衡函数。
+5. 改变原 CSV 行顺序必须被数据 SHA-256 和 run/config hash 捕获；报告明确该变更可能导致论文随机 CV 切分改变，不能把两次结果混合比较。
+
+### 23.7 端到端执行顺序、测试计划与阶段验收
+
+#### 实施顺序
+
+| 阶段 | 计划工作 | 主要文件/边界 | 完成条件 |
+|---|---|---|---|
+| P1：配置与切分 | 扩展 feature-set schema；实现 `repeated_kfold` manifest 与 source row 审计 | `yonod/benchmark/config.py`、`yonod/splits/manifest.py`、`tests/` | 5×5 切分与 sklearn 基准逐行一致；旧配置/分组策略回归通过 |
+| P2：MFP artifact | 新增无状态 count descriptor、按组件块拼接、artifact params/hash 传递 | `yonod/descriptors/`、`yonod/universal/feature_builder.py`、`yonod/universal/descriptor_artifact.py` | 特征与官方小 fixture 一致；零块保行；可安全缓存 |
+| P3：OHE fold transformer | 实现 fold 内 fit/transform、缺失/未知类别策略和折元数据 | `yonod/benchmark/fold_preprocessors.py`、`yonod/benchmark/executor.py`、`scripts/run_benchmark.py` | 证明无全局 fit、无样本删除、未见类别可审计 |
+| P4：RF 对齐 | 增加 `max_features`，把 manifest seed 注入每折 RF，并保存有效参数快照 | `yonod/models/rf_model.py`、`yonod/benchmark/executor.py` | 500/0.3/-1 与 1000–1004 被逐折验证 |
+| P5：协议 smoke 与报告 | 新增论文协议 YAML、运行级审计章节和回归测试 | `configs/`、`yonod/benchmark/report.py`、`tests/` | 小数据 25 fold 闭环产生可追溯 manifest、预测、metadata、报告 |
+
+每个阶段仅在前一阶段的单元/回归测试通过后进入下一阶段。P1–P4 不运行论文全量训练；P5 的 smoke 也不可以作为论文数值复现结论。
+
+#### 必须新增的测试覆盖
+
+- `test_mfp_descriptor.py`：官方计数向量一致性、计数非二值、维度、组件顺序、空/非法组分零块和全行保留。
+- `test_descriptor_artifact_protocol.py`：MFP params/组件列顺序/输入归一化策略进入 artifact 与缓存失效判断；不兼容 artifact 不能复用。
+- `test_ohe_fold_preprocessor.py`：仅训练集类别 fit、验证未见类别零块、缺失块清零、各 fold 独立 categories hash、无全局 OHE artifact。
+- `test_repeated_kfold_manifest.py`：同 sklearn KFold 的逐行 split 等价、25 折完整性、1000–1004 seed、source row 记录与旧分组策略回归。
+- `test_rf_paper_protocol.py`：RF 有效参数、每 repeat seed 注入、所有非指定参数保持 sklearn 默认、旧 RF 默认路径未变。
+- `test_vjethbkm_protocol_smoke.py`：一个小型固定 CSV 以 `mfp × rf` 和 `ohe × rf` 各完成 25 个 fold，验证预测同 manifest 一一对应、折 metadata 完整、报告可在新进程重建且不重新 fit。
+
+#### 交付验收门
+
+只有同时满足以下条件，才可声称“YONOD 已具备论文式 MFP/OHE/RF 随机 CV 协议”；此措辞不等同于已经复现论文数值：
+
+1. 所有 P1–P5 测试通过，且既有 benchmark、普通 CLI/向导和分组策略回归测试无破坏。
+2. `mfp` 的参数、组分顺序、零块保行与 count 语义通过固定参考实现验证；`morgan` 的既有行为未改变。
+3. OHE 的类别只来源于当前训练折，并有足以审计泄漏防护的 metadata；验证集未见/缺失组分不丢样本。
+4. 每个论文协议 run 有 25 个 manifest 定义的 RF fold，RF 参数和 repeat seed 都可从折级 JSON 独立核验。
+5. run manifest、MFP artifact、OHE 折元数据、split manifest、预测分片与报告之间的 `run_id`、`config_hash`、数据/特征 schema hash 相互一致。
+6. 在取得并校验论文同版本数据后，再将 BH1/BH2/SM/SL1 的数值与论文表格分开记录为“数值复现验收”；若指标存在差异，报告必须先检查数据哈希、原始行顺序、RDKit/sklearn 版本、特征哈希和 split manifest，不能只通过继续调参掩盖差异。
+
+### 23.8 风险、报告边界与下一步
+
+| 风险 | 防护与报告要求 |
+|---|---|
+| 把 MFP 实现成一般二值 Morgan | 用官方 count fixture、至少一个计数大于 1 的断言和 `algorithm=morgan_count` artifact 字段防止混淆 |
+| OHE 在全数据上预先拟合 | 将 OHE 限制为 fold transformer；测试阻止其产出全数据 artifact；折 metadata 记录训练类别哈希 |
+| 将重复 KFold 当成现有分组 CV | 独立 `repeated_kfold` 分支，报告注明“逐行随机 CV、非分组”，不使用 group 泛化措辞 |
+| RF 种子仍被固定 42 覆盖 | 执行器以 manifest seed 建立 effective kwargs，并将实际参数快照写入折 JSON |
+| CSV 重排或列顺序漂移 | 记录数据 SHA、source row index 与 component order；配置/数据变化形成新 run identity |
+| 论文数值无法逐位一致 | 报告用“协议对齐状态、数值偏差、可能原因”三列说明；优先排查可追溯证据，不把额外调参当作对齐 |
+
+后续应由 **project-builder-cn** 按 P1→P5 的顺序实现，并在每阶段后更新 `project-docs/buildlog.md`。在 P5 smoke 全部通过前，不启动全量 BH1/BH2/SM/SL1 的 25-fold 训练；在数据与环境版本证据补齐前，报告中仅可写“实现协议已对齐”而非“已复现论文结果”。
 
 ---
 
