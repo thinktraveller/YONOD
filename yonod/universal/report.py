@@ -429,6 +429,12 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
 
 def _section_grid(df: pd.DataFrame) -> str:
     """4×N 描述符 × 模型矩阵，单元格显示 R²/RMSE/MAE。"""
+    if df.empty:
+        return """
+<section>
+<h2>1 · 描述符 × 模型结果矩阵</h2>
+<p class="note">没有有效模型结果；请查看“描述符预计算状态”中的失败原因。</p>
+</section>"""
     # 统一列名
     desc_col  = "desc_name"  if "desc_name"  in df.columns else "descriptor"
     model_col = "model_name" if "model_name" in df.columns else "model"
@@ -661,6 +667,54 @@ def _section_descriptor_config(task_info: Dict[str, Any]) -> str:
 </section>"""
 
 
+def _section_descriptor_precomputation(task_info: Dict[str, Any]) -> str:
+    """Show descriptor artifact reuse/recompute/failure outcomes."""
+    statuses = task_info.get("descriptor_statuses", [])
+    if not statuses:
+        return ""
+    labels = {
+        "computed": "新生成",
+        "recomputed": "已重算",
+        "reused": "已复用",
+        "deferred": "按折拟合",
+        "completed": "已完成",
+        "failed": "失败",
+    }
+    rows_html = ""
+    for item in statuses:
+        status = str(item.get("status", "—"))
+        rows_html += (
+            "<tr>"
+            f"<td><b>{_esc(item.get('feature_id', item.get('descriptor', '—')))}</b></td>"
+            f"<td>{_esc(item.get('descriptor', '—'))}</td>"
+            f"<td>{_esc(item.get('lifecycle', 'static_descriptor'))}</td>"
+            f"<td>{_esc(labels.get(status, status))}</td>"
+            f"<td>{_esc(item.get('stage', '—'))}</td>"
+            f"<td>{_fmt(item.get('n_valid'))}/{_fmt(item.get('n_total'))}</td>"
+            f"<td>{_fmt(item.get('feature_dim_min', item.get('feature_dim')))}–{_fmt(item.get('feature_dim_max', item.get('feature_dim')))}</td>"
+            f"<td>{_fmt(item.get('completed_folds'))}</td>"
+            f"<td>{_esc(item.get('skipped_model_count', 0))}</td>"
+            f"<td style='text-align:left'>{_esc(item.get('reason', ''))}</td>"
+            f"<td style='text-align:left'><code>{_esc(item.get('artifact_path', '—'))}</code></td>"
+            "</tr>\n"
+        )
+    status_path = task_info.get("descriptor_status_path")
+    status_note = (
+        f"<p class='note'>完整机器可读状态：<code>{_esc(status_path)}</code></p>"
+        if status_path else ""
+    )
+    return f"""
+<section>
+<h2>4.2 · 特征准备状态（描述符预计算状态）</h2>
+<p class="note">静态描述符从持久化文件读取；fold_transform 只在训练折拟合并保存折级状态。单个特征失败时仅跳过其模型任务。</p>
+<table>
+<thead><tr><th>特征 ID</th><th>实现</th><th>生命周期</th><th>状态</th><th>阶段</th><th>有效/总样本</th><th>维度范围</th><th>完成折数</th><th>跳过模型数</th><th>原因</th><th>文件</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table>
+{status_note}
+</section>"""
+
+
 def _section_data_paths(task_info: Dict[str, Any]) -> str:
     """数据路径信息段落。"""
     origin_path = task_info.get("origin_dataset_path")
@@ -704,7 +758,7 @@ def _section_data_paths(task_info: Dict[str, Any]) -> str:
 
     return f"""
 <section>
-<h2>4.2 · 数据路径</h2>
+<h2>4.3 · 数据路径</h2>
 <table>
 {rows_html}
 </table>
@@ -777,6 +831,7 @@ def generate_report(
         + _section_ranking(ranked)
         + _section_column_mapping(task_info)
         + _section_descriptor_config(task_info)
+        + _section_descriptor_precomputation(task_info)
         + _section_data_paths(task_info)
         + _section_modeling_time(metrics_df, out_dir)
         + _section_scatter(out_dir)
@@ -841,6 +896,11 @@ def generate_markdown_report(
             return "—"
         return f"{float(v):.{d}f}"
 
+    def _md(v: Any) -> str:
+        if v is None:
+            return "—"
+        return str(v).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
     lines: List[str] = []
 
     # ── 标题 ─────────────────────────────────────────────────────────────────
@@ -885,22 +945,24 @@ def generate_markdown_report(
         lines.append("")
 
     # ── 结果矩阵（R²）────────────────────────────────────────────────────────
-    descs  = metrics_df[desc_col].unique().tolist()
-    models = metrics_df[model_col].unique().tolist()
-
     lines += ["---", "", "## 结果矩阵（R²）", ""]
-    header = "| 描述符 \\ 模型 | " + " | ".join(models) + " |"
-    sep    = "|---|" + "---|" * len(models)
-    lines += [header, sep]
-    for d in descs:
-        cells = []
-        for m in models:
-            sub = metrics_df[(metrics_df[desc_col] == d) & (metrics_df[model_col] == m)]
-            if sub.empty:
-                cells.append("—")
-            else:
-                cells.append(_fv(sub.iloc[0].get(r2_col, float("nan"))))
-        lines.append("| " + d + " | " + " | ".join(cells) + " |")
+    if metrics_df.empty:
+        lines += ["没有有效模型结果；请查看下方“描述符预计算状态”中的失败原因。"]
+    else:
+        descs  = metrics_df[desc_col].unique().tolist()
+        models = metrics_df[model_col].unique().tolist()
+        header = "| 描述符 \\ 模型 | " + " | ".join(models) + " |"
+        sep    = "|---|" + "---|" * len(models)
+        lines += [header, sep]
+        for d in descs:
+            cells = []
+            for m in models:
+                sub = metrics_df[(metrics_df[desc_col] == d) & (metrics_df[model_col] == m)]
+                if sub.empty:
+                    cells.append("—")
+                else:
+                    cells.append(_fv(sub.iloc[0].get(r2_col, float("nan"))))
+            lines.append("| " + d + " | " + " | ".join(cells) + " |")
     lines.append("")
 
     # ── 详细指标 ─────────────────────────────────────────────────────────────
@@ -909,16 +971,19 @@ def generate_markdown_report(
     time_sep = "---|" if has_time else ""
 
     lines += ["---", "", "## 详细指标", ""]
-    lines.append(f"| 描述符 | 模型 | R² 均值 | R² 标准差 | RMSE | MAE |{time_th}")
-    lines.append(f"|---|---|---|---|---|---|{time_sep}")
-    for _, row in metrics_df.iterrows():
-        r2_std = row.get("r2_std", float("nan")) if "r2_std" in row.index else float("nan")
-        t_cell = f" {_fmt_time(row.get('train_time_s'))} |" if has_time else ""
-        lines.append(
-            f"| {row[desc_col]} | {row[model_col]}"
-            f" | {_fv(row.get(r2_col))} | {_fv(r2_std)}"
-            f" | {_fv(row.get(rmse_col))} | {_fv(row.get(mae_col))} |{t_cell}"
-        )
+    if metrics_df.empty:
+        lines.append("无有效指标记录。")
+    else:
+        lines.append(f"| 描述符 | 模型 | R² 均值 | R² 标准差 | RMSE | MAE |{time_th}")
+        lines.append(f"|---|---|---|---|---|---|{time_sep}")
+        for _, row in metrics_df.iterrows():
+            r2_std = row.get("r2_std", float("nan")) if "r2_std" in row.index else float("nan")
+            t_cell = f" {_fmt_time(row.get('train_time_s'))} |" if has_time else ""
+            lines.append(
+                f"| {row[desc_col]} | {row[model_col]}"
+                f" | {_fv(row.get(r2_col))} | {_fv(r2_std)}"
+                f" | {_fv(row.get(rmse_col))} | {_fv(row.get(mae_col))} |{t_cell}"
+            )
     lines.append("")
 
     # ── 推荐组合 ─────────────────────────────────────────────────────────────
@@ -1060,6 +1125,47 @@ def generate_markdown_report(
             columns_str = ", ".join(columns) if columns else "（全部SMILES列）"
             mode_cn = mode_cn_map.get(mode, mode)
             lines.append(f"| **{desc_name}** | {mode_cn} | `{columns_str}` |")
+        lines.append("")
+
+    # ── 描述符预计算状态 ───────────────────────────────────────────────────
+    descriptor_statuses = task_info.get("descriptor_statuses", [])
+    if descriptor_statuses:
+        status_labels = {
+            "computed": "新生成",
+            "recomputed": "已重算",
+            "reused": "已复用",
+            "deferred": "按折拟合",
+            "completed": "已完成",
+            "failed": "失败",
+        }
+        lines += [
+            "---", "", "## 特征准备状态（描述符预计算状态）", "",
+            "静态描述符从持久化文件读取；fold_transform 只在训练折拟合并保存折级状态。单个特征失败时仅跳过其模型任务。", "",
+            "| 特征 ID | 实现 | 生命周期 | 状态 | 阶段 | 有效/总样本 | 维度范围 | 完成折数 | 跳过模型数 | 原因 | 文件 |",
+            "|---|---|---|---|---|---|---|---|---|---|---|",
+        ]
+        for item in descriptor_statuses:
+            status = str(item.get("status", "—"))
+            lines.append(
+                "| {feature_id} | {descriptor} | {lifecycle} | {status} | {stage} | {n_valid}/{n_total} | {feature_dim_min}–{feature_dim_max} | {completed_folds} | {skipped} | {reason} | `{path}` |".format(
+                    feature_id=_md(item.get("feature_id", item.get("descriptor", "—"))),
+                    descriptor=_md(item.get("descriptor", "—")),
+                    lifecycle=_md(item.get("lifecycle", "static_descriptor")),
+                    status=_md(status_labels.get(status, status)),
+                    stage=_md(item.get("stage", "—")),
+                    n_valid=_md(item.get("n_valid", "—")),
+                    n_total=_md(item.get("n_total", "—")),
+                    feature_dim_min=_md(item.get("feature_dim_min", item.get("feature_dim", "—"))),
+                    feature_dim_max=_md(item.get("feature_dim_max", item.get("feature_dim", "—"))),
+                    completed_folds=_md(item.get("completed_folds", "—")),
+                    skipped=_md(item.get("skipped_model_count", 0)),
+                    reason=_md(item.get("reason", "")),
+                    path=_md(item.get("artifact_path", "—")),
+                )
+            )
+        status_path = task_info.get("descriptor_status_path")
+        if status_path:
+            lines += ["", f"完整机器可读状态：`{_md(status_path)}`"]
         lines.append("")
 
     # ── 数据路径 ─────────────────────────────────────────────────────────────

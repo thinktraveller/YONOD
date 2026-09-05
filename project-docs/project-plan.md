@@ -8066,4 +8066,225 @@ summary["total_model_time_s"] = summary["total_train_time_s"] + summary["total_p
 
 ---
 
+## 二十四、MFP 与 OHE 面向普通任务的统一特征库兼容计划
+
+> 本节响应“将 MFP 和 one（按上下文为 OHE）兼容到描述符库，使其他普通任务也能使用”的需求。目标是让二者在 `main.py`、JSON 配置与 `yonod.py` 向导中像其他候选特征一样可发现、可配置、可审计；但不为追求表面一致而把有状态的 OHE 伪装成可全数据预计算的 `BaseDescriptor`。本节仅扩展常规入口，不改写已交付的 `vjethbkm_rf_5x5` 严格协议语义。
+
+### 24.1 目标、现状与范围边界
+
+| 项目 | 当前状态 | 本次目标 |
+|---|---|---|
+| `mfp` | 已有 `MFPDescriptor`、通用 builder 映射和严格 benchmark 使用路径；未出现在普通 CLI/向导候选项 | 成为标准特征目录的一等静态描述符，支持普通 JSON/CLI/向导任务、参数化、独立 artifact 与报告 |
+| `ohe` | `ReactionComponentOHE` 仅位于 `yonod/benchmark/fold_preprocessors.py`，只可供论文 benchmark 调用 | 作为统一目录中的**折内特征转换器**供普通任务选择；其实现、状态和审计均不依赖论文协议名称 |
+| 普通入口 | `main.py` 预计算 descriptor artifact，之后由各模型自行 CV；`yonod.py` 只列出既有静态描述符 | 在不破坏两阶段静态特征流程的前提下，增加 OHE 的显式 CV 执行分支与配置/向导 UX |
+
+#### 包含
+
+1. MFP 的公共导入、参数配置、静态 artifact、普通 JSON/CLI/向导接入与报告记录。
+2. OHE 的公共 fold-transform API、每折 `fit/transform`、可恢复的状态保存/加载、未知/缺失值策略和普通入口接入。
+3. 统一特征目录、唯一 feature ID、配置校验、向后兼容与完整的单元/端到端回归测试。
+
+#### 明确排除
+
+- 不把 OHE 纳入 `BaseDescriptor.featurize(smiles_list)`，不创建全数据 OHE `.npz`，也不允许通过预计算 artifact 绕过训练折拟合。
+- 不改变 `morgan` 的名称、二值 ECFP4 语义或默认参数；`mfp` 始终代表 Morgan **count** fingerprint。
+- 第一版不自动把 MFP、OHE、数值列或其他描述符拼成未经声明的组合。每个 feature ID 是一个独立模型候选；若后续需要组合，另以显式 `feature_set` 设计、测试和报告。
+- 不把普通随机 CV 的结果写成论文严格协议、分组泛化或外部验证结果。
+
+### 24.2 统一特征目录与公共 API
+
+#### 设计决策：同一目录，可区分生命周期
+
+“描述符库”在用户界面和配置层表示**统一特征目录**，但底层保留两类生命周期：
+
+| 生命周期 | 公共对象 | 可否全数据预计算 | CV 中的处理 |
+|---|---|---|---|
+| `static_descriptor` | `BaseDescriptor` 子类，例如 `MFPDescriptor` | 可以 | 运行前生成/校验 artifact，fold 仅切片读取 |
+| `fold_transform` | `OHEFeature`（名称可在实现期细化） | 不可以 | 每个 `(feature_id, repeat, fold)` 仅以训练集 `fit`，再分别 transform train/valid |
+
+推荐新增以下稳定导入面，避免用户依赖私有 `_get_descriptor()` 或 benchmark 内部类：
+
+```python
+from yonod.descriptors import MFPDescriptor, OHEFeature, get_feature_provider
+
+mfp = MFPDescriptor(radius=3, fp_size=1024)
+matrix, valid_mask = mfp.featurize(smiles_values)
+
+ohe = OHEFeature(columns=["catalyst", "solvent"], missing_policy="as_category")
+ohe.fit(train_frame, sample_ids=train_ids)
+X_valid = ohe.transform(valid_frame, partition="valid")
+ohe.save(state_directory)
+restored = OHEFeature.load(state_directory, expected_context=...)
+```
+
+实施时保留 `BaseDescriptor` 的现有抽象和既有子类 API，不在其上增加 `fit()` 义务。`yonod/descriptors/ohe.py` 应提供 `OHEFeature`，而 `yonod/benchmark/fold_preprocessors.py` 的 `ReactionComponentOHE` 变为同一实现的兼容别名/薄适配层，防止严格协议与普通入口各自维护一份有差异的编码规则。
+
+公共注册表至少暴露以下不可变元数据：`feature_name`、`lifecycle`、支持的输入类型、支持的模式、参数 schema 和简短的用户提示。`mfp` 注册为 `static_descriptor`；`ohe` 注册为 `fold_transform`。解析失败应报告可用特征与生命周期，而非静默回退到其它描述符。
+
+#### FeatureSpec 与唯一标识
+
+将每个候选特征规范化为内部 `FeatureSpec`，至少包含：
+
+- `id`：一次运行中唯一、用于 artifact/折状态/报告/模型结果的稳定 ID；未提供时兼容地等于 `descriptor`。
+- `descriptor`：稳定的注册名称，如 `mfp` 或 `ohe`。
+- `lifecycle`：由注册表推导并写入规范化配置，用户提供冲突值时报错。
+- `columns`、`mode` 与 `params`：保持用户声明顺序，纳入 schema hash；不允许因 set、字典遍历或自动排序改变列顺序。
+
+同一运行中若要对比多个 MFP 参数组合，必须使用不同 ID，例如 `mfp_r2`、`mfp_r3`；不能让两个条目同时写入 `mfp.npz`。旧 JSON 未填写 `id` 时继续产生原有 `morgan.npz` 等命名；重复的旧式同名条目应给出迁移提示而不是相互覆盖。
+
+### 24.3 MFP 的普通任务契约
+
+#### 配置与特征语义
+
+普通 JSON 的推荐形状如下。`mode: concat` 中 `columns` 的声明顺序就是特征块顺序；第一版仅支持该模式，避免把多个组分先合并再指纹化而混淆反应级语义。
+
+```json
+{
+  "version": "1.1",
+  "descriptors": [
+    {
+      "id": "mfp_r3",
+      "descriptor": "mfp",
+      "mode": "concat",
+      "columns": ["reactant-1", "catalyst", "solvent"],
+      "params": {"radius": 3, "fp_size": 1024, "profile": "standard"}
+    }
+  ]
+}
+```
+
+`MFPDescriptor(radius, fp_size)` 保持单组分、无状态 count Morgan 的公共语义。普通 `profile: standard` 复用一般静态描述符的输入规范化和有效行处置规则：无效组件写零块，行是否进入模型遵从常规 concat 的有效性策略。严格论文路径继续显式声明 `profile: vjethbkm`（或语义等价的严格字段），固定原始 CSV 值、`zero_block_keep_row` 和论文组件顺序。两种 profile 的完整配置、行策略、参数和列顺序都必须写入 artifact 指纹，绝不能复用彼此的特征文件。
+
+`main.py` 的 `_DESCRIPTOR_NAMES`、公开注册表、帮助文本、JSON schema 和 `example.json` 均增加 `mfp`。CLI 至少支持 `--descriptors mfp`；当不用 JSON 时，MFP 默认使用现有的 SMILES 列选择和 `radius=3/fp_size=1024`，并提供 `--mfp-radius`、`--mfp-fp-size` 覆盖。CLI 指定的值必须被转换成与 JSON 相同的规范化 `FeatureSpec`，而不是绕开 artifact/报告元数据。
+
+#### artifact 与报告
+
+每个静态 MFP feature ID 在 `results/<task>/descriptors/<id>.npz` 建立独立 artifact，复用既有样本 ID、有效性、数据指纹和原子写入契约，并追加：描述符实现版本、`radius`、`fp_size`、count 语义、profile、输入规范化/无效块策略、列顺序、块维度和 feature schema hash。`mfp` 不得被转换为 0/1 bit；测试至少包含一个桶计数大于 1 的分子。
+
+常规 HTML/Markdown/CSV 结果应显示 `feature_id`、`descriptor=mfp`、生命周期、列顺序、原始/有效样本数与最终维度；不能只显示含糊的“mfp”。
+
+### 24.4 OHE 的无泄漏公共 API、保存与加载
+
+#### 输入与可配置行为
+
+`ohe` 的 `columns` 是明确列出的类别身份列，可选自反应物、产物、其他组分或离散条件；不得按 dtype 自动猜测所有字符串列，也不得把标签列纳入。普通任务默认要求显式提供至少一个列名，列不存在、重复、标签列或纯数值连续列均应在配置校验阶段失败。
+
+第一版支持的参数及默认行为如下：
+
+| 参数 | 默认/可选值 | 契约 |
+|---|---|---|
+| `handle_unknown` | 固定 `ignore` | 验证/预测中的未见类别编码为其列块的全零，不触发重新拟合；计数写入 metadata |
+| `missing_policy` | `as_category`；可选 `zero_block`、`error` | 普通任务可把缺失作为训练折可见类别；论文严格配置仍用 `zero_block`，先稳定编码后将原始缺失的整块清零 |
+| `dtype` | `float32` | 输出在模型输入前转换为一致数值类型 |
+| `columns` | 必填、有序 | 决定编码器输入、输出块和特征名顺序 |
+
+`OHEFeature` 至少提供 `fit(train_frame, sample_ids=None)`、`transform(frame, partition)`、`get_feature_names_out()`、`metadata()`、`save(directory)` 和 `load(directory, expected_context)`。`transform` 在未 fit 时必须失败；`partition` 显式为 `train` 或 `valid`，以便记录未知/缺失审计。若支持独立预测，再新增命名清晰的 `partition="predict"`，不得复用模糊的默认值。
+
+#### 状态持久化与恢复
+
+OHE 的持久化对象是**某一训练折的编码器状态**，不是全数据描述符 artifact。建议输出位置：
+
+```text
+results/<task>/fold_transformers/<feature_id>/repeat-<r>/fold-<f>/
+  state.joblib          # 已拟合 OneHotEncoder 和必要策略状态，原子写入
+  metadata.json         # 可读、可校验的非敏感审计摘要
+```
+
+`metadata.json` 至少保存：`feature_id`、规范化 FeatureSpec/hash、数据指纹、split manifest hash、repeat/fold、训练样本 ID 哈希、声明列及顺序、类别数/类别哈希、输出维度、未知与缺失计数、缺失策略、sklearn 版本、状态文件校验和及创建时间。类别原文属于状态文件的最小必要内容；报告默认只输出哈希和计数，避免无意复制受限的化学或商业条件字符串。
+
+恢复时必须同时验证状态校验和、FeatureSpec/hash、数据/切分身份、repeat/fold 和训练样本集合哈希。任一项不符即拒绝加载并重新按该折训练集拟合，不能将相邻折、旧数据或全局 OHE 状态拿来变换新验证集。状态写入用临时文件加原子替换；读取失败、版本不兼容或 metadata 不完整须明确标记该折为不可恢复。默认不承诺跨 sklearn 主版本的二进制 state 可移植性，版本变化要么重算，要么由用户显式接受风险。
+
+### 24.5 普通 `main.py` 的执行与配置接入
+
+#### 统一运行流程
+
+常规入口仍保留“静态特征先落盘、模型再读取”的两阶段原则，但以 FeatureSpec 分流：
+
+1. 读取 JSON/CLI 后规范化并校验 FeatureSpec；先生成一次可复用的 CV index plan，确保同一候选特征与模型的折边界可审计。
+2. 对 `static_descriptor`（包括 MFP）执行现有 `prepare_descriptor_artifact()` → `load_descriptor_artifact()` 流程，再按折切片；数值缩放仍只在训练折拟合。
+3. 对 `fold_transform`（OHE）保留原始、有序的类别列帧；每折执行 `fit(train)`、`transform(train)`、`transform(valid)`，保存/校验该折状态后才构建并拟合模型。
+4. 每折用新模型实例训练，聚合 OOF 预测、指标、训练时间和 OHE 审计；不调用当前模型类中会隐式自建 CV 且无法插入 fold transform 的捷径。
+
+为避免遗漏无泄漏处理，新增或抽取一个普通 CV runner，让静态和 fold-transform 都通过同一个明确的 `train_idx/valid_idx` 循环。它必须复用现有模型构造、数值预处理、指标和报告字段，不能另建一套指标口径。普通入口的随机种子和折数保持现有 CLI/JSON 默认；论文 repeat seed 只在严格 benchmark 配置中生效。
+
+`descriptor_status.csv` 和最终报告增加 `lifecycle`、`feature_id`、`precompute_status` 或 `fold_transform_status`、成功/失败折数、输出维度范围（OHE 可随折变化）及状态目录。OHE 不应在 `descriptors/` 假装有一个可复用 `.npz`；其状态应显示为 `fold_local`。
+
+#### JSON 兼容与参数校验
+
+保留现有 `descriptors` 数组作为普通任务的公共配置面，升级 `version` 到可选的 `1.1`；旧 `1.0` 条目无 `id`/`params` 时按旧规则规范化。新条目可以使用 `id`、`params`，并由 `load_config_from_json()` 在真正读 CSV 前校验注册名称、列格式、模式与参数类型。禁止未知字段静默忽略；错误信息必须说明推荐配置和可用生命周期。
+
+对于 OHE：JSON 要求 `columns`；对于 MFP：未提供列时才遵循原有静态描述符的 SMILES 列默认选择，提供列时严格采用声明顺序。`feature_id`、列序、参数、缺失策略和生命周期进入运行配置 hash 与报告。已有的 `descriptors: [{"descriptor":"morgan", ...}]`、旧命令和旧 artifact 不需要迁移即可继续运行。
+
+### 24.6 CLI 与 `yonod.py` 向导体验
+
+#### CLI
+
+- `--descriptors` 的 choices 增加 `mfp` 与 `ohe`，帮助文本明确 `mfp=计数 Morgan`、`ohe=按 CV 训练折拟合的类别编码`。
+- 增加 `--mfp-radius`、`--mfp-fp-size`；它们只在选中 `mfp` 时生效，并写入规范化配置。
+- 增加 `--ohe-cols COL [COL ...]`（选择 OHE 时必填）和 `--ohe-missing-policy {as_category,zero_block,error}`；未提供列时拒绝执行并提示使用 JSON 或此参数，避免不透明的自动列选择。
+- 在启动日志中分开显示“待预计算静态特征”和“按折转换特征”，并在 OHE 场景显示 CV 折数与“训练折拟合”提示。
+
+#### 交互向导
+
+`yonod.py` 的步骤 4 增加两项，并在同屏标明语义差异：
+
+- `mfp`：逐列拼接的 Morgan count fingerprint；允许沿用当前静态 descriptor 的列选择和顺序界面，并可询问/显示半径、位数及默认值。
+- `ohe`：训练折内 one-hot 类别编码；展示可选的非标签类别列、让用户以明确顺序选择，并询问缺失策略。向导必须提示“不会生成全数据 OHE 描述符，运行时每折单独拟合”。
+
+生成的 JSON 必须直接是 `main.py` 可消费的 `FeatureSpec` 形状，含 `id`、`descriptor`、`columns` 和 `params`，而不是把 OHE 选择信息留在向导内存中。`example.json`、README 的描述符表和示例命令随之更新。既有 `yonod.py` 默认选择集合保持不变，避免用户仅按回车就意外启用高基数 OHE 或多一个 MFP 任务。
+
+### 24.7 向后兼容、严格协议隔离与迁移
+
+1. `morgan` 与 `mfp` 是不同稳定名称；不得用别名覆盖，也不得改变 morgan 的 `radius=2`、二值 1024 维默认行为。
+2. 严格 benchmark YAML 的 `feature_sets` 与普通 JSON 的 `descriptors` 可以共享 MFP/OHE 的核心实现，但分别保留自己的 profile/验证规则。严格 MFP 继续原始 CSV、零块保行；严格 OHE 继续 `zero_block`，并保留 5×5 seed/metadata 证据。
+3. 旧 `ReactionComponentOHE` 的 import 路径、行为和既有测试在一个过渡版本内继续有效；内部转发到公共 `OHEFeature`，待 deprecation 周期结束再移除。
+4. 旧静态 artifact schema 可照常读取；新增 `feature_id` 的新 artifact 不得覆盖旧文件。若同一路径发现同名、但 FeatureSpec/hash 不一致的文件，按现有不兼容逻辑重建或新建 ID，而不是错误复用。
+5. 普通 OHE 不可与旧 artifact 自动互认；OHE 的唯一可恢复输入是经验证的折状态目录和对应 split context。删除/缺失该状态时，重跑该折即可，不应影响 MFP artifact。
+
+### 24.8 分阶段实施、测试与验收门
+
+| 阶段 | 主要改动 | 验收 |
+|---|---|---|
+| G1：目录与 MFP 普通接入 | 公共 feature registry、`MFPDescriptor` 导出、FeatureSpec/JSON schema、普通 CLI/JSON/static artifact 的 `id` 与 params | `mfp` 可由 JSON 与 CLI 运行；count 语义、列序和参数变更都可审计；原有 static descriptor 回归通过 |
+| G2：通用 OHE API | 提取 `OHEFeature`、兼容 benchmark adapter、实现 metadata/原子 `save/load` 与严格 context 校验 | 未 fit 不能 transform；加载状态的输出与原对象一致；错误 context 被拒绝；严格 benchmark OHE 回归通过 |
+| G3：普通 CV runner | 为 `main.py` 接入显式折循环、OHE state 输出/恢复、统一数值预处理和报告状态 | 验证集类别绝不参与 fit；未知/缺失不丢行；普通 RF/SVM/XGBoost 小 fixture 完成 CV |
+| G4：CLI/向导与文档 | `yonod.py` 菜单/配置生成、示例 JSON、README、日志/HTML/Markdown | mock 向导输入生成合法 config；CLI 帮助和普通任务 smoke 可复现 |
+
+必须新增或扩充的测试：
+
+- `test_feature_registry.py`：`mfp/ohe` 的生命周期、公开导入、参数 schema、未知名称报错和稳定 ID 规则。
+- `test_mfp_general_descriptor.py`：count 非二值、普通 concat 列序、`radius/fp_size`、常规 invalid policy、artifact hash/cache 行为；并回归论文 profile 的 raw/零块保行语义。
+- `test_ohe_feature.py`：train-only categories、验证未见类别、三种缺失策略、feature names/块顺序、未 fit 报错、状态 save/load 等价、篡改/错折/错训练集哈希/错版本 context 拒绝。
+- `test_main_ohe_cv.py`：普通 JSON 的 OHE × 至少两个模型 CV；监控每折 `fit` 的样本集合不含 valid ID、没有 `prepare_descriptor_artifact("ohe")`、输出 OOF 与折状态完整。
+- `test_main_mfp_json_cli.py`：JSON 和 CLI 都能运行 MFP，二者规范化配置等价；保留普通 descriptor artifact 两阶段读取。
+- `test_yonod_wizard_features.py`：MFP/OHE 的交互配置快照、未选时旧默认描述符集不变、OHE 缺列无法生成配置。
+- 对既有 `test_ohe_fold_preprocessor.py`、论文 25-fold smoke、普通 CLI/JSON、MFP artifact、报告和旧配置回归建立联合测试门。
+
+#### 完成判定
+
+只有同时满足下列条件，才可宣称“MFP 与 OHE 已兼容到 YONOD 的普通任务特征库”：
+
+1. 用户能通过 JSON、CLI 或 `yonod.py` 选择 MFP/OHE，且生成配置可由 `main.py` 无人工修改执行。
+2. MFP 有稳定公共 API、独立 feature ID/artifact、可验证的 count 参数/列顺序；旧 Morgan 和论文 MFP profile 均未改变。
+3. OHE 的每一折状态可保存、验证、恢复；任何验证样本、未知类别或全数据类别表都没有参与该折 `fit`。
+4. 常规报告能区分 `static_descriptor` 和 `fold_transform`，并完整显示 OHE 的折成功度、维度范围和审计信息。
+5. 既有普通配置、`yonod.py` 默认流程和已交付的论文协议测试全部通过；新功能未迫使旧配置改版或覆盖已有 artifact。
+
+### 24.9 风险与防护
+
+| 风险 | 防护 |
+|---|---|
+| 将 OHE 当作全数据静态 descriptor 导致泄漏 | 类型系统/registry 区分 lifecycle；禁止 `prepare_descriptor_artifact("ohe")`；CV 级测试检查训练集 ID 哈希 |
+| 普通与论文 MFP 行策略混淆 | `profile`、列序和无效策略强制写入 FeatureSpec/artifact hash；固定双 profile 回归 fixture |
+| 高基数类别导致宽矩阵、内存或过拟合 | 向导展示每列训练折类别数量和维度；报告记录维度范围；第一版不默认选取任何列，后续再规划频次截断/哈希编码 |
+| joblib 状态跨环境不可读或不安全 | 仅读取本地受信任结果目录；校验 checksum/版本/context；版本不兼容时重算，不将状态作为不受限制的外部输入格式 |
+| 多个参数化 MFP 相互覆盖 | 引入唯一 `feature_id` 和 ID 对应 artifact 路径；拒绝重复 ID |
+| 为 OHE 重写 CV 导致静态模型结果漂移 | 复用同一 split、模型构造、数值 scaler 与指标函数；对普通静态 descriptor 做 before/after 结果与旧测试回归 |
+
+### 24.10 下一步行动建议
+
+由 **project-builder-cn** 按 G1 → G4 实施，优先完成公共注册表、MFP 的普通入口和 OHE 的无泄漏 API，再改 `main.py` 的 CV 编排，最后接入向导。每个阶段先跑针对性单元测试，再跑严格协议与普通入口回归；在 G3 的 OHE 泄漏、保存/加载与恢复测试全部通过前，不应在 README 中把 OHE 描述为已可供普通任务使用。
+
+---
+
 **文档结束**
