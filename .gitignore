@@ -40,19 +40,6 @@ AutogluonModels/
 result/
 docs/
 
-# ===================== Large model weights =====================
-# WEIGHTS/MolMetaLM-base/  is ~500 MB -- download separately, see README.
-# WEIGHTS/FISD/            is ~19 MB  -- no explicit license; not redistributed.
-#                          Copy the 3 .pth files from 化学描述符相关项目/FISD/
-#                          or retrain with the upstream notebooks; see README.
-WEIGHTS/MolMetaLM-base/
-WEIGHTS/FISD/
-
-# Generic large weight file types
-*.safetensors
-*.pt
-*.ckpt
-
 # ===================== Datasets =====================
 # dataset/ contains large/proprietary data; only the two MIT-licensed sample CSVs
 # (from github.com/aichemeco/amide_coupling) are tracked.
