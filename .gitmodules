@@ -1,0 +1,6 @@
+[submodule "reference-proejct/expansion-ml-comparison"]
+	path = reference-proejct/expansion-ml-comparison
+	url = https://github.com/PatWalters/expansion-ml-comparison.git
+[submodule "reference-proejct/polaris-method-comparison"]
+	path = reference-proejct/polaris-method-comparison
+	url = https://github.com/polaris-hub/polaris-method-comparison.git
