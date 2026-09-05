@@ -1,0 +1,9 @@
+# (Optional) remove existing env
+conda remove -n chemspace --all -y
+
+# Create env from environment.yml
+conda env create -f environment.yml
+
+# Run the project
+conda activate chemspace
+streamlit run app.py
