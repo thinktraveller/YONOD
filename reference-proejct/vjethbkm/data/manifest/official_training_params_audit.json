@@ -1,0 +1,108 @@
+{
+  "train_description": "YieldSmarter/Src/Train — Model training scripts\n===============================================\n\nThis folder contains scripts for training and evaluating machine-learning models\non reaction datasets. Two distinct training paradigms are used:\n\n1) Training on precomputed feature arrays (.npz)\n2) Training with on-the-fly encoding (for One-Hot Encoding only)\n\nThe distinction is important to avoid data leakage and to ensure fair evaluation.",
+  "ohe_fit_scope": "OneHotEncoder is fit on train_df[cols] inside each fold, then used to transform train/test.",
+  "cv_strategy": "For each outer_fold in range(outer_splits), KFold uses random_state=seed+outer_fold.",
+  "rf_defaults_literal": "n_estimators=500, max_features=0.3, n_jobs=-1",
+  "lgbm_defaults_literal": "n_estimators=500, colsample_bytree=0.3, n_jobs=-1",
+  "metrics": [
+    "mae",
+    "rmse",
+    "r2",
+    "medae",
+    "kendall"
+  ],
+  "config_summaries": {
+    "BH1.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "",
+      "descriptors_npz": "../../Results/Compare_Complexity/Doyle_2018/{descr_type}/Doyle_{descr_type}.npz",
+      "target_col": "",
+      "missing_token": "",
+      "zero_out_missing": ""
+    },
+    "BH1_OHE.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "../../Data/HTE_datasets/BH1/BH1.csv",
+      "descriptors_npz": "",
+      "target_col": "Yield",
+      "missing_token": "__MISSING__",
+      "zero_out_missing": true
+    },
+    "BH2.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "",
+      "descriptors_npz": "../../Results/Compare_Complexity/Denmark_2023/{descr_type}/Denmark_{descr_type}.npz",
+      "target_col": "",
+      "missing_token": "",
+      "zero_out_missing": ""
+    },
+    "BH2_OHE.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "../../Data/HTE_datasets/BH2/BH2.csv",
+      "descriptors_npz": "",
+      "target_col": "Yield",
+      "missing_token": "__MISSING__",
+      "zero_out_missing": true
+    },
+    "SL1.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "",
+      "descriptors_npz": "../../Results/Compare_Complexity/Bode_2023/{descr_type}/Bode_{descr_type}.npz",
+      "target_col": "",
+      "missing_token": "",
+      "zero_out_missing": ""
+    },
+    "SL1_OHE.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "../../Data/HTE_datasets/SL1/SL1.csv",
+      "descriptors_npz": "",
+      "target_col": "Yield",
+      "missing_token": "__MISSING__",
+      "zero_out_missing": true
+    },
+    "SM.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "",
+      "descriptors_npz": "../../Results/Compare_Complexity/Suzuki_2018/{descr_type}/Suzuki_{descr_type}.npz",
+      "target_col": "",
+      "missing_token": "",
+      "zero_out_missing": ""
+    },
+    "SM_OHE.json": {
+      "splits": 5,
+      "outer_splits": 5,
+      "seed": 1000,
+      "reaction_csv": "../../Data/HTE_datasets/SM/SM.csv",
+      "descriptors_npz": "",
+      "target_col": "Yield",
+      "missing_token": "__MISSING__",
+      "zero_out_missing": true
+    }
+  },
+  "local_runner_alignment": {
+    "implemented_after_audit": [
+      "core_rf_5x5 default n_estimators=500",
+      "core_rf_5x5 default rf_max_features=0.3",
+      "core_rf_5x5 default random_state=1000",
+      "RF model random_state varies by repeat as seed+repeat_index, matching official outer_fold behavior"
+    ],
+    "remaining_differences": [
+      "Official OHE writes medae in addition to MAE/RMSE/R2/Kendall; local Table S3 merge currently tracks four paper-facing metrics.",
+      "Official descriptor runner consumes precomputed .npz for MFP/PhysChem/DFT/SOAP; local Morgan/PhysChem descriptors are compatibility implementations until .npz adapter is added."
+    ]
+  }
+}

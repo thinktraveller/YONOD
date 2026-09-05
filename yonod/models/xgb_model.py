@@ -42,8 +42,11 @@ class XGBYieldModel:
     def __init__(
         self,
         n_estimators: int = 300,
+        # 尝试一下把n_estimators调大到1000，看看效果如何
         learning_rate: float = 0.05,
+        # 学习率应当在0.1左右？
         max_depth: int = 6,
+        # 学习深度调到10,“故意”让它过拟合看看效果
         tree_method: str = "hist",
         device: str = "auto",
         random_state: int = 42,
@@ -66,7 +69,7 @@ class XGBYieldModel:
 
     def cross_validate(
         self, X: np.ndarray, y: np.ndarray, cv: int = 5
-    ) -> Dict[str, float]:
+    ) -> Dict[str, float | str | np.ndarray]:
         kf = KFold(n_splits=cv, shuffle=True, random_state=42)
         r2s, rmses, maes = [], [], []
         oof = np.full(len(y), np.nan, dtype=np.float64)

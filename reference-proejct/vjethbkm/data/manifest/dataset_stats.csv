@@ -1,0 +1,2 @@
+dataset_id,path,sha256,n_rows_read,n_columns,target_column,target_missing,target_min,target_max,target_mean,unique_sub_1_smiles,missing_sub_1_smiles,unique_sub_2_smiles,missing_sub_2_smiles
+smoke_local_yonod,D:\大创\YONOD\dataset\test-amide-coupling(additive_fixed).csv,576da87557334f2c30b0b65fcc82ac8c138b8da84dfea70b9245f11871e9f732,10,9,yield,0,0.0218646,0.8727948,0.43876871489999997,9,0,8,0

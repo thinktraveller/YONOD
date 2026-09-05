@@ -117,9 +117,12 @@ def _fmt(v: Any, digits: int = 4) -> str:
 
 def _fmt_time(v: Any) -> str:
     """将秒数格式化为人类可读字符串，如 '3.2s' 或 '1m 23s'。"""
-    if v is None or (isinstance(v, float) and math.isnan(v)):
+    try:
+        s = float(v)
+    except (TypeError, ValueError):
         return "—"
-    s = float(v)
+    if not math.isfinite(s) or s < 0.0:
+        return "—"
     if s < 60:
         return f"{s:.1f}s"
     return f"{int(s)//60}m {int(s)%60}s"
@@ -146,6 +149,199 @@ def _b64_png(path: Path) -> Optional[str]:
     if path.exists():
         return base64.b64encode(path.read_bytes()).decode("ascii")
     return None
+
+
+_UNIVERSAL_TIME_COLUMNS = [
+    "descriptor", "model", "reported_rows", "total_train_time_s",
+    "is_time_comparable", "time_status",
+]
+_UNIVERSAL_DIMENSION_TIME_COLUMNS = [
+    "aggregation_dimension", "item", "expected_combinations",
+    "comparable_combinations", "noncomparable_combinations",
+    "is_time_comparable", "time_status", "total_train_time_s",
+]
+
+
+def _universal_time_summary(metrics_df: pd.DataFrame) -> pd.DataFrame:
+    """Create a conservative combination-level training-time summary.
+
+    The universal path has no fold-level prediction time contract.  It only
+    reports supplied ``train_time_s`` values and never manufactures a total
+    modelling duration from a missing prediction-time column.
+    """
+    if "train_time_s" not in metrics_df.columns:
+        return pd.DataFrame(columns=_UNIVERSAL_TIME_COLUMNS)
+    desc_col = "desc_name" if "desc_name" in metrics_df.columns else "descriptor"
+    model_col = "model_name" if "model_name" in metrics_df.columns else "model"
+    if desc_col not in metrics_df.columns or model_col not in metrics_df.columns:
+        return pd.DataFrame(columns=_UNIVERSAL_TIME_COLUMNS)
+    frame = metrics_df[[desc_col, model_col, "train_time_s"]].copy()
+    frame.columns = ["descriptor", "model", "train_time_s"]
+    frame["train_time_s"] = pd.to_numeric(frame["train_time_s"], errors="coerce")
+    rows: List[Dict[str, Any]] = []
+    for (descriptor, model), part in frame.groupby(["descriptor", "model"], sort=True, dropna=False):
+        times = part["train_time_s"].to_numpy(dtype=float)
+        valid = len(times) > 0 and all(math.isfinite(value) and value >= 0.0 for value in times)
+        rows.append({
+            "descriptor": str(descriptor),
+            "model": str(model),
+            "reported_rows": int(len(part)),
+            "total_train_time_s": float(times.sum()) if valid else float("nan"),
+            "is_time_comparable": bool(valid),
+            "time_status": "reported_train_time" if valid else "invalid_or_missing_train_time",
+        })
+    result = pd.DataFrame.from_records(rows, columns=_UNIVERSAL_TIME_COLUMNS)
+    if not result.empty:
+        result = result.sort_values(["is_time_comparable", "total_train_time_s"], ascending=[False, False], kind="stable")
+    return result
+
+
+def _universal_dimension_time_summary(
+    combination_summary: pd.DataFrame,
+    dimension: str,
+) -> pd.DataFrame:
+    """Summarise complete universal-report combinations by one dimension.
+
+    These are two alternative roll-ups of the reported combination training
+    times, not extra elapsed stages.  The universal path has no descriptor
+    featurisation timing contract, so it is excluded rather than duplicated
+    across every model.
+    """
+    if dimension not in {"descriptor", "model"}:
+        raise ValueError("dimension 必须是 descriptor 或 model")
+    required = set(_UNIVERSAL_TIME_COLUMNS)
+    if required.difference(combination_summary.columns):
+        return pd.DataFrame(columns=_UNIVERSAL_DIMENSION_TIME_COLUMNS)
+    rows: List[Dict[str, Any]] = []
+    for item, part in combination_summary.groupby(dimension, sort=True, dropna=False):
+        expected = int(len(part))
+        comparable = part["is_time_comparable"].fillna(False).astype(bool)
+        comparable_count = int(comparable.sum())
+        is_comparable = bool(expected > 0 and comparable_count == expected)
+        rows.append({
+            "aggregation_dimension": dimension,
+            "item": str(item),
+            "expected_combinations": expected,
+            "comparable_combinations": comparable_count,
+            "noncomparable_combinations": expected - comparable_count,
+            "is_time_comparable": is_comparable,
+            "time_status": "complete_and_comparable" if is_comparable else "contains_noncomparable_combination",
+            "total_train_time_s": float(part["total_train_time_s"].sum()) if is_comparable else float("nan"),
+        })
+    result = pd.DataFrame.from_records(rows, columns=_UNIVERSAL_DIMENSION_TIME_COLUMNS)
+    if not result.empty:
+        result = result.sort_values(["is_time_comparable", "total_train_time_s"], ascending=[False, False], kind="stable")
+    return result
+
+
+def _configure_chinese_matplotlib(plt: Any) -> None:
+    """Use an installed CJK font when available for Chinese plot labels."""
+    try:
+        from matplotlib import font_manager
+        installed = {font.name for font in font_manager.fontManager.ttflist}
+    except Exception:  # pragma: no cover - font discovery varies by platform
+        return
+    for candidate in ("Microsoft YaHei", "SimHei", "SimSun", "Noto Sans CJK SC"):
+        if candidate in installed:
+            current = list(plt.rcParams.get("font.sans-serif", []))
+            plt.rcParams["font.sans-serif"] = [candidate] + [name for name in current if name != candidate]
+            plt.rcParams["axes.unicode_minus"] = False
+            return
+
+
+def _write_universal_time_figure(
+    summary: pd.DataFrame,
+    out_dir: Path,
+    *,
+    dimension: str,
+) -> Optional[Path]:
+    """Create one named universal-report training-time comparison PNG."""
+    comparable = summary.loc[summary["is_time_comparable"].fillna(False).astype(bool)].copy() if not summary.empty else summary
+    if comparable.empty:
+        return None
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+    _configure_chinese_matplotlib(plt)
+    comparable = comparable.sort_values("total_train_time_s", ascending=False, kind="stable")
+    if dimension == "combination":
+        labels = (comparable["descriptor"].astype(str) + " × " + comparable["model"].astype(str)).tolist()
+        filename = "combination_training_time.png"
+        title = "描述符 × 模型：报告提供的训练时间"
+    elif dimension == "descriptor":
+        labels = comparable["item"].astype(str).tolist()
+        filename = "descriptor_training_time.png"
+        title = "描述符：各模型组合累计训练时间"
+    elif dimension == "model":
+        labels = comparable["item"].astype(str).tolist()
+        filename = "model_training_time.png"
+        title = "建模方法：各描述符组合累计训练时间"
+    else:  # pragma: no cover - internal callers use fixed dimensions
+        raise ValueError("未知的耗时图维度：{0}".format(dimension))
+    figure, axis = plt.subplots(figsize=(10, max(3.6, 0.62 * len(comparable) + 1.0)), constrained_layout=True)
+    positions = list(range(len(comparable)))
+    totals = comparable["total_train_time_s"].to_numpy(dtype=float)
+    axis.barh(positions, totals, color="#2563eb")
+    axis.set_yticks(positions, labels)
+    axis.invert_yaxis()
+    axis.set_xlabel("累计训练时间（秒）")
+    axis.set_title(title)
+    axis.grid(axis="x", alpha=0.2)
+    max_total = float(totals.max()) if len(totals) else 0.0
+    axis.set_xlim(0.0, max(0.01, max_total * 1.18))
+    for position, total in zip(positions, totals):
+        axis.annotate(_fmt_time(total), xy=(total, position), xytext=(5, 0), textcoords="offset points", va="center", fontsize=8)
+    figure.text(0.01, 0.01, "仅含 metrics_df.train_time_s；未提供预测时间，不能解释为端到端墙钟时间。", fontsize=7, color="#56657a")
+    pictures_dir = out_dir / "pictures"
+    pictures_dir.mkdir(parents=True, exist_ok=True)
+    path = pictures_dir / filename
+    figure.savefig(path, dpi=160)
+    plt.close(figure)
+    return path
+
+
+def _section_modeling_time(metrics_df: pd.DataFrame, out_dir: Path) -> str:
+    """Render a clear no-data state instead of a misleading zero-time chart."""
+    summary = _universal_time_summary(metrics_df)
+    if "train_time_s" not in metrics_df.columns:
+        return """
+<section>
+<h2>5 · 建模耗时与成本对比</h2>
+<p class="note">未提供组合级 <code>train_time_s</code>，无法绘制建模耗时图；报告未使用空值或零值代替耗时。</p>
+</section>"""
+    dimension_summaries = {
+        "descriptor": _universal_dimension_time_summary(summary, "descriptor"),
+        "model": _universal_dimension_time_summary(summary, "model"),
+    }
+    figure_paths = {
+        "combination": _write_universal_time_figure(summary, out_dir, dimension="combination"),
+        "descriptor": _write_universal_time_figure(dimension_summaries["descriptor"], out_dir, dimension="descriptor"),
+        "model": _write_universal_time_figure(dimension_summaries["model"], out_dir, dimension="model"),
+    }
+    def table_for(frame: pd.DataFrame) -> str:
+        shown = frame.copy()
+        if not shown.empty:
+            shown["total_train_time_s"] = shown["total_train_time_s"].map(_fmt_time)
+        return shown.to_html(index=False, escape=True) if not shown.empty else "<p class='note'>没有可用耗时记录。</p>"
+    def figure_for(key: str, caption: str) -> str:
+        path = figure_paths[key]
+        image = _b64_png(path) if path else None
+        if not image:
+            return "<p class='note'>没有可比较的有限非负训练时间，因此未生成零高柱状图。</p>"
+        return "<figure style='text-align:center'><img src='data:image/png;base64,{0}' alt='{1}' style='max-width:100%'/><figcaption class='note'>{1}；同一 PNG 由 Markdown 报告相对引用。</figcaption></figure>".format(image, _esc(caption))
+    return """
+<section>
+<h2>5 · 建模耗时与成本对比</h2>
+<p class="note">本路径仅汇总输入 <code>metrics_df.train_time_s</code>，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。描述符和建模方法图是组合时间的两种汇总视图，不与组合图相加；共享描述符特征化时间未提供，因此不重复归因。异常或缺失时间标为不可比较，不以零秒显示。</p>
+<h3>描述符 × 建模方法组合</h3>{combination_table}{combination_figure}
+<h3>按描述符汇总</h3><p class="note">每根柱为该描述符下所有完整且时间可比较模型组合的累计训练时间。</p>{descriptor_table}{descriptor_figure}
+<h3>按建模方法汇总</h3><p class="note">每根柱为该建模方法在所有描述符下完整且时间可比较组合的累计训练时间。</p>{model_table}{model_figure}
+</section>""".format(
+        combination_table=table_for(summary), combination_figure=figure_for("combination", "组合训练时间柱状图"),
+        descriptor_table=table_for(dimension_summaries["descriptor"]), descriptor_figure=figure_for("descriptor", "描述符累计训练时间柱状图"),
+        model_table=table_for(dimension_summaries["model"]), model_figure=figure_for("model", "建模方法累计训练时间柱状图"),
+    )
 
 
 # ─────────────────────────────── HTML 段落 ──────────────────────────────────── #
@@ -233,6 +429,12 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
 
 def _section_grid(df: pd.DataFrame) -> str:
     """4×N 描述符 × 模型矩阵，单元格显示 R²/RMSE/MAE。"""
+    if df.empty:
+        return """
+<section>
+<h2>1 · 描述符 × 模型结果矩阵</h2>
+<p class="note">没有有效模型结果；请查看“描述符预计算状态”中的失败原因。</p>
+</section>"""
     # 统一列名
     desc_col  = "desc_name"  if "desc_name"  in df.columns else "descriptor"
     model_col = "model_name" if "model_name" in df.columns else "model"
@@ -465,6 +667,54 @@ def _section_descriptor_config(task_info: Dict[str, Any]) -> str:
 </section>"""
 
 
+def _section_descriptor_precomputation(task_info: Dict[str, Any]) -> str:
+    """Show descriptor artifact reuse/recompute/failure outcomes."""
+    statuses = task_info.get("descriptor_statuses", [])
+    if not statuses:
+        return ""
+    labels = {
+        "computed": "新生成",
+        "recomputed": "已重算",
+        "reused": "已复用",
+        "deferred": "按折拟合",
+        "completed": "已完成",
+        "failed": "失败",
+    }
+    rows_html = ""
+    for item in statuses:
+        status = str(item.get("status", "—"))
+        rows_html += (
+            "<tr>"
+            f"<td><b>{_esc(item.get('feature_id', item.get('descriptor', '—')))}</b></td>"
+            f"<td>{_esc(item.get('descriptor', '—'))}</td>"
+            f"<td>{_esc(item.get('lifecycle', 'static_descriptor'))}</td>"
+            f"<td>{_esc(labels.get(status, status))}</td>"
+            f"<td>{_esc(item.get('stage', '—'))}</td>"
+            f"<td>{_fmt(item.get('n_valid'))}/{_fmt(item.get('n_total'))}</td>"
+            f"<td>{_fmt(item.get('feature_dim_min', item.get('feature_dim')))}–{_fmt(item.get('feature_dim_max', item.get('feature_dim')))}</td>"
+            f"<td>{_fmt(item.get('completed_folds'))}</td>"
+            f"<td>{_esc(item.get('skipped_model_count', 0))}</td>"
+            f"<td style='text-align:left'>{_esc(item.get('reason', ''))}</td>"
+            f"<td style='text-align:left'><code>{_esc(item.get('artifact_path', '—'))}</code></td>"
+            "</tr>\n"
+        )
+    status_path = task_info.get("descriptor_status_path")
+    status_note = (
+        f"<p class='note'>完整机器可读状态：<code>{_esc(status_path)}</code></p>"
+        if status_path else ""
+    )
+    return f"""
+<section>
+<h2>4.2 · 特征准备状态（描述符预计算状态）</h2>
+<p class="note">静态描述符从持久化文件读取；fold_transform 只在训练折拟合并保存折级状态。单个特征失败时仅跳过其模型任务。</p>
+<table>
+<thead><tr><th>特征 ID</th><th>实现</th><th>生命周期</th><th>状态</th><th>阶段</th><th>有效/总样本</th><th>维度范围</th><th>完成折数</th><th>跳过模型数</th><th>原因</th><th>文件</th></tr></thead>
+<tbody>{rows_html}</tbody>
+</table>
+{status_note}
+</section>"""
+
+
 def _section_data_paths(task_info: Dict[str, Any]) -> str:
     """数据路径信息段落。"""
     origin_path = task_info.get("origin_dataset_path")
@@ -508,7 +758,7 @@ def _section_data_paths(task_info: Dict[str, Any]) -> str:
 
     return f"""
 <section>
-<h2>4.2 · 数据路径</h2>
+<h2>4.3 · 数据路径</h2>
 <table>
 {rows_html}
 </table>
@@ -559,7 +809,7 @@ def generate_report(
         task_info:  任务元数据字典，键包括：
                     task_name, csv_path, n_samples,
                     smiles_cols, numeric_cols, label_col, n_combinations。
-        out_dir:    输出目录（同时扫描其中的 scatter_*.png）。
+        out_dir:    输出根目录；图片位于 pictures/，报告位于 report/。
         filename:   输出 HTML 文件名（默认 report.html）。
 
     Returns:
@@ -567,6 +817,9 @@ def generate_report(
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "pictures").mkdir(parents=True, exist_ok=True)
+    report_dir = out_dir / "report"
+    report_dir.mkdir(parents=True, exist_ok=True)
 
     now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ranked = rank_combinations(metrics_df)
@@ -578,7 +831,9 @@ def generate_report(
         + _section_ranking(ranked)
         + _section_column_mapping(task_info)
         + _section_descriptor_config(task_info)
+        + _section_descriptor_precomputation(task_info)
         + _section_data_paths(task_info)
+        + _section_modeling_time(metrics_df, out_dir)
         + _section_scatter(out_dir)
     )
 
@@ -605,7 +860,7 @@ MathJax = {{
 </body>
 </html>"""
 
-    out_path = out_dir / filename
+    out_path = report_dir / filename
     out_path.write_text(html, encoding="utf-8")
     return out_path
 
@@ -622,6 +877,9 @@ def generate_markdown_report(
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "pictures").mkdir(parents=True, exist_ok=True)
+    report_dir = out_dir / "report"
+    report_dir.mkdir(parents=True, exist_ok=True)
 
     now       = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     task_name = str(task_info.get("task_name", "—"))
@@ -637,6 +895,11 @@ def generate_markdown_report(
         if v is None or (isinstance(v, float) and math.isnan(float(v))):
             return "—"
         return f"{float(v):.{d}f}"
+
+    def _md(v: Any) -> str:
+        if v is None:
+            return "—"
+        return str(v).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
 
     lines: List[str] = []
 
@@ -682,22 +945,24 @@ def generate_markdown_report(
         lines.append("")
 
     # ── 结果矩阵（R²）────────────────────────────────────────────────────────
-    descs  = metrics_df[desc_col].unique().tolist()
-    models = metrics_df[model_col].unique().tolist()
-
     lines += ["---", "", "## 结果矩阵（R²）", ""]
-    header = "| 描述符 \\ 模型 | " + " | ".join(models) + " |"
-    sep    = "|---|" + "---|" * len(models)
-    lines += [header, sep]
-    for d in descs:
-        cells = []
-        for m in models:
-            sub = metrics_df[(metrics_df[desc_col] == d) & (metrics_df[model_col] == m)]
-            if sub.empty:
-                cells.append("—")
-            else:
-                cells.append(_fv(sub.iloc[0].get(r2_col, float("nan"))))
-        lines.append("| " + d + " | " + " | ".join(cells) + " |")
+    if metrics_df.empty:
+        lines += ["没有有效模型结果；请查看下方“描述符预计算状态”中的失败原因。"]
+    else:
+        descs  = metrics_df[desc_col].unique().tolist()
+        models = metrics_df[model_col].unique().tolist()
+        header = "| 描述符 \\ 模型 | " + " | ".join(models) + " |"
+        sep    = "|---|" + "---|" * len(models)
+        lines += [header, sep]
+        for d in descs:
+            cells = []
+            for m in models:
+                sub = metrics_df[(metrics_df[desc_col] == d) & (metrics_df[model_col] == m)]
+                if sub.empty:
+                    cells.append("—")
+                else:
+                    cells.append(_fv(sub.iloc[0].get(r2_col, float("nan"))))
+            lines.append("| " + d + " | " + " | ".join(cells) + " |")
     lines.append("")
 
     # ── 详细指标 ─────────────────────────────────────────────────────────────
@@ -706,16 +971,19 @@ def generate_markdown_report(
     time_sep = "---|" if has_time else ""
 
     lines += ["---", "", "## 详细指标", ""]
-    lines.append(f"| 描述符 | 模型 | R² 均值 | R² 标准差 | RMSE | MAE |{time_th}")
-    lines.append(f"|---|---|---|---|---|---|{time_sep}")
-    for _, row in metrics_df.iterrows():
-        r2_std = row.get("r2_std", float("nan")) if "r2_std" in row.index else float("nan")
-        t_cell = f" {_fmt_time(row.get('train_time_s'))} |" if has_time else ""
-        lines.append(
-            f"| {row[desc_col]} | {row[model_col]}"
-            f" | {_fv(row.get(r2_col))} | {_fv(r2_std)}"
-            f" | {_fv(row.get(rmse_col))} | {_fv(row.get(mae_col))} |{t_cell}"
-        )
+    if metrics_df.empty:
+        lines.append("无有效指标记录。")
+    else:
+        lines.append(f"| 描述符 | 模型 | R² 均值 | R² 标准差 | RMSE | MAE |{time_th}")
+        lines.append(f"|---|---|---|---|---|---|{time_sep}")
+        for _, row in metrics_df.iterrows():
+            r2_std = row.get("r2_std", float("nan")) if "r2_std" in row.index else float("nan")
+            t_cell = f" {_fmt_time(row.get('train_time_s'))} |" if has_time else ""
+            lines.append(
+                f"| {row[desc_col]} | {row[model_col]}"
+                f" | {_fv(row.get(r2_col))} | {_fv(r2_std)}"
+                f" | {_fv(row.get(rmse_col))} | {_fv(row.get(mae_col))} |{t_cell}"
+            )
     lines.append("")
 
     # ── 推荐组合 ─────────────────────────────────────────────────────────────
@@ -756,6 +1024,70 @@ def generate_markdown_report(
     else:
         lines += ["无有效结果。", ""]
 
+    # ── 建模耗时与成本对比 ───────────────────────────────────────────────────
+    time_summary = _universal_time_summary(metrics_df)
+    descriptor_time_summary = _universal_dimension_time_summary(time_summary, "descriptor")
+    model_time_summary = _universal_dimension_time_summary(time_summary, "model")
+    time_figures = {
+        "combination": _write_universal_time_figure(time_summary, out_dir, dimension="combination") if "train_time_s" in metrics_df.columns else None,
+        "descriptor": _write_universal_time_figure(descriptor_time_summary, out_dir, dimension="descriptor") if "train_time_s" in metrics_df.columns else None,
+        "model": _write_universal_time_figure(model_time_summary, out_dir, dimension="model") if "train_time_s" in metrics_df.columns else None,
+    }
+    lines += ["---", "", "## 建模耗时与成本对比", ""]
+    if "train_time_s" not in metrics_df.columns:
+        lines += ["未提供组合级 `train_time_s`，无法绘制建模耗时图；报告未使用空值或零值代替耗时。", ""]
+    else:
+        lines += [
+            "本路径仅汇总输入 `metrics_df.train_time_s`，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。描述符和建模方法图是组合时间的两种汇总视图，不与组合图相加；共享描述符特征化时间未提供，因此不重复归因。异常或缺失时间标为不可比较，不以零秒显示。",
+            "",
+            "### 描述符 × 建模方法组合",
+            "",
+            "| 描述符 | 模型 | 报告记录数 | 组合训练时间 | 可比较 | 时间状态 |",
+            "|---|---|---|---|---|---|",
+        ]
+        if time_summary.empty:
+            lines += ["| — | — | — | — | 否 | 无可用记录 |"]
+        else:
+            for _, row in time_summary.iterrows():
+                lines.append(
+                    "| {0} | {1} | {2} | {3} | {4} | {5} |".format(
+                        row["descriptor"], row["model"], int(row["reported_rows"]),
+                        _fmt_time(row["total_train_time_s"]), "是" if bool(row["is_time_comparable"]) else "否",
+                        row["time_status"],
+                    )
+                )
+        if time_figures["combination"]:
+            lines += ["", "![组合训练时间柱状图](../pictures/{0})".format(time_figures["combination"].name)]
+        else:
+            lines += ["", "> 没有可比较的有限非负训练时间，因此未生成零高柱状图。"]
+        for title, frame, figure, label in (
+            ("按描述符汇总", descriptor_time_summary, time_figures["descriptor"], "描述符累计训练时间柱状图"),
+            ("按建模方法汇总", model_time_summary, time_figures["model"], "建模方法累计训练时间柱状图"),
+        ):
+            lines += [
+                "", "### {0}".format(title), "",
+                "每根柱为该维度下所有完整且时间可比较组合的累计训练时间。",
+                "",
+                "| 项目 | 预期组合数 | 可比较组合数 | 不可比较组合数 | 累计训练时间 | 可比较 | 时间状态 |",
+                "|---|---|---|---|---|---|---|",
+            ]
+            if frame.empty:
+                lines += ["| — | — | — | — | — | 否 | 无可用记录 |"]
+            else:
+                for _, row in frame.iterrows():
+                    lines.append(
+                        "| {0} | {1} | {2} | {3} | {4} | {5} | {6} |".format(
+                            row["item"], int(row["expected_combinations"]), int(row["comparable_combinations"]),
+                            int(row["noncomparable_combinations"]), _fmt_time(row["total_train_time_s"]),
+                            "是" if bool(row["is_time_comparable"]) else "否", row["time_status"],
+                        )
+                    )
+            if figure:
+                lines += ["", "![{0}](../pictures/{1})".format(label, figure.name)]
+            else:
+                lines += ["", "> 没有可比较的有限非负训练时间，因此未生成零高柱状图。"]
+        lines.append("")
+
     # ── 列映射与分类 ─────────────────────────────────────────────────────────
     column_mapping = task_info.get("column_mapping", [])
     if column_mapping:
@@ -793,6 +1125,47 @@ def generate_markdown_report(
             columns_str = ", ".join(columns) if columns else "（全部SMILES列）"
             mode_cn = mode_cn_map.get(mode, mode)
             lines.append(f"| **{desc_name}** | {mode_cn} | `{columns_str}` |")
+        lines.append("")
+
+    # ── 描述符预计算状态 ───────────────────────────────────────────────────
+    descriptor_statuses = task_info.get("descriptor_statuses", [])
+    if descriptor_statuses:
+        status_labels = {
+            "computed": "新生成",
+            "recomputed": "已重算",
+            "reused": "已复用",
+            "deferred": "按折拟合",
+            "completed": "已完成",
+            "failed": "失败",
+        }
+        lines += [
+            "---", "", "## 特征准备状态（描述符预计算状态）", "",
+            "静态描述符从持久化文件读取；fold_transform 只在训练折拟合并保存折级状态。单个特征失败时仅跳过其模型任务。", "",
+            "| 特征 ID | 实现 | 生命周期 | 状态 | 阶段 | 有效/总样本 | 维度范围 | 完成折数 | 跳过模型数 | 原因 | 文件 |",
+            "|---|---|---|---|---|---|---|---|---|---|---|",
+        ]
+        for item in descriptor_statuses:
+            status = str(item.get("status", "—"))
+            lines.append(
+                "| {feature_id} | {descriptor} | {lifecycle} | {status} | {stage} | {n_valid}/{n_total} | {feature_dim_min}–{feature_dim_max} | {completed_folds} | {skipped} | {reason} | `{path}` |".format(
+                    feature_id=_md(item.get("feature_id", item.get("descriptor", "—"))),
+                    descriptor=_md(item.get("descriptor", "—")),
+                    lifecycle=_md(item.get("lifecycle", "static_descriptor")),
+                    status=_md(status_labels.get(status, status)),
+                    stage=_md(item.get("stage", "—")),
+                    n_valid=_md(item.get("n_valid", "—")),
+                    n_total=_md(item.get("n_total", "—")),
+                    feature_dim_min=_md(item.get("feature_dim_min", item.get("feature_dim", "—"))),
+                    feature_dim_max=_md(item.get("feature_dim_max", item.get("feature_dim", "—"))),
+                    completed_folds=_md(item.get("completed_folds", "—")),
+                    skipped=_md(item.get("skipped_model_count", 0)),
+                    reason=_md(item.get("reason", "")),
+                    path=_md(item.get("artifact_path", "—")),
+                )
+            )
+        status_path = task_info.get("descriptor_status_path")
+        if status_path:
+            lines += ["", f"完整机器可读状态：`{_md(status_path)}`"]
         lines.append("")
 
     # ── 数据路径 ─────────────────────────────────────────────────────────────
@@ -841,6 +1214,6 @@ def generate_markdown_report(
         f"*由 YONOD report.py 自动生成 · {now}*",
     ]
 
-    out_path = out_dir / filename
+    out_path = report_dir / filename
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path

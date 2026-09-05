@@ -1,0 +1,23 @@
+version: 1
+stages:
+  smoke:
+    dataset: smoke_local_yonod
+    descriptors: [ohe, morgan, physchem]
+    models: [rf]
+    split: random_5x5
+    max_rows: 10
+    repeats: 1
+    folds: 2
+  core_rf_5x5:
+    dataset: pending_official_dataset
+    descriptors: [ohe, morgan, physchem]
+    models: [rf]
+    split: random_5x5
+    status: blocked_until_official_data_available
+  main_figures:
+    dataset: pending_official_dataset
+    descriptors: [ohe, morgan, physchem, dft, soap]
+    models: [rf]
+    split: [random_5x5, bh2_external, holdout_1d, holdout_2d]
+    status: planned
+

@@ -1,18 +1,19 @@
 """
 YONOD 数据集输入向导 (Dataset Input Wizard)
 
-完全重构的数据集输入流程,采用向导式、逐列声明的交互方式。
+完全重构的数据集输入与建模配置流程,采用向导式、逐列声明的交互方式。
 
 核心功能:
 1. 逐列声明列角色(标签、反应物SMILES、产物SMILES、其他组分SMILES、条件数值)
 2. 合法性检验(SMILES合法性、数值合法性)
-3. 生成规范数据集(固定列顺序)
+3. 生成规范数据集(固定列顺序，写入 docs/)
 4. 生成列映射文件(记录原始列名→角色→新列名的对应关系)
-5. 生成非法输入报告(Markdown格式)
+5. 生成非法输入报告(Markdown格式，写入 report/)
+6. 选择已接入主建模流程的模型并生成配置；完成后可自动调用 main.py 建模
 
 作者: YONOD构建专家
-版本: v1.0
-日期: 2026-06-29
+版本: v1.1
+日期: 2026-09-03
 """
 
 import os
@@ -29,6 +30,18 @@ from rdkit import RDLogger
 
 # 静默RDKit警告信息
 RDLogger.DisableLog('rdApp.*')
+
+
+def _create_project_output_layout(project_folder: str) -> Dict[str, str]:
+    """Create the stable output layout for a newly configured project."""
+    layout = {
+        'docs': os.path.join(project_folder, 'docs'),
+        'pictures': os.path.join(project_folder, 'pictures'),
+        'report': os.path.join(project_folder, 'report'),
+    }
+    for path in layout.values():
+        os.makedirs(path, exist_ok=True)
+    return layout
 
 
 def step1_collect_basic_info() -> Dict:
@@ -108,7 +121,11 @@ def step1_collect_basic_info() -> Dict:
 
         if os.path.isdir(project_folder) or not os.path.exists(project_folder):
             os.makedirs(project_folder, exist_ok=True)
+            layout = _create_project_output_layout(project_folder)
             print(f"[OK] 项目文件夹: {project_folder}")
+            print(f"     文档: {layout['docs']}")
+            print(f"     图片: {layout['pictures']}")
+            print(f"     报告: {layout['report']}")
             break
         else:
             print("[X] 路径无效或不是文件夹")
@@ -146,6 +163,11 @@ def _precheck_csv_format(file_path: str, encoding: str = 'utf-8') -> List[Dict]:
             expected_fields = len(header)
 
             for line_num, row in enumerate(reader, start=2):  # 从第2行开始（第1行是表头）
+                # 电子表格有时会把尾部空行写为 `,,,,`。这些记录不含实际数据，
+                # 即使分隔符数量与表头不一致也不应当作为格式错误报告。
+                if not row or all(not field.strip() for field in row):
+                    continue
+
                 actual_fields = len(row)
                 if actual_fields != expected_fields:
                     # 截断过长的内容，避免输出过多
@@ -164,6 +186,22 @@ def _precheck_csv_format(file_path: str, encoding: str = 'utf-8') -> List[Dict]:
         pass
 
     return bad_lines
+
+
+def _find_delimiter_only_empty_rows(file_path: str, encoding: str) -> List[int]:
+    """返回仅含逗号和空白字符的记录在文件中的零基行号。"""
+    empty_row_indices = []
+
+    with open(file_path, 'r', encoding=encoding, newline='') as f:
+        for row_index, line in enumerate(f):
+            if row_index == 0:
+                continue
+
+            stripped_line = line.strip()
+            if ',' in stripped_line and not stripped_line.strip(',').strip():
+                empty_row_indices.append(row_index)
+
+    return empty_row_indices
 
 
 def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
@@ -186,11 +224,17 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
     df = None
     used_encoding = None
     parser_error = None
+    delimiter_only_empty_rows = []
 
     for encoding in encodings_to_try:
         try:
+            delimiter_only_empty_rows = _find_delimiter_only_empty_rows(dataset_path, encoding)
             # 首先尝试严格模式读取
-            df = pd.read_csv(dataset_path, encoding=encoding)
+            df = pd.read_csv(
+                dataset_path,
+                encoding=encoding,
+                skiprows=delimiter_only_empty_rows or None
+            )
             used_encoding = encoding
             if encoding != 'utf-8':
                 print(f"[OK] 使用 {encoding.upper()} 编码成功读取")
@@ -247,6 +291,7 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
             df = pd.read_csv(
                 dataset_path,
                 encoding=used_encoding,
+                skiprows=delimiter_only_empty_rows or None,
                 on_bad_lines='warn'  # 'skip' 静默跳过，'warn' 显示警告
             )
             skipped_count = len(bad_lines) if bad_lines else 0
@@ -259,6 +304,7 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
                 df = pd.read_csv(
                     dataset_path,
                     encoding=used_encoding,
+                    skiprows=delimiter_only_empty_rows or None,
                     error_bad_lines=False,
                     warn_bad_lines=True
                 )
@@ -277,6 +323,9 @@ def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
             print(f"\n[X] 无法自动修复 CSV 格式问题: {fallback_error}")
             print(f"    请手动检查并修复上述问题行后重试")
             raise parser_error from fallback_error
+
+    if delimiter_only_empty_rows:
+        print(f"[OK] 已忽略 {len(delimiter_only_empty_rows)} 行仅包含分隔符的空记录")
 
     print(f"\n数据集基本信息:")
     print(f"  总行数: {len(df)}")
@@ -1105,7 +1154,8 @@ def step3_1_generate_invalid_report(
 
     print(f"\n生成非法输入排除报告... 共 {len(all_invalid_rows)} 行")
 
-    report_path = os.path.join(project_folder, f"{project_name}_invalid_report.md")
+    report_path = os.path.join(project_folder, 'report', f"{project_name}_invalid_report.md")
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(f"# {project_name} 非法输入排除报告\n\n")
@@ -1362,7 +1412,8 @@ def step3_3_generate_normalized_dataset(
     normalized_df = normalized_df.fillna('')
 
     # 保存
-    normalized_path = os.path.join(project_folder, f"{project_name}_normalized_dataset.csv")
+    normalized_path = os.path.join(project_folder, 'docs', f"{project_name}_normalized_dataset.csv")
+    os.makedirs(os.path.dirname(normalized_path), exist_ok=True)
     normalized_df.to_csv(normalized_path, index=False, encoding='utf-8')
 
     print(f"[OK] 规范数据集已生成: {normalized_path}")
@@ -1444,6 +1495,8 @@ def step4_select_descriptors():
 
     descriptors = {
         'morgan': '横向拼接,可编辑参与列和拼接顺序',
+        'mfp': '逐列拼接的 Morgan count fingerprint（默认 radius=3、1024维）',
+        'ohe': '类别 one-hot；只在每个 CV 训练折拟合，不生成全数据描述符',
         'maccs': '横向拼接,可编辑参与列和拼接顺序',
         'rdkit2d': '横向拼接,可编辑参与列和拼接顺序',
         'fisd': '横向拼接,可编辑参与列和拼接顺序',
@@ -1463,7 +1516,12 @@ def step4_select_descriptors():
         user_input = input("描述符序号: ").strip()
 
         if user_input == '':
-            selected = list(descriptors.keys())
+            # Keep the historical default grid stable: MFP/OHE are opt-in so
+            # a user who simply presses Enter does not unexpectedly add a
+            # count fingerprint or a high-cardinality categorical baseline.
+            selected = [
+                'morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm', 'maf', 'drfp'
+            ]
             break
 
         try:
@@ -1508,7 +1566,7 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
     for idx, cfg in enumerate(smiles_columns):
         print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
 
-    if descriptor_name in ['morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
+    if descriptor_name in ['morgan', 'mfp', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
         # 横向拼接模式
         print("\n该描述符为横向拼接模式")
         print("默认顺序: reactant -> others -> product")
@@ -1543,10 +1601,61 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
 
         print(f"[OK] 拼接顺序: {' -> '.join(columns)}")
 
-        return {
+        result = {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'concat',
             'columns': columns
+        }
+        if descriptor_name == 'mfp':
+            print("\nMFP 使用 Morgan count fingerprint（与二值 morgan 不同）。")
+            while True:
+                radius_text = input("Morgan 半径 [3]: ").strip() or "3"
+                bits_text = input("每组分维度 [1024]: ").strip() or "1024"
+                try:
+                    radius, fp_size = int(radius_text), int(bits_text)
+                    if radius < 0 or fp_size < 8:
+                        raise ValueError
+                    result['params'] = {
+                        'radius': radius, 'fp_size': fp_size, 'profile': 'standard'
+                    }
+                    break
+                except ValueError:
+                    print("[X] 半径必须 >= 0，维度必须 >= 8")
+        return result
+
+    elif descriptor_name == 'ohe':
+        category_columns = [cfg for cfg in all_column_configs if cfg['role'] != 'label']
+        if not category_columns:
+            raise ValueError("OHE 需要至少一个非标签类别列")
+        print("\nOHE 不会生成全数据描述符：每个 CV 训练折将单独拟合类别表。")
+        print("请选择有序类别列（通常为反应物、其他组分或离散条件）：")
+        for idx, cfg in enumerate(category_columns):
+            print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
+        while True:
+            user_input = input("列序号（逗号分隔）: ").strip()
+            try:
+                indices = [int(value.strip()) for value in user_input.split(',')]
+                if not indices or not all(0 <= index < len(category_columns) for index in indices):
+                    raise ValueError
+                if len(set(indices)) != len(indices):
+                    print("[X] 列不能重复")
+                    continue
+                columns = [category_columns[index]['name'] for index in indices]
+                break
+            except ValueError:
+                print("[X] 请输入至少一个有效且不重复的列序号")
+        print("缺失值策略：1) as_category（默认） 2) zero_block 3) error")
+        policy_map = {'': 'as_category', '1': 'as_category', '2': 'zero_block', '3': 'error'}
+        while True:
+            policy = policy_map.get(input("选择 [1]: ").strip())
+            if policy:
+                break
+            print("[X] 请输入 1、2 或 3")
+        return {
+            'id': 'ohe',
+            'descriptor': 'ohe', 'mode': 'concat', 'columns': columns,
+            'params': {'missing_policy': policy, 'dtype': 'float32', 'handle_unknown': 'ignore'},
         }
 
     elif descriptor_name == 'maf':
@@ -1569,6 +1678,7 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
         print(f"[OK] 参与加和的列: {', '.join(columns)}")
 
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'sum',
             'columns': columns
@@ -1608,6 +1718,7 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
             print("[OK] 使用默认reactant列")
 
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'reaction',
             'extra_reactants': extra_reactants
@@ -1625,7 +1736,7 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
     Returns:
         dict: 描述符配置字典
     """
-    if descriptor_name in ['morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
+    if descriptor_name in ['morgan', 'mfp', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
         # concat模式: 按 reactant → others → product 顺序
         columns = []
         for role in ['reactant', 'others', 'product']:
@@ -1633,11 +1744,15 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
                 if cfg['role'] == role:
                     columns.append(cfg['name'])
 
-        return {
+        result = {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'concat',
             'columns': columns
         }
+        if descriptor_name == 'mfp':
+            result['params'] = {'radius': 3, 'fp_size': 1024, 'profile': 'standard'}
+        return result
 
     elif descriptor_name == 'maf':
         # sum模式: 包含所有SMILES列
@@ -1647,6 +1762,7 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
         ]
 
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'sum',
             'columns': columns
@@ -1655,6 +1771,7 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
     elif descriptor_name == 'drfp':
         # reaction模式: extra_reactants为空
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'reaction',
             'extra_reactants': []
@@ -1687,6 +1804,15 @@ def display_descriptor_configs_summary(descriptor_configs):
         if mode == 'concat':
             # 横向拼接模式: 显示列顺序
             columns_str = ' → '.join(config['columns'])
+            if desc_name == 'ohe':
+                policy = config.get('params', {}).get('missing_policy', 'as_category')
+                columns_str = f"训练折 OHE: {columns_str}（缺失={policy}）"
+            elif desc_name == 'mfp':
+                params = config.get('params', {})
+                columns_str = (
+                    f"count r={params.get('radius', 3)}, d={params.get('fp_size', 1024)}: "
+                    + columns_str
+                )
             if len(columns_str) > 45:
                 columns_str = columns_str[:42] + '...'
         elif mode == 'sum':
@@ -1753,7 +1879,13 @@ def step4_orchestrate(all_column_configs):
     # 4.2 自动生成所有描述符的默认配置
     descriptor_configs = []
     for desc_name in selected_descriptors:
-        config = generate_default_descriptor_config(desc_name, all_column_configs)
+        # OHE must never receive an implicit set of all strings: make the
+        # user identify the categorical inputs before a JSON can be written.
+        config = (
+            step4_configure_descriptor(desc_name, all_column_configs)
+            if desc_name == 'ohe'
+            else generate_default_descriptor_config(desc_name, all_column_configs)
+        )
         descriptor_configs.append(config)
 
     # 4.3 显示配置摘要
@@ -1806,11 +1938,17 @@ def step5_select_models():
     print("步骤5: 指定建模模型")
     print("=" * 60)
 
-    models = ['XGBoost', 'Random Forest', 'SVM', 'AutoGluon']
+    models = [
+        ('XGBoost', '梯度提升树回归'),
+        ('Random Forest', '随机森林回归'),
+        ('SVM', '支持向量回归'),
+        ('AutoGluon', '自动化集成建模'),
+        ('LightGBM', 'CPU 梯度提升树回归基线（需安装可选 lightgbm 依赖）'),
+    ]
 
     print("\n可用模型:")
-    for idx, model in enumerate(models, 1):
-        print(f"  [{idx}] {model}")
+    for idx, (model, description) in enumerate(models, 1):
+        print(f"  [{idx}] {model}: {description}")
 
     print("\n请选择模型(输入序号,用逗号分隔,如: 1,2,4)")
     print("或直接回车选择全部模型")
@@ -1819,13 +1957,13 @@ def step5_select_models():
         user_input = input("模型序号: ").strip()
 
         if user_input == '':
-            selected = models
+            selected = [model for model, _ in models]
             break
 
         try:
             indices = [int(x.strip()) for x in user_input.split(',')]
             if all(1 <= idx <= len(models) for idx in indices):
-                selected = [models[i-1] for i in indices]
+                selected = [models[i-1][0] for i in indices]
                 break
             else:
                 print("[X] 存在无效的序号")
@@ -1956,7 +2094,8 @@ def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
     valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
     fixed_df = df.iloc[valid_row_indices]
 
-    fixed_path = os.path.join(project_folder, f"{project_name}_修复后数据集.csv")
+    fixed_path = os.path.join(project_folder, 'docs', f"{project_name}_fixed_dataset.csv")
+    os.makedirs(os.path.dirname(fixed_path), exist_ok=True)
     fixed_df.to_csv(fixed_path, index=False, encoding='utf-8')
 
     print(f"[OK] 修复后数据集已生成: {fixed_path}")
@@ -2007,7 +2146,16 @@ def save_config_file(
         'reactants': [],
         'products': [],
         'others': [],
-        'conditions': []
+        'conditions': [],
+        # OHE columns are also declared on the FeatureSpec. This duplicate
+        # role-level list keeps exported JSON self-describing for tools that
+        # inspect column roles before parsing feature declarations.
+        'categoricals': list(dict.fromkeys(
+            column
+            for descriptor in descriptor_configs
+            if descriptor.get('descriptor') == 'ohe'
+            for column in descriptor.get('columns', [])
+        )),
     }
 
     if normalized_dataset_path:
@@ -2093,7 +2241,7 @@ def save_config_file(
 
     # 构建配置字典
     config = {
-        'version': '1.0',
+        'version': '1.1',
         'project_name': project_name,
         'origin_dataset_path': dataset_path,  # 原始数据集路径（仅用于记录）
         # 移除 dataset_path 字段：规范数据集默认为 <project_name>_normalized_dataset.csv
@@ -2106,7 +2254,8 @@ def save_config_file(
     }
 
     # 保存配置文件
-    config_path = os.path.join(project_folder, f"{project_name}_yonod_config.json")
+    config_path = os.path.join(project_folder, 'docs', f"{project_name}_yonod_config.json")
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
     with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
@@ -2206,7 +2355,8 @@ def validate_config_file(config_path: str) -> bool:
 
         print("[OK] 配置文件验证通过")
         print(f"    项目名称: {project_name}")
-        print(f"    项目文件夹: {config_dir}")
+        project_folder = os.path.dirname(config_dir) if os.path.basename(config_dir) == 'docs' else config_dir
+        print(f"    项目文件夹: {project_folder}")
         print(f"    规范数据集: {normalized_dataset}")
         return True
 

@@ -34,6 +34,7 @@ from .descriptors.fisd import FISDDescriptor
 from .descriptors.maf import MAFDescriptor
 from .descriptors.molmetalm import MolMetaLMDescriptor
 from .descriptors.morgan import MorganDescriptor
+from .descriptors.mfp import MFPDescriptor
 from .descriptors.rdkit2d import RDKit2DDescriptor
 from .descriptors.drfp_desc import DRFPDescriptor
 from .features.dataset import MoleculeFeaturizer
@@ -41,10 +42,12 @@ from .models.autogluon_model import AutoGluonYieldModel
 from .models.rf_model import RFYieldModel
 from .models.svm_model import SVMYieldModel
 from .models.xgb_model import XGBYieldModel
+from .models.lightgbm_model import LightGBMYieldModel
 
 
 DESCRIPTOR_REGISTRY: Dict[str, Type[BaseDescriptor]] = {
     "morgan": MorganDescriptor,
+    "mfp": MFPDescriptor,
     "atmomaccs": ATMOMACCSDescriptor,
     "fisd": FISDDescriptor,
     "molmetalm": MolMetaLMDescriptor,
@@ -58,6 +61,7 @@ MODEL_REGISTRY: Dict[str, Type[Any]] = {
     "rf": RFYieldModel,
     "svm": SVMYieldModel,
     "autogluon": AutoGluonYieldModel,
+    "lightgbm": LightGBMYieldModel,
 }
 
 

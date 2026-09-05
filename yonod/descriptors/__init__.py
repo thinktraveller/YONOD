@@ -11,6 +11,12 @@ from .base import BaseDescriptor
 __all__ = [
     "BaseDescriptor",
     "MorganDescriptor",
+    "MFPDescriptor",
+    "OHEFeature",
+    "FeatureSpec",
+    "FeatureProvider",
+    "get_feature_provider",
+    "normalise_feature_specs",
     "ATMOMACCSDescriptor",
     "FISDDescriptor",
     "MolMetaLMDescriptor",
@@ -25,6 +31,20 @@ def __getattr__(name: str):
     if name == "MorganDescriptor":
         from .morgan import MorganDescriptor
         return MorganDescriptor
+    elif name == "MFPDescriptor":
+        from .mfp import MFPDescriptor
+        return MFPDescriptor
+    elif name == "OHEFeature":
+        from .ohe import OHEFeature
+        return OHEFeature
+    elif name in {"FeatureSpec", "FeatureProvider", "get_feature_provider", "normalise_feature_specs"}:
+        from .registry import FeatureProvider, FeatureSpec, get_feature_provider, normalise_feature_specs
+        return {
+            "FeatureSpec": FeatureSpec,
+            "FeatureProvider": FeatureProvider,
+            "get_feature_provider": get_feature_provider,
+            "normalise_feature_specs": normalise_feature_specs,
+        }[name]
     elif name == "ATMOMACCSDescriptor":
         from .atmomaccs import ATMOMACCSDescriptor
         return ATMOMACCSDescriptor

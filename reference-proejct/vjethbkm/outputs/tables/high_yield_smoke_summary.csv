@@ -1,0 +1,4 @@
+descriptor,model,threshold,actual_high_yield,predicted_high_yield,true_positive,false_positive,false_negative,precision,recall
+morgan,rf,0.8,10,0,0,0,10,0.0,0.0
+ohe,rf,0.8,10,0,0,0,10,0.0,0.0
+physchem,rf,0.8,10,0,0,0,10,0.0,0.0

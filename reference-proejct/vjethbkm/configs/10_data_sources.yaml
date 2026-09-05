@@ -1,0 +1,62 @@
+version: 1
+datasets:
+  smoke_local_yonod:
+    kind: local_smoke
+    path: "../../dataset/test-amide-coupling(additive_fixed).csv"
+    label_col: yield
+    component_cols:
+      - sub_1_smiles
+      - sub_2_smiles
+    nrows: 10
+    status: available_for_smoke_only
+  BH:
+    kind: official_vjethbkm_dataset
+    path: "yieldsmarter/Data/HTE_datasets/BH1/BH1.csv"
+    label_col: Yield
+    component_cols:
+      - Aryl_halide_SMILES
+      - Additive_SMILES
+      - Base_SMILES
+      - Ligand_SMILES
+    status: available_from_yieldsmarter_package
+  SM:
+    kind: official_vjethbkm_dataset
+    path: "yieldsmarter/Data/HTE_datasets/SM/SM.csv"
+    label_col: Yield
+    component_cols:
+      - reactant_1_smiles
+      - reactant_2_smiles
+      - ligand_smiles
+      - reagent_1_smiles
+      - solvent_1_smiles
+    status: available_from_yieldsmarter_package
+  SLAP:
+    kind: official_vjethbkm_dataset
+    path: "yieldsmarter/Data/HTE_datasets/SL1/SL1.csv"
+    label_col: Yield
+    component_cols:
+      - Aldehyde_1
+      - bifunctional_reagent
+      - Aldehyde_2
+    status: available_from_yieldsmarter_package
+  SL1:
+    kind: official_vjethbkm_dataset
+    path: "yieldsmarter/Data/HTE_datasets/SL1/SL1.csv"
+    label_col: Yield
+    component_cols:
+      - Aldehyde_1
+      - bifunctional_reagent
+      - Aldehyde_2
+    status: available_from_yieldsmarter_package
+  BH2:
+    kind: official_vjethbkm_dataset
+    path: "yieldsmarter/Data/HTE_datasets/BH2/BH2.csv"
+    label_col: Yield
+    component_cols:
+      - Amine_SMILES
+      - Bromide_SMILES
+      - Ligand_SMILES
+      - Solvent_SMILES
+      - Base_SMILES
+    external_validation_file: "yieldsmarter/Data/HTE_datasets/BH2/csv/187_with_corrected_catalyst_smiles.csv"
+    status: available_from_yieldsmarter_package

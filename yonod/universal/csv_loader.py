@@ -38,6 +38,7 @@ class LoadedDataset:
     df: pd.DataFrame
     smiles_cols: List[str]
     numeric_cols: List[str]
+    categorical_cols: List[str]
     label_col: str
     smiles_roles: Dict[str, List[str]] = field(default_factory=lambda: {
         'reactant': [],
@@ -142,6 +143,7 @@ def load_csv_with_roles(
     label_col: Optional[str] = None,
     smiles_cols: Optional[List[str]] = None,
     numeric_cols: Optional[List[str]] = None,
+    categorical_cols: Optional[List[str]] = None,
     reactant_cols: Optional[List[str]] = None,
     product_cols: Optional[List[str]] = None,
     other_cols: Optional[List[str]] = None,
@@ -156,6 +158,7 @@ def load_csv_with_roles(
         label_col: 标签列名；None → 自动推断最后一列浮点型
         smiles_cols: SMILES 列名列表（传统模式）；None → 自动探测
         numeric_cols: 数值辅助列名列表（温度等）；None → 空列表
+        categorical_cols: 供折内 OHE 使用的显式类别列；可与 SMILES 列重叠。
         reactant_cols: 反应物列名列表（三分类模式）
         product_cols: 产物列名列表（三分类模式）
         other_cols: 其他参与者列名列表（三分类模式，可选）
@@ -267,6 +270,19 @@ def load_csv_with_roles(
             raise ValueError(f"指定的数值辅助列不存在：{missing}\n可用列：{list(df_raw.columns)}")
         print(f"[数值辅助列] {numeric_cols}")
 
+    # OHE 的输入可能就是反应组分 SMILES，也可能是显式声明的离散条件。
+    # 它们不自动参与任何静态描述符，因此仅在用户明确声明时保留在精简表中。
+    if categorical_cols is None:
+        categorical_cols = []
+    else:
+        missing = [c for c in categorical_cols if c not in df_raw.columns]
+        if missing:
+            raise ValueError(f"指定的类别列不存在：{missing}\n可用列：{list(df_raw.columns)}")
+        duplicate_categories = [c for c in categorical_cols if categorical_cols.count(c) > 1]
+        if duplicate_categories:
+            raise ValueError(f"categorical_cols 不能重复：{sorted(set(duplicate_categories))}")
+        print(f"[类别辅助列] {categorical_cols}")
+
     # ── 列重叠检查 ──
     all_role_cols = set(smiles_cols) | set(numeric_cols) | {label_col}
     if len(all_role_cols) != len(smiles_cols) + len(numeric_cols) + 1:
@@ -275,7 +291,7 @@ def load_csv_with_roles(
         )
 
     # ── 构建精简 DataFrame ──
-    keep_cols = smiles_cols + numeric_cols + [label_col]
+    keep_cols = list(dict.fromkeys(smiles_cols + numeric_cols + categorical_cols + [label_col]))
     df = df_raw[keep_cols].copy()
 
     # 过滤标签 NaN 行
@@ -288,12 +304,14 @@ def load_csv_with_roles(
     print(
         f"[完成] 角色确认：SMILES={smiles_cols}，"
         f"数值辅助={numeric_cols if numeric_cols else '（无）'}，"
+        f"类别辅助={categorical_cols if categorical_cols else '（无）'}，"
         f"标签='{label_col}'，有效行数={len(df)}"
     )
     return LoadedDataset(
         df=df,
         smiles_cols=smiles_cols,
         numeric_cols=numeric_cols,
+        categorical_cols=categorical_cols,
         label_col=label_col,
         smiles_roles=smiles_roles,
     )

@@ -1,0 +1,31 @@
+{
+  "datasets": [
+    "BH",
+    "BH2",
+    "SM",
+    "SLAP"
+  ],
+  "descriptors": [
+    "OHE",
+    "MFP",
+    "PhysChem"
+  ],
+  "yield_buckets": [
+    "<20",
+    "20-40",
+    "40-60",
+    "60-80",
+    "80-100",
+    ">100"
+  ],
+  "high_yield_threshold": 80,
+  "dataset_bucket_rows": 24,
+  "bucket_error_rows": 69,
+  "high_yield_rows": 12,
+  "boundary": "Uses bundled official OOF predictions for RF descriptors; SM/OHE remains marked elsewhere as a forensic unresolved artifact.",
+  "outputs": {
+    "dataset_summary": "outputs/tables/official_yield_bucket_dataset_summary.csv",
+    "bucket_error": "outputs/tables/official_oof_bucket_error_summary.csv",
+    "high_yield": "outputs/tables/official_oof_high_yield_summary.csv"
+  }
+}

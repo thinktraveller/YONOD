@@ -1,0 +1,28 @@
+version: 1
+descriptors:
+  ohe:
+    stage: A
+    source: local
+    cost_class: low
+  morgan:
+    stage: A
+    source: rdkit_or_yonod_adapter
+    cost_class: low
+    radius: 2
+    n_bits: 2048
+    count_based: true
+  physchem:
+    stage: A
+    source: rdkit_or_yonod_adapter
+    cost_class: low
+  dft:
+    stage: B
+    source: official_precomputed_preferred
+    cost_class: high
+    status: pending
+  soap:
+    stage: B
+    source: official_precomputed_or_ase_dscribe
+    cost_class: high
+    status: pending
+

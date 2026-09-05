@@ -1,0 +1,71 @@
+{
+  "sm_csv": {
+    "path": "yieldsmarter/Data/HTE_datasets/SM/SM.csv",
+    "shape": [
+      5760,
+      6
+    ],
+    "sha256": "111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a"
+  },
+  "two_sm_csv": {
+    "path": "yieldsmarter/Results/Compare_Complexity/Suzuki_2018/2SM.csv",
+    "shape": [
+      5760,
+      7
+    ],
+    "sha256": "feb007f46b94948041e897fca3bf4e7a2ee5bab8dd513af846eab40c028ed8e0",
+    "extra_columns": [
+      "catalyst_smiles"
+    ],
+    "shared_columns_equal": true
+  },
+  "official_ohe": {
+    "y_true_len": 28800,
+    "y_pred_len": 28800,
+    "fold_id_len": 28800,
+    "y_true_sequence_equal_generated_kfold": true,
+    "fold_id_equal_generated_kfold": true,
+    "categorical_columns": [
+      "reactant_1_smiles",
+      "reactant_2_smiles",
+      "ligand_smiles",
+      "reagent_1_smiles",
+      "solvent_1_smiles"
+    ],
+    "test_summary": {
+      "mae": 9.362933409146159,
+      "rmse": 13.059287989170132,
+      "r2": 0.783424395582564,
+      "kendall_tau": 0.7101765501581333
+    }
+  },
+  "float64_variant": {
+    "mae": 7.839955389107668,
+    "rmse": 11.165822306155633,
+    "r2": 0.8416078818262736,
+    "kendall_tau": 0.7513819976006316,
+    "train_elapsed_s_mean": 0.593974
+  },
+  "two_sm_catalyst_variant": {
+    "mae": 7.869201504815484,
+    "rmse": 11.182777194337973,
+    "r2": 0.8411250524236284,
+    "kendall_tau": 0.750876009438253,
+    "train_elapsed_s_mean": 0.60468108
+  },
+  "variant_abs_diffs_vs_official_test_summary": {
+    "float64_variant": {
+      "mae": 1.522978020038491,
+      "rmse": 1.8934656830144991,
+      "r2": 0.058183486243709504,
+      "kendall_tau": 0.04120544744249832
+    },
+    "two_sm_catalyst_variant": {
+      "mae": 1.4937319043306747,
+      "rmse": 1.8765107948321589,
+      "r2": 0.0577006568410644,
+      "kendall_tau": 0.04069945928011964
+    }
+  },
+  "inference": "Official SM/OHE y_true and fold_id exactly match KFold over Data/HTE_datasets/SM/SM.csv, so row order, labels, and split generation are ruled out as causes. The 2SM.csv file only adds catalyst_smiles while preserving all shared columns and Yield. Neither a float64 OHE variant nor a 2SM+catalyst variant reproduces the official SM/OHE summary. The supported conclusion is that the bundled Suzuki OHE RF result is a stale or differently generated artifact whose missing generation details are not recoverable from the included README/config/scripts alone."
+}
