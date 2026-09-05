@@ -1495,6 +1495,8 @@ def step4_select_descriptors():
 
     descriptors = {
         'morgan': '横向拼接,可编辑参与列和拼接顺序',
+        'mfp': '逐列拼接的 Morgan count fingerprint（默认 radius=3、1024维）',
+        'ohe': '类别 one-hot；只在每个 CV 训练折拟合，不生成全数据描述符',
         'maccs': '横向拼接,可编辑参与列和拼接顺序',
         'rdkit2d': '横向拼接,可编辑参与列和拼接顺序',
         'fisd': '横向拼接,可编辑参与列和拼接顺序',
@@ -1514,7 +1516,12 @@ def step4_select_descriptors():
         user_input = input("描述符序号: ").strip()
 
         if user_input == '':
-            selected = list(descriptors.keys())
+            # Keep the historical default grid stable: MFP/OHE are opt-in so
+            # a user who simply presses Enter does not unexpectedly add a
+            # count fingerprint or a high-cardinality categorical baseline.
+            selected = [
+                'morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm', 'maf', 'drfp'
+            ]
             break
 
         try:
@@ -1559,7 +1566,7 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
     for idx, cfg in enumerate(smiles_columns):
         print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
 
-    if descriptor_name in ['morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
+    if descriptor_name in ['morgan', 'mfp', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
         # 横向拼接模式
         print("\n该描述符为横向拼接模式")
         print("默认顺序: reactant -> others -> product")
@@ -1594,10 +1601,61 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
 
         print(f"[OK] 拼接顺序: {' -> '.join(columns)}")
 
-        return {
+        result = {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'concat',
             'columns': columns
+        }
+        if descriptor_name == 'mfp':
+            print("\nMFP 使用 Morgan count fingerprint（与二值 morgan 不同）。")
+            while True:
+                radius_text = input("Morgan 半径 [3]: ").strip() or "3"
+                bits_text = input("每组分维度 [1024]: ").strip() or "1024"
+                try:
+                    radius, fp_size = int(radius_text), int(bits_text)
+                    if radius < 0 or fp_size < 8:
+                        raise ValueError
+                    result['params'] = {
+                        'radius': radius, 'fp_size': fp_size, 'profile': 'standard'
+                    }
+                    break
+                except ValueError:
+                    print("[X] 半径必须 >= 0，维度必须 >= 8")
+        return result
+
+    elif descriptor_name == 'ohe':
+        category_columns = [cfg for cfg in all_column_configs if cfg['role'] != 'label']
+        if not category_columns:
+            raise ValueError("OHE 需要至少一个非标签类别列")
+        print("\nOHE 不会生成全数据描述符：每个 CV 训练折将单独拟合类别表。")
+        print("请选择有序类别列（通常为反应物、其他组分或离散条件）：")
+        for idx, cfg in enumerate(category_columns):
+            print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
+        while True:
+            user_input = input("列序号（逗号分隔）: ").strip()
+            try:
+                indices = [int(value.strip()) for value in user_input.split(',')]
+                if not indices or not all(0 <= index < len(category_columns) for index in indices):
+                    raise ValueError
+                if len(set(indices)) != len(indices):
+                    print("[X] 列不能重复")
+                    continue
+                columns = [category_columns[index]['name'] for index in indices]
+                break
+            except ValueError:
+                print("[X] 请输入至少一个有效且不重复的列序号")
+        print("缺失值策略：1) as_category（默认） 2) zero_block 3) error")
+        policy_map = {'': 'as_category', '1': 'as_category', '2': 'zero_block', '3': 'error'}
+        while True:
+            policy = policy_map.get(input("选择 [1]: ").strip())
+            if policy:
+                break
+            print("[X] 请输入 1、2 或 3")
+        return {
+            'id': 'ohe',
+            'descriptor': 'ohe', 'mode': 'concat', 'columns': columns,
+            'params': {'missing_policy': policy, 'dtype': 'float32', 'handle_unknown': 'ignore'},
         }
 
     elif descriptor_name == 'maf':
@@ -1620,6 +1678,7 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
         print(f"[OK] 参与加和的列: {', '.join(columns)}")
 
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'sum',
             'columns': columns
@@ -1659,6 +1718,7 @@ def step4_configure_descriptor(descriptor_name, all_column_configs):
             print("[OK] 使用默认reactant列")
 
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'reaction',
             'extra_reactants': extra_reactants
@@ -1676,7 +1736,7 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
     Returns:
         dict: 描述符配置字典
     """
-    if descriptor_name in ['morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
+    if descriptor_name in ['morgan', 'mfp', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
         # concat模式: 按 reactant → others → product 顺序
         columns = []
         for role in ['reactant', 'others', 'product']:
@@ -1684,11 +1744,15 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
                 if cfg['role'] == role:
                     columns.append(cfg['name'])
 
-        return {
+        result = {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'concat',
             'columns': columns
         }
+        if descriptor_name == 'mfp':
+            result['params'] = {'radius': 3, 'fp_size': 1024, 'profile': 'standard'}
+        return result
 
     elif descriptor_name == 'maf':
         # sum模式: 包含所有SMILES列
@@ -1698,6 +1762,7 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
         ]
 
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'sum',
             'columns': columns
@@ -1706,6 +1771,7 @@ def generate_default_descriptor_config(descriptor_name, all_column_configs):
     elif descriptor_name == 'drfp':
         # reaction模式: extra_reactants为空
         return {
+            'id': descriptor_name,
             'descriptor': descriptor_name,
             'mode': 'reaction',
             'extra_reactants': []
@@ -1738,6 +1804,15 @@ def display_descriptor_configs_summary(descriptor_configs):
         if mode == 'concat':
             # 横向拼接模式: 显示列顺序
             columns_str = ' → '.join(config['columns'])
+            if desc_name == 'ohe':
+                policy = config.get('params', {}).get('missing_policy', 'as_category')
+                columns_str = f"训练折 OHE: {columns_str}（缺失={policy}）"
+            elif desc_name == 'mfp':
+                params = config.get('params', {})
+                columns_str = (
+                    f"count r={params.get('radius', 3)}, d={params.get('fp_size', 1024)}: "
+                    + columns_str
+                )
             if len(columns_str) > 45:
                 columns_str = columns_str[:42] + '...'
         elif mode == 'sum':
@@ -1804,7 +1879,13 @@ def step4_orchestrate(all_column_configs):
     # 4.2 自动生成所有描述符的默认配置
     descriptor_configs = []
     for desc_name in selected_descriptors:
-        config = generate_default_descriptor_config(desc_name, all_column_configs)
+        # OHE must never receive an implicit set of all strings: make the
+        # user identify the categorical inputs before a JSON can be written.
+        config = (
+            step4_configure_descriptor(desc_name, all_column_configs)
+            if desc_name == 'ohe'
+            else generate_default_descriptor_config(desc_name, all_column_configs)
+        )
         descriptor_configs.append(config)
 
     # 4.3 显示配置摘要
@@ -2065,7 +2146,16 @@ def save_config_file(
         'reactants': [],
         'products': [],
         'others': [],
-        'conditions': []
+        'conditions': [],
+        # OHE columns are also declared on the FeatureSpec. This duplicate
+        # role-level list keeps exported JSON self-describing for tools that
+        # inspect column roles before parsing feature declarations.
+        'categoricals': list(dict.fromkeys(
+            column
+            for descriptor in descriptor_configs
+            if descriptor.get('descriptor') == 'ohe'
+            for column in descriptor.get('columns', [])
+        )),
     }
 
     if normalized_dataset_path:
@@ -2151,7 +2241,7 @@ def save_config_file(
 
     # 构建配置字典
     config = {
-        'version': '1.0',
+        'version': '1.1',
         'project_name': project_name,
         'origin_dataset_path': dataset_path,  # 原始数据集路径（仅用于记录）
         # 移除 dataset_path 字段：规范数据集默认为 <project_name>_normalized_dataset.csv

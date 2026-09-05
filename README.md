@@ -1,7 +1,7 @@
 # YONOD — 有机合成反应预测平台
 
 > **Y**ou **O**nly **N**eed **O**utstanding **D**escriptors
-> 以 SMILES 为统一输入，比较 4 类分子描述符 × 4 种机器学习算法在多类有机合成任务上的表现。
+> 以 SMILES 与显式类别列为统一输入，比较多种分子描述符和机器学习算法在有机合成任务上的表现。
 
 [![Python](https://img.shields.io/badge/Python-3.9-blue.svg)](https://www.python.org) [![CUDA](https://img.shields.io/badge/CUDA-12.1-green.svg)](https://developer.nvidia.com/cuda-12-1-0-download-archive) [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
 
@@ -32,6 +32,38 @@
 | **ATMOMACCS (MACCS)** | ✓ | ✓ | ✓ | ✓ |
 | **FISD (GNN embedding)** | ✓ | ✓ | ✓ | ✓ |
 | **MolMetaLM (Llama embedding)** | ✓ | ✓ | ✓ | ✓ |
+
+### 普通任务的扩展特征
+
+除上表的既有静态描述符外，普通 CLI、JSON 配置和交互向导还可显式选择以下特征：
+
+- `mfp`：按声明列顺序拼接的 Morgan **count** fingerprint（默认 `radius=3`、每组分 1024 维），会保存为可复用的静态 artifact；它与二值 `morgan` 是不同特征。
+- `ohe`：指定类别列的 one-hot 编码。编码器只从每个 CV 的训练折拟合，验证折未见类别为全零；状态保存在 `fold_transformers/<feature-id>/`，不会生成全数据 OHE `.npz`。OHE 当前支持 `rf`、`xgb`、`svm` 与 `lightgbm`，不支持使用内部 holdout 的 AutoGluon。
+
+例如：
+
+```bash
+# MFP 静态特征
+python main.py --csv data.csv --label-col yield --smiles-cols reactant catalyst \
+  --descriptors mfp --mfp-radius 3 --mfp-fp-size 1024 --models rf
+
+# OHE 折内特征；类别列必须显式声明
+python main.py --csv data.csv --label-col yield --smiles-cols reactant \
+  --categorical-cols catalyst solvent --descriptors ohe --ohe-cols catalyst solvent \
+  --ohe-missing-policy as_category --models rf
+```
+
+JSON 中可为候选特征提供稳定 `id`，从而对比不同参数而不覆盖 artifact：
+
+```json
+{
+  "id": "mfp_r3",
+  "descriptor": "mfp",
+  "mode": "concat",
+  "columns": ["reactant", "catalyst"],
+  "params": {"radius": 3, "fp_size": 1024, "profile": "standard"}
+}
+```
 
 详细设计文档见 [YONOD项目构建计划书.md](YONOD项目构建计划书.md)。
 
@@ -195,7 +227,9 @@ python yonod.py
 
 [init] 任务：smoke-test
 [load] n_rows=10  SMILES列=[...]  标签列='yield'
-[desc] 计算描述符: morgan ...
+[phase 1/2] 预计算或复用本次配置选中的全部描述符
+[desc:computed] morgan: ... file=<项目目录>/result/smoke-test/descriptors/morgan.npz
+[phase 2/2] 从 descriptors/ 文件读取特征并开始建模
 [eval] 开始: morgan x xgb (1/1)
 [done] morgan x xgb  R²=0.XXXX  RMSE=0.XXXX  t=X.Xs
 [save] 指标已保存: <项目目录>/result/smoke-test/docs/metrics_summary.csv
@@ -203,13 +237,13 @@ python yonod.py
 [done] 全部完成。
 ```
 
-每次运行的输出根目录固定分为三类：`docs/` 存放指标 CSV、日志、JSON 与规范化数据集，`pictures/` 存放散点图和训练时间图，`report/` 存放 HTML/Markdown 报告。上例的指标文件为 `result/smoke-test/docs/metrics_summary.csv`。
+每次运行先处理本次配置选中的全部描述符，再开始任何模型训练。`descriptors/` 中每个描述符对应一个 `.npz` 文件，保存特征矩阵、完整 `sample_id`、有效行标记、特征结构和配置元数据；数据与描述符配置一致时自动复用，变化时自动重算。`docs/` 存放指标、描述符状态、日志、JSON 与规范化数据集，`pictures/` 存放散点图和训练时间图，`report/` 存放 HTML/Markdown 报告。
 
 ### 第八步：完整运行
 
 再次运行 `python yonod.py` 启动向导，使用完整数据集和全量 4×4 建模（约 60 ~ 120 分钟，建议 GPU）。
 
-结果输出默认到 `results/<task-name>建模报告/`：`docs/metrics_summary.csv` 保存指标，`pictures/` 保存全部 PNG，`report/` 保存 HTML 与 Markdown 报告。
+结果输出默认到 `results/<task-name>建模报告/`：`descriptors/` 保存可复用描述符文件，`docs/metrics_summary.csv` 保存指标，`docs/descriptor_status.csv` 记录新生成、复用、重算或失败状态，`pictures/` 保存全部 PNG，`report/` 保存 HTML 与 Markdown 报告。单个描述符失败时只跳过该描述符对应的模型，并在状态 CSV 和最终报告中保留原因。
 
 > **Windows 用户**：如遇中文路径问题，可将数据集复制到纯英文路径再指定 `--csv`。
 
@@ -220,7 +254,10 @@ python yonod.py
 [load] n_rows=N  SMILES列=[M 列]  数值列=无  标签列='yield'
 [grid] 描述符=['morgan', 'maccs', 'fisd', 'molmetalm']  模型=['xgb', 'rf', 'svm', 'autogluon']  cv=5
 
-[desc] 计算描述符: morgan ...
+[phase 1/2] 预计算或复用本次配置选中的全部描述符
+[desc:computed] morgan: ... file=.../descriptors/morgan.npz
+...
+[phase 2/2] 从 descriptors/ 文件读取特征并开始建模
 [eval] 开始: morgan x xgb (1/16)
 [done] morgan x xgb (1/16)  R²=X.XXXX  RMSE=X.XXXX  t=X.Xs
 ...
@@ -288,9 +325,12 @@ YONOD/
 │
 ├── results/                          运行输出（自动生成，不入库）
 │   └── <task-name>/
-│       ├── metrics_summary.csv         所有 (描述符, 模型) 组合的 R²/RMSE/MAE
-│       ├── report.html                 可视化报告（内嵌散点图画廊，可直接用浏览器打开）
-│       ├── run_<timestamp>.log         运行日志镜像
+│       ├── descriptors/                每个已成功描述符一个可复用 .npz 产物
+│       ├── docs/
+│       │   ├── metrics_summary.csv     所有 (描述符, 模型) 组合的 R²/RMSE/MAE
+│       │   ├── descriptor_status.csv   描述符缓存状态与失败原因
+│       │   └── run_<timestamp>.log     运行日志镜像
+│       ├── report/                     HTML/Markdown 可视化报告
 │       └── pictures/                   各 (描述符 × 模型) 组合的 OOF 散点图
 │           └── scatter_<desc>_<model>.png
 │
@@ -399,6 +439,7 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 | 算法 | inline 实现位置 | 上游来源 / 外部库 |
 |---|---|---|
 | Morgan ECFP4 指纹 | [morgan.py:32-50](yonod/descriptors/morgan.py#L32-L50) | RDKit `rdkit.Chem.AllChem.GetMorganFingerprintAsBitVect`（仅作 API 调用） |
+| Morgan count 指纹（MFP） | [mfp.py](yonod/descriptors/mfp.py) | RDKit Morgan count API；普通任务默认 radius=3、1024 维，按组件列拼接 |
 | MACCS keys（166 维） | [atmomaccs.py:30-44](yonod/descriptors/atmomaccs.py#L30-L44) | RDKit `rdkit.Chem.rdMolDescriptors.GetMACCSKeysFingerprint`；与上游 ATMOMACCS 的 `generate_MACCS.py` 完全等价（去掉占位 bit 0）。引用：[Zenodo 18669279](https://zenodo.org/records/18669279) / [DOI:10.1063/5.0308548](https://doi.org/10.1063/5.0308548) |
 | MAF 多分子加和指纹（128 维） | [maf.py:50-112](yonod/descriptors/maf.py#L50-L112) | 本项目原创设计（2026-06-22）；对多组分反应中每个分子生成 ECFP (radius=2, 128 bits)，按位加和得到整数向量，捕捉集体子结构特征 |
 | FISD 双 GCN 嵌入（架构） | [fisd.py:51-95](yonod/descriptors/fisd.py#L51-L95) (`_GNN`、`_TwoInOne` 类) | 与上游 FISD `code/MLMS_mse.ipynb` / `MLMS_cos.ipynb` / `MLMS_2IN1.ipynb` 完全一致；上游：[KeantChen/FISD](https://github.com/KeantChen/FISD)；论文：[DOI:10.1039/D5SC00451A](https://doi.org/10.1039/D5SC00451A) |
@@ -408,6 +449,7 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 | MolMetaLM 嵌入 | [molmetalm.py:80-149](yonod/descriptors/molmetalm.py#L80-L149) | HuggingFace [`wudejian789/MolMetaLM-base`](https://huggingface.co/wudejian789/MolMetaLM-base)；GitHub：[CSUBioGroup/MolMetaLM](https://github.com/CSUBioGroup/MolMetaLM)；论文：[DOI:10.48550/arXiv.2411.15500](https://doi.org/10.48550/arXiv.2411.15500)；用 `AutoModel`（带 CausalLM 兜底）+ attention-masked mean-pool 取 768 维 |
 | 通用 CSV 自动探测 | [csv_loader.py](yonod/universal/csv_loader.py) | 本项目原创；用 RDKit 解析率 > threshold 判定 SMILES 列 |
 | 通用特征矩阵构建 | [feature_builder.py](yonod/universal/feature_builder.py) | 本项目原创；SMILES 描述符 + 数值辅助列拼接 |
+| 训练折 OHE | [ohe.py](yonod/descriptors/ohe.py) | `sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore')`；类别表仅由当前训练折拟合 |
 | 反应级 6 分子特征拼接 | [reaction_featurizer.py:33-57](yonod/features/reaction_featurizer.py#L33-L57) | 本项目原创设计（v0.3 §2.3），含 `(无)` 零向量 + `,` → `.` 预处理 |
 | 试剂 SMILES 缓存 | [reagent_cache.py](yonod/features/reagent_cache.py) | 本项目原创；首次运行落 `cache/reagent_feats_<desc>.pkl` |
 | XGBoost 回归适配器 | [xgb_model.py](yonod/models/xgb_model.py) | `xgboost.XGBRegressor`（`tree_method='hist', device='cuda'`） |
@@ -432,8 +474,12 @@ WEIGHTS/FISD/           ← 需手动创建此目录并放入以下文件
 | `--label-col COL` | 自动探测最后一列浮点 | 回归目标列名 |
 | `--smiles-cols COL [COL ...]` | 自动探测 | SMILES 列名（可多列） |
 | `--numeric-cols COL [COL ...]` | 无 | 数值辅助列（如温度），会拼入特征 |
+| `--categorical-cols COL [COL ...]` | 无 | 显式保留的类别列；供 OHE 使用，可与 SMILES 列重叠 |
 | `--task-name NAME` | CSV 文件名（无后缀） | 结果子目录名（`results/<NAME>/`） |
-| `--descriptors {morgan,maccs,fisd,molmetalm}` | 全部 4 个 | 选择描述符（可多选） |
+| `--descriptors FEATURE [FEATURE ...]` | 既有静态特征集 | 选择特征；可选 `mfp`（count Morgan）与 `ohe`（训练折 OHE），两者均为显式 opt-in |
+| `--mfp-radius N` / `--mfp-fp-size N` | `3` / `1024` | MFP 的半径和每组分 count 指纹维度 |
+| `--ohe-cols COL [COL ...]` | 无 | OHE 的有序类别列；选择 `ohe` 时必填 |
+| `--ohe-missing-policy {as_category,zero_block,error}` | `as_category` | OHE 对缺失值的处理策略 |
 | `--models {xgb,rf,svm,autogluon}` | 全部 4 个 | 选择模型（可多选） |
 | `--nrows N` | 全量 | 限制读取行数（调试时用 500） |
 | `--cv K` | 5 | K 折交叉验证 |

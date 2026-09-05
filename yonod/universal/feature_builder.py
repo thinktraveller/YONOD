@@ -66,9 +66,12 @@ def _get_descriptor(
         # addition to fingerprint settings; only constructor-owned settings
         # are consumed here.
         from ..descriptors.mfp import MFPDescriptor
+        params = options.get("params", options)
+        if not isinstance(params, dict):
+            raise ValueError("mfp.params 必须是对象")
         return MFPDescriptor(
-            radius=int(options.get("radius", 3)),
-            fp_size=int(options.get("fp_size", 1024)),
+            radius=int(params.get("radius", 3)),
+            fp_size=int(params.get("fp_size", 1024)),
         )
 
     if name_lower in _DESCRIPTOR_REGISTRY:
@@ -132,42 +135,49 @@ def build_universal_features(
     descriptor = _get_descriptor(desc_name, descriptor_config)
     n = len(df)
 
-    # The YieldSmarter MFP is component-wise count Morgan, not a normalized
-    # generic SMILES descriptor.  It must preserve raw CSV values, write a
-    # zero block for each blank/invalid component, and retain every reaction.
+    # The YieldSmarter profile is component-wise count Morgan over raw CSV
+    # values.  Ordinary MFP uses the common concat lifecycle below (including
+    # its ordinary valid-row mask) and is intentionally a separate profile.
     if desc_name.lower() == "mfp":
         if mode != "concat":
-            raise ValueError("论文式 mfp 只支持 concat 模式，必须逐组分拼接")
+            raise ValueError("mfp 只支持 concat 模式，必须逐组分拼接")
         options = dict(descriptor_config or {})
-        algorithm = str(options.get("algorithm", "morgan_count"))
-        if algorithm != "morgan_count":
-            raise ValueError("mfp.algorithm 必须为 'morgan_count'")
-        input_normalization = str(options.get("input_normalization", "raw_csv_value"))
-        if input_normalization != "raw_csv_value":
-            raise ValueError("论文式 mfp.input_normalization 必须为 'raw_csv_value'")
-        zero_policy = str(options.get("blank_or_invalid_component", "zero_block_keep_row"))
-        if zero_policy != "zero_block_keep_row":
-            raise ValueError("论文式 mfp 仅支持 blank_or_invalid_component=zero_block_keep_row")
+        params = options.get("params", options)
+        if not isinstance(params, dict):
+            raise ValueError("mfp.params 必须是对象")
+        inferred_profile = "vjethbkm" if (
+            "input_normalization" in options or "blank_or_invalid_component" in options
+        ) else "standard"
+        profile = str(params.get("profile", options.get("profile", inferred_profile)))
+        if profile not in {"standard", "vjethbkm"}:
+            raise ValueError("mfp.profile 仅支持 standard 或 vjethbkm")
+        if profile == "vjethbkm":
+            algorithm = str(options.get("algorithm", "morgan_count"))
+            if algorithm != "morgan_count":
+                raise ValueError("论文式 mfp.algorithm 必须为 'morgan_count'")
+            input_normalization = str(options.get("input_normalization", "raw_csv_value"))
+            if input_normalization != "raw_csv_value":
+                raise ValueError("论文式 mfp.input_normalization 必须为 'raw_csv_value'")
+            zero_policy = str(options.get("blank_or_invalid_component", "zero_block_keep_row"))
+            if zero_policy != "zero_block_keep_row":
+                raise ValueError("论文式 mfp 仅支持 blank_or_invalid_component=zero_block_keep_row")
 
-        blocks: list[np.ndarray] = []
-        for column in smiles_cols:
-            if column not in df.columns:
-                raise KeyError(f"DataFrame 中未找到 SMILES 列 {column!r}")
-            raw_values = [
-                "" if pd.isna(value) else str(value)
-                for value in df[column].tolist()
-            ]
-            features, _mask = descriptor.featurize(raw_values)
-            blocks.append(features)
-        X_smiles = np.concatenate(blocks, axis=1)
-        row_mask = np.ones(n, dtype=bool)
-        X_numeric: Optional[np.ndarray] = None
-        if numeric_cols:
-            missing = [column for column in numeric_cols if column not in df.columns]
-            if missing:
-                raise KeyError(f"DataFrame 中未找到数值列：{missing}")
-            X_numeric = df[numeric_cols].to_numpy(dtype=np.float32)
-        return X_smiles, X_numeric, row_mask
+            blocks: list[np.ndarray] = []
+            for column in smiles_cols:
+                if column not in df.columns:
+                    raise KeyError(f"DataFrame 中未找到 SMILES 列 {column!r}")
+                raw_values = ["" if pd.isna(value) else str(value) for value in df[column].tolist()]
+                features, _mask = descriptor.featurize(raw_values)
+                blocks.append(features)
+            X_smiles = np.concatenate(blocks, axis=1)
+            row_mask = np.ones(n, dtype=bool)
+            X_numeric: Optional[np.ndarray] = None
+            if numeric_cols:
+                missing = [column for column in numeric_cols if column not in df.columns]
+                if missing:
+                    raise KeyError(f"DataFrame 中未找到数值列：{missing}")
+                X_numeric = df[numeric_cols].to_numpy(dtype=np.float32)
+            return X_smiles, X_numeric, row_mask
 
     # --- 根据描述符类型选择使用的列 ---
     # DRFP 等反应类描述符：仅使用反应物+产物

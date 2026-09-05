@@ -3416,3 +3416,25 @@ for desc_name in args.descriptors:
 - ✅ 第 23 节实现与协议 smoke 已完成；取得论文同版本数据后，可单独开展 BH1/BH2/SM/SL1 数值复现实验。
 
 ---
+
+## [2026-09-05 20:57] 步骤 24 完成：MFP / OHE 通用特征库
+
+### 执行的任务
+- 新增公共 feature registry 与 `FeatureSpec`：统一标识、参数、列顺序和生命周期；`mfp` 为可预计算的静态 count Morgan，`ohe` 为只能在训练折拟合的 fold transform。
+- 普通 CLI、JSON 和 `yonod.py` 向导均可选择 MFP/OHE。MFP 支持半径/维度参数及独立 artifact；OHE 要求显式类别列并保存每折 `state.joblib`、校验和与 context metadata，不会生成全数据 OHE artifact。
+- 将严格 benchmark 的 `ReactionComponentOHE` 改为公共 `OHEFeature` 的兼容适配层，保留论文 `zero_block` 行为与既有审计字段。
+- 普通报告和状态 CSV 增加 feature ID、descriptor、生命周期、维度范围、完成折数与折状态目录；README 记录普通任务的命令行/JSON 使用方式和 AutoGluon 限制。
+
+### 验证结果
+- `python -B -m unittest tests.test_wizard_feature_library tests.test_feature_registry_and_ohe tests.test_main_feature_library tests.test_wizard_model_selection -v`：14/14 通过。
+- `python -B -m unittest tests.test_feature_registry_and_ohe tests.test_main_feature_library tests.test_wizard_feature_library tests.test_mfp_descriptor tests.test_ohe_fold_preprocessor tests.test_rf_paper_protocol tests.test_repeated_kfold_manifest tests.test_benchmark_timing tests.test_wizard_csv_loading tests.test_wizard_model_selection -v`：30/30 通过。
+- 覆盖 MFP CLI artifact、普通 JSON OHE 折状态保存/加载、未知/缺失类别、向导 MFP/OHE 配置、旧静态 artifact、严格 MFP/OHE/RF 协议组件和报告兼容性。
+
+### 遇到的问题及解决方案
+- OHE 的类别表属于训练数据，不能走静态 descriptor cache；普通入口为它使用显式 KFold 循环，并在写入后立即按 context 恢复校验。
+- AutoGluon 的当前适配器自行创建 holdout，无法证明 OHE 只从外部训练折学习类别，因此 OHE 任务明确拒绝该模型；RF、XGBoost、SVM 和 LightGBM 可使用。
+
+### 下一步计划
+- ✅ 普通任务特征库接入完成。后续若需“分子描述符 + OHE + 数值列”的联合特征，应新增显式 `feature_set` 设计，避免隐式拼接改变比较口径。
+
+---

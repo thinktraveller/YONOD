@@ -22,7 +22,9 @@ CLI 用法示例
 
 输出（默认到 results/<task-name>建模报告/）
 ----------------------------------------------
+  descriptors/<name>.npz   可复用的描述符矩阵、样本映射与配置元数据
   docs/metrics_summary.csv   所有 (描述符, 模型) 组合的指标
+  docs/descriptor_status.csv 描述符生成、复用与失败状态
   docs/run_<timestamp>.log   控制台镜像日志
   pictures/*.png             散点图与训练时间图
   report/report.{html,md}    最终报告
@@ -32,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import re
 import sys
@@ -50,15 +53,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from yonod.universal.csv_loader import load_csv_with_roles
 from yonod.universal.feature_builder import build_universal_features
+from yonod.universal.descriptor_artifact import (
+    descriptor_artifact_path,
+    load_descriptor_artifact,
+    prepare_descriptor_artifact,
+)
 from yonod.descriptors.base import split_multi_smiles
+from yonod.descriptors.ohe import OHEFeature
+from yonod.descriptors.registry import (
+    FeatureRegistryError,
+    FeatureSpec,
+    available_feature_names,
+    normalise_feature_specs,
+)
 
-_DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"]
+# New features are selectable but are intentionally not silently added to an
+# existing task when the user accepts the legacy default grid.
+_DEFAULT_DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"]
+_DESCRIPTOR_NAMES = list(available_feature_names())
 _MODEL_NAMES = ["xgb", "rf", "svm", "autogluon", "lightgbm"]
 
 DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent / "results"
 
 _CSV_COLUMNS = [
-    "task_name", "descriptor", "model",
+    "task_name", "feature_id", "descriptor", "lifecycle", "model",
     "n_smiles_cols", "n_numeric_cols",
     "n_samples", "n_total", "coverage", "feature_dim",
     "cv", "r2_mean", "r2_std", "rmse_mean", "mae_mean",
@@ -328,9 +346,23 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
     # 使用 load_config_from_json 中设置的数据集路径
     dataset_path = config['_dataset_path']
 
-    # 解析描述符配置（保留完整配置，包括 columns 和 mode）
+    # 规范化公开 feature declaration。旧的静态 descriptor JSON 仍可直接
+    # 使用；OHE 会被标记为 fold_transform，不能落入全局 artifact 阶段。
     descriptor_configs = config.get('descriptors', [])
-    descriptors = [cfg['descriptor'] for cfg in descriptor_configs]
+    try:
+        feature_specs = normalise_feature_specs(
+            descriptor_configs,
+            label_col=str(column_roles['label']),
+        )
+    except FeatureRegistryError as exc:
+        raise ValueError(f"descriptors 配置无效：{exc}") from exc
+    descriptors = [spec.descriptor for spec in feature_specs]
+
+    configured_categoricals = list(column_roles.get('categoricals', []) or [])
+    for spec in feature_specs:
+        if spec.lifecycle == "fold_transform":
+            configured_categoricals.extend(spec.columns)
+    categorical_cols = list(dict.fromkeys(configured_categoricals)) or None
 
     # 解析模型列表（映射显示名称）
     models_raw = config.get('models', [])
@@ -363,11 +395,12 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
         label_col=column_roles['label'],
         smiles_cols=smiles_cols if smiles_cols else None,
         numeric_cols=column_roles.get('conditions', []) or None,
+        categorical_cols=categorical_cols,
         reactant_cols=reactant_cols if reactant_cols else None,
         product_cols=product_cols if product_cols else None,
         other_cols=other_cols if other_cols else None,
         task_name=project_name,
-        descriptors=descriptors if descriptors else _DESCRIPTOR_NAMES,
+        descriptors=descriptors if descriptors else _DEFAULT_DESCRIPTOR_NAMES,
         models=models if models else _MODEL_NAMES,
         output_dir=output_dir,
         cv=5,
@@ -379,6 +412,10 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
         rf_n_jobs=-1,
         rf_n_estimators=300,
         rf_max_depth=None,
+        mfp_radius=3,
+        mfp_fp_size=1024,
+        ohe_cols=None,
+        ohe_missing_policy="as_category",
         dataset_citation=metadata.get('doi'),
         dataset_url=metadata.get('repo_url'),
         dataset_notes=metadata.get('notes'),
@@ -389,7 +426,8 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
         json=config_path,
         config=config_path,
         # 新增：保留完整的描述符配置列表（包含 columns 和 mode）
-        _descriptor_configs=descriptor_configs,
+        _descriptor_configs=[spec.to_dict() for spec in feature_specs],
+        _feature_specs=feature_specs,
     )
 
     return args
@@ -526,6 +564,59 @@ def _get_descriptor_config(
     return None
 
 
+def _feature_specs_for_args(args: argparse.Namespace, *, label_col: str) -> list[FeatureSpec]:
+    """Return one validated public feature declaration per requested candidate.
+
+    JSON configuration reaches this function through ``_feature_specs``.  CLI
+    flags are converted to the same schema so neither MFP parameters nor OHE
+    lifecycle rules can bypass configuration/artifact auditing.
+    """
+    configured = getattr(args, "_feature_specs", None)
+    if configured is not None:
+        return list(configured)
+
+    declarations: list[dict[str, Any]] = []
+    for descriptor in args.descriptors:
+        item: dict[str, Any] = {"id": descriptor, "descriptor": descriptor}
+        if descriptor == "drfp":
+            item["mode"] = "reaction"
+        elif descriptor == "maf":
+            item["mode"] = "sum"
+        else:
+            item["mode"] = "concat"
+        if descriptor == "mfp":
+            item["params"] = {
+                "radius": int(args.mfp_radius),
+                "fp_size": int(args.mfp_fp_size),
+                "profile": "standard",
+            }
+        elif descriptor == "ohe":
+            if not args.ohe_cols:
+                raise FeatureRegistryError(
+                    "选择 ohe 时必须提供 --ohe-cols COL [COL ...]；"
+                    "OHE 不会自动猜测类别列。"
+                )
+            item["columns"] = list(args.ohe_cols)
+            item["params"] = {
+                "missing_policy": args.ohe_missing_policy,
+                "dtype": "float32",
+                "handle_unknown": "ignore",
+            }
+        declarations.append(item)
+    return normalise_feature_specs(declarations, label_col=label_col)
+
+
+def _resolve_static_feature_columns(
+    spec: FeatureSpec,
+    all_smiles_cols: List[str],
+    smiles_roles: Dict[str, List[str]],
+) -> List[str]:
+    """Resolve old base-name shorthand while preserving declared order."""
+    if spec.lifecycle != "static_descriptor":
+        raise ValueError("只有静态特征可以解析 SMILES 列")
+    return _resolve_descriptor_columns(spec.to_dict(), all_smiles_cols, smiles_roles)
+
+
 # ────────────────────────────── argparse ──────────────────────────────────── #
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -545,6 +636,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--label-col", default=None, help="标签列名")
     p.add_argument("--smiles-cols", nargs="+", default=None, help="SMILES 列名（传统模式必填，三分类模式可省略）")
     p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
+    p.add_argument(
+        "--categorical-cols", nargs="+", default=None,
+        help="显式保留的类别列（供 OHE 使用；可与 SMILES 列重叠）",
+    )
 
     # 新增：三分类模式参数
     p.add_argument("--reactant-cols", nargs="+", default=None, help="反应物 SMILES 列名（三分类模式）")
@@ -553,8 +648,9 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
     p.add_argument("--task-name", default=None, help="任务名称（报告标题，默认 CSV 文件名去后缀）")
     p.add_argument(
-        "--descriptors", nargs="+", default=_DESCRIPTOR_NAMES,
-        choices=_DESCRIPTOR_NAMES, help="选用描述符"
+        "--descriptors", nargs="+", default=_DEFAULT_DESCRIPTOR_NAMES,
+        choices=_DESCRIPTOR_NAMES,
+        help="选用特征（mfp 为计数 Morgan；ohe 在每个 CV 训练折拟合）",
     )
     p.add_argument(
         "--models", nargs="+", default=_MODEL_NAMES,
@@ -576,6 +672,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--rf-n-jobs", type=int, default=-1)
     p.add_argument("--rf-n-estimators", type=int, default=300)
     p.add_argument("--rf-max-depth", type=int, default=None)
+    p.add_argument("--mfp-radius", type=int, default=3, help="MFP 的 Morgan 半径")
+    p.add_argument("--mfp-fp-size", type=int, default=1024, help="MFP 每组分的 count 指纹维度")
+    p.add_argument(
+        "--ohe-cols", nargs="+", default=None,
+        help="OHE 的有序类别列；选择 ohe 时必填",
+    )
+    p.add_argument(
+        "--ohe-missing-policy", choices=["as_category", "zero_block", "error"],
+        default="as_category", help="OHE 对缺失类别的处理策略",
+    )
     p.add_argument("--dataset-citation", default=None, metavar="TEXT",
                    help="数据集文献来源（可选，显示在报告中）")
     p.add_argument("--dataset-url", default=None, metavar="URL",
@@ -601,7 +707,7 @@ def _print_table(rows: List[dict]) -> None:
     if not rows:
         return
     df = pd.DataFrame(rows)
-    cols = [c for c in ["descriptor", "model", "feature_dim", "n_samples",
+    cols = [c for c in ["feature_id", "descriptor", "lifecycle", "model", "feature_dim", "n_samples",
                         "r2_mean", "r2_std", "rmse_mean", "mae_mean", "train_time_s"]
             if c in df.columns]
     pd.set_option("display.float_format", lambda v: f"{v:.4f}")
@@ -619,6 +725,19 @@ def _save_metrics(rows: List[dict], out_dir: Path, append: bool) -> Path:
         df = pd.concat([old, df], ignore_index=True)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     return csv_path
+
+
+def _save_descriptor_status(rows: List[dict], docs_dir: Path) -> Path:
+    """Persist the complete descriptor-stage audit table for this invocation."""
+    columns = [
+        "feature_id", "descriptor", "lifecycle", "status", "stage", "artifact_path", "n_total",
+        "n_valid", "feature_dim", "feature_dim_min", "feature_dim_max", "completed_folds",
+        "skipped_model_count", "reason",
+    ]
+    frame = pd.DataFrame(rows, columns=columns)
+    path = docs_dir / "descriptor_status.csv"
+    frame.to_csv(path, index=False, encoding="utf-8-sig")
+    return path
 
 
 def _create_output_layout(out_dir: Path) -> tuple[Path, Path, Path]:
@@ -671,6 +790,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             print("[error] 请指定 --label-col 参数或使用 --json 配置文件。", file=sys.stderr)
             return 1
 
+    try:
+        feature_specs = _feature_specs_for_args(args, label_col=str(args.label_col))
+    except FeatureRegistryError as exc:
+        print(f"[error] 特征配置错误: {exc}", file=sys.stderr)
+        return 1
+    args._feature_specs = feature_specs
+    if args.ohe_cols:
+        args.categorical_cols = list(dict.fromkeys((args.categorical_cols or []) + list(args.ohe_cols)))
+
     # 检查数据集文件是否存在
     if args.csv is not None and not args.csv.exists():
         print(f"[error] CSV 不存在: {args.csv}", file=sys.stderr)
@@ -685,7 +813,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     # 验证 DRFP 描述符与列角色分类的依赖关系
-    if "drfp" in args.descriptors:
+    if any(spec.descriptor == "drfp" for spec in feature_specs):
         if not args.reactant_cols or not args.product_cols:
             print(
                 "[error] DRFP 描述符需要列角色分类，请同时指定 --reactant-cols 和 --product-cols 参数。",
@@ -700,6 +828,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     log_path = _log_path_in_docs(args.log_file, docs_dir)
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    previous_stdout = sys.stdout
     log_fh = open(log_path, "w", encoding="utf-8", buffering=1)
     sys.stdout = _Tee(log_fh)
 
@@ -714,6 +843,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         csv_path=args.csv,
         smiles_cols=args.smiles_cols,
         numeric_cols=args.numeric_cols or [],
+        categorical_cols=args.categorical_cols or [],
         label_col=args.label_col,
         reactant_cols=args.reactant_cols,
         product_cols=args.product_cols,
@@ -742,71 +872,155 @@ def main(argv: Optional[List[str]] = None) -> int:
         f"数值列={numeric_cols or '无'}  "
         f"标签列='{label_col}'"
     )
-    print(f"[grid] 描述符={args.descriptors}  模型={args.models}  cv={args.cv}")
+    print(
+        "[grid] 特征={0}  模型={1}  cv={2}".format(
+            ["{0}:{1}".format(spec.id, spec.lifecycle) for spec in feature_specs],
+            args.models, args.cv,
+        )
+    )
 
     svm_sub = args.svm_subsample if args.svm_subsample > 0 else None
 
     rows: List[dict] = []
-
-    total = len(args.descriptors) * len(args.models)
+    descriptor_statuses: List[dict] = []
+    descriptors_dir = out_dir / "descriptors"
+    descriptors_dir.mkdir(parents=True, exist_ok=True)
+    total = len(feature_specs) * len(args.models)
     done = 0
+    sample_ids = [str(value) for value in df.index]
+    sample_id_array = np.asarray(sample_ids, dtype=str)
+    prepared_features: Dict[str, Dict[str, Any]] = {}
+    status_by_id: Dict[str, Dict[str, Any]] = {}
 
-    # 获取描述符配置列表（JSON 配置模式下可用）
-    descriptor_configs = getattr(args, '_descriptor_configs', None)
-
-    for desc_name in args.descriptors:
-        print(f"\n[desc] 计算描述符: {desc_name} ...")
-
-        # 获取该描述符的独立配置（如果存在）
-        desc_config = _get_descriptor_config(desc_name, descriptor_configs)
-
-        # 解析该描述符应使用的列和模式
-        if desc_config is not None:
-            # JSON 配置模式：使用描述符自己配置的列
-            desc_smiles_cols = _resolve_descriptor_columns(
-                desc_config, smiles_cols, smiles_roles
-            )
-            # 构建该描述符的 smiles_roles（用于 DRFP 等反应类描述符）
-            desc_smiles_roles = {
-                'reactant': [c for c in desc_smiles_cols if c in smiles_roles.get('reactant', [])],
-                'product': [c for c in desc_smiles_cols if c in smiles_roles.get('product', [])],
-                'other': [c for c in desc_smiles_cols if c in smiles_roles.get('other', [])],
+    print("\n[phase 1/2] 预计算静态特征；按折特征将在建模阶段拟合")
+    for spec in feature_specs:
+        if spec.lifecycle == "fold_transform":
+            missing = [column for column in spec.columns if column not in df.columns]
+            state_root = out_dir / "fold_transformers" / spec.id
+            status = {
+                "feature_id": spec.id,
+                "descriptor": spec.descriptor,
+                "lifecycle": spec.lifecycle,
+                "status": "deferred" if not missing else "failed",
+                "stage": "fold_transform" if not missing else "validate",
+                "artifact_path": str(state_root),
+                "n_total": len(df), "n_valid": len(df), "feature_dim": None,
+                "feature_dim_min": None, "feature_dim_max": None, "completed_folds": 0,
+                "skipped_model_count": len(args.models) if missing else 0,
+                "reason": (
+                    "每个 CV 训练折单独 fit；不会生成全数据 OHE artifact"
+                    if not missing else "OHE 类别列不存在：{0}".format(", ".join(missing))
+                ),
             }
-            # 提取 mode 参数（默认 concat）
-            desc_mode = desc_config.get('mode', 'concat')
-            print(f"  [config] 模式: {desc_mode}")
-            print(f"  [config] 使用列 ({len(desc_smiles_cols)}): {', '.join(desc_smiles_cols)}")
-        else:
-            # 传统 CLI 模式：使用全局列，默认 concat 模式
-            desc_smiles_cols = smiles_cols
-            desc_smiles_roles = smiles_roles
-            desc_mode = "concat"
-            # 根据描述符类型显示使用的列
-            if desc_name.lower() == "drfp":
-                cols_used = smiles_roles['reactant'] + smiles_roles['product']
-                print(f"  使用列（反应物+产物）: {', '.join(cols_used)}")
+            descriptor_statuses.append(status)
+            status_by_id[spec.id] = status
+            if not missing:
+                prepared_features[spec.id] = {"spec": spec, "state_root": state_root}
+                print("[feature:deferred] {0}: OHE 将在每个训练折拟合，列={1}".format(
+                    spec.id, ", ".join(spec.columns)
+                ))
             else:
-                print(f"  使用列（全部）: {', '.join(smiles_cols)}")
+                print("[feature:failed] {0}: {1}".format(spec.id, status["reason"]), file=sys.stderr)
+            continue
 
-        X_smiles, X_numeric, mask = build_universal_features(
-            smiles_cols=desc_smiles_cols,
-            numeric_cols=numeric_cols,
-            df=df,
-            desc_name=desc_name,
-            smiles_roles=desc_smiles_roles,
-            mode=desc_mode,
-        )
-        y = df[label_col].to_numpy(dtype=np.float64)[mask]
+        print("\n[feature] 准备静态特征: {0} ({1}) ...".format(spec.id, spec.descriptor))
+        desc_smiles_cols = _resolve_static_feature_columns(spec, smiles_cols, smiles_roles)
+        desc_smiles_roles = {
+            'reactant': [c for c in desc_smiles_cols if c in smiles_roles.get('reactant', [])],
+            'product': [c for c in desc_smiles_cols if c in smiles_roles.get('product', [])],
+            'other': [c for c in desc_smiles_cols if c in smiles_roles.get('other', [])],
+        }
+        feature_config = {"params": dict(spec.params), "feature_spec": spec.to_dict()}
+        artifact_path = descriptor_artifact_path(descriptors_dir, spec.id)
+        try:
+            preparation = prepare_descriptor_artifact(
+                descriptors_dir,
+                descriptor=spec.descriptor,
+                feature_id=spec.id,
+                smiles_cols=list(desc_smiles_cols),
+                df=df,
+                smiles_roles=desc_smiles_roles,
+                mode=spec.mode,
+                descriptor_config=feature_config,
+                sample_ids=sample_ids,
+                sample_id_name="dataframe_index_after_label_filter",
+                compute=build_universal_features,
+            )
+            prepared_features[spec.id] = {
+                "spec": spec, "preparation": preparation,
+                "smiles_cols": list(desc_smiles_cols), "mode": spec.mode,
+            }
+            status = {
+                "feature_id": spec.id, "descriptor": spec.descriptor, "lifecycle": spec.lifecycle,
+                "status": preparation.status, "stage": "precompute",
+                "artifact_path": str(preparation.path), "n_total": preparation.n_total,
+                "n_valid": preparation.n_valid, "feature_dim": preparation.feature_dim,
+                "feature_dim_min": preparation.feature_dim, "feature_dim_max": preparation.feature_dim,
+                "completed_folds": None, "skipped_model_count": 0, "reason": preparation.reason,
+            }
+            descriptor_statuses.append(status)
+            status_by_id[spec.id] = status
+            print("[feature:{0}] {1}: n_valid={2}/{3}  feature_dim={4}  file={5}".format(
+                preparation.status, spec.id, preparation.n_valid, preparation.n_total,
+                preparation.feature_dim, preparation.path,
+            ))
+        except Exception as exc:
+            status = {
+                "feature_id": spec.id, "descriptor": spec.descriptor, "lifecycle": spec.lifecycle,
+                "status": "failed", "stage": "precompute", "artifact_path": str(artifact_path),
+                "n_total": len(df), "n_valid": None, "feature_dim": None,
+                "feature_dim_min": None, "feature_dim_max": None, "completed_folds": 0,
+                "skipped_model_count": len(args.models), "reason": f"{type(exc).__name__}: {exc}",
+            }
+            descriptor_statuses.append(status)
+            status_by_id[spec.id] = status
+            print("[feature:failed] {0}: {1}".format(spec.id, status["reason"]), file=sys.stderr)
 
-        print(
-            f"[desc] {desc_name}: n_valid={mask.sum()}  "
-            f"X_smiles.shape={X_smiles.shape}"
-            + (f"  X_numeric.shape={X_numeric.shape}" if X_numeric is not None else "")
-        )
+    status_path = _save_descriptor_status(descriptor_statuses, docs_dir)
+    print(f"\n[save] 描述符状态已保存: {status_path}")
+    print("\n[phase 2/2] 从 descriptors/ 文件读取特征并开始建模")
+
+    for spec in feature_specs:
+        context = prepared_features.get(spec.id)
+        if context is None:
+            done += len(args.models)
+            print("[skip] {0}: 特征阶段失败，跳过 {1} 个模型".format(spec.id, len(args.models)))
+            continue
+        if spec.lifecycle == "static_descriptor":
+            preparation = context["preparation"]
+            desc_smiles_cols = context["smiles_cols"]
+            try:
+                artifact = load_descriptor_artifact(
+                    preparation.path,
+                    expected_descriptor_config=preparation.descriptor_config,
+                    expected_dataset_fingerprint=preparation.dataset_fingerprint,
+                    expected_sample_ids=np.asarray(sample_ids, dtype=np.str_),
+                )
+            except Exception as exc:
+                status = status_by_id[spec.id]
+                status.update({"status": "failed", "stage": "load", "skipped_model_count": len(args.models),
+                               "reason": f"{type(exc).__name__}: {exc}"})
+                done += len(args.models)
+                print("[feature:failed] {0} 建模前读取失败: {1}".format(spec.id, status["reason"]), file=sys.stderr)
+                continue
+            X_smiles = artifact.X_smiles
+            mask = artifact.valid_mask
+            X_numeric = df[numeric_cols].to_numpy(dtype=np.float32)[mask] if numeric_cols else None
+            y = df[label_col].to_numpy(dtype=np.float64)[mask]
+            input_columns = desc_smiles_cols
+            print("[feature:loaded] {0}: n_valid={1}  X.shape={2}".format(
+                spec.id, int(mask.sum()), X_smiles.shape
+            ))
+        else:
+            X_smiles = None
+            X_numeric = None
+            mask = np.ones(len(df), dtype=bool)
+            y = df[label_col].to_numpy(dtype=np.float64)
+            input_columns = list(spec.columns)
 
         for model_name in args.models:
             done += 1
-            label = f"{desc_name} x {model_name} ({done}/{total})"
+            label = f"{spec.id} x {model_name} ({done}/{total})"
             print(f"[eval] 开始: {label}")
 
             hb = _Heartbeat(interval=args.heartbeat, label=label)
@@ -814,17 +1028,21 @@ def main(argv: Optional[List[str]] = None) -> int:
                 hb.start()
 
             try:
-                model = _make_model(model_name, args)
-
-                if X_numeric is None:
-                    metrics = model.cross_validate(X_smiles, y, cv=args.cv)
-                else:
-                    metrics = _cv_with_numeric(
-                        model_name, model,
-                        X_smiles, X_numeric, y,
-                        cv=args.cv,
-                        svm_subsample=svm_sub,
+                if spec.lifecycle == "fold_transform":
+                    metrics = _cv_with_ohe_feature(
+                        spec=spec, frame=df, sample_ids=sample_id_array, numeric_cols=numeric_cols,
+                        y=y, model_name=model_name, args=args,
+                        state_root=context["state_root"], svm_subsample=svm_sub,
                     )
+                else:
+                    model = _make_model(model_name, args)
+                    if X_numeric is None:
+                        metrics = model.cross_validate(X_smiles, y, cv=args.cv)
+                    else:
+                        metrics = _cv_with_numeric(
+                            model_name, model, X_smiles, X_numeric, y,
+                            cv=args.cv, svm_subsample=svm_sub,
+                        )
             except Exception as exc:
                 print(f"[error] {label} 失败: {exc}", file=sys.stderr)
                 hb.stop()
@@ -834,14 +1052,19 @@ def main(argv: Optional[List[str]] = None) -> int:
 
             row: dict = {
                 "task_name":     task_name,
-                "descriptor":    desc_name,
+                "feature_id":    spec.id,
+                "descriptor":    spec.descriptor,
+                "lifecycle":     spec.lifecycle,
                 "model":         model_name,
-                "n_smiles_cols": len(desc_smiles_cols),
+                "n_smiles_cols": len(input_columns),
                 "n_numeric_cols":len(numeric_cols),
                 "n_samples":     int(mask.sum()),
                 "n_total":       int(len(mask)),
                 "coverage":      float(mask.sum() / max(len(mask), 1)),
-                "feature_dim":   int(X_smiles.shape[1]) + (X_numeric.shape[1] if X_numeric is not None else 0),
+                "feature_dim":   (
+                    int(X_smiles.shape[1]) + (X_numeric.shape[1] if X_numeric is not None else 0)
+                    if X_smiles is not None else int(metrics["fold_transform_summary"]["output_dim_max"]) + len(numeric_cols)
+                ),
                 "cv":            args.cv,
             }
             oof_pred   = metrics.get("oof_pred")
@@ -851,6 +1074,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                     row[k] = v
 
             rows.append(row)
+            if spec.lifecycle == "fold_transform":
+                summary = metrics["fold_transform_summary"]
+                status_by_id[spec.id].update({
+                    "status": "completed", "stage": "fold_transform",
+                    "feature_dim": summary["output_dim_max"],
+                    "feature_dim_min": summary["output_dim_min"],
+                    "feature_dim_max": summary["output_dim_max"],
+                    "completed_folds": summary["completed_folds"],
+                    "reason": "每个 CV 训练折独立拟合；状态已保存并完成加载校验",
+                })
             print(
                 f"[done] {label}  "
                 f"R²={row.get('r2_mean', float('nan')):.4f}  "
@@ -865,62 +1098,230 @@ def main(argv: Optional[List[str]] = None) -> int:
                     if valid.sum() >= 2:
                         plot_scatter(
                             oof_y_true[valid], oof_pred[valid],
-                            desc_name, model_name,
+                            spec.id, model_name,
                             pictures_dir,
                         )
                 except Exception as _exc:
                     print(f"[warn] 散点图生成失败 ({label}): {_exc}", file=sys.stderr)
 
     _print_table(rows)
-
+    status_path = _save_descriptor_status(descriptor_statuses, docs_dir)
     if rows:
         csv_out = _save_metrics(rows, docs_dir, args.append)
         print(f"\n[save] 指标已保存: {csv_out}")
-
-        task_info = {
-            "task_name":        task_name,
-            "csv_path":         args.csv,
-            "project_folder":   str(out_dir),  # 添加项目文件夹位置
-            "n_samples":        rows[0].get("n_samples", "—") if rows else "—",
-            "smiles_cols":      smiles_cols,
-            "numeric_cols":     numeric_cols or "（无）",
-            "label_col":        label_col,
-            "n_combinations":   len(rows),
-            "dataset_citation": args.dataset_citation,
-            "dataset_url":      args.dataset_url,
-            "dataset_notes":    args.dataset_notes,
-        }
-        # 如果使用配置文件模式，添加额外信息到报告
-        if hasattr(args, '_config') and args._config:
-            task_info["column_mapping"] = args._config.get("column_mapping", [])
-            task_info["descriptors"] = args._config.get("descriptors", [])
-            task_info["origin_dataset_path"] = args._config.get("origin_dataset_path")
-            task_info["dataset_path"] = str(args.csv)  # 实际使用的数据集路径
-        if hasattr(args, '_config_path') and args._config_path:
-            task_info["config_path"] = str(args._config_path)
-        metrics_df = pd.DataFrame(rows)
-        fmt = args.output_format
-
-        if fmt in ("html", "both"):
-            try:
-                from yonod.universal.report import generate_report
-                report_path = generate_report(metrics_df, task_info, out_dir)
-                print(f"[report] HTML 报告已生成: {report_path}")
-            except Exception as exc:
-                print(f"[warn] HTML 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
-
-        if fmt in ("md", "both"):
-            try:
-                from yonod.universal.report import generate_markdown_report
-                md_path = generate_markdown_report(metrics_df, task_info, out_dir)
-                print(f"[report] Markdown 报告已生成: {md_path}")
-            except Exception as exc:
-                print(f"[warn] Markdown 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
     else:
         print("\n[warn] 无有效结果，docs/metrics_summary.csv 未写入", file=sys.stderr)
 
+    task_info = {
+        "task_name":        task_name,
+        "csv_path":         args.csv,
+        "project_folder":   str(out_dir),
+        "n_samples":        rows[0].get("n_samples", "—") if rows else len(df),
+        "smiles_cols":      smiles_cols,
+        "numeric_cols":     numeric_cols or "（无）",
+        "label_col":        label_col,
+        "n_combinations":   len(rows),
+        "dataset_citation": args.dataset_citation,
+        "dataset_url":      args.dataset_url,
+        "dataset_notes":    args.dataset_notes,
+        "descriptors":      [spec.to_dict() for spec in feature_specs],
+        "descriptor_statuses": descriptor_statuses,
+        "descriptor_status_path": str(status_path),
+    }
+    if hasattr(args, '_config') and args._config:
+        task_info["column_mapping"] = args._config.get("column_mapping", [])
+        task_info["origin_dataset_path"] = args._config.get("origin_dataset_path")
+        task_info["dataset_path"] = str(args.csv)
+    if hasattr(args, '_config_path') and args._config_path:
+        task_info["config_path"] = str(args._config_path)
+    metrics_df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=_CSV_COLUMNS)
+    fmt = args.output_format
+
+    if fmt in ("html", "both"):
+        try:
+            from yonod.universal.report import generate_report
+            report_path = generate_report(metrics_df, task_info, out_dir)
+            print(f"[report] HTML 报告已生成: {report_path}")
+        except Exception as exc:
+            print(f"[warn] HTML 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
+
+    if fmt in ("md", "both"):
+        try:
+            from yonod.universal.report import generate_markdown_report
+            md_path = generate_markdown_report(metrics_df, task_info, out_dir)
+            print(f"[report] Markdown 报告已生成: {md_path}")
+        except Exception as exc:
+            print(f"[warn] Markdown 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
+
     print(f"[done] 全部完成。日志: {log_path}")
+    sys.stdout.flush()
+    sys.stdout = previous_stdout
+    log_fh.close()
     return 0
+
+
+def _stable_hash(value: Any) -> str:
+    """Hash an audit payload without relying on process-local object IDs."""
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _fit_predict_explicit_fold(
+    model_name: str,
+    args: argparse.Namespace,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_valid: np.ndarray,
+    *,
+    fold_index: int,
+    svm_subsample: Optional[int],
+) -> tuple[np.ndarray, str]:
+    """Build a fresh supported estimator for an externally defined CV fold."""
+    if model_name == "autogluon":
+        raise ValueError(
+            "OHE 需要显式的训练折/验证折边界；AutoGluon 当前仅提供内部 holdout，"
+            "因此不能用于 OHE 的无泄漏 CV。请选择 rf、xgb、svm 或 lightgbm。"
+        )
+    model = _make_model(model_name, args)
+    if model_name in {"rf", "xgb", "lightgbm"}:
+        estimator = model._build()
+        estimator.fit(X_train, y_train)
+    elif model_name == "svm":
+        train_index = np.arange(len(X_train))
+        if svm_subsample and svm_subsample < len(train_index):
+            rng = np.random.default_rng(seed=fold_index)
+            train_index = rng.choice(train_index, size=svm_subsample, replace=False)
+        estimator = model._build(n_features=X_train.shape[1], n_train=len(train_index))
+        estimator.fit(X_train[train_index], y_train[train_index])
+    else:  # Keep this exhaustive if a future CLI model is added.
+        raise ValueError(f"OHE 显式 CV 尚未支持模型 {model_name!r}")
+    return np.asarray(estimator.predict(X_valid), dtype=np.float64), str(getattr(model, "device", "cpu"))
+
+
+def _cv_with_ohe_feature(
+    *,
+    spec: FeatureSpec,
+    frame: pd.DataFrame,
+    sample_ids: np.ndarray,
+    numeric_cols: List[str],
+    y: np.ndarray,
+    model_name: str,
+    args: argparse.Namespace,
+    state_root: Path,
+    svm_subsample: Optional[int],
+) -> Dict[str, Any]:
+    """Run ordinary KFold CV with a strictly train-fold-local OHE encoder.
+
+    This intentionally does not call a model adapter's convenience
+    ``cross_validate`` method: those methods own their own split loop and
+    would make it impossible to prove which samples taught the OHE vocabulary.
+    """
+    if spec.lifecycle != "fold_transform" or spec.descriptor != "ohe":
+        raise ValueError("_cv_with_ohe_feature 仅接受 OHE fold_transform")
+    if len(y) < args.cv:
+        raise ValueError("样本数必须不少于 cv 折数")
+    component_frame = frame.loc[:, list(spec.columns)]
+    numeric = frame.loc[:, numeric_cols].to_numpy(dtype=np.float32) if numeric_cols else None
+    if numeric is not None and not np.isfinite(numeric).all():
+        raise ValueError("数值辅助列包含 NaN 或 inf，无法在 OHE CV 中安全缩放")
+
+    state_root.mkdir(parents=True, exist_ok=True)
+    dataset_hash = _stable_hash({
+        "sample_ids": sample_ids.tolist(),
+        "columns": list(spec.columns),
+        "records": component_frame.where(pd.notna(component_frame), None).to_dict(orient="records"),
+    })
+    splitter = KFold(n_splits=args.cv, shuffle=True, random_state=42)
+    oof = np.full(len(y), np.nan, dtype=np.float64)
+    r2s: List[float] = []
+    rmses: List[float] = []
+    maes: List[float] = []
+    audits: List[Dict[str, Any]] = []
+    started = time.time()
+    device = "cpu"
+
+    for fold_index, (train_idx, valid_idx) in enumerate(splitter.split(component_frame), start=1):
+        transformer = OHEFeature(
+            spec.columns,
+            missing_policy=str(spec.params["missing_policy"]),
+            dtype=str(spec.params["dtype"]),
+            handle_unknown=str(spec.params["handle_unknown"]),
+        )
+        transformer.fit(component_frame.iloc[train_idx], sample_ids=sample_ids[train_idx])
+        X_train = transformer.transform(component_frame.iloc[train_idx], partition="train")
+        X_valid = transformer.transform(component_frame.iloc[valid_idx], partition="valid")
+        if numeric is not None:
+            scaler = StandardScaler()
+            X_train = np.hstack([X_train, scaler.fit_transform(numeric[train_idx])])
+            X_valid = np.hstack([X_valid, scaler.transform(numeric[valid_idx])])
+
+        metadata = transformer.metadata()
+        context = {
+            "feature_id": spec.id,
+            "feature_spec_hash": spec.schema_hash,
+            "dataset_hash": dataset_hash,
+            "split_hash": _stable_hash({
+                "cv": int(args.cv), "seed": 42, "repeat": 1, "fold": fold_index,
+                "train_sample_ids": sample_ids[train_idx].tolist(),
+                "valid_sample_ids": sample_ids[valid_idx].tolist(),
+            }),
+            "repeat": 1,
+            "fold": fold_index,
+            "train_sample_ids_hash": metadata["train_sample_ids_hash"],
+        }
+        fold_dir = state_root / "repeat-01" / f"fold-{fold_index:02d}"
+        transformer.save(fold_dir, context=context)
+        # Read the freshly persisted state back immediately. This checks the
+        # atomic state/metadata contract without refitting on validation rows.
+        OHEFeature.load(fold_dir, expected_context=context)
+
+        prediction, device = _fit_predict_explicit_fold(
+            model_name, args, X_train, y[train_idx], X_valid,
+            fold_index=fold_index, svm_subsample=svm_subsample,
+        )
+        if not np.isfinite(prediction).all():
+            raise ValueError(f"OHE 第 {fold_index} 折模型预测包含 NaN 或 inf")
+        oof[valid_idx] = prediction
+        r2s.append(float(r2_score(y[valid_idx], prediction)))
+        rmses.append(float(np.sqrt(mean_squared_error(y[valid_idx], prediction))))
+        maes.append(float(mean_absolute_error(y[valid_idx], prediction)))
+        audits.append({
+            "fold": fold_index,
+            "state_directory": str(fold_dir),
+            "output_dim": int(metadata["output_dim"]),
+            "categories_hash": metadata["categories_hash"],
+            "train_sample_ids_hash": metadata["train_sample_ids_hash"],
+            "valid_unseen_count": int(metadata["valid_unseen_count"]),
+            "valid_missing_count": int(metadata["valid_missing_count"]),
+        })
+
+    summary = {
+        "feature_id": spec.id,
+        "descriptor": spec.descriptor,
+        "lifecycle": spec.lifecycle,
+        "feature_spec_hash": spec.schema_hash,
+        "dataset_hash": dataset_hash,
+        "fit_scope": "train_only_per_fold",
+        "completed_folds": len(audits),
+        "output_dim_min": min(item["output_dim"] for item in audits),
+        "output_dim_max": max(item["output_dim"] for item in audits),
+        "folds": audits,
+    }
+    (state_root / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "r2_mean": float(np.mean(r2s)),
+        "r2_std": float(np.std(r2s)),
+        "rmse_mean": float(np.mean(rmses)),
+        "mae_mean": float(np.mean(maes)),
+        "train_time_s": float(time.time() - started),
+        "device": device,
+        "oof_pred": oof,
+        "oof_y_true": y,
+        "fold_transform_summary": summary,
+    }
 
 
 # ─────────────────────────────── 入口 ────────────────────────────────────── #

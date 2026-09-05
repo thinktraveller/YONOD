@@ -63,6 +63,7 @@ def _canonical_json(value: Any) -> str:
 
 def _normalise_config(
     descriptor: str,
+    feature_id: str,
     smiles_cols: List[str],
     smiles_roles: Optional[Mapping[str, List[str]]],
     mode: str,
@@ -71,6 +72,7 @@ def _normalise_config(
 ) -> Dict[str, Any]:
     roles = smiles_roles or {"reactant": [], "product": [], "other": []}
     return json.loads(_canonical_json({
+        "feature_id": feature_id,
         "descriptor": descriptor.lower(),
         "mode": mode,
         "sample_id_name": sample_id_name,
@@ -138,8 +140,12 @@ def _feature_structure(
     }
 
 
-def _mfp_component_audit(df: pd.DataFrame, smiles_cols: List[str]) -> Dict[str, Any]:
-    """Count zero-block causes without altering paper-protocol raw inputs."""
+def _mfp_component_audit(
+    df: pd.DataFrame,
+    smiles_cols: List[str],
+    descriptor_config: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Record profile-specific MFP component behaviour without changing inputs."""
     from rdkit import Chem
     import rdkit
 
@@ -151,6 +157,13 @@ def _mfp_component_audit(df: pd.DataFrame, smiles_cols: List[str]) -> Dict[str, 
                 blank_count += 1
             elif Chem.MolFromSmiles(str(value)) is None:
                 invalid_count += 1
+    supplied = descriptor_config.get("options", descriptor_config)
+    if not isinstance(supplied, Mapping):
+        supplied = {}
+    options = supplied.get("params", supplied)
+    if not isinstance(options, Mapping):
+        options = {}
+    profile = str(options.get("profile", "vjethbkm"))
     return {
         "algorithm": "morgan_count",
         "rdkit_version": str(getattr(rdkit, "__version__", "unknown")),
@@ -159,7 +172,10 @@ def _mfp_component_audit(df: pd.DataFrame, smiles_cols: List[str]) -> Dict[str, 
         "blank_component_count": blank_count,
         "invalid_component_count": invalid_count,
         "zero_block_component_count": blank_count + invalid_count,
-        "row_retention_policy": "zero_block_keep_row",
+        "profile": profile,
+        "row_retention_policy": (
+            "zero_block_keep_row" if profile == "vjethbkm" else "any_valid_component"
+        ),
     }
 
 
@@ -238,6 +254,7 @@ def prepare_descriptor_artifact(
     directory: Path,
     *,
     descriptor: str,
+    feature_id: Optional[str] = None,
     smiles_cols: List[str],
     df: pd.DataFrame,
     smiles_roles: Optional[Mapping[str, List[str]]] = None,
@@ -249,11 +266,14 @@ def prepare_descriptor_artifact(
 ) -> DescriptorPreparation:
     """Reuse a matching artifact or atomically compute and persist a new one."""
     current_sample_ids = _sample_id_array(df, sample_ids)
+    resolved_feature_id = str(feature_id or descriptor).strip()
+    if not resolved_feature_id:
+        raise DescriptorArtifactError("feature_id 不能为空")
     config = _normalise_config(
-        descriptor, smiles_cols, smiles_roles, mode, descriptor_config, sample_id_name
+        descriptor, resolved_feature_id, smiles_cols, smiles_roles, mode, descriptor_config, sample_id_name
     )
     fingerprint = dataset_fingerprint(df, smiles_cols, current_sample_ids)
-    path = descriptor_artifact_path(directory, descriptor)
+    path = descriptor_artifact_path(directory, resolved_feature_id)
     cache_miss_reason = "描述符文件不存在"
 
     if path.exists():
@@ -302,7 +322,7 @@ def prepare_descriptor_artifact(
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
     }
     if descriptor.lower() == "mfp":
-        audit = _mfp_component_audit(df, smiles_cols)
+        audit = _mfp_component_audit(df, smiles_cols, config)
         if len(smiles_cols) == 0 or X_smiles.shape[1] % len(smiles_cols) != 0:
             raise DescriptorArtifactError("MFP 特征维度无法按组件列拆分")
         audit["block_dim"] = int(X_smiles.shape[1] // len(smiles_cols))
