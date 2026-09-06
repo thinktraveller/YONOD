@@ -1,0 +1,24 @@
+{
+  "run_id": "core_rf_5x5_20260825_171156",
+  "stage": "core_rf_5x5",
+  "git_commit": "83776999",
+  "python": "3.13.9",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "dataset": "SM",
+  "dataset_path": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\yieldsmarter\\Data\\HTE_datasets\\SM\\SM.csv",
+  "n_rows": 5760,
+  "descriptors": [
+    "ohe"
+  ],
+  "model": "rf",
+  "n_estimators": 500,
+  "rf_max_features": 0.3,
+  "folds": 5,
+  "repeats": 5,
+  "random_state": 1000,
+  "outputs": {
+    "run_dir": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\outputs\\runs\\core_rf_5x5_20260825_171156",
+    "summary": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\outputs\\tables\\core_rf_5x5_SM_metrics_summary.csv",
+    "table_s3_style_summary": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\outputs\\tables\\table_s3_style_SM_summary.csv"
+  }
+}

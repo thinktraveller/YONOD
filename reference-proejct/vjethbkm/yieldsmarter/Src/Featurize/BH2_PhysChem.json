@@ -1,0 +1,9 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/BH2/BH2.csv",
+  "target_col": "Yield",
+  "min_frac_variance": 0.90,
+  "output_npz": "../../Results/Compare_Complexity/Denmark_2023/PhysChem/Denmark_PhysChem.npz",
+  "components": ["Amine_SMILES", "Bromide_SMILES", "Ligand_SMILES", "Solvent_SMILES", "Base_SMILES"]
+
+}
+

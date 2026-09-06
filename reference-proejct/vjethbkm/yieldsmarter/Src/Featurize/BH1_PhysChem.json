@@ -1,0 +1,9 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/BH1/BH1.csv",
+  "target_col": "Yield",
+  "min_frac_variance": 0.90,
+  "output_npz": "../../Results/Compare_Complexity/Doyle_2018/PhysChem/Doyle_PhysChem.npz",
+  "components": ["Additive_SMILES", "Aryl_halide_SMILES", "Base_SMILES", "Ligand_SMILES"]
+
+}
+

@@ -1,0 +1,13 @@
+YieldSmarter/Src/Featurize — Feature generation scripts
+======================================================
+
+This folder contains small utilities to convert reaction datasets into .npz feature files
+for downstream ML (arrays X and y).
+
+Outputs are NumPy .npz archives. Typical contents:
+- X: feature matrix (n_samples, n_features)
+- y: target vector (n_samples,)
+
+Example json files are provided for the different datasets. These were used to
+generate the descriptors used in the paper.
+

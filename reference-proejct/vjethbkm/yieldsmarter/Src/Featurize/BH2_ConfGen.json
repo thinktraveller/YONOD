@@ -1,0 +1,45 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/BH2/csv/BH2.csv",
+  "target_col": "lcms_ratio",
+  "xyz_dir": "../../Data/HTE_datasets/BH2/xyz",
+
+  "components": [
+    {
+      "name": "Amine",
+      "reaction_col": "Amine_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Amine_SMILES.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "Amine_{id}.xyz"
+    },
+    {
+      "name": "Base",
+      "reaction_col": "Base_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Base_SMILES.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "Base_{id}.xyz"
+    },
+    {
+      "name": "Bromide",
+      "reaction_col": "Bromide_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Bromide_SMILES.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "Bromide_{id}.xyz"
+    },
+    {
+      "name": "Catalysts",
+      "reaction_col": "Catalysts_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Catalysts_SMILES.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "Catalysts_{id}.xyz"
+    },
+    {
+      "name": "Solvent",
+      "reaction_col": "Solvent_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Solvent_SMILES.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "Solvent_{id}.xyz"
+    }
+
+  ]
+}
+

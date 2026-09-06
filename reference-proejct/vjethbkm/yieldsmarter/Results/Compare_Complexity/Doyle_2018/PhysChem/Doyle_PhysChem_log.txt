@@ -1,0 +1,11 @@
+2026-04-08T12:43:56 - Config: BH1_PhysChem.json
+2026-04-08T12:43:56 - Reaction CSV: ../../Data/HTE_datasets/BH1/BH1.csv
+2026-04-08T12:43:56 - Target column: Yield
+2026-04-08T12:43:56 - Output (unscaled): ../../Results/Compare_Complexity/Doyle_2018/PhysChem/Doyle_PhysChem.npz
+2026-04-08T12:43:56 - Min frac variance for PCA: 0.9
+2026-04-08T12:43:57 -      Computing descriptors for 22 unique SMILES
+2026-04-08T12:43:57 -      Computing descriptors for 15 unique SMILES
+2026-04-08T12:43:57 -      Computing descriptors for 3 unique SMILES
+2026-04-08T12:43:58 -      Computing descriptors for 4 unique SMILES
+2026-04-08T12:43:58 - 
+Done.

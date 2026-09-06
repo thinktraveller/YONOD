@@ -1,0 +1,15 @@
+{
+  "run_id": "official_npz_rf_5x5_20260825_171801",
+  "stage": "official_npz_rf_5x5",
+  "dataset": "BH2",
+  "descriptors": [
+    "PhysChem"
+  ],
+  "folds": 5,
+  "repeats": 5,
+  "seed": 1000,
+  "n_estimators": 500,
+  "max_features": 0.3,
+  "git_commit": "f7d5fbc5",
+  "summary_path": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\outputs\\tables\\official_npz_rf_5x5_BH2_metrics_summary.csv"
+}

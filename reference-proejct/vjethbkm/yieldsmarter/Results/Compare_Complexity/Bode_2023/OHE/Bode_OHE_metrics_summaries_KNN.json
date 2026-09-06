@@ -1,0 +1,62 @@
+{
+  "model": "KNN",
+  "splits": 5,
+  "seed": 1000,
+  "train": {
+    "mae": {
+      "mean": 19.623649721855966,
+      "std": 0.6874565856578598
+    },
+    "rmse": {
+      "mean": 39.02165032008742,
+      "std": 1.554876944291316
+    },
+    "r2": {
+      "mean": 0.7246972798540996,
+      "std": 0.022632601233406345
+    },
+    "medae": {
+      "mean": 9.339919874472,
+      "std": 0.6148191001189574
+    },
+    "kendall": {
+      "mean": 0.5270547059079785,
+      "std": 0.010470124534605971
+    }
+  },
+  "test": {
+    "mae": {
+      "mean": 24.3178416687249,
+      "std": 2.5749236824681767
+    },
+    "rmse": {
+      "mean": 47.26483951262057,
+      "std": 7.149182346259497
+    },
+    "r2": {
+      "mean": 0.5769668854485658,
+      "std": 0.1316433828151221
+    },
+    "medae": {
+      "mean": 11.773219631503999,
+      "std": 1.5481845184070806
+    },
+    "kendall": {
+      "mean": 0.44098756600158057,
+      "std": 0.03751978481726159
+    }
+  },
+  "categorical_columns": [
+    "Aldehyde_1",
+    "bifunctional_reagent",
+    "Aldehyde_2"
+  ],
+  "target_col": "Yield",
+  "reaction_csv": "../../Data/HTE_datasets/SL1/SL1.csv",
+  "ohe": {
+    "missing_token": "__MISSING__",
+    "zero_out_missing": true,
+    "handle_unknown": "ignore",
+    "fit_scope": "train_only_per_fold"
+  }
+}

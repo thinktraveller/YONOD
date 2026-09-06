@@ -1,0 +1,60 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/SM/SM.csv",
+  "target_col": "Yield",
+  "xyz_dir": "../../Data/HTE_datasets/SM/xyz",
+  "output_npz": "../../Results/Compare_Complexity/Suzuki_2018/SOAP/Suzuki_SOAP.npz",
+
+  "skip_rows_with_missing_values": true,
+
+  "components": [
+    {
+      "name": "ligand",
+      "reaction_col": "ligand_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/ligand_smiles.csv",
+      "lookup_key_col": "ligand_smiles",
+      "xyz_template": "ligand_{id}.xyz"
+    },
+    {
+      "name": "solvent_1",
+      "reaction_col": "solvent_1_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/solvent_1_smiles.csv",
+      "lookup_key_col": "solvent_1_smiles",
+      "xyz_template": "solvent_1_{id}.xyz"
+    },
+    {
+      "name": "reactant_1",
+      "reaction_col": "reactant_1_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/reactant_1_smiles.csv",
+      "lookup_key_col": "reactant_1_smiles",
+      "xyz_template": "reactant_1_{id}.xyz"
+    },
+    {
+      "name": "reactant_2",
+      "reaction_col": "reactant_2_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/reactant_2_smiles.csv",
+      "lookup_key_col": "reactant_2_smiles",
+      "xyz_template": "reactant_2_{id}.xyz"
+    },
+    {
+      "name": "reagent_1",
+      "reaction_col": "reagent_1_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/reagent_1_smiles.csv",
+      "lookup_key_col": "reagent_1_smiles",
+      "xyz_template": "reagent_1_{id}.xyz"
+    }
+
+  ],
+  
+  "soap": {
+    "species": ["C", "H", "N", "O", "F", "Cl", "Br", "I", "Fe","B", "P", "S", "Li", "Na", "K", "Cs"],
+    "periodic": false,
+    "r_cut": 6.0,
+    "n_max": 6,
+    "l_max": 4,
+    "sigma": 0.5,
+    "average": "inner",
+    "compression": { "mode": "mu2" },
+    "sparse": false
+  }
+}
+
