@@ -47,7 +47,6 @@ docs/
 #                          or retrain with the upstream notebooks; see README.
 WEIGHTS/MolMetaLM-base/
 WEIGHTS/FISD/
-dataset/
 
 
 # Generic large weight file types
@@ -55,9 +54,6 @@ dataset/
 *.pt
 *.ckpt
 
-# ===================== Datasets =====================
-# dataset/ contains large/proprietary data; only the two MIT-licensed sample CSVs
-# (from github.com/aichemeco/amide_coupling) are tracked.
 
 
 # ===================== Third-party project sources =====================
