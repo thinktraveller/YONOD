@@ -40,11 +40,6 @@ AutogluonModels/
 result/
 docs/
 
-# ===================== Datasets =====================
-# dataset/ contains large/proprietary data; only the two MIT-licensed sample CSVs
-# (from github.com/aichemeco/amide_coupling) are tracked.
-
-
 # ===================== Third-party project sources =====================
 # These upstream repos are kept locally for reference but not redistributed
 # (the original 化学描述符相关项目/FISD/ has its own .git heritage that confuses
