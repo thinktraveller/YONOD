@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Final MFP/OHE RF metrics</title>
+<style>body{font-family:system-ui,sans-serif;margin:2rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:.4rem;text-align:left}th{background:#f1f5f9}</style></head><body>
+<h1>Final MFP/OHE + RF metrics from official YieldSmarter artifacts</h1>
+<p>Each mean and standard deviation summarizes 25 fold-level values from 5 repeats × 5 folds. This is an official-artifact summary, not an independent retraining claim. SM/MFP uses 4620 rows, while bundled SM/OHE artifacts use 5760 rows; this remains an audit boundary.</p>
+<table><thead><tr><th>Dataset</th><th>Descriptor</th><th>Metric</th><th>Mean ± std</th><th>Unit</th><th>Valid folds</th><th>Population</th><th>Table S3 display</th></tr></thead><tbody>
+<tr><td>BH1</td><td>MFP</td><td>kendall_tau</td><td>0.85 ± 0.01</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH1</td><td>MFP</td><td>mae</td><td>4.5 ± 0.2</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH1</td><td>MFP</td><td>r2</td><td>0.94 ± 0.01</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH1</td><td>MFP</td><td>rmse</td><td>6.9 ± 0.5</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH1</td><td>OHE</td><td>kendall_tau</td><td>0.80 ± 0.01</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH1</td><td>OHE</td><td>mae</td><td>6.4 ± 0.3</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH1</td><td>OHE</td><td>r2</td><td>0.88 ± 0.01</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH1</td><td>OHE</td><td>rmse</td><td>9.3 ± 0.5</td><td>Yield (%)</td><td>25</td><td>official CSV: 3955 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>MFP</td><td>kendall_tau</td><td>0.68 ± 0.01</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>MFP</td><td>mae</td><td>12.1 ± 0.5</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>MFP</td><td>r2</td><td>0.73 ± 0.02</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>MFP</td><td>rmse</td><td>17.9 ± 0.8</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>OHE</td><td>kendall_tau</td><td>0.61 ± 0.02</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>OHE</td><td>mae</td><td>15.3 ± 0.6</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>OHE</td><td>r2</td><td>0.59 ± 0.03</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>BH2</td><td>OHE</td><td>rmse</td><td>21.9 ± 0.9</td><td>Yield (%)</td><td>25</td><td>official CSV: 3359 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>MFP</td><td>kendall_tau</td><td>0.51 ± 0.04</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>MFP</td><td>mae</td><td>18.0 ± 1.8</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>MFP</td><td>r2</td><td>0.77 ± 0.05</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>MFP</td><td>rmse</td><td>35.1 ± 5.1</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>OHE</td><td>kendall_tau</td><td>0.48 ± 0.04</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>OHE</td><td>mae</td><td>22.0 ± 2.8</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>OHE</td><td>r2</td><td>0.61 ± 0.10</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SL1</td><td>OHE</td><td>rmse</td><td>45.9 ± 7.6</td><td>LC-MS product ratio</td><td>25</td><td>official CSV: 1150 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>MFP</td><td>kendall_tau</td><td>0.76 ± 0.01</td><td>Yield (%)</td><td>25</td><td>SI all-components-specified subset: 4620 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>MFP</td><td>mae</td><td>7.4 ± 0.2</td><td>Yield (%)</td><td>25</td><td>SI all-components-specified subset: 4620 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>MFP</td><td>r2</td><td>0.85 ± 0.01</td><td>Yield (%)</td><td>25</td><td>SI all-components-specified subset: 4620 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>MFP</td><td>rmse</td><td>11.0 ± 0.3</td><td>Yield (%)</td><td>25</td><td>SI all-components-specified subset: 4620 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>OHE</td><td>kendall_tau</td><td>0.71 ± 0.01</td><td>Yield (%)</td><td>25</td><td>official OHE artifact: raw SM.csv, 5760 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>OHE</td><td>mae</td><td>9.4 ± 0.2</td><td>Yield (%)</td><td>25</td><td>official OHE artifact: raw SM.csv, 5760 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>OHE</td><td>r2</td><td>0.78 ± 0.01</td><td>Yield (%)</td><td>25</td><td>official OHE artifact: raw SM.csv, 5760 reactions</td><td>True</td></tr>
+<tr><td>SM</td><td>OHE</td><td>rmse</td><td>13.1 ± 0.3</td><td>Yield (%)</td><td>25</td><td>official OHE artifact: raw SM.csv, 5760 reactions</td><td>True</td></tr>
+</tbody></table></body></html>

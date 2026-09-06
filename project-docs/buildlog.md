@@ -5499,3 +5499,18 @@ for desc_name in args.descriptors:
 - ✅ 普通任务特征库接入完成。后续若需“分子描述符 + OHE + 数值列”的联合特征，应新增显式 `feature_set` 设计，避免隐式拼接改变比较口径。
 
 ---
+
+## [2026-09-06] 步骤 1 完成：论文项目独立最终指标汇总
+
+### 执行的任务
+- 在 `reference-proejct/vjethbkm/` 新增独立汇总器，读取论文自带 YieldSmarter 的 RF 指标 JSON，生成 MFP/OHE × 四数据集 × MAE/RMSE/R²/Kendall τ 共 32 项最终指标。
+- 每项保留 mean、std、单位、25 个有效折、原始 JSON 路径、SI Table S3 印刷值与显示精度比对状态；未修改 `yonod/`、`configs/` 或 YONOD 的脚本、测试和报告框架。
+- 生成 CSV、JSON、Markdown 和 HTML 独立结果包；SM/MFP 的 4620 行与 SM/OHE artifact 的 5760 行作为审计边界明确展示。
+
+### 验证结果
+- 新增测试覆盖 32 行唯一指标、每项 25 折、完整的 Table S3 显示精度匹配、SL1 单位及 SM 双口径元数据。
+
+### 下一步计划
+- 步骤 2：仅在论文自带数据、脚本和产物范围内开展独立复跑与差异审计，不修改 YONOD 本体。
+
+---
