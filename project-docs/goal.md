@@ -374,7 +374,42 @@ Z-AIHub 中该文献已有主文和 SI 两个向量化附件：主文 11 页，S
   - 严谨模型比较架构目标
 <!-- GOAL-QA-R008-END -->
 
+### QA-R009：原文与 SI 审查后的复现边界校正
+<!-- GOAL-QA-R009-START -->
+- **提问时间**：2026-09-06 19:33
+- **提问目的**：用户要求详细浏览 `YONOD/reference-proejct/vjethbkm/papers/` 中的原文文献和补充材料，判断当前计划书是否满足复现原文结果。本轮用于把基于主文与 SI 的审查事实、当前阶段可覆盖范围、以及需要用户后续裁决的纠偏建议记录到目标文档中，避免把先前工程假设误写成论文已确认口径。
+- **问题列表**
+  1. 当前计划书是否已经满足复现 `VJETHBKM` 原文结果？
+  2. 若不完全满足，当前阶段能够可信覆盖哪些原文结果，哪些结果仍应列为排除或后续扩展？
+  3. 原文和 SI 是否暴露出需要修正或重新裁决的目标边界？
+- **用户回答**
+  1. 用户本轮原话：“[@project-creator-cn](subagent://project-creator-cn) 详细浏览 [papers](YONOD/reference-proejct/vjethbkm/papers/) 中的原文文献和补充材料，当前计划书是否满足能复现原文结果？”
+  2. 用户尚未对本轮审查后的纠偏建议作出确认。
+  3. 用户尚未确认是否扩展当前阶段范围或调整 SM/OHE 的正式验收口径。
+- **提炼结论**
+  - 基于主文与 SI，当前计划更准确地说只覆盖“Table S3 中 MFP/OHE + RF + 5×5 交叉验证子集”的工程复现骨架；不能直接声称已经满足完整复现原文结果。原文还包含五类描述符的 RF 比较、MFP 下 LightGBM/KNN/Ridge 比较、Fig.5/Fig.S6 的同时置信区间比较、Fig.S7 的重加权比较、BH2 外部验证 Fig.6、以及泛化划分和产率分布不平衡讨论。
+  - SM 存在“SI 方法文字”和“官方 artifact/结果表”之间的实质冲突：SI 明确说明 SM 原始数据为 5760 行，并在本研究中移除 ligand 或 other reagent 信息缺失行得到 4620 条全部组分明确的反应；但官方 `Results/Compare_Complexity/Suzuki_2018/OHE/*_metrics_summaries_RF.json` 与 OOF 产物显示，SM/OHE 使用 raw `SM.csv` 的 5760 行、5 次重复共 28800 条 OOF 预测，且 mean 指标与 Table S3 显示精度一致；SM/MFP 则为 4620 行、5 次重复共 23100 条 OOF 预测。目标文档应把这记录为待审计冲突：5760 可作为官方 artifact/Table S3 数值复现口径，4620 可作为 SI 清洗方法口径；在用户确认前，不应把任一口径单方面写成唯一正式验收口径。
+  - SI Table S3/Table S4 报告的是 MAE、RMSE、R²、Kendall τ 的 mean ± std，并明确 BH1/BH2/SM 使用 yield % 尺度、SL1 使用 LC-MS product ratio 尺度。因此官方目标表应记录 `official_mean`、`official_std`、`unit` 和 `source_table/source_figure`；`official_value` 单值字段不足以支撑论文级差异审计。
+  - `1e-9` 级容差可以作为“同版本、同随机协议、同官方 JSON/CSV 全精度产物”对齐时的严格目标，尤其适用于 MFP X/y 特征矩阵对齐，以及与官方 metrics summary JSON 的全精度数值对照；但不能直接套用到 Table S3 印刷数值，因为论文表格已四舍五入且包含跨折标准差。
+  - SI 明确 RDKit 版本为 2025.03.6、scikit-learn 版本为 1.6.1。若目标是“完全复现”，环境应锁定或至少在 manifest 中记录这些版本；宽松版本范围只能支撑“兼容复跑”，不能支撑严格等值复现结论。
+  - Kendall τ 作为一等指标的方向与 SI 一致，且官方 `Train_OHE.py` 已确认其实现口径：每个 repeat 使用 `KFold`，每折计算 Kendall τ，最终用 `np.std(..., ddof=0)` 汇总；官方代码中 KFold 与 RF 的随机种子均为 `1000 + repeat`。因此，YONOD 目标中“逐 valid fold 计算并汇总 25 折 mean/std”的要求有官方代码证据支持，而不是只从 Table S3 展示形式推断。
+  - Fig.6 是 MFP+RF 的 BH2 外部验证结果，训练集为完整 BH2，测试集为 187 个外部反应并按 13 个 product group 比较；若当前阶段声称覆盖“有关 MFP 的主文结果”，应将 Fig.6 纳入，或明确写为当前阶段排除项。
+  - Fig.7 是 0D/1D/2D 泛化划分的示意和方法讨论，不是本论文给出的可直接验收数值矩阵；因此当前阶段不应为了 Fig.7 强行新增 0D/1D/2D 数值复现，但若报告声称复现“泛化验证”，需要另设后续扩展边界。
+  - Fig.5 的同时置信区间比较依赖五类描述符共同比较，不能仅用 MFP/OHE 两类描述符重算后声称复现 Fig.5；当前阶段最多能提供 MFP/OHE 子集的局部比较或作为后续完整 Fig.5 复现的准备。
+  - 当前 YONOD 执行器只有在配置显式声明 `reproduction_protocol.name = vjethbkm_rf_5x5` 时才会注入论文式 RF seed。目标和后续计划应要求正式配置包含该协议开关，并对每个 repeat/fold 的 KFold seed、RF seed、fold 数、样本数和指标聚合方式做断言，否则仅写 `cv.seed = 1000` 不足以支撑官方协议复现。
+- **影响的目标文档章节**
+  - 核心目标
+  - 期望成果
+  - 成功标准
+  - 范围界定
+  - 约束条件
+  - 阶段规划
+  - 严谨模型比较架构目标
+<!-- GOAL-QA-R009-END -->
+
 <!-- GOAL-QA-LOG-END -->
 
 ## 备注
 目标文档已根据八轮澄清收束为当前版：前两轮确定 `VJETHBKM` 复现与 YONOD benchmark 工具化方向，第三轮补充文件夹整理目标，第四轮确定严谨模型比较架构的分组、验证和统计范围，第五轮明确描述符预计算、持久化、复用和失败隔离契约，第六轮将 MFP/OHE 的可用范围扩展到普通任务入口并确认 OHE 的折内无泄漏边界，第七轮收束完全复现阶段的 MFP/OHE + RF 范围与 SM 双口径，第八轮将 Kendall τ 固化为与 MAE/RMSE/R² 同级的一等报告指标。建议下一步调用 **project-planner-cn** agent，将本目标拆解为具体实施计划、数据产物 schema、任务顺序、兼容性改造和验证方案。
+
+本轮新增第九轮原文/SI 审查记录：当前计划应被表述为 MFP/OHE + RF 的阶段性子集复现，而不是完整原文结果复现；SM 同时存在 SI 4620 清洗口径与官方 SM/OHE 5760 artifact/Table S3 数值口径，需作为待审计冲突等待用户后续裁决；官方指标表需要 mean/std/unit/source 级别的目标记录；BH2 外部验证 Fig.6、Fig.5 全五描述符同时置信区间、其他模型和重加权实验均不能被当前两描述符子集替代；正式配置还需显式启用 `vjethbkm_rf_5x5` 协议并逐折断言种子与聚合口径。本段为审查结论和待决策建议，不表示用户已经批准调整阶段范围。
