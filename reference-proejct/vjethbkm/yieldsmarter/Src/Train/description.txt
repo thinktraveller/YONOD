@@ -1,0 +1,11 @@
+YieldSmarter/Src/Train — Model training scripts
+===============================================
+
+This folder contains scripts for training and evaluating machine-learning models
+on reaction datasets. Two distinct training paradigms are used:
+
+1) Training on precomputed feature arrays (.npz)
+2) Training with on-the-fly encoding (for One-Hot Encoding only)
+
+The distinction is important to avoid data leakage and to ensure fair evaluation.
+

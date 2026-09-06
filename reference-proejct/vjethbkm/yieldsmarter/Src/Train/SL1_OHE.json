@@ -1,0 +1,17 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/SL1/SL1.csv",
+  "target_col": "Yield",
+
+  "outer_splits": 5,
+  "splits": 5,
+  "seed": 1000,
+
+  "metrics_out": "../../Results/Compare_Complexity/Bode_2023/OHE/Bode_OHE_metrics_{model_name}.json",
+  "metrics_summaries_out": "../../Results/Compare_Complexity/Bode_2023/OHE/Bode_OHE_metrics_summaries_{model_name}.json",
+  "preds_out": "../../Results/Compare_Complexity/Bode_2023/OHE/Bode_OHE_oof_predictions_{model_name}.npz",
+
+  "missing_token": "__MISSING__",
+  "zero_out_missing": true
+
+}
+

@@ -1,0 +1,44 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/SL1/SL1.csv",
+  "target_col": "Yield",
+  "xyz_dir": "../../Data/HTE_datasets/SL1/xyz",
+  "output_npz": "../../Results/Compare_Complexity/Bode_2023/SOAP/Bode_SOAP.npz",
+  
+
+  "components": [
+    {
+      "name": "Aldehyde_1",
+      "reaction_col": "Aldehyde_1",
+      "lookup_csv": "../../Data/HTE_datasets/SL1/csv/Aldehyde_1.csv",
+      "lookup_key_col": "Aldehyde_1",
+      "xyz_template": "Aldehyde_1_{id}.xyz"
+    },
+    {
+      "name": "Aldehyde_2",
+      "reaction_col": "Aldehyde_2",
+      "lookup_csv": "../../Data/HTE_datasets/SL1/csv/Aldehyde_2.csv",
+      "lookup_key_col": "Aldehyde_2",
+      "xyz_template": "Aldehyde_2_{id}.xyz"
+    },
+    {
+      "name": "bifunctional_reagent",
+      "reaction_col": "bifunctional_reagent",
+      "lookup_csv": "../../Data/HTE_datasets/SL1/csv/bifunctional_reagent.csv",
+      "lookup_key_col": "bifunctional_reagent",
+      "xyz_template": "bifunctional_reagent_{id}.xyz"
+    }
+  ],
+
+  "soap": {
+    "species": ["C", "H", "N", "O", "F", "Cl", "Br", "Si", "P", "S", "Sn"],
+    "periodic": false,
+    "r_cut": 6.0,
+    "n_max": 6,
+    "l_max": 4,
+    "sigma": 0.5,
+    "average": "inner",
+    "compression": { "mode": "mu2" },
+    "sparse": false
+  }
+}
+

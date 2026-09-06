@@ -1,0 +1,54 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/BH1/BH1.csv",
+  "target_col": "Yield",
+  "xyz_dir": "../../Data/HTE_datasets/BH1/xyz",
+  "output_npz": "../../Results/Compare_Complexity/Doyle_2018/SOAP/Doyle_SOAP.npz",
+
+  "components": [
+    {
+      "name": "Additive",
+      "id_col": "Index",
+      "reaction_col": "Additive_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Additive_SMILES.csv",
+      "lookup_key_col": "Additive_SMILES",
+      "xyz_template": "Additive_{id}.xyz"
+    },
+    {
+      "name": "Aryl_halide",
+      "id_col": "Index",
+      "reaction_col": "Aryl_halide_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Aryl_halide_SMILES.csv",
+      "lookup_key_col": "Aryl_halide_SMILES",
+      "xyz_template": "Aryl_halide_{id}.xyz"
+    },
+    {
+      "name": "Base",
+      "id_col": "Index",
+      "reaction_col": "Base_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Base_SMILES.csv",
+      "lookup_key_col": "Base_SMILES",
+      "xyz_template": "Base_{id}.xyz"
+    },
+    {
+      "name": "Ligand",
+      "id_col": "Index",
+      "reaction_col": "Ligand_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Ligand_SMILES.csv",
+      "lookup_key_col": "Ligand_SMILES",
+      "xyz_template": "Ligand_{id}.xyz"
+    }
+
+  ],
+  "soap": {
+    "species": ["C", "H", "N", "O", "F", "Cl", "Br", "I","Si", "P", "S", "Na", "K"],
+    "periodic": false,
+    "r_cut": 6.0,
+    "n_max": 6,
+    "l_max": 4,
+    "sigma": 0.5,
+    "average": "inner",
+    "compression": { "mode": "mu2" },
+    "sparse": false
+  }
+}
+

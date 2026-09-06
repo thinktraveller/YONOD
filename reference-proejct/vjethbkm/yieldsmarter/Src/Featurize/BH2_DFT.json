@@ -1,0 +1,33 @@
+{
+ 
+  "reaction_csv": "../../Data/HTE_datasets/BH2/BH2.csv",
+  "target_col": "Yield",
+  "output_npz": "../../Results/Compare_Complexity/Denmark_2023/DFT/Denmark_DFT.npz",
+
+  "components_order": ["amine", "bromide", "catalyst", "solvent", "base"],
+
+  "reaction_smiles_cols": {
+    "amine": "Amine_SMILES",
+    "bromide": "Bromide_SMILES",
+    "catalyst": "Ligand_SMILES",
+    "solvent": "Solvent_SMILES",
+    "base": "Base_SMILES"
+  },
+
+ "props_paths": {
+   "amine": "../../Results/BH2/orca_outputs_amine/molecular_properties.csv",
+   "base": "../../Results/BH2/orca_outputs_base/molecular_properties.csv",
+   "bromide": "../../Results/BH2/orca_outputs_bromide/molecular_properties.csv",
+   "catalyst": "../../Results/BH2/orca_outputs_catalyst/molecular_properties.csv",
+   "solvent": "../../Results/BH2/orca_outputs_sol/molecular_properties.csv"
+},
+
+  "smiles_map_paths": {
+    "amine": "../../Data/HTE_datasets/BH2/csv/Amine_SMILES.csv",
+    "base": "../../Data/HTE_datasets/BH2/csv/Base_SMILES.csv",
+    "bromide": "../../Data/HTE_datasets/BH2/csv/Bromide_SMILES.csv",
+    "catalyst": "../../Data/HTE_datasets/BH2/csv/Catalysts_SMILES.csv",
+    "solvent": "../../Data/HTE_datasets/BH2/csv/Solvent_SMILES.csv"
+  }
+}
+

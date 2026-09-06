@@ -1,0 +1,64 @@
+{
+  "model": "RF",
+  "splits": 5,
+  "seed": 1000,
+  "train": {
+    "mae": {
+      "mean": 3.4533949917321523,
+      "std": 0.0295578618984101
+    },
+    "rmse": {
+      "mean": 4.826321368220709,
+      "std": 0.04115608819679265
+    },
+    "r2": {
+      "mean": 0.9704515927190667,
+      "std": 0.0005121031503764175
+    },
+    "medae": {
+      "mean": 2.392421356675305,
+      "std": 0.04269065709607794
+    },
+    "kendall": {
+      "mean": 0.9057333935101094,
+      "std": 0.0008772071967217104
+    }
+  },
+  "test": {
+    "mae": {
+      "mean": 9.362933409146159,
+      "std": 0.2448976808369306
+    },
+    "rmse": {
+      "mean": 13.059287989170132,
+      "std": 0.320226246043108
+    },
+    "r2": {
+      "mean": 0.783424395582564,
+      "std": 0.009718200195019306
+    },
+    "medae": {
+      "mean": 6.502955443878186,
+      "std": 0.32694580296671377
+    },
+    "kendall": {
+      "mean": 0.7101765501581333,
+      "std": 0.008953186850442671
+    }
+  },
+  "categorical_columns": [
+    "reactant_1_smiles",
+    "reactant_2_smiles",
+    "ligand_smiles",
+    "reagent_1_smiles",
+    "solvent_1_smiles"
+  ],
+  "target_col": "Yield",
+  "reaction_csv": "../../Data/HTE_datasets/SM/SM.csv",
+  "ohe": {
+    "missing_token": "__MISSING__",
+    "zero_out_missing": true,
+    "handle_unknown": "ignore",
+    "fit_scope": "train_only_per_fold"
+  }
+}
