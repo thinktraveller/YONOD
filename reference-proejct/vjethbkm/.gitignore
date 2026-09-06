@@ -1,31 +1,6 @@
-# Local environments
+# Include every file and directory, overriding parent ignore rules.
+!**
+
+# Only local virtual environments and pytest caches are ignored.
 .venv/
-venv/
-env/
-
-# Copyright-sensitive or large source artifacts
-yieldsmarter/
-data/raw/
-data/interim/
-data/processed/*
-!data/processed/.gitkeep
-
-# Reproducible caches and run outputs
-cache/
-outputs/runs/
-outputs/logs/
-outputs/reports/*.html
-outputs/figures/*.png
-outputs/figures/*.pdf
-
-# Heavy binary artifacts
-*.pkl
-*.joblib
-*.npy
-*.npz
-*.parquet
-
-# Python caches
-__pycache__/
-*.py[cod]
 .pytest_cache/

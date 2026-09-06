@@ -1,0 +1,95 @@
+2025-07-24T16:22:12.810326 - 
+Processing: 2SM.csv
+2025-07-24T16:22:16.782479 -    Validating descriptors for reactant_1_smiles (7 unique canonical SMILES)
+2025-07-24T16:22:16.815320 -     21 valid descriptors kept out of 21
+2025-07-24T16:22:16.815349 -     Included descriptors for reactant_1_smiles:
+2025-07-24T16:22:16.815383 -         1. reactant_1_smiles_MolWt
+2025-07-24T16:22:16.815392 -         2. reactant_1_smiles_ExactMolWt
+2025-07-24T16:22:16.815399 -         3. reactant_1_smiles_TPSA
+2025-07-24T16:22:16.815406 -         4. reactant_1_smiles_MolLogP
+2025-07-24T16:22:16.815413 -         5. reactant_1_smiles_MolMR
+2025-07-24T16:22:16.815421 -         6. reactant_1_smiles_NumHDonors
+2025-07-24T16:22:16.815428 -         7. reactant_1_smiles_NumHAcceptors
+2025-07-24T16:22:16.815435 -         8. reactant_1_smiles_NumHeteroatoms
+2025-07-24T16:22:16.815442 -         9. reactant_1_smiles_NumRotatableBonds
+2025-07-24T16:22:16.815449 -        10. reactant_1_smiles_FractionCSP3
+2025-07-24T16:22:16.815456 -        11. reactant_1_smiles_RingCount
+2025-07-24T16:22:16.815463 -        12. reactant_1_smiles_NumAromaticRings
+2025-07-24T16:22:16.815471 -        13. reactant_1_smiles_BalabanJ
+2025-07-24T16:22:16.815478 -        14. reactant_1_smiles_BertzCT
+2025-07-24T16:22:16.815484 -        15. reactant_1_smiles_Chi0v
+2025-07-24T16:22:16.815491 -        16. reactant_1_smiles_Chi1v
+2025-07-24T16:22:16.815502 -        17. reactant_1_smiles_Chi2v
+2025-07-24T16:22:16.815510 -        18. reactant_1_smiles_Chi3v
+2025-07-24T16:22:16.815517 -        19. reactant_1_smiles_Kappa1
+2025-07-24T16:22:16.815524 -        20. reactant_1_smiles_Kappa2
+2025-07-24T16:22:16.815531 -        21. reactant_1_smiles_Kappa3
+2025-07-24T16:22:26.895234 -    Validating descriptors for reactant_2_smiles (4 unique canonical SMILES)
+2025-07-24T16:22:26.913086 -     20 valid descriptors kept out of 20
+2025-07-24T16:22:26.913115 -     Included descriptors for reactant_2_smiles:
+2025-07-24T16:22:26.913127 -         1. reactant_2_smiles_MolWt
+2025-07-24T16:22:26.913135 -         2. reactant_2_smiles_ExactMolWt
+2025-07-24T16:22:26.913141 -         3. reactant_2_smiles_TPSA
+2025-07-24T16:22:26.913148 -         4. reactant_2_smiles_MolLogP
+2025-07-24T16:22:26.913154 -         5. reactant_2_smiles_MolMR
+2025-07-24T16:22:26.913161 -         6. reactant_2_smiles_NumHDonors
+2025-07-24T16:22:26.913167 -         7. reactant_2_smiles_NumHAcceptors
+2025-07-24T16:22:26.913174 -         8. reactant_2_smiles_FractionCSP3
+2025-07-24T16:22:26.913184 -         9. reactant_2_smiles_NumRotatableBonds
+2025-07-24T16:22:26.913212 -        10. reactant_2_smiles_NumHeteroatoms
+2025-07-24T16:22:26.913237 -        11. reactant_2_smiles_RingCount
+2025-07-24T16:22:26.913258 -        12. reactant_2_smiles_NumAromaticRings
+2025-07-24T16:22:26.913266 -        13. reactant_2_smiles_Chi0v
+2025-07-24T16:22:26.913286 -        14. reactant_2_smiles_Chi1v
+2025-07-24T16:22:26.913295 -        15. reactant_2_smiles_Chi2v
+2025-07-24T16:22:26.913302 -        16. reactant_2_smiles_LabuteASA
+2025-07-24T16:22:26.913310 -        17. reactant_2_smiles_BalabanJ
+2025-07-24T16:22:26.913335 -        18. reactant_2_smiles_BertzCT
+2025-07-24T16:22:26.913341 -        19. reactant_2_smiles_Kappa1
+2025-07-24T16:22:26.913361 -        20. reactant_2_smiles_Kappa2
+2025-07-24T16:22:36.001467 -    Validating descriptors for ligand_smiles (11 unique canonical SMILES)
+2025-07-24T16:22:36.105686 -     16 valid descriptors kept out of 18
+2025-07-24T16:22:36.105718 -     Included descriptors for ligand_smiles:
+2025-07-24T16:22:36.105733 -         1. ligand_smiles_MolWt
+2025-07-24T16:22:36.105742 -         2. ligand_smiles_ExactMolWt
+2025-07-24T16:22:36.105764 -         3. ligand_smiles_MolLogP
+2025-07-24T16:22:36.105771 -         4. ligand_smiles_MolMR
+2025-07-24T16:22:36.105779 -         5. ligand_smiles_TPSA
+2025-07-24T16:22:36.105787 -         6. ligand_smiles_NumRotatableBonds
+2025-07-24T16:22:36.105794 -         7. ligand_smiles_NumHAcceptors
+2025-07-24T16:22:36.105803 -         8. ligand_smiles_FractionCSP3
+2025-07-24T16:22:36.105811 -         9. ligand_smiles_RingCount
+2025-07-24T16:22:36.105818 -        10. ligand_smiles_NumAromaticRings
+2025-07-24T16:22:36.105825 -        11. ligand_smiles_Chi0
+2025-07-24T16:22:36.105832 -        12. ligand_smiles_Chi1
+2025-07-24T16:22:36.105838 -        13. ligand_smiles_Kappa1
+2025-07-24T16:22:36.105845 -        14. ligand_smiles_Kappa2
+2025-07-24T16:22:36.105857 -        15. ligand_smiles_Kappa3
+2025-07-24T16:22:36.105864 -        16. ligand_smiles_BertzCT
+2025-07-24T16:22:44.203120 -    Validating descriptors for reagent_1_smiles (7 unique canonical SMILES)
+2025-07-24T16:22:44.206642 -     12 valid descriptors kept out of 12
+2025-07-24T16:22:44.206663 -     Included descriptors for reagent_1_smiles:
+2025-07-24T16:22:44.206689 -         1. reagent_1_smiles_MolWt
+2025-07-24T16:22:44.206710 -         2. reagent_1_smiles_ExactMolWt
+2025-07-24T16:22:44.206716 -         3. reagent_1_smiles_MolLogP
+2025-07-24T16:22:44.206736 -         4. reagent_1_smiles_TPSA
+2025-07-24T16:22:44.206742 -         5. reagent_1_smiles_NumHDonors
+2025-07-24T16:22:44.206761 -         6. reagent_1_smiles_NumHAcceptors
+2025-07-24T16:22:44.206780 -         7. reagent_1_smiles_FractionCSP3
+2025-07-24T16:22:44.206801 -         8. reagent_1_smiles_NumHeteroatoms
+2025-07-24T16:22:44.206807 -         9. reagent_1_smiles_LabuteASA
+2025-07-24T16:22:44.206827 -        10. reagent_1_smiles_Chi0v
+2025-07-24T16:22:44.206833 -        11. reagent_1_smiles_Chi1v
+2025-07-24T16:22:44.206840 -        12. reagent_1_smiles_Kappa1
+2025-07-24T16:22:46.413993 -    Validating descriptors for solvent_1_smiles (4 unique canonical SMILES)
+2025-07-24T16:22:46.415519 -     5 valid descriptors kept out of 5
+2025-07-24T16:22:46.415539 -     Included descriptors for solvent_1_smiles:
+2025-07-24T16:22:46.415552 -         1. solvent_1_smiles_MolWt
+2025-07-24T16:22:46.415561 -         2. solvent_1_smiles_MolLogP
+2025-07-24T16:22:46.415568 -         3. solvent_1_smiles_TPSA
+2025-07-24T16:22:46.415575 -         4. solvent_1_smiles_NumRotatableBonds
+2025-07-24T16:22:46.415583 -         5. solvent_1_smiles_FractionCSP3
+2025-07-24T16:22:48.090225 - Saved: 2SM_rdkit_selected.npz (X shape: (5760, 74), y shape: (5760,))
+2025-07-24T16:22:48.121112 - Saved scaled data and scaler.
+2025-07-24T16:22:48.121139 - 
+All files processed.

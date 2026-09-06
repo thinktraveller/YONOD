@@ -1,0 +1,9 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/SM/SM.csv",
+  "target_col": "Yield",
+  "min_frac_variance": 0.90,
+  "output_npz": "../../Results/Compare_Complexity/Suzuki_2018/PhysChem/Suzuki_PhysChem.npz",
+  "components": ["reactant_1_smiles", "reactant_2_smiles", "reagent_1_smiles", "ligand_smiles", "solvent_1_smiles"],
+  "skip_rows_with_missing_values": true
+}
+

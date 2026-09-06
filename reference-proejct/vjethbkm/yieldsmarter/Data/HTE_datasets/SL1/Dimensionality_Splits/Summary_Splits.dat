@@ -1,0 +1,19 @@
+MASTER: SL1.csv
+TOTAL ROWS: 1150
+CATEGORIES: Aldehyde_1, bifunctional_reagent, Aldehyde_2
+MASTER UNIQUE COUNTS:
+  - Aldehyde_1: 50
+  - bifunctional_reagent: 5
+  - Aldehyde_2: 60
+
+file	rows	%rows_of_master	Aldehyde_1_covered/total(%)	bifunctional_reagent_covered/total(%)	Aldehyde_2_covered/total(%)
+SL1_0D/test_0D.csv	237	20.61	50/50 (100.00%)	5/5 (100.00%)	60/60 (100.00%)
+SL1_0D/train_0D.csv	913	79.39	50/50 (100.00%)	5/5 (100.00%)	60/60 (100.00%)
+SL1_1D_Aldehyde_1/test_1D_Aldehyde_1.csv	240	20.87	3/50 (6.00%)	3/5 (60.00%)	36/60 (60.00%)
+SL1_1D_Aldehyde_1/train_1D_Aldehyde_1.csv	910	79.13	47/50 (94.00%)	5/5 (100.00%)	60/60 (100.00%)
+SL1_1D_Aldehyde_2/test_1D_Aldehyde_2.csv	231	20.09	42/50 (84.00%)	5/5 (100.00%)	4/60 (6.67%)
+SL1_1D_Aldehyde_2/train_1D_Aldehyde_2.csv	919	79.91	50/50 (100.00%)	5/5 (100.00%)	56/60 (93.33%)
+SL1_1D_bifunctional_reagent/test_1D_bifunctional_reagent.csv	240	20.87	24/50 (48.00%)	1/5 (20.00%)	29/60 (48.33%)
+SL1_1D_bifunctional_reagent/train_1D_bifunctional_reagent.csv	910	79.13	42/50 (84.00%)	4/5 (80.00%)	48/60 (80.00%)
+SL1_2D/test_2D.csv	187	16.26	42/50 (84.00%)	5/5 (100.00%)	21/60 (35.00%)
+SL1_2D/train_2D.csv	963	83.74	44/50 (88.00%)	4/5 (80.00%)	56/60 (93.33%)

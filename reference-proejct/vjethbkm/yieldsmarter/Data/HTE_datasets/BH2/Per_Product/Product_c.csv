@@ -1,0 +1,12 @@
+Product,True_Yield,DFT_Yield,Amine_SMILES,Bromide_SMILES,Catalysts_SMILES,Base_SMILES,Solvent_SMILES
+c,7,2,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C1CCCCC1)(C2CCCCC2)C3=CC=CN3C4=CC=CC=C4,C(=O)([O-])[O-].[K+].[K+],Cc1ccccc1
+c,13,3,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C1CCCCC1)(C2CCCCC2)C3=CC4=C(C=CC=C4)N3C5=CC=CC=C5,C(=O)([O-])[O-].[K+].[K+],CCC(C)(C)O
+c,72,33,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C1CCCCC1)(C2CCCCC2)C3=CC4=C(C=CC=C4)N3C5=CC=CC=C5,[Na+].[O-]C(C)(C)C,CCC(C)(C)O
+c,7,2,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C1CCCCC1)(C2CCCCC2)C3=CC=CC=C3C4=CC=CC=C4,C(=O)([O-])[O-].[K+].[K+],Cc1ccccc1
+c,21,21,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C1CCCCC1)(C2CCCCC2)C3=CC=CC=C3C4=C(C(C)C)C=C(C(C)C)C=C4C(C)C,[Na+].[O-]C(C)(C)C,CCC(C)(C)O
+c,14,11,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C1=CC(C(F)(F)F)=CC(C(F)(F)F)=C1)(C2=CC(C(F)(F)F)=CC(C(F)(F)F)=C2)C3=C(OC)C=CC(OC)=C3C4=C(N(C)C)C=CC=C4N(C)C,[Na+].[O-]C(C)(C)C,CCC(C)(C)O
+c,17,14,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C1=CC=CC=C1)(C2=CC=CC=C2)C3=CC=CC=C3C4=C(OC)C=CC=C4OC,[Na+].[O-]C(C)(C)C,Cc1ccccc1
+c,97,34,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C(C)(C)C)(C(C)(C)C)C1=C(OC)C=CC(C)=C1C2=C(C(C)C)C=C(C(C)C)C=C2C(C)C,[Na+].[O-]C(C)(C)C,Cc1ccccc1
+c,100,46,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P]([C@@]12C[C@@H]3C[C@H](C2)C[C@H](C1)C3)([C@@]4(C[C@H](C5)C6)C[C@H]6C[C@H]5C4)C7=C(OC)C=CC(OC)=C7C8=C(C(C)C)C=C(C(C)C)C=C8C(C)C,[Na+].[O-]C(C)(C)C,O1CCOCC1
+c,92,47,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P]([C@@]12C[C@@H]3C[C@H](C2)C[C@H](C1)C3)([C@@]4(C[C@H](C5)C6)C[C@H]6C[C@H]5C4)C7=C(OC)C=CC(OC)=C7C8=C(C(C)C)C=C(C(C)C)C=C8C(C)C,[Na+].[O-]C(C)(C)C,Cc1ccccc1
+c,99,49,NCC1CCCCC1,Brc1cc(C(F)(F)F)cc(C(F)(F)F)c1,[P](C(C)(C)C)(C(C)(C)C)C1=C(C)C(C)=C(C)C(C)=C1C2=C(C(C)C)C=C(C(C)C)C=C2C(C)C,[Na+].[O-]C(C)(C)C,O1CCOCC1

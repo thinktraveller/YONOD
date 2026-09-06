@@ -1,0 +1,64 @@
+{
+  "model": "LightGBM",
+  "splits": 5,
+  "seed": 1000,
+  "train": {
+    "mae": {
+      "mean": 13.381508716419908,
+      "std": 0.13544953460441123
+    },
+    "rmse": {
+      "mean": 17.484978435994748,
+      "std": 0.13266682991296375
+    },
+    "r2": {
+      "mean": 0.738241198726789,
+      "std": 0.00434615217722821
+    },
+    "medae": {
+      "mean": 10.244712287020857,
+      "std": 0.20747074350799086
+    },
+    "kendall": {
+      "mean": 0.67503128693618,
+      "std": 0.0032885030073071895
+    }
+  },
+  "test": {
+    "mae": {
+      "mean": 17.740222457025023,
+      "std": 0.5536046765840426
+    },
+    "rmse": {
+      "mean": 23.165052829422475,
+      "std": 0.6073316198229356
+    },
+    "r2": {
+      "mean": 0.5397111163304636,
+      "std": 0.02231986158531128
+    },
+    "medae": {
+      "mean": 13.625162535312814,
+      "std": 0.8759540006320019
+    },
+    "kendall": {
+      "mean": 0.5818627660716826,
+      "std": 0.014833148287203566
+    }
+  },
+  "categorical_columns": [
+    "Amine_SMILES",
+    "Bromide_SMILES",
+    "Ligand_SMILES",
+    "Solvent_SMILES",
+    "Base_SMILES"
+  ],
+  "target_col": "Yield",
+  "reaction_csv": "../../Data/HTE_datasets/BH2/BH2.csv",
+  "ohe": {
+    "missing_token": "__MISSING__",
+    "zero_out_missing": true,
+    "handle_unknown": "ignore",
+    "fit_scope": "train_only_per_fold"
+  }
+}

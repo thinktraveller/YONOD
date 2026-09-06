@@ -1,0 +1,12 @@
+{
+  "descriptors_npz": "../../Results/Compare_Complexity/Bode_2023/{descr_type}/Bode_{descr_type}.npz",
+
+  "outer_splits": 5,
+  "splits": 5,
+  "seed": 1000,
+
+  "metrics_out": "../../Results/Compare_Complexity/Bode_2023/{descr_type}/Bode_{descr_type}_metrics_{model_name}.json",
+  "metrics_summaries_out": "../../Results/Compare_Complexity/Bode_2023/{descr_type}/Bode_{descr_type}_metrics_summaries_{model_name}.json",
+  "preds_out": "../../Results/Compare_Complexity/Bode_2023/{descr_type}/Bode_{descr_type}_oof_predictions_{model_name}.npz"
+}
+

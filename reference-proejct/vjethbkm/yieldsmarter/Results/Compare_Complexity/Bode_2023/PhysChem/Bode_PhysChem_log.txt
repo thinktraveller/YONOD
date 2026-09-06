@@ -1,0 +1,10 @@
+2026-04-08T12:45:46 - Config: SL1_PhysChem.json
+2026-04-08T12:45:46 - Reaction CSV: ../../Data/HTE_datasets/SL1/SL1.csv
+2026-04-08T12:45:46 - Target column: Yield
+2026-04-08T12:45:46 - Output (unscaled): ../../Results/Compare_Complexity/Bode_2023/PhysChem/Bode_PhysChem.npz
+2026-04-08T12:45:46 - Min frac variance for PCA: 0.9
+2026-04-08T12:45:46 -      Computing descriptors for 50 unique SMILES
+2026-04-08T12:45:47 -      Computing descriptors for 5 unique SMILES
+2026-04-08T12:45:47 -      Computing descriptors for 60 unique SMILES
+2026-04-08T12:45:47 - 
+Done.

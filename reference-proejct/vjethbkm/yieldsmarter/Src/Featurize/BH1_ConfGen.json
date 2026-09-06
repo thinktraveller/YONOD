@@ -1,0 +1,38 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/BH1/csv/BH1.csv",
+  "target_col": "lcms_ratio",
+  "xyz_dir": "../../Data/HTE_datasets/BH1/xyz",
+
+  "components": [
+    {
+      "name": "Additive",
+      "reaction_col": "Additive_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Additive_SMILES.csv",
+      "lookup_key_col": "Index",
+      "xyz_template": "Additive_{id}.xyz"
+    },
+    {
+      "name": "Aryl_halide",
+      "reaction_col": "Aryl_halide_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Aryl_halide_SMILES.csv",
+      "lookup_key_col": "Index",
+      "xyz_template": "Aryl_halide_{id}.xyz"
+    },
+    {
+      "name": "Base",
+      "reaction_col": "Base_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Base_SMILES.csv",
+      "lookup_key_col": "Index",
+      "xyz_template": "Base_{id}.xyz"
+    },
+    {
+      "name": "Ligand",
+      "reaction_col": "Ligand_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH1/csv/Ligand_SMILES.csv",
+      "lookup_key_col": "Index",
+      "xyz_template": "Ligand_{id}.xyz"
+    }
+
+  ]
+}
+

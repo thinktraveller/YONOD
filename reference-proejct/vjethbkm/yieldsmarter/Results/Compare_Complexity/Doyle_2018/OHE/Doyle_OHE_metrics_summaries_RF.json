@@ -1,0 +1,63 @@
+{
+  "model": "RF",
+  "splits": 5,
+  "seed": 1000,
+  "train": {
+    "mae": {
+      "mean": 2.368478970938831,
+      "std": 0.020586137156054857
+    },
+    "rmse": {
+      "mean": 3.432404385550378,
+      "std": 0.037635644597956965
+    },
+    "r2": {
+      "mean": 0.9841743813051665,
+      "std": 0.0003653551021615947
+    },
+    "medae": {
+      "mean": 1.6089281246314127,
+      "std": 0.02290864245961895
+    },
+    "kendall": {
+      "mean": 0.9236537260799043,
+      "std": 0.0007109380296500424
+    }
+  },
+  "test": {
+    "mae": {
+      "mean": 6.43266540035404,
+      "std": 0.29452228282367027
+    },
+    "rmse": {
+      "mean": 9.303579610678113,
+      "std": 0.4748886228087751
+    },
+    "r2": {
+      "mean": 0.8831276621985755,
+      "std": 0.013226017429811483
+    },
+    "medae": {
+      "mean": 4.36067763125017,
+      "std": 0.21754072860110849
+    },
+    "kendall": {
+      "mean": 0.7952110389388872,
+      "std": 0.010904146137893929
+    }
+  },
+  "categorical_columns": [
+    "Aryl_halide_SMILES",
+    "Additive_SMILES",
+    "Base_SMILES",
+    "Ligand_SMILES"
+  ],
+  "target_col": "Yield",
+  "reaction_csv": "../../Data/HTE_datasets/BH1/BH1.csv",
+  "ohe": {
+    "missing_token": "__MISSING__",
+    "zero_out_missing": true,
+    "handle_unknown": "ignore",
+    "fit_scope": "train_only_per_fold"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/BH2/BH2.csv",
+  "target_col": "Yield",
+  "xyz_dir": "../../Data/HTE_datasets/BH2/xyz",
+  "output_npz": "../../Results/Compare_Complexity/Denmark_2023/SOAP/Denmark_SOAP.npz",
+
+
+  "components": [
+    {
+      "name": "Amine",
+      "reaction_col": "Amine_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Amine_SMILES.csv",
+      "lookup_key_col": "Amine_SMILES",
+      "xyz_template": "Amine_{id}.xyz"
+    },
+    {
+      "name": "Base",
+      "reaction_col": "Base_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Base_SMILES.csv",
+      "lookup_key_col": "Base_SMILES",
+      "xyz_template": "Base_{id}.xyz"
+    },
+    {
+      "name": "Bromide",
+      "reaction_col": "Bromide_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Bromide_SMILES.csv",
+      "lookup_key_col": "Bromide_SMILES",
+      "xyz_template": "Bromide_{id}.xyz"
+    },
+    {
+      "name": "Ligand",
+      "reaction_col": "Ligand_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Catalysts_SMILES.csv",
+      "lookup_key_col": "Catalysts_SMILES",
+      "xyz_template": "Catalysts_{id}.xyz"
+    },
+    {
+      "name": "Solvent",
+      "reaction_col": "Solvent_SMILES",
+      "lookup_csv": "../../Data/HTE_datasets/BH2/csv/Solvent_SMILES.csv",
+      "lookup_key_col": "Solvent_SMILES",
+      "xyz_template": "Solvent_{id}.xyz"
+    }
+
+  ],
+  "soap": {
+    "species": ["C", "H", "N", "O", "F", "Cl", "Br", "Si", "P", "S", "Na", "K"],
+    "periodic": false,
+    "r_cut": 6.0,
+    "n_max": 6,
+    "l_max": 4,
+    "sigma": 0.5,
+    "average": "inner",
+    "compression": { "mode": "mu2" },
+    "sparse": false
+  }
+}
+

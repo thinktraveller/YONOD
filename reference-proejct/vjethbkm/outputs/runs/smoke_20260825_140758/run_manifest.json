@@ -1,0 +1,23 @@
+{
+  "run_id": "smoke_20260825_140758",
+  "stage": "smoke",
+  "git_commit": "e9796de1",
+  "python": "3.13.9",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "dataset": "smoke_local_yonod",
+  "dataset_path": "D:\\大创\\YONOD\\dataset\\test-amide-coupling(additive_fixed).csv",
+  "n_rows": 10,
+  "descriptors": [
+    "ohe",
+    "morgan",
+    "physchem"
+  ],
+  "model": "rf",
+  "folds": 2,
+  "repeats": 1,
+  "random_state": 42,
+  "outputs": {
+    "run_dir": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\outputs\\runs\\smoke_20260825_140758",
+    "summary": "D:\\大创\\YONOD\\reference-proejct\\vjethbkm\\outputs\\tables\\smoke_metrics_summary.csv"
+  }
+}

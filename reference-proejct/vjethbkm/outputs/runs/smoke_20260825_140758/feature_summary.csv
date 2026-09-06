@@ -1,0 +1,7 @@
+run_id,descriptor,repeat,fold,feature_dim,feature_elapsed_s,invalid_smiles
+smoke_20260825_140758,ohe,1,1,9,0.027598,0
+smoke_20260825_140758,ohe,1,2,10,0.003393,0
+smoke_20260825_140758,morgan,1,1,4096,0.004231,0
+smoke_20260825_140758,morgan,1,2,4096,0.003566,0
+smoke_20260825_140758,physchem,1,1,434,0.107691,0
+smoke_20260825_140758,physchem,1,2,434,0.103594,0

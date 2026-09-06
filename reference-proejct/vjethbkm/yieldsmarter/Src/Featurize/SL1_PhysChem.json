@@ -1,0 +1,9 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/SL1/SL1.csv",
+  "target_col": "Yield",
+  "min_frac_variance": 0.90,
+  "output_npz": "../../Results/Compare_Complexity/Bode_2023/PhysChem/Bode_PhysChem.npz",
+  "components": ["Aldehyde_1", "bifunctional_reagent", "Aldehyde_2"]
+
+}
+

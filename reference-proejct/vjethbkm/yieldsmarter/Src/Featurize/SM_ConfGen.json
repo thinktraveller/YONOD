@@ -1,0 +1,45 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/SM/csv/SM.csv",
+  "target_col": "lcms_ratio",
+  "xyz_dir": "../../Data/HTE_datasets/SM/xyz",
+
+  "components": [
+    {
+      "name": "solvent",
+      "reaction_col": "solvent_1_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/solvent_1_smiles.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "solvent_1_{id}.xyz"
+    },
+    {
+      "name": "ligand",
+      "reaction_col": "ligand_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/ligand_smiles.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "ligand_{id}.xyz"
+    },
+    {
+      "name": "reactant_1",
+      "reaction_col": "reactant_1_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/reactant_1_smiles.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "reactant_1_{id}.xyz"
+    },
+    {
+      "name": "reactant_2",
+      "reaction_col": "reactant_2_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/reactant_2_smiles.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "reactant_2_{id}.xyz"
+    },
+    {
+      "name": "reagent_1",
+      "reaction_col": "reagent_1_smiles",
+      "lookup_csv": "../../Data/HTE_datasets/SM/csv/reagent_1_smiles.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "reagent_1_{id}.xyz"
+    }
+
+  ]
+}
+

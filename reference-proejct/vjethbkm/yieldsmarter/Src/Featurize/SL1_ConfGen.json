@@ -1,0 +1,30 @@
+{
+  "reaction_csv": "../../Data/HTE_datasets/SL1/csv/SL1.csv",
+  "target_col": "lcms_ratio",
+  "xyz_dir": "../../Data/HTE_datasets/SL1/xyz",
+
+  "components": [
+    {
+      "name": "Aldehyde_1",
+      "reaction_col": "Aldehyde_1",
+      "lookup_csv": "../../Data/HTE_datasets/SL1/csv/Aldehyde_1.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "Aldehyde_1_{id}.xyz"
+    },
+    {
+      "name": "Aldehyde_2",
+      "reaction_col": "Aldehyde_2",
+      "lookup_csv": "../../Data/HTE_datasets/SL1/csv/Aldehyde_2.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "Aldehyde_2_{id}.xyz"
+    },
+    {
+      "name": "bifunctional_reagent",
+      "reaction_col": "bifunctional_reagent",
+      "lookup_csv": "../../Data/HTE_datasets/SL1/csv/bifunctional_reagent.csv",
+      "lookup_key_col": "ID",
+      "xyz_template": "bifunctional_reagent_{id}.xyz"
+    }
+  ]
+}
+

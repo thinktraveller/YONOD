@@ -1,0 +1,16 @@
+Index,Aryl_halide_SMILES
+1,FC(F)(F)c1ccc(Cl)cc1
+2,FC(F)(F)c1ccc(Br)cc1
+3,FC(F)(F)c1ccc(I)cc1
+4,COc1ccc(Cl)cc1
+5,COc1ccc(Br)cc1
+6,COc1ccc(I)cc1
+7,CCc1ccc(Cl)cc1
+8,CCc1ccc(Br)cc1
+9,CCc1ccc(I)cc1
+10,Clc1ccccn1
+11,Brc1ccccn1
+12,Ic1ccccn1
+13,Clc1cccnc1
+14,Brc1cccnc1
+15,Ic1cccnc1
