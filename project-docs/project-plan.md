@@ -8307,7 +8307,7 @@ results/<task>/fold_transformers/<feature_id>/repeat-<r>/fold-<f>/
 | 缺口/风险 | 应对 |
 |---|---|
 | yieldmaster CSV 无稳定 `sample_id` | 按原始行顺序派生 `yonod_sample_id`，记录 `source_row_index`，不改原始 CSV |
-| 当前正式指标缺 `Kendall tau` | 在 fold metrics、summary、差异表和报告中补齐，使用 `scipy.stats.kendalltau` 并记录版本 |
+| Kendall tau 尚未成为 YONOD 全局一等指标 | 在公共折级指标计算、schema、汇总、完整性、CSV/Parquet、Markdown/HTML 报告和测试中统一加入 `kendall_tau`，VJETHBKM 直接复用该公共能力 |
 | 只有 smoke YAML | 新增 BH1/BH2/SL1 正式 YAML，以及 SM-OHE-5760、SM-MFP-4620 双配置 |
 | `SM/OHE` 官方 artifact 未解 | 固定标注为 `forensic_unresolved_official_artifact_difference`，不调参追数值 |
 | MFP+RF 耗时较长 | 依赖 `TaskStateStore`、`--rerun-failed`、`--task-key` 分批恢复执行 |
@@ -8417,23 +8417,23 @@ BH1、BH2、SM-MFP、SL1 的 MFP `X/y` 最大差异为 `0.0`；OHE 每折 metada
 
 全数据 OHE 后再切 fold 属于泄漏，即使数值接近官方也不能通过验收。
 
-### 步骤25.4：补齐 Kendall tau 指标
+### 步骤25.4：将 Kendall tau 升级为 YONOD 全局一等指标
 
 #### 目标说明
 
-官方结果含 Kendall tau，YONOD 正式复现必须把它纳入 fold、summary、comparison 和 report。
+可以用“让整个 YONOD 兼容 Kendall tau 指标”替代原本只服务 VJETHBKM 的局部补齐。这样更稳：Kendall tau 成为与 MAE、RMSE、R2 同级的公共指标能力，VJETHBKM 复现只是复用这套公共实现。 该升级不应改变非 VJETHBKM 普通 benchmark 的训练、切分或既有 `mae/rmse/r2` 语义，只是在公共指标层追加可审计输出。
 
 #### 具体操作
 
-在 `yonod/benchmark/metrics.py` 增加安全计算：样本数不足、非有限值、常数输入返回 `NaN` 和 reason；正常情况使用 `scipy.stats.kendalltau`。同步扩展 `FOLD_METRIC_COLUMNS`、汇总统计、配对比较、Tukey HSD、报告和差异表 metric 集合。
+在公共折级指标计算中加入 `kendall_tau`：每个 valid fold 调用 `scipy.stats.kendalltau(y_true, y_pred)[0]`，再由组合汇总对 25 个 fold 计算 mean/std/CI。同步扩展 schema/列契约、完整性与 exclusions、CSV/Parquet 表、Markdown 报告、HTML 报告、配对比较和 Tukey HSD；必要时提升指标表 schema version 或提供兼容迁移，保持既有 `mae/rmse/r2` 字段和下游接口不破坏。NaN、常数数组、样本不足、非有限值必须显式记录 reason，不能填 0。
 
 #### 验证方法
 
-新增 `test_benchmark_kendall_tau.py`，覆盖正相关、负相关、ties、常数、非有限值；生成的正式 summary 不允许缺少 `kendall_tau`。
+新增 `test_benchmark_kendall_tau.py`，覆盖正相关、负相关、ties、常数、非有限值、样本不足、旧指标列兼容、旧运行产物迁移、非 VJETHBKM 普通 benchmark smoke、Markdown/HTML 同步展示；任何正式 summary、差异表或报告都不允许缺少 `kendall_tau`。
 
 #### 风险提示
 
-Kendall tau 的 ties 处理与库版本有关，必须在 run manifest 中保存 `scipy` 版本。
+Kendall tau 的 ties 处理与库版本有关，必须在 run manifest 中保存 `scipy` 版本。不要为贴近官方值改用全量 OOF 一次性 Kendall tau；VJETHBKM 的口径是逐 valid fold 计算后汇总 25 折 mean/std。
 
 ### 步骤25.5：抽取官方目标并构建差异表
 
@@ -8447,7 +8447,7 @@ Kendall tau 的 ties 处理与库版本有关，必须在 run manifest 中保存
 
 #### 验证方法
 
-差异表覆盖四数据集、MFP/OHE、RF、`MAE/RMSE/R2/Kendall tau`；MFP 为 exact 或 within tolerance；SM/OHE 四个指标不能被误判为完全成功。
+差异表直接消费 YONOD 公共指标输出，覆盖四数据集、MFP/OHE、RF、`MAE/RMSE/R2/kendall_tau`；MFP 为 exact 或 within tolerance；SM/OHE 四个指标不能被误判为完全成功。
 
 #### 风险提示
 
@@ -8485,7 +8485,7 @@ MFP+OHE 单数据集理论任务数为 50；单一 SM population 理论任务数
 
 #### 具体操作
 
-生成 `reproduction_acceptance_report.md`、`reproduction_acceptance_summary.json`、`table_s3_style_yonod_summary.csv`、`local_vs_official_differences.csv`、`sm_ohe_boundary_note.md`。报告必须包含数据/协议身份、结果总览、MFP 精确对齐结论、OHE 兼容复跑结论、SM/OHE 未解差异和本阶段排除范围。
+生成 `reproduction_acceptance_report.md`、`reproduction_acceptance_summary.json`、`table_s3_style_yonod_summary.csv`、`local_vs_official_differences.csv`、`sm_ohe_boundary_note.md`。报告必须包含数据/协议身份、结果总览、MFP 精确对齐结论、OHE 兼容复跑结论、SM/OHE 未解差异和本阶段排除范围；Markdown 与 HTML 必须使用同一公共指标表展示 `mae/rmse/r2/kendall_tau`。
 
 #### 验证方法
 
@@ -8503,7 +8503,7 @@ MFP+OHE 单数据集理论任务数为 50；单一 SM population 理论任务数
 
 #### 具体操作
 
-验收门：CSV hash 一致；派生 sample_id 可回连；MFP `X/y` 与官方 NPZ 精确一致；OHE train-only fit；RF 参数和 seed 可审计；四个指标完整；每个组合 25 fold 完整；SM 双口径分开；差异表覆盖所有目标；报告边界清楚。
+验收门：CSV hash 一致；派生 sample_id 可回连；MFP `X/y` 与官方 NPZ 精确一致；OHE train-only fit；RF 参数和 seed 可审计；公共指标层完整输出 `mae/rmse/r2/kendall_tau`；Kendall tau 按每个 valid fold 计算并汇总 25 折 mean/std；不可定义值显式进入 exclusions 或 reason；每个组合 25 fold 完整；SM 双口径分开；差异表覆盖所有目标；报告边界清楚。
 
 #### 验证方法
 
@@ -8513,7 +8513,7 @@ MFP+OHE 单数据集理论任务数为 50；单一 SM population 理论任务数
 
 如果官方包缺少足够信息解释某个 artifact，验收状态应是“复现边界清楚且差异可审计”，不是“失败后继续调参直到接近”。
 
-### 25.6 Q&A 记录
+### 25.9 Q&A 记录
 
 ### 步骤25.1：固化正式复现矩阵与样本身份
 
@@ -8525,14 +8525,19 @@ MFP+OHE 单数据集理论任务数为 50；单一 SM population 理论任务数
 **Q：** 我能否使用 YONOD 来复现其中有关 MFP 和 OHE 的结果？  
 **A：** 可以。YONOD 已具备关键基础；MFP 的可信度最高，因为本地特征已与官方 NPZ 逐元素一致。OHE 可以做无泄漏兼容复跑，但 `SM/OHE` 必须保留官方 artifact 未解差异。
 
+### 步骤25.4：将 Kendall tau 升级为 YONOD 全局一等指标
+
+**Q：** 是否能用“直接让整个 YONOD 兼容 Kendall tau 指标”代替第 25.4 的局部补齐？  
+**A：** 可以，而且建议这样做。Kendall tau 应作为 YONOD 公共指标层的一等能力进入折级指标、组合汇总、差异表、Markdown 和 HTML 报告；VJETHBKM 复现只复用这套公共实现。口径仍固定为每个 valid fold 调用 `scipy.stats.kendalltau(y_true, y_pred)[0]`，再汇总 25 折 mean/std；NaN、常数和样本不足必须显式标记或排除，不能填 0。
+
 ### 通用问题
 
 **Q：** 本阶段是否继续复现 DFT、SOAP 或其他模型？  
 **A：** 不继续。本阶段只验收 MFP/OHE + RF；其他描述符、模型和完整 SI 矩阵放到后续阶段。
 
-### 25.7 下一步行动建议
+### 25.10 下一步行动建议
 
-由 **project-builder-cn** 按步骤25.1 到 25.8 执行。优先补 `sample_id` 派生、Kendall tau、正式 YAML 和差异表测试，再分批跑正式结果，最后生成 `reproduction_acceptance_report.md`。
+由 **project-builder-cn** 按步骤25.1 到 25.8 执行。优先补 `sample_id` 派生、YONOD 全局 `kendall_tau` 指标能力、旧指标/旧产物兼容测试、正式 YAML 和差异表测试，再分批跑正式结果，最后生成 `reproduction_acceptance_report.md`。
 
 ---
 
