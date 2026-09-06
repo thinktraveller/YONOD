@@ -8285,6 +8285,255 @@ results/<task>/fold_transformers/<feature_id>/repeat-<r>/fold-<f>/
 
 由 **project-builder-cn** 按 G1 → G4 实施，优先完成公共注册表、MFP 的普通入口和 OHE 的无泄漏 API，再改 `main.py` 的 CV 编排，最后接入向导。每个阶段先跑针对性单元测试，再跑严格协议与普通入口回归；在 G3 的 OHE 泄漏、保存/加载与恢复测试全部通过前，不应在 README 中把 OHE 描述为已可供普通任务使用。
 
+
+---
+
+## 二十五、基于 YONOD 的 VJETHBKM 四数据集 MFP/OHE + RF 复现结果工程计划
+
+> 本节基于 `project-docs/goal.md` 的 2026-09-06 收束目标追加：当前阶段只做 `BH1/BH2/SM/SL1` 四个 yieldmaster 数据集上的 `MFP/OHE + RF + 5×5 repeated KFold` 复现结果工程；不扩展 DFT、SOAP、其他模型或完整 SI 矩阵。已有代码已经具备论文式 MFP、fold-local OHE、RF 论文协议、可恢复任务状态和 smoke YAML；本节重点规划正式数据、指标、差异审计和报告闭环。
+
+### 25.1 项目概述
+
+- 项目目标：用 YONOD 自身流程复现 `VJETHBKM/YieldSmarter` 中与 MFP、OHE、RF 相关的核心结果，并形成可审计结果包。
+- 预期成果：正式 YAML、派生 `sample_id`、MFP/官方 NPZ 对齐审计、OHE fold-local 审计、`MAE/RMSE/R2/Kendall tau` 指标、官方差异表、复现验收报告。
+- 使用场景：大创答辩、论文写作、后续扩展 DFT/SOAP/其他模型前的可信最小闭环。
+
+### 25.2 可行性分析
+
+可行。当前仓库已具备 `MFPDescriptor`、`OHEFeature`、`repeated_kfold`、RF seed/参数注入、逐折预测和可恢复 benchmark；四份 yieldmaster CSV 与官方 CSV 哈希一致，MFP 的本地 `X/y` 已验证与官方 NPZ 逐元素一致。
+
+主要缺口和应对：
+
+| 缺口/风险 | 应对 |
+|---|---|
+| yieldmaster CSV 无稳定 `sample_id` | 按原始行顺序派生 `yonod_sample_id`，记录 `source_row_index`，不改原始 CSV |
+| 当前正式指标缺 `Kendall tau` | 在 fold metrics、summary、差异表和报告中补齐，使用 `scipy.stats.kendalltau` 并记录版本 |
+| 只有 smoke YAML | 新增 BH1/BH2/SL1 正式 YAML，以及 SM-OHE-5760、SM-MFP-4620 双配置 |
+| `SM/OHE` 官方 artifact 未解 | 固定标注为 `forensic_unresolved_official_artifact_difference`，不调参追数值 |
+| MFP+RF 耗时较长 | 依赖 `TaskStateStore`、`--rerun-failed`、`--task-key` 分批恢复执行 |
+
+### 25.3 技术选型
+
+- `python >= 3.10`
+- `git >= 2.30`
+- `numpy >= 1.24`
+- `pandas >= 2.0`
+- `scikit-learn >= 1.3`
+- `scipy >= 1.10`
+- `rdkit >= 2023.9`
+- `pyarrow >= 14.0`
+- `PyYAML >= 6.0`
+- `pytest >= 8.0`
+
+本阶段不做服务部署，不需要 GPU；输出以 CSV/JSON/Parquet/Markdown 报告为主。
+
+### 25.4 环境配置
+
+#### 硬件/系统要求
+
+建议 `CPU >= 8 cores`、`RAM >= 16 GB`、可用磁盘 `>= 10 GB`。最低 4 核也可运行，但 MFP+RF 会明显变慢。
+
+#### 开发环境搭建
+
+```powershell
+cd D:\大创\YONOD
+git init  # 仅当项目目录尚未初始化 Git 时执行
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+```bash
+cd /home/wangzh685/桌面/ord-data/YONOD
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+#### 依赖安装
+
+```powershell
+# 1. 首先尝试官方源
+python -m pip install --upgrade pip
+pip install "numpy>=1.24" "pandas>=2.0" "scikit-learn>=1.3" "scipy>=1.10" "pyarrow>=14.0" "PyYAML>=6.0" "pytest>=8.0" "rdkit>=2023.9"
+
+# 2. 若失败或超时，临时使用清华镜像
+pip install "numpy>=1.24" "pandas>=2.0" "scikit-learn>=1.3" "scipy>=1.10" "pyarrow>=14.0" "PyYAML>=6.0" "pytest>=8.0" "rdkit>=2023.9" -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+RDKit 若 pip 不可用，优先使用 conda-forge 官方源，失败后再配置清华 conda 镜像。
+
+### 25.5 开发计划
+
+### 步骤25.1：固化正式复现矩阵与样本身份
+
+#### 目标说明
+
+明确本阶段只验收四个 yieldmaster 数据集的 MFP/OHE + RF，并为没有 `sample_id` 的 CSV 派生稳定样本身份。
+
+#### 具体操作
+
+正式矩阵：`BH1` 3955 行、`BH2` 3359 行、`SL1` 1150 行均跑 MFP+OHE；`SM` 拆为 OHE 5760 行与 MFP 4620 行。新增 helper 时采用原始行顺序生成 `yonod_sample_id = <dataset>:row-000000`，同时记录 `source_row_index/source_csv_sha256/component_cols`。禁止直接修改 `dataset/yieldmaster/*.csv`。
+
+#### 验证方法
+
+同一 CSV 重复派生得到相同 ID；打乱行顺序后数据 hash 与 split hash 改变；manifest 中每个 `sample_id` 都能回连原始行号。
+
+#### 风险提示
+
+不要用 SMILES 内容去重或做内容哈希 ID；重复实验行必须作为独立样本保留。
+
+### 步骤25.2：生成正式 YAML 与 SM 双配置
+
+#### 目标说明
+
+把 `configs/benchmark_vjethbkm_protocol_smoke.yaml` 扩展为正式运行配置。
+
+#### 具体操作
+
+新增：`benchmark_vjethbkm_bh1_mfp_ohe_rf_5x5.yaml`、`benchmark_vjethbkm_bh2_mfp_ohe_rf_5x5.yaml`、`benchmark_vjethbkm_sl1_mfp_ohe_rf_5x5.yaml`、`benchmark_vjethbkm_sm_ohe_rf_5x5_5760.yaml`、`benchmark_vjethbkm_sm_mfp_rf_5x5_4620.yaml`。每份 YAML 显式声明 `feature_sets`、组件列顺序、`rf: {n_estimators: 500, max_features: 0.3, n_jobs: -1}`、`repeated_kfold`、`cv: {n_repeats: 5, n_splits: 5, seed: 1000}`。
+
+#### 验证方法
+
+所有 YAML 能通过配置解析和数据校验；SM 只有两个正式 population；RF 配置不写冲突 `random_state`。
+
+#### 风险提示
+
+smoke YAML 只能证明协议实现，不可作为正式论文数值结果。
+
+### 步骤25.3：建立数据与特征对齐审计
+
+#### 目标说明
+
+训练前先输出数据身份和特征身份审计，尤其把已验证的 MFP/官方 NPZ 逐元素一致转为自动验收门。
+
+#### 具体操作
+
+输出 `data_identity.csv`、`mfp_npz_alignment.csv`、`ohe_fold_lifecycle_audit.csv`、`sm_population_boundary.json`。MFP 审计字段包括 `dataset_id/official_alias/local_rows/official_npz_rows/feature_shape/y_exact_equal/x_max_abs_diff/status`；OHE 审计字段包括 `fit_scope/train_sample_ids_hash/categories_hash/output_dim/missing_count/unseen_count`。
+
+#### 验证方法
+
+BH1、BH2、SM-MFP、SL1 的 MFP `X/y` 最大差异为 `0.0`；OHE 每折 metadata 证明只用训练集 fit；SM boundary 明确 `OHE=5760`、`MFP=4620`。
+
+#### 风险提示
+
+全数据 OHE 后再切 fold 属于泄漏，即使数值接近官方也不能通过验收。
+
+### 步骤25.4：补齐 Kendall tau 指标
+
+#### 目标说明
+
+官方结果含 Kendall tau，YONOD 正式复现必须把它纳入 fold、summary、comparison 和 report。
+
+#### 具体操作
+
+在 `yonod/benchmark/metrics.py` 增加安全计算：样本数不足、非有限值、常数输入返回 `NaN` 和 reason；正常情况使用 `scipy.stats.kendalltau`。同步扩展 `FOLD_METRIC_COLUMNS`、汇总统计、配对比较、Tukey HSD、报告和差异表 metric 集合。
+
+#### 验证方法
+
+新增 `test_benchmark_kendall_tau.py`，覆盖正相关、负相关、ties、常数、非有限值；生成的正式 summary 不允许缺少 `kendall_tau`。
+
+#### 风险提示
+
+Kendall tau 的 ties 处理与库版本有关，必须在 run manifest 中保存 `scipy` 版本。
+
+### 步骤25.5：抽取官方目标并构建差异表
+
+#### 目标说明
+
+用结构化表回答“是否复现”，避免只靠报告文字判断。
+
+#### 具体操作
+
+生成 `official_targets.csv`、`local_metrics_summary.csv`、`local_vs_official_differences.csv`、`unreproducible_cases.csv`。差异表字段至少包含 `dataset_id/official_alias/population_id/descriptor/model/metric/official_value/local_value/abs_diff/rel_diff/tolerance/status/status_reason/local_run_id/config_hash`。MFP 容差建议 `1e-9` 以内；OHE 先用 `abs_diff <= 0.02` 或相对误差 `<= 0.5%`；`SM/OHE` 固定为未解差异状态。
+
+#### 验证方法
+
+差异表覆盖四数据集、MFP/OHE、RF、`MAE/RMSE/R2/Kendall tau`；MFP 为 exact 或 within tolerance；SM/OHE 四个指标不能被误判为完全成功。
+
+#### 风险提示
+
+保留官方别名映射：本地 `BH1` 对官方 `BH`，本地 `SL1` 对官方 `SLAP/Bode`。
+
+### 步骤25.6：可恢复执行正式 5×5 训练
+
+#### 目标说明
+
+用正式 YAML 分批运行，保留中断恢复和局部重跑能力。
+
+#### 具体操作
+
+建议先跑 BH1 OHE，再跑 BH1 MFP，然后 BH2、SL1，最后 SM-OHE-5760 与 SM-MFP-4620。命令示例：
+
+```powershell
+python scripts/run_benchmark.py --config configs/benchmark_vjethbkm_protocol_smoke.yaml --bootstrap-n 200
+python scripts/run_benchmark.py --config configs/benchmark_vjethbkm_bh1_mfp_ohe_rf_5x5.yaml --bootstrap-n 2000
+python scripts/run_benchmark.py --config configs/benchmark_vjethbkm_bh1_mfp_ohe_rf_5x5.yaml --rerun-failed --bootstrap-n 2000
+```
+
+#### 验证方法
+
+MFP+OHE 单数据集理论任务数为 50；单一 SM population 理论任务数为 25；`failed/interrupted/pending` 均为 0；每个 prediction parquet 的验证 `sample_id` 与 manifest 一致。
+
+#### 风险提示
+
+不要删除整个结果目录来重跑；配置相同应恢复，配置变化应生成新 `run_id`。
+
+### 步骤25.7：生成复现报告与答辩级结论包
+
+#### 目标说明
+
+把正式结果变成可读、可引用、可审计的报告。
+
+#### 具体操作
+
+生成 `reproduction_acceptance_report.md`、`reproduction_acceptance_summary.json`、`table_s3_style_yonod_summary.csv`、`local_vs_official_differences.csv`、`sm_ohe_boundary_note.md`。报告必须包含数据/协议身份、结果总览、MFP 精确对齐结论、OHE 兼容复跑结论、SM/OHE 未解差异和本阶段排除范围。
+
+#### 验证方法
+
+报告中每个数值可追溯到 CSV/JSON；不得把 SM/OHE 写成完全复现；不得声称 DFT/SOAP/其他模型已完成。
+
+#### 风险提示
+
+推荐表述是：MFP 已达到数据、特征和指标严格对齐；OHE 达到协议兼容与差异可审计；SM/OHE 官方 artifact 存在未解历史差异。
+
+### 步骤25.8：最终验收门与提交边界
+
+#### 目标说明
+
+定义何时可以宣称本阶段完成。
+
+#### 具体操作
+
+验收门：CSV hash 一致；派生 sample_id 可回连；MFP `X/y` 与官方 NPZ 精确一致；OHE train-only fit；RF 参数和 seed 可审计；四个指标完整；每个组合 25 fold 完整；SM 双口径分开；差异表覆盖所有目标；报告边界清楚。
+
+#### 验证方法
+
+新增或扩展 `test_yieldmaster_sample_ids.py`、`test_benchmark_kendall_tau.py`、`test_vjethbkm_formal_configs.py`、`test_vjethbkm_official_difference_table.py`、`test_vjethbkm_acceptance_report.py`，并继续运行现有 MFP/OHE/RF/repeated_kfold/protocol smoke 测试。
+
+#### 风险提示
+
+如果官方包缺少足够信息解释某个 artifact，验收状态应是“复现边界清楚且差异可审计”，不是“失败后继续调参直到接近”。
+
+### 25.6 Q&A 记录
+
+### 步骤25.1：固化正式复现矩阵与样本身份
+
+**Q：** 如果我希望完全复现，应该如何做？  
+**A：** 先锁定本阶段范围：四个 yieldmaster 数据集的 MFP/OHE + RF。然后严格固定数据哈希、样本身份、组件列顺序、5×5 KFold、RF 参数、MFP/OHE 特征生命周期和四个指标；不可完全一致项进入差异审计。
+
+### 步骤25.2：生成正式 YAML 与 SM 双配置
+
+**Q：** 我能否使用 YONOD 来复现其中有关 MFP 和 OHE 的结果？  
+**A：** 可以。YONOD 已具备关键基础；MFP 的可信度最高，因为本地特征已与官方 NPZ 逐元素一致。OHE 可以做无泄漏兼容复跑，但 `SM/OHE` 必须保留官方 artifact 未解差异。
+
+### 通用问题
+
+**Q：** 本阶段是否继续复现 DFT、SOAP 或其他模型？  
+**A：** 不继续。本阶段只验收 MFP/OHE + RF；其他描述符、模型和完整 SI 矩阵放到后续阶段。
+
+### 25.7 下一步行动建议
+
+由 **project-builder-cn** 按步骤25.1 到 25.8 执行。优先补 `sample_id` 派生、Kendall tau、正式 YAML 和差异表测试，再分批跑正式结果，最后生成 `reproduction_acceptance_report.md`。
+
 ---
 
 **文档结束**
