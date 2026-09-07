@@ -36,11 +36,7 @@
   "models": ["Random Forest"],
   "metadata": {
     "doi": "10.1021/jacs.6c02213",
-    "notes": "BH2: 3,359 rows; MFP and OHE both use the five component columns in the declared paper order."
+    "notes": "BH2 共 3,359 行。MFP 和 OHE 均按声明的论文组分顺序使用 5 个组分列；仅执行随机森林、MFP 和训练折 OHE。运行命令：python main.py --json configs/yieldmaster_bh2_mfp_ohe_rf.json --csv dataset/yieldmaster/BH2.csv。必须提供 --csv，因为 JSON 模式默认查找配置文件同级的规范化数据集。"
   },
-  "report_formats": ["HTML", "Markdown"],
-  "_comments": {
-    "execution": "python main.py --json configs/yieldmaster_bh2_mfp_ohe_rf.json --csv dataset/yieldmaster/BH2.csv",
-    "scope": "Only Random Forest, MFP and train-fold OHE are declared. The --csv argument is required because main.py JSON mode otherwise expects a normalized CSV beside this config."
-  }
+  "report_formats": ["HTML", "Markdown"]
 }
