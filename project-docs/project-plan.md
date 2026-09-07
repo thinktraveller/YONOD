@@ -8539,6 +8539,358 @@ MFP+OHE 单数据集理论任务数为 50；单一 SM population 理论任务数
 
 由 **project-builder-cn** 按步骤25.1 到 25.8 执行。优先补 `sample_id` 派生、YONOD 全局 `kendall_tau` 指标能力、旧指标/旧产物兼容测试、正式 YAML 和差异表测试，再分批跑正式结果，最后生成 `reproduction_acceptance_report.md`。
 
+
+---
+
+## 二十六、AutoGluon 严格外层 5 折 CV 平行比较升级计划
+
+> 本节响应“具体而言，要对 AutoGluon 进行什么修改，才能和原本进行平行比较”的后续规划请求。计划前提是：当前 YONOD 中 AutoGluon 的 `cross_validate()` 实际只调用一次内部 80/20 holdout，`r2_std=0`，普通数值列路径还会对 AutoGluon 使用全局 `StandardScaler`，普通 OHE 路径与严格 benchmark executor 也明确排除了 AutoGluon。因此，当前四个 yieldmaster 全模型结果里的 AutoGluon 行只能视为探索性结果，不能与 RF、XGBoost、LightGBM、SVM 的 5 折 CV 排名直接比较。
+>
+> 本节只规划后续实现，不修改源码。目标是让 AutoGluon 与其他模型共享同一外层 split manifest、同一折边界、同一训练折预处理规则和同一指标/报告口径，并覆盖 MFP、训练折 OHE 和含数值列的普通任务路径。
+
+### 26.1 项目概述
+
+- 项目目标：将 AutoGluon 从“单次内部 holdout 评估”改造为“严格外层 5 折 CV 评估”，使其可与 RF、XGBoost、LightGBM、SVM 平行比较。
+- 预期成果：AutoGluon 支持 MFP 静态特征、OHE 训练折特征和数值辅助列；输出完整 OOF 预测、逐折指标、mean±std、Markdown/HTML 报告和严格 benchmark 预测分片。
+- 使用场景：四个 yieldmaster 数据集的全模型公平重跑；VJETHBKM 复现之外的普通 YONOD JSON/CLI 任务；后续答辩或论文中的模型横向比较。
+
+### 26.2 可行性分析
+
+可行，但必须接受两个边界：
+
+1. 运行成本会显著增加。AutoGluon 原来只训练 1 次；严格 5 折需要每个 `(数据集, 特征, 模型)` 训练 5 次。若 OHE 也纳入，四个 yieldmaster 数据集从当前 `MFP×AutoGluon` 扩展到 `MFP/OHE×AutoGluon`，耗时约为当前 AutoGluon 部分的 5 到 10 倍。
+2. AutoGluon 1.1.1 没有一个可覆盖所有内部子模型的顶层 `random_seed` 参数。公平比较的核心应先保证外层 split 完全一致、验证样本从未进入训练或预处理；随机性通过 split manifest、依赖版本、AutoGluon 参数和重复运行稳定性记录来审计，而不是承诺跨平台逐位一致。
+
+主要风险和应对：
+
+| 风险 | 应对 |
+|---|---|
+| 继续把 80/20 holdout 行混进 5 折排行榜 | 在结果 schema 中加入 `evaluation_protocol`，报告层只允许 `outer_kfold` 或 manifest 完整组合进入公平排名 |
+| AutoGluon 训练时看见验证折数据 | 新增 `fit_predict_fold(X_train, y_train, X_valid, context)`，适配器只接收当前折训练矩阵与验证矩阵 |
+| OHE 类别表由全数据拟合造成泄漏 | OHE 仍在每个训练折单独 `fit`，AutoGluon 只消费折内转换后的 `X_train/X_valid` |
+| 数值列全局标准化造成泄漏 | 删除 AutoGluon 的全局 scaler 特例，所有模型统一在训练折 `fit_transform`、验证折 `transform` |
+| AutoGluon 临时模型目录互相覆盖 | 每折独立 `TemporaryDirectory` 或 `run_dir/models/<descriptor>__autogluon__rXX__fXX/`；默认清理，正式 benchmark 可配置保留 |
+| CPU 过度订阅 | 四数据集正式重跑采用串行 fold，AutoGluon `num_cpus=19`；若外层并行任务，则每个任务的 `num_cpus` 必须按 worker 数重新分配 |
+
+### 26.3 技术选型与依赖
+
+继续使用现有 conda 环境 `yonod`。新增实现不引入新的建模框架，只补齐 AutoGluon 的外层 fold 契约与报告/测试。
+
+- `python >= 3.10`
+- `numpy >= 1.24`
+- `pandas >= 2.0`
+- `scikit-learn >= 1.3`
+- `scipy >= 1.10`
+- `pyarrow >= 14.0`
+- `pytest >= 8.0`
+- `autogluon.tabular == 1.1.1`
+- `lightgbm >= 4.0`、`xgboost >= 1.7`：用于同一矩阵中的对照模型，不作为本节新增重点
+
+依赖检查优先使用官方源；若需要重装，失败后再使用镜像：
+
+```powershell
+# 1. 首先尝试官方源
+pip install "autogluon.tabular==1.1.1" "pytest>=8.0"
+
+# 2. 若失败或超时，临时使用清华镜像
+pip install "autogluon.tabular==1.1.1" "pytest>=8.0" -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+正式四数据集重跑建议先固定 AutoGluon 参数：`time_limit=300`、`presets="medium_quality"`、`num_cpus=19`、`evaluation_protocol="outer_kfold"`、`n_splits=5`、`seed=42`（普通 main 路径）或读取严格 benchmark 的 split manifest seed（论文式/benchmark 路径）。这些字段必须进入配置哈希、run manifest、折级 metadata 和报告。
+
+### 26.4 开发计划
+
+### 步骤26.1：标记并隔离现有 AutoGluon holdout 结果
+
+#### 目标说明
+
+先阻止旧 AutoGluon 结果被误用于公平排名。当前结果不是“错”，而是评估协议不同：它只验证一次随机 20% holdout，缺少 5 折方差，也没有与其他模型共享验证折。
+
+#### 具体操作
+
+在普通 `metrics_summary.csv`、严格 benchmark 指标表和报告上下文中增加或规范化 `evaluation_protocol` 字段：
+
+```text
+autogluon_internal_holdout   # 旧结果或兼容路径，只能作探索性参考
+outer_kfold                  # 普通 main 的严格外层 KFold
+manifest_outer_cv            # benchmark executor 使用 split manifest 的严格外层 CV
+```
+
+报告排名函数必须只把 `outer_kfold` 或 `manifest_outer_cv` 且 `completed_folds == expected_folds` 的组合纳入“平行比较”。旧 AutoGluon 行可保留在“探索性结果/协议不一致”表中，明确写出 `holdout_frac=0.2` 或 `1/cv`、`r2_std=0` 的含义。
+
+产物隔离规则：后续严格重跑使用新的输出目录和日志名，例如 `yieldmaster_all_models_outercv_<timestamp>`；不得把旧 holdout 的 AutoGluon 行追加到新的 5 折正式汇总表中。
+
+#### 验证方法
+
+构造一张含 RF 5 折行与 AutoGluon holdout 行的测试表，断言报告排名只包含 RF，AutoGluon 出现在协议提示区；同一 run 中混入协议不一致数据时，严格 summary 生成应失败或显式降级为“不可公平比较”。
+
+#### 风险提示
+
+不要为了保持 CSV 列少而省略协议字段；一旦旧行和新行共存，没有协议字段就很容易在论文或答辩表格中误读。
+
+### 步骤26.2：实现 AutoGluon 单折训练/预测适配器
+
+#### 目标说明
+
+让 AutoGluon 像其他模型一样接受外部定义的训练折和验证折。核心不是让 AutoGluon 内部不用验证集，而是确保外层验证折从未进入 `TabularPredictor.fit()`、OHE、scaler 或任何特征选择步骤。
+
+#### 具体操作
+
+在 `yonod/models/autogluon_model.py` 中保留旧接口作兼容，但新增严格方法：
+
+```python
+def fit_predict_fold(self, X_train, y_train, X_valid, *, fold_index, context=None):
+    if len(X_train) != len(y_train):
+        raise ValueError("X_train 与 y_train 行数不一致")
+    if X_valid.ndim != 2 or X_train.ndim != 2:
+        raise ValueError("AutoGluon 输入必须是二维矩阵")
+    if X_train.shape[1] != X_valid.shape[1]:
+        raise ValueError("训练折和验证折特征维度不一致")
+
+    path = self._resolve_fold_path(fold_index, context)
+    train_df = _make_df(X_train, y_train)
+    valid_df = _make_df(X_valid)
+    predictor = TabularPredictor(
+        label="yield",
+        problem_type="regression",
+        path=str(path),
+        verbosity=1,
+    ).fit(
+        train_data=train_df,
+        time_limit=self.time_limit,
+        presets=self.presets,
+        num_cpus=self.num_cpus,
+    )
+    pred = predictor.predict(valid_df).to_numpy(dtype=float)
+    if len(pred) != len(X_valid) or not np.isfinite(pred).all():
+        raise ValueError("AutoGluon 预测结果行数或数值非法")
+    return pred, metadata
+```
+
+`metadata` 至少记录 `time_limit`、`presets`、`num_cpus`、AutoGluon 版本、训练/预测耗时、模型目录、是否清理、外层 fold id、外层 seed、`random_state` 审计说明和可选 leaderboard 摘要。旧 `cross_validate()` 要么改为真正的外层 KFold，要么明确改名/标记为 `fit_evaluate_holdout()`，避免名称继续误导。
+
+#### 验证方法
+
+新增 `test_autogluon_fold_adapter.py`，用 monkeypatch/mock 替代真实 `TabularPredictor`，断言：
+
+- `fit()` 的 `train_data` 只包含训练折行和 label；
+- `predict()` 只接收验证折特征；
+- 每折使用独立 path，不覆盖上一个 fold；
+- `time_limit/presets/num_cpus` 被传入并写入 metadata；
+- 预测长度、非有限值、维度不一致会触发明确异常。
+
+#### 风险提示
+
+不要直接把外层验证折作为 AutoGluon 的 `tuning_data`。那会使 AutoGluon 用外层验证折做模型选择，污染用于报告的验证分数。第一版允许 AutoGluon 在训练折内部自行划分训练内验证，但外层 valid 只能用于最后预测。
+
+### 步骤26.3：改造普通 `main.py` 的 MFP、OHE 与数值列路径
+
+#### 目标说明
+
+让普通 JSON/CLI 入口中的 AutoGluon 与其他模型使用同一外层 5 折切分，并消除数值列和 OHE 的泄漏风险。
+
+#### 具体操作
+
+需要覆盖三个现有位置：
+
+1. `_cv_with_numeric()`：删除 AutoGluon 的全局 `StandardScaler` 特例。无论模型是谁，都在 `KFold(n_splits=args.cv, shuffle=True, random_state=42)` 的每个训练折 fit scaler，再 transform 验证折。
+2. `_fit_predict_explicit_fold()`：为 `model_name == "autogluon"` 增加分支，调用 `AutoGluonYieldModel(...).fit_predict_fold(...)`，使 OHE 路径不再拒绝 AutoGluon。
+3. 静态特征路径：当特征是 MFP 或其他预计算矩阵且模型是 AutoGluon 时，不再调用旧 holdout 逻辑，而是走与 RF/XGBoost/LightGBM 相同的外层 fold loop，填满 OOF。
+
+普通 main 路径第一版可继续使用现有 `cv=5, shuffle=True, random_state=42`；若后续要与严格 benchmark 完全统一，再把这个 fold list 提升为普通任务的 lightweight split manifest。无论是否落盘 manifest，报告中都必须写清外层切分参数。
+
+#### 验证方法
+
+新增或扩展：
+
+- `test_main_autogluon_outer_cv_static.py`：MFP/静态矩阵 × AutoGluon 产生 5 个 fold、`r2_std` 非硬编码 0、OOF 无 NaN。
+- `test_main_autogluon_numeric_no_global_scaler.py`：在验证折插入极端数值，断言 scaler 的均值/方差只来自训练折。
+- `test_main_autogluon_ohe_cv_no_leak.py`：验证折独有类别不出现在训练折 OHE 类别表中，AutoGluon 仍能预测该折。
+- 普通 RF/XGBoost/LightGBM/SVM 的现有 smoke 继续通过，证明 refactor 未改变其指标口径。
+
+#### 风险提示
+
+OHE 的输出维度可能随训练折类别数量变化，但同一折的 `X_train/X_valid` 必须维度一致。报告应记录 `output_dim_min/output_dim_max`，不要假设 OHE 在所有 fold 维度完全相同。
+
+### 步骤26.4：适配严格 benchmark executor 与 split manifest
+
+#### 目标说明
+
+严格 benchmark pipeline 已经以 `split_manifest` 驱动单折任务，但当前 `_build_estimator()` 对 AutoGluon 直接报错。本步骤让 AutoGluon 进入同一 executor，仍使用 manifest 的 train/valid 边界和预测分片 schema。
+
+#### 具体操作
+
+在 `yonod/benchmark/executor.py` 中不要把 AutoGluon 强行包装成 sklearn estimator；建议将当前流程拆成两个小函数：
+
+```text
+build_fold_matrices(...)  # 已含 MFP/静态特征、OHE fold_transform、数值列折内 scaler
+fit_predict_model(...)    # RF/XGB/LGB/SVM 走 estimator.fit/predict；AutoGluon 走 fit_predict_fold
+```
+
+AutoGluon metadata 需要与现有折级 JSON 对齐，同时增加：
+
+```json
+{
+  "evaluation_protocol": "manifest_outer_cv",
+  "autogluon_version": "1.1.1",
+  "autogluon_time_limit": 300,
+  "autogluon_presets": "medium_quality",
+  "autogluon_num_cpus": 19,
+  "autogluon_seed_policy": "outer split fixed; AutoGluon 1.1.1 has no single top-level seed covering all submodels",
+  "model_artifact_path": "...",
+  "model_artifact_cleanup": true
+}
+```
+
+`_software_versions()` 同步加入 `autogluon.core`、`autogluon.common`、`autogluon.tabular`、`catboost`、`lightgbm` 等可用版本。预测 parquet 继续使用现有字段，保证指标模块无需为 AutoGluon 单独开表。
+
+#### 验证方法
+
+新增 `test_benchmark_autogluon_executor.py`：
+
+- 同一 `split_manifest` 下，RF 与 AutoGluon 的每个 fold 验证 `sample_id` 完全一致；
+- `mfp × autogluon` 和 `ohe × autogluon` 均能在 2 折 fixture 上写出预测分片和折级 JSON；
+- benchmark executor 的 OHE fold_transform metadata 证明只用训练折拟合；
+- 已存在完整预测分片时可恢复跳过，损坏或协议哈希不一致时拒绝静默覆盖。
+
+#### 风险提示
+
+AutoGluon 会生成较大的模型目录。严格 benchmark 中默认可以清理模型包，只保留预测分片、leaderboard 摘要和 metadata；若需要后续解释模型，必须显式 `keep_autogluon_artifacts=true`，并把磁盘预算写入运行前检查。
+
+### 步骤26.5：统一指标、OOF、报告与公平排名口径
+
+#### 目标说明
+
+AutoGluon 进入严格外层 CV 后，其结果必须像 RF、XGBoost、LightGBM 一样由逐折预测重建，而不是由适配器内部返回一个不可审计的单次分数。
+
+#### 具体操作
+
+普通 main 路径返回字段至少保持：
+
+```text
+r2_mean, r2_std, rmse_mean, rmse_std, mae_mean, mae_std,
+kendall_tau_mean, kendall_tau_std,
+train_time_s, predict_time_s, completed_folds, expected_folds,
+evaluation_protocol, oof_pred, oof_y_true
+```
+
+若当前普通 CSV 暂时只有 `rmse_mean/mae_mean` 而没有 `rmse_std/mae_std`，本节实施时应一并补齐标准差列，使它们与 `r2_std`、Kendall tau 一样代表“折级指标的波动”，而不是标签本身的统计量。
+
+严格 benchmark 继续以 `predictions/*.parquet` 为唯一指标来源。Markdown 与 HTML 报告应增加协议筛选说明：只有同一 `split_id/config_hash/evaluation_protocol`、完成 fold 数一致、指标字段完整的组合进入模型排行榜；旧 `autogluon_internal_holdout` 行在表格中保留但标记为“不可与 5 折 CV 排名比较”。
+
+#### 验证方法
+
+用固定预测 fixture 反算指标，断言 AutoGluon 与 RF 的 `mean/std/OOF` 计算路径一致；报告 snapshot 测试覆盖 Markdown 和 HTML，确保 `evaluation_protocol`、`completed_folds`、`kendall_tau`、`rmse_std/mae_std` 都可见。
+
+#### 风险提示
+
+不要把 5 折合并后的全量 OOF 再计算一次 R²/RMSE/Kendall tau 作为 mean±std 的替代。正式比较应保留逐折指标，再汇总 mean/std；全量 OOF 指标可以作为补充诊断单独命名。
+
+### 步骤26.6：测试矩阵、无泄漏门禁与验收标准
+
+#### 目标说明
+
+用低成本测试证明“平行比较”真的成立：同一切分、同一预处理生命周期、同一预测库、同一指标重建。
+
+#### 具体操作
+
+必须新增或扩展的测试：
+
+- `test_autogluon_fold_adapter.py`：mock `TabularPredictor`，覆盖单折训练/预测、参数传递、临时目录和异常处理。
+- `test_main_autogluon_outer_cv_static.py`：普通 main 静态特征/MFP × AutoGluon 真正跑外层 5 折。
+- `test_main_autogluon_numeric_no_global_scaler.py`：证明数值列 scaler 只在训练折拟合。
+- `test_main_autogluon_ohe_cv_no_leak.py`：证明 OHE 训练折类别表不含验证折独有类别。
+- `test_benchmark_autogluon_executor.py`：严格 executor 中 AutoGluon 读取同一 split manifest，预测分片与 fold metadata 完整。
+- `test_report_autogluon_protocol_guard.py`：协议不一致结果不能进入同一公平排名。
+- 继续运行既有 MFP、OHE、repeated_kfold、RF 论文协议、Kendall tau、报告重建和时间统计测试。
+
+验收门：
+
+1. AutoGluon 的普通 main 静态/MFP、OHE、数值列路径均产生完整 OOF，`completed_folds == cv`。
+2. 严格 benchmark 中 AutoGluon 与 RF/XGBoost/LightGBM/SVM 使用完全相同的 manifest valid 样本集合。
+3. 任一验证折样本不参与 scaler/OHE/model fit；测试中有明确的泄漏 canary。
+4. AutoGluon 的 `time_limit/presets/num_cpus/version/seed policy` 出现在 run manifest、fold metadata 和报告中。
+5. 旧 holdout 结果被标记为探索性，不能与 `outer_kfold`/`manifest_outer_cv` 混排。
+
+#### 验证方法
+
+开发期命令建议：
+
+```bash
+conda run -n yonod python -m pytest tests/test_autogluon_fold_adapter.py tests/test_main_autogluon_outer_cv_static.py tests/test_main_autogluon_ohe_cv_no_leak.py -q
+conda run -n yonod python -m pytest tests/test_benchmark_autogluon_executor.py tests/test_report_autogluon_protocol_guard.py -q
+```
+
+真实 AutoGluon 集成烟测应使用小 fixture 和低成本参数：`time_limit=30`、`presets="medium_quality"`、`num_cpus=2`、`cv=2`。四数据集正式重跑再使用 `time_limit=300`、`num_cpus=19`。
+
+#### 风险提示
+
+mock 测试只能证明数据边界和接口，不证明 AutoGluon 真实依赖可用；真实 AutoGluon smoke 应单独标记为慢测试，避免每次普通单测都训练多个模型。
+
+### 步骤26.7：重跑四个 yieldmaster 数据集并隔离正式产物
+
+#### 目标说明
+
+在实现通过后，重新运行四个全模型任务，得到可与 RF/XGBoost/LightGBM/SVM 平行比较的 AutoGluon MFP 与 OHE 结果。
+
+#### 具体操作
+
+沿用现有四份 all-models JSON 的数据和特征声明，但生成新的输出目录或 run id，例如：
+
+```text
+configs/yieldmaster_bh1_mfp_ohe_all_models/report_outercv/
+configs/yieldmaster_bh2_mfp_ohe_all_models/report_outercv/
+configs/yieldmaster_sl1_mfp_ohe_all_models/report_outercv/
+configs/yieldmaster_sm_mfp_ohe_all_models/report_outercv/
+logs/yieldmaster_all_models_outercv_<timestamp>.log
+```
+
+正式运行约束：
+
+- AutoGluon 固定 `autogluon.tabular==1.1.1`、`time_limit=300`、`presets="medium_quality"`、`num_cpus=19`；
+- 四个数据集依次执行，避免 AutoGluon 内部并行与任务外层并行叠加；
+- MFP 与 OHE 都应包含 AutoGluon，理论上每个数据集输出 `5 模型 × 2 特征 = 10` 个组合；
+- 旧 `report/metrics_summary.csv` 中的 AutoGluon holdout 行不得与新 `report_outercv/metrics_summary.csv` 合并。
+
+#### 验证方法
+
+每个数据集检查：
+
+- `metrics_summary.csv` 中 AutoGluon 的 `evaluation_protocol` 为 `outer_kfold`，`completed_folds=5`，`r2_std/rmse_std/mae_std/kendall_tau_std` 来自逐折指标；
+- MFP 与 OHE 的 AutoGluon OOF 均无 NaN，验证样本覆盖率为 100%；
+- Markdown/HTML 报告的排行榜包含 AutoGluon，但只与同协议模型比较；
+- 与实现前的 AutoGluon holdout 数值分开列示，结论写成“严格 5 折后是否优于其他模型”，不再引用旧 holdout 作为排名依据。
+
+#### 风险提示
+
+如果 AutoGluon 训练耗时超过预算，应先降低 smoke/试运行的 `time_limit` 或只跑一个数据集估算成本；正式比较的参数一旦确定，不能因为单个数据集结果不理想而临时调参，否则会破坏平行比较。
+
+### 26.5 Q&A 记录
+
+### 步骤26.1：标记并隔离现有 AutoGluon holdout 结果
+
+**Q：** 当前四个 yieldmaster 全模型结果里的 AutoGluon 能和 RF、XGBoost、LightGBM 直接比较排名吗？  
+**A：** 不能。当前 AutoGluon 只做一次内部 80/20 holdout，`r2_std=0`，而其他模型是外层 5 折 CV；二者验证样本、方差估计和预处理边界都不同。它可以作为探索性结果保留，但不能进入严格 5 折排行榜。
+
+### 步骤26.2：实现 AutoGluon 单折训练/预测适配器
+
+**Q：** 具体而言，要对 AutoGluon 做什么修改，才能和原本进行平行比较？  
+**A：** 核心修改是把 AutoGluon 从“自己随机切 80/20 再评估”改成“接收外部训练折和验证折”。每个 fold 独立创建 `TabularPredictor`，只用训练折 `fit`，再预测验证折；五个 fold 的预测合成完整 OOF，并按折计算 R²、RMSE、MAE、Kendall tau 的 mean±std。
+
+### 步骤26.3：改造普通 `main.py` 的 MFP、OHE 与数值列路径
+
+**Q：** AutoGluon 能否同时支持 OHE 和含数值列的数据？  
+**A：** 可以，但必须让 OHE 和数值 scaler 都在训练折内拟合。OHE 不能先全数据 one-hot 再切分；数值列也不能先全局标准化再交给 AutoGluon。正确路径是每折先用训练折 fit OHE/scaler，再 transform 当前验证折，最后把矩阵交给 AutoGluon 的单折适配器。
+
+### 通用问题
+
+**Q：** AutoGluon 1.1.1 的随机性会不会影响公平比较？  
+**A：** 会影响数值的逐位复现，但不影响“同一外层验证集”的公平性。计划要求固定 split manifest、记录 AutoGluon 版本、time_limit、presets、num_cpus 和 seed policy；若要发表非常严格的模型排名，还应对关键组合做重复运行稳定性检查。
+
+### 26.6 下一步行动建议
+
+由 **project-builder-cn** 按步骤26.1 到 26.7 实施。建议先完成协议标记和 AutoGluon 单折适配器，再改普通 `main.py` 的静态/OHE/数值列路径，随后接入严格 benchmark executor；全部无泄漏测试和报告协议门禁通过后，再用 conda `yonod` 环境依次重跑四个 yieldmaster 数据集并输出隔离的 `outercv` 结果包。
+
 ---
 
 **文档结束**
