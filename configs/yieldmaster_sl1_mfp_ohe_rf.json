@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "project_name": "yieldmaster_sl1_mfp_ohe_rf",
+  "origin_dataset_path": "../dataset/yieldmaster/SL1.csv",
+  "column_mapping": [
+    {"origin_name": "Aldehyde_1", "role": "reactant", "new_name": "Aldehyde_1"},
+    {"origin_name": "bifunctional_reagent", "role": "others", "new_name": "bifunctional_reagent"},
+    {"origin_name": "Aldehyde_2", "role": "reactant", "new_name": "Aldehyde_2"},
+    {"origin_name": "Yield", "role": "label", "new_name": "Yield"}
+  ],
+  "column_roles": {
+    "label": "Yield",
+    "reactants": ["Aldehyde_1", "Aldehyde_2"],
+    "products": [],
+    "others": ["bifunctional_reagent"],
+    "conditions": []
+  },
+  "descriptors": [
+    {
+      "id": "mfp_vjethbkm",
+      "descriptor": "mfp",
+      "mode": "concat",
+      "columns": ["Aldehyde_1", "bifunctional_reagent", "Aldehyde_2"],
+      "params": {"radius": 3, "fp_size": 1024, "profile": "vjethbkm"}
+    },
+    {
+      "id": "ohe_train_fold",
+      "descriptor": "ohe",
+      "mode": "concat",
+      "columns": ["Aldehyde_1", "bifunctional_reagent", "Aldehyde_2"],
+      "params": {"missing_policy": "zero_block", "dtype": "float64", "handle_unknown": "ignore"}
+    }
+  ],
+  "models": ["Random Forest"],
+  "metadata": {
+    "doi": "10.1021/jacs.6c02213",
+    "notes": "SL1: 1,150 rows; the descriptor order deliberately follows Aldehyde_1, bifunctional_reagent, Aldehyde_2."
+  },
+  "report_formats": ["HTML", "Markdown"],
+  "_comments": {
+    "execution": "python main.py --json configs/yieldmaster_sl1_mfp_ohe_rf.json --csv dataset/yieldmaster/SL1.csv",
+    "scope": "Only Random Forest, MFP and train-fold OHE are declared. The --csv argument is required because main.py JSON mode otherwise expects a normalized CSV beside this config."
+  }
+}
