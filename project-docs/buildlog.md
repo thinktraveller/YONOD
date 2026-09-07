@@ -5536,3 +5536,27 @@ for desc_name in args.descriptors:
 - 在相同边界内逐项扩展到 OHE 及其余可追溯数据集，并先验证原始特征/切分/模型路径，再判定每项是否可完成独立复现。
 
 ---
+
+## [2026-09-07] 步骤 2 完成：四数据集 MFP/OHE + RF 论文原生独立复现
+
+### 执行的任务
+- 新增论文项目内的四数据集 MFP 和 OHE 独立复跑器及统一验收汇总器；它们只读取 `yieldsmarter` 自带 CSV、`Gen_MFP.py`、`Train_descriptors.py`/`Train_OHE.py` 的 RF 分支逻辑及官方 artifacts，未改动任何 `yonod/`、`configs/`、YONOD 脚本、测试或报告框架。
+- MFP 对 BH1、BH2、SL1、SM 分别从原始 CSV 调用未改动的 `Gen_MFP.py`；SM 显式使用该原始程序的 `--skip_rows_with_missing_values`，将 5760 行原始数据变为 4620 行完整组分数据。
+- OHE 对四个官方原始 CSV 在每个训练折拟合 `OneHotEncoder`，保留原始程序的未知类别忽略、缺失组分整块清零、5×5 KFold、1000–1004 种子和 RF `500/0.30/-1` 参数；逐项对照官方 JSON 和 OOF arrays。
+- 生成 32 项的单一 acceptance CSV/JSON/Markdown/HTML 报告；大型 MFP 特征缓存、OOF 预测和逐折结果保留在未提交的运行目录。
+
+### 验证结果
+- 四个 MFP artifact 均逐元素一致：BH1 `(3955,4096)`、BH2 `(3359,5120)`、SL1 `(1150,3072)`、SM `(4620,5120)` 的 `X`、`y`、组分列全部 exact。
+- OHE 的四套官方 OOF 中，真实值与 fold ID 全部 exact；预测最大绝对差 `1.71e-13`，属于浮点舍入并小于明确的 `1e-12` 容差。
+- MFP/OHE × 四数据集 × MAE/RMSE/R²/Kendall τ 共 32 项的均值和标准差全部通过 `1e-12` 验收；所有指标绝对差最大为 `7.11e-15`。
+- `uv run --no-sync pytest tests/test_paper_native_mfp_rf.py tests/test_paper_native_mfp_rf_matrix.py tests/test_paper_native_ohe_rf_matrix.py tests/test_paper_native_reproduction_acceptance.py tests/test_final_metrics_report.py tests/test_official_metrics_extraction.py -q`：13/13 通过；`git diff --check`：通过。
+
+### 已知边界
+- 本地实际为 Python `3.11.15`、RDKit `2026.03.4`、scikit-learn `1.4.0`；SI 为 RDKit `2025.03.6`、scikit-learn `1.6.1`。数值严格对齐证明兼容复跑，不能替代锁定原论文环境后的跨环境位级声明。
+- 原始训练脚本在选择 RF 前无条件导入本地不可用的 LightGBM；窄包装器仅镜像 RF 分支，未编辑上游脚本。当前验收不覆盖其他描述符、非 RF 模型、Fig.5 五描述符区间比较、BH2 外部验证、重加权或泛化实验。
+- SM 的 MFP 4620 与 OHE 5760 是两种经过原始路径验证的独立 population；报告明确分列，不将其静默合并为单一数据口径。
+
+### 下一步计划
+- ✅ 用户限定的两步工作均完成。若需“完全复现”论文其余图表或模型，应另行授权并锁定论文原始软件环境。
+
+---

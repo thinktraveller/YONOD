@@ -1,0 +1,497 @@
+{
+  "run_type": "independent_paper_native_mfp_rf_matrix",
+  "datasets": [
+    {
+      "dataset_id": "BH1",
+      "paper_dataset_id": "BH",
+      "source_csv": "yieldsmarter/Data/HTE_datasets/BH1/BH1.csv",
+      "source_csv_sha256": "ea448500b1a121ff9158b1787b8eeebae25ba1940d0e993bff5702947b43af86",
+      "mfp_skip_rows_with_missing_values": false,
+      "official_summary_json": "yieldsmarter/Results/Compare_Complexity/Doyle_2018/MFP/Doyle_MFP_metrics_summaries_RF.json",
+      "upstream_training_config": "yieldsmarter/Src/Train/BH1.json",
+      "mfp_alignment": {
+        "generated_shape": [
+          3955,
+          4096
+        ],
+        "official_shape": [
+          3955,
+          4096
+        ],
+        "x_exact": true,
+        "x_max_abs_diff": 0,
+        "y_exact": true,
+        "smiles_columns_exact": true
+      },
+      "independent_native_metrics": {
+        "mae": {
+          "mean": 4.531535492347868,
+          "std": 0.2144479354821038
+        },
+        "rmse": {
+          "mean": 6.851955627322502,
+          "std": 0.475351569627682
+        },
+        "r2": {
+          "mean": 0.9364555872923422,
+          "std": 0.009567625818611597
+        },
+        "kendall": {
+          "mean": 0.8484259715085937,
+          "std": 0.008933443112753955
+        }
+      },
+      "comparison_rows": [
+        {
+          "dataset_id": "BH1",
+          "paper_dataset_id": "BH",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "mae",
+          "unit": "yield %",
+          "published_table_s3_mean": 4.5,
+          "published_table_s3_std": 0.2,
+          "official_json_mean": 4.531535492347868,
+          "official_json_std": 0.21444793548210375,
+          "independent_native_mean": 4.531535492347868,
+          "independent_native_std": 0.2144479354821038,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 5.551115123125783e-17,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "BH1",
+          "paper_dataset_id": "BH",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "rmse",
+          "unit": "yield %",
+          "published_table_s3_mean": 6.9,
+          "published_table_s3_std": 0.5,
+          "official_json_mean": 6.851955627322502,
+          "official_json_std": 0.47535156962768194,
+          "independent_native_mean": 6.851955627322502,
+          "independent_native_std": 0.475351569627682,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 5.551115123125783e-17,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "BH1",
+          "paper_dataset_id": "BH",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "r2",
+          "unit": "yield %",
+          "published_table_s3_mean": 0.94,
+          "published_table_s3_std": 0.01,
+          "official_json_mean": 0.9364555872923422,
+          "official_json_std": 0.009567625818611597,
+          "independent_native_mean": 0.9364555872923422,
+          "independent_native_std": 0.009567625818611597,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "BH1",
+          "paper_dataset_id": "BH",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "kendall_tau",
+          "unit": "yield %",
+          "published_table_s3_mean": 0.85,
+          "published_table_s3_std": 0.01,
+          "official_json_mean": 0.8484259715085937,
+          "official_json_std": 0.008933443112753955,
+          "independent_native_mean": 0.8484259715085937,
+          "independent_native_std": 0.008933443112753955,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        }
+      ]
+    },
+    {
+      "dataset_id": "BH2",
+      "paper_dataset_id": "BH2",
+      "source_csv": "yieldsmarter/Data/HTE_datasets/BH2/BH2.csv",
+      "source_csv_sha256": "cdd9bfda16a790ec3be91a0dd618fbc476d576942e274deae3494a7897513a65",
+      "mfp_skip_rows_with_missing_values": false,
+      "official_summary_json": "yieldsmarter/Results/Compare_Complexity/Denmark_2023/MFP/Denmark_MFP_metrics_summaries_RF.json",
+      "upstream_training_config": "yieldsmarter/Src/Train/BH2.json",
+      "mfp_alignment": {
+        "generated_shape": [
+          3359,
+          5120
+        ],
+        "official_shape": [
+          3359,
+          5120
+        ],
+        "x_exact": true,
+        "x_max_abs_diff": 0,
+        "y_exact": true,
+        "smiles_columns_exact": true
+      },
+      "independent_native_metrics": {
+        "mae": {
+          "mean": 12.05600068639324,
+          "std": 0.5273358871203663
+        },
+        "rmse": {
+          "mean": 17.892543335494505,
+          "std": 0.8358343772583589
+        },
+        "r2": {
+          "mean": 0.7250461909827262,
+          "std": 0.02472694475552353
+        },
+        "kendall": {
+          "mean": 0.6840725868058348,
+          "std": 0.0127806133304408
+        }
+      },
+      "comparison_rows": [
+        {
+          "dataset_id": "BH2",
+          "paper_dataset_id": "BH2",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "mae",
+          "unit": "yield %",
+          "published_table_s3_mean": 12.1,
+          "published_table_s3_std": 0.5,
+          "official_json_mean": 12.05600068639324,
+          "official_json_std": 0.5273358871203663,
+          "independent_native_mean": 12.05600068639324,
+          "independent_native_std": 0.5273358871203663,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "BH2",
+          "paper_dataset_id": "BH2",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "rmse",
+          "unit": "yield %",
+          "published_table_s3_mean": 17.9,
+          "published_table_s3_std": 0.8,
+          "official_json_mean": 17.892543335494505,
+          "official_json_std": 0.8358343772583589,
+          "independent_native_mean": 17.892543335494505,
+          "independent_native_std": 0.8358343772583589,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "BH2",
+          "paper_dataset_id": "BH2",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "r2",
+          "unit": "yield %",
+          "published_table_s3_mean": 0.73,
+          "published_table_s3_std": 0.02,
+          "official_json_mean": 0.7250461909827262,
+          "official_json_std": 0.02472694475552353,
+          "independent_native_mean": 0.7250461909827262,
+          "independent_native_std": 0.02472694475552353,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "BH2",
+          "paper_dataset_id": "BH2",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "kendall_tau",
+          "unit": "yield %",
+          "published_table_s3_mean": 0.68,
+          "published_table_s3_std": 0.01,
+          "official_json_mean": 0.6840725868058348,
+          "official_json_std": 0.0127806133304408,
+          "independent_native_mean": 0.6840725868058348,
+          "independent_native_std": 0.0127806133304408,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        }
+      ]
+    },
+    {
+      "dataset_id": "SL1",
+      "paper_dataset_id": "SLAP",
+      "source_csv": "yieldsmarter/Data/HTE_datasets/SL1/SL1.csv",
+      "source_csv_sha256": "3fc0481e46d69bf8657b739a3872ba4c77682b68fd8b3af64fac6feaefc42d6a",
+      "mfp_skip_rows_with_missing_values": false,
+      "official_summary_json": "yieldsmarter/Results/Compare_Complexity/Bode_2023/MFP/Bode_MFP_metrics_summaries_RF.json",
+      "upstream_training_config": "yieldsmarter/Src/Train/SL1.json",
+      "mfp_alignment": {
+        "generated_shape": [
+          1150,
+          3072
+        ],
+        "official_shape": [
+          1150,
+          3072
+        ],
+        "x_exact": true,
+        "x_max_abs_diff": 0,
+        "y_exact": true,
+        "smiles_columns_exact": true
+      },
+      "independent_native_metrics": {
+        "mae": {
+          "mean": 18.043381253794735,
+          "std": 1.8406673610385005
+        },
+        "rmse": {
+          "mean": 35.12299567652329,
+          "std": 5.08988909135084
+        },
+        "r2": {
+          "mean": 0.7681948782217961,
+          "std": 0.052291947802991616
+        },
+        "kendall": {
+          "mean": 0.5095152925758325,
+          "std": 0.0357339404447818
+        }
+      },
+      "comparison_rows": [
+        {
+          "dataset_id": "SL1",
+          "paper_dataset_id": "SLAP",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "mae",
+          "unit": "LC-MS product ratio",
+          "published_table_s3_mean": 18.0,
+          "published_table_s3_std": 1.8,
+          "official_json_mean": 18.04338125379474,
+          "official_json_std": 1.8406673610385011,
+          "independent_native_mean": 18.043381253794735,
+          "independent_native_std": 1.8406673610385005,
+          "native_minus_official_mean": -3.552713678800501e-15,
+          "native_minus_official_std": -6.661338147750939e-16,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "SL1",
+          "paper_dataset_id": "SLAP",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "rmse",
+          "unit": "LC-MS product ratio",
+          "published_table_s3_mean": 35.1,
+          "published_table_s3_std": 5.1,
+          "official_json_mean": 35.122995676523296,
+          "official_json_std": 5.089889091350841,
+          "independent_native_mean": 35.12299567652329,
+          "independent_native_std": 5.08988909135084,
+          "native_minus_official_mean": -7.105427357601002e-15,
+          "native_minus_official_std": -8.881784197001252e-16,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "SL1",
+          "paper_dataset_id": "SLAP",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "r2",
+          "unit": "LC-MS product ratio",
+          "published_table_s3_mean": 0.77,
+          "published_table_s3_std": 0.05,
+          "official_json_mean": 0.7681948782217961,
+          "official_json_std": 0.0522919478029916,
+          "independent_native_mean": 0.7681948782217961,
+          "independent_native_std": 0.052291947802991616,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 1.3877787807814457e-17,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "SL1",
+          "paper_dataset_id": "SLAP",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "kendall_tau",
+          "unit": "LC-MS product ratio",
+          "published_table_s3_mean": 0.51,
+          "published_table_s3_std": 0.04,
+          "official_json_mean": 0.5095152925758325,
+          "official_json_std": 0.0357339404447818,
+          "independent_native_mean": 0.5095152925758325,
+          "independent_native_std": 0.0357339404447818,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        }
+      ]
+    },
+    {
+      "dataset_id": "SM",
+      "paper_dataset_id": "SM",
+      "source_csv": "yieldsmarter/Data/HTE_datasets/SM/SM.csv",
+      "source_csv_sha256": "111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a",
+      "mfp_skip_rows_with_missing_values": true,
+      "official_summary_json": "yieldsmarter/Results/Compare_Complexity/Suzuki_2018/MFP/Suzuki_MFP_metrics_summaries_RF.json",
+      "upstream_training_config": "yieldsmarter/Src/Train/SM.json",
+      "mfp_alignment": {
+        "generated_shape": [
+          4620,
+          5120
+        ],
+        "official_shape": [
+          4620,
+          5120
+        ],
+        "x_exact": true,
+        "x_max_abs_diff": 0,
+        "y_exact": true,
+        "smiles_columns_exact": true
+      },
+      "independent_native_metrics": {
+        "mae": {
+          "mean": 7.398945621312399,
+          "std": 0.2199739432287866
+        },
+        "rmse": {
+          "mean": 11.008577405453288,
+          "std": 0.3229990876709754
+        },
+        "r2": {
+          "mean": 0.8527994807980537,
+          "std": 0.008652368329218849
+        },
+        "kendall": {
+          "mean": 0.7615115880573682,
+          "std": 0.008364901212263468
+        }
+      },
+      "comparison_rows": [
+        {
+          "dataset_id": "SM",
+          "paper_dataset_id": "SM",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "mae",
+          "unit": "yield %",
+          "published_table_s3_mean": 7.4,
+          "published_table_s3_std": 0.2,
+          "official_json_mean": 7.398945621312399,
+          "official_json_std": 0.2199739432287865,
+          "independent_native_mean": 7.398945621312399,
+          "independent_native_std": 0.2199739432287866,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 1.1102230246251565e-16,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "SM",
+          "paper_dataset_id": "SM",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "rmse",
+          "unit": "yield %",
+          "published_table_s3_mean": 11.0,
+          "published_table_s3_std": 0.3,
+          "official_json_mean": 11.008577405453288,
+          "official_json_std": 0.3229990876709754,
+          "independent_native_mean": 11.008577405453288,
+          "independent_native_std": 0.3229990876709754,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "SM",
+          "paper_dataset_id": "SM",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "r2",
+          "unit": "yield %",
+          "published_table_s3_mean": 0.85,
+          "published_table_s3_std": 0.01,
+          "official_json_mean": 0.8527994807980537,
+          "official_json_std": 0.008652368329218849,
+          "independent_native_mean": 0.8527994807980537,
+          "independent_native_std": 0.008652368329218849,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        },
+        {
+          "dataset_id": "SM",
+          "paper_dataset_id": "SM",
+          "descriptor": "MFP",
+          "model": "RF",
+          "metric": "kendall_tau",
+          "unit": "yield %",
+          "published_table_s3_mean": 0.76,
+          "published_table_s3_std": 0.01,
+          "official_json_mean": 0.7615115880573682,
+          "official_json_std": 0.008364901212263468,
+          "independent_native_mean": 0.7615115880573682,
+          "independent_native_std": 0.008364901212263468,
+          "native_minus_official_mean": 0.0,
+          "native_minus_official_std": 0.0,
+          "official_json_matches_table_s3_display": true,
+          "valid_fold_count": 25
+        }
+      ]
+    }
+  ],
+  "actual_versions": {
+    "python": "3.11.15",
+    "numpy": "1.26.4",
+    "pandas": "3.0.5",
+    "scikit-learn": "1.4.0",
+    "scipy": "1.17.1",
+    "rdkit": "2026.3.4",
+    "rdkit_runtime": "2026.03.4"
+  },
+  "paper_reported_versions": {
+    "rdkit": "2025.03.6",
+    "scikit-learn": "1.6.1"
+  },
+  "cv": {
+    "outer_splits": 5,
+    "splits": 5,
+    "seed": 1000,
+    "repeat_seeds": [
+      1000,
+      1001,
+      1002,
+      1003,
+      1004
+    ],
+    "valid_fold_count": 25
+  },
+  "rf": {
+    "n_estimators": 500,
+    "max_features": 0.3,
+    "n_jobs": -1
+  },
+  "implementation_boundary": "RF-only wrapper; upstream files are unmodified and their unconditional LightGBM import is unavailable locally."
+}
