@@ -41,7 +41,10 @@ def _software_versions() -> Dict[str, str]:
         "python": sys.version,
         "platform": platform.platform(),
     }
-    for distribution in ("numpy", "pandas", "scikit-learn", "pyarrow", "xgboost", "lightgbm"):
+    for distribution in (
+        "numpy", "pandas", "scikit-learn", "pyarrow", "xgboost", "lightgbm",
+        "autogluon.common", "autogluon.core", "autogluon.tabular", "catboost",
+    ):
         try:
             versions[distribution] = importlib.metadata.version(distribution)
         except importlib.metadata.PackageNotFoundError:
@@ -158,6 +161,76 @@ def _json_safe_estimator_params(estimator: Any) -> Dict[str, Any]:
     except AttributeError as exc:  # pragma: no cover - all supported adapters expose sklearn estimators
         raise FoldExecutionError("估计器不支持 get_params() 审计") from exc
     return json.loads(json.dumps(params, ensure_ascii=False, sort_keys=True, default=str))
+
+
+def _fit_predict_model(
+    *,
+    model: str,
+    effective_model_kwargs: Mapping[str, Any],
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_valid: np.ndarray,
+    fold: int,
+    protocol_seed: Optional[int],
+    config_seed: Any,
+    layout: Any,
+    suffix: str,
+) -> tuple[np.ndarray, float, float, Dict[str, Any], Dict[str, Any]]:
+    """Fit one external fold and return predictions plus audit metadata."""
+    if model == "autogluon":
+        from ..models.autogluon_model import AutoGluonYieldModel
+
+        adapter_kwargs = dict(effective_model_kwargs)
+        keep_artifacts = bool(adapter_kwargs.pop("keep_autogluon_artifacts", False))
+        cleanup = bool(adapter_kwargs.pop("cleanup", not keep_artifacts))
+        model_root = adapter_kwargs.pop("model_root", None)
+        save_path = adapter_kwargs.pop("save_path", None)
+        if save_path is not None and model_root is None:
+            model_root = save_path
+        artifact_root = Path(model_root) if model_root is not None else layout.run_dir / "models"
+        artifact_path = artifact_root / suffix
+        adapter = AutoGluonYieldModel(**adapter_kwargs, cleanup=cleanup)
+        outer_seed = protocol_seed if protocol_seed is not None else int(config_seed)
+        prediction, metadata = adapter.fit_predict_fold(
+            X_train,
+            y_train,
+            X_valid,
+            fold_index=fold,
+            context={
+                "evaluation_protocol": "manifest_outer_cv",
+                "outer_seed": outer_seed,
+                "model_artifact_path": str(artifact_path),
+                "cleanup": cleanup,
+            },
+        )
+        if not np.isfinite(prediction).all():
+            raise FoldExecutionError("AutoGluon 预测包含 NaN 或 inf")
+        snapshot = {
+            "adapter": "AutoGluonYieldModel",
+            "time_limit": adapter.time_limit,
+            "presets": adapter.presets,
+            "num_cpus": adapter.num_cpus,
+            "random_state": adapter.random_state,
+            "cleanup": cleanup,
+            "keep_autogluon_artifacts": keep_artifacts,
+        }
+        return (
+            np.asarray(prediction, dtype=float),
+            float(metadata.get("train_time_s", 0.0)),
+            float(metadata.get("predict_time_s", 0.0)),
+            snapshot,
+            metadata,
+        )
+
+    estimator = _build_estimator(model, effective_model_kwargs, X_train.shape[1], len(y_train))
+    estimator_params_snapshot = _json_safe_estimator_params(estimator)
+    start = time.perf_counter()
+    estimator.fit(X_train, y_train)
+    train_time_s = time.perf_counter() - start
+    start = time.perf_counter()
+    prediction = np.asarray(estimator.predict(X_valid), dtype=float)
+    predict_time_s = time.perf_counter() - start
+    return prediction, train_time_s, predict_time_s, estimator_params_snapshot, {}
 
 
 def _effective_model_kwargs(
@@ -312,15 +385,19 @@ def execute_fold(
         assert X_smiles is not None
         X_train, X_valid = _prepare_fold_features(X_smiles, X_numeric, train_idx, valid_idx)
         schema_source = X_smiles
-    estimator = _build_estimator(model, effective_model_kwargs, X_train.shape[1], len(train_idx))
-    estimator_params_snapshot = _json_safe_estimator_params(estimator)
     started_at_utc = datetime.now(timezone.utc).isoformat()
-    start = time.perf_counter()
-    estimator.fit(X_train, y_array[train_idx])
-    train_time_s = time.perf_counter() - start
-    start = time.perf_counter()
-    prediction = np.asarray(estimator.predict(X_valid), dtype=float)
-    predict_time_s = time.perf_counter() - start
+    prediction, train_time_s, predict_time_s, estimator_params_snapshot, model_metadata = _fit_predict_model(
+        model=model,
+        effective_model_kwargs=effective_model_kwargs,
+        X_train=X_train,
+        y_train=y_array[train_idx],
+        X_valid=X_valid,
+        fold=fold,
+        protocol_seed=protocol_seed,
+        config_seed=contract.config.cv["seed"],
+        layout=layout,
+        suffix=suffix,
+    )
     if not np.isfinite(prediction).all():
         raise FoldExecutionError("模型预测包含 NaN 或 inf")
     group_by_id = part.drop_duplicates("sample_id").set_index("sample_id")["group_id"].astype(str)
@@ -352,6 +429,7 @@ def execute_fold(
         "split_id": split_id,
         "descriptor": descriptor,
         "model": model,
+        "evaluation_protocol": "manifest_outer_cv",
         "repeat": repeat,
         "fold": fold,
         "n_train": int(len(train_idx)),
@@ -372,5 +450,15 @@ def execute_fold(
         "software_versions": _software_versions(),
         "prediction_path": str(prediction_path),
     }
+    if model_metadata:
+        metadata["model_adapter_metadata"] = model_metadata
+        metadata["autogluon_time_limit"] = model_metadata.get("time_limit")
+        metadata["autogluon_presets"] = model_metadata.get("presets")
+        metadata["autogluon_num_cpus"] = model_metadata.get("num_cpus")
+        metadata["autogluon_seed_policy"] = model_metadata.get("random_state_policy")
+        metadata["model_artifact_path"] = model_metadata.get("model_artifact_path")
+        metadata["model_artifact_cleanup"] = model_metadata.get("model_artifact_cleanup")
+        versions = model_metadata.get("autogluon_versions") or {}
+        metadata["autogluon_version"] = versions.get("autogluon.tabular")
     metadata_path = _atomic_write_json(metadata, metadata_path)
     return FoldExecutionResult(prediction_path, metadata_path, len(train_idx), len(valid_idx), train_time_s, predict_time_s)

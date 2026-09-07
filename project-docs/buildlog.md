@@ -5586,3 +5586,33 @@ for desc_name in args.descriptors:
 - 步骤 26.3：改造普通 `main.py` 的 MFP/静态矩阵、OHE 和数值列路径，让 AutoGluon 统一走外层折边界，并删除数值列全局 scaler 与 OHE 禁用分支。
 
 ---
+
+## [2026-09-07 21:32] 步骤 26.3–26.4 完成：AutoGluon 接入普通入口与 strict executor
+
+### 执行的任务
+- 改造普通 `main.py` 的 AutoGluon 路径：静态 MFP/描述符使用真实 `outer_kfold`，含数值列路径删除旧全局 scaler 特例，改为每折只在训练折拟合 `StandardScaler` 后调用 `fit_predict_fold()`。
+- 改造普通 OHE 显式折流程：OHE 类别表继续只在训练折拟合，并允许 AutoGluon 与 RF/XGBoost/SVM/LightGBM 一样消费外层 fold 的训练/验证矩阵。
+- 改造 strict benchmark executor：`autogluon` 模型名进入外层 manifest 单折执行路径，折级 JSON 记录 `manifest_outer_cv`、AutoGluon time_limit/presets/num_cpus/version/seed policy、模型目录与清理策略；预测 parquet 字段保持既有 schema。
+- 普通 JSON 配置的 `model_params` 对 AutoGluon 支持内部名 `autogluon` 与显示名 `AutoGluon` 两种键，避免同一模型因命名风格丢失参数。
+
+### 关键变更
+- `main.py`：新增外层折指标汇总 helper、AutoGluon CLI 参数、JSON 参数解析、数值列折内缩放、OHE→AutoGluon 单折适配器接入及 RMSE/MAE std 等协议列保存。
+- `yonod/benchmark/executor.py`：新增 `_fit_predict_model()` 分流 AutoGluon adapter 与 sklearn-like estimator；strict fold metadata 增加 AutoGluon 审计字段。
+- `tests/test_main_autogluon_outer_cv_paths.py`：新增普通入口静态 MFP、数值列折内 scaler、OHE 防泄漏三条 AutoGluon 路径测试。
+- `tests/test_benchmark_autogluon_executor.py`：新增 strict executor 中 MFP+数值列、OHE fold_transform 与 AutoGluon 使用同一 split manifest 的测试，并覆盖已有完整输出的恢复跳过。
+
+### 验证结果
+- `python3 -m py_compile YONOD/main.py YONOD/yonod/benchmark/executor.py YONOD/tests/test_main_autogluon_outer_cv_paths.py YONOD/tests/test_benchmark_autogluon_executor.py`：通过。
+- `git -C YONOD diff --check -- main.py yonod/benchmark/executor.py tests/test_main_autogluon_outer_cv_paths.py tests/test_benchmark_autogluon_executor.py`：通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -m unittest tests/test_main_autogluon_outer_cv_paths.py tests/test_benchmark_autogluon_executor.py -v`：5/5 通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_autogluon_fold_adapter.py tests/test_main_autogluon_outer_cv_paths.py tests/test_benchmark_autogluon_executor.py tests/test_main_feature_library.py -v`：11/11 通过。
+
+### 遇到的问题及解决方案
+- 普通 `apply_patch` 和部分读/检查命令仍触发 `bwrap: loopback: Failed RTM_NEWADDR`；已在用户授权范围内改用受控命令写入，仅修改本阶段源码、测试和 `buildlog.md`。
+- conda `yonod` 环境缺少 `pyarrow/fastparquet`，真实 parquet 写入不可用；未安装依赖，新增 executor 单测使用局部 pickle-backed parquet mock，仍验证 executor 的 prediction schema、sample_id 对齐、metadata 和恢复跳过逻辑。
+- 测试输出包含 matplotlib 中文字体缺字和 pyparsing deprecation 警告，均未导致失败。
+
+### 下一步计划
+- 步骤 26.5：统一指标、OOF、报告与公平排名口径，确保 AutoGluon 与其他模型只在相同协议、相同完成 fold 数和完整指标字段下进入排行榜。
+
+---

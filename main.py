@@ -79,8 +79,11 @@ _CSV_COLUMNS = [
     "task_name", "feature_id", "descriptor", "lifecycle", "model",
     "n_smiles_cols", "n_numeric_cols",
     "n_samples", "n_total", "coverage", "feature_dim",
-    "cv", "r2_mean", "r2_std", "rmse_mean", "mae_mean",
-    "train_time_s", "device",
+    "cv", "evaluation_protocol", "expected_folds", "completed_folds",
+    "r2_mean", "r2_std", "rmse_mean", "rmse_std", "mae_mean", "mae_std",
+    "train_time_s", "predict_time_s", "device",
+    "holdout_frac", "autogluon_time_limit", "autogluon_presets",
+    "autogluon_num_cpus", "autogluon_seed_policy",
 ]
 
 # ─────────────────────────────────────── 日志 ──────────────────────────────── #
@@ -155,11 +158,61 @@ def _make_model(model_name: str, args: argparse.Namespace) -> Any:
         return SVMYieldModel(subsample_n=sub)
     if model_name == "autogluon":
         from yonod.models.autogluon_model import AutoGluonYieldModel
-        return AutoGluonYieldModel()
+        return AutoGluonYieldModel(
+            time_limit=int(getattr(args, "autogluon_time_limit", 300)),
+            presets=str(getattr(args, "autogluon_presets", "medium_quality")),
+            num_cpus=int(getattr(args, "autogluon_num_cpus", 1)),
+        )
     if model_name == "lightgbm":
         from yonod.models.lightgbm_model import LightGBMYieldModel
         return LightGBMYieldModel()
     raise ValueError(f"未知模型名称 {model_name!r}")
+
+
+# ──────────────────────────── 外层折指标汇总 ─────────────────────────────── #
+
+def _fold_metric_result(
+    *,
+    r2s: List[float],
+    rmses: List[float],
+    maes: List[float],
+    started_at: float,
+    predict_time_s: float,
+    device: str,
+    oof: np.ndarray,
+    y: np.ndarray,
+    cv: int,
+    fold_metadata: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Summarise externally defined folds with one canonical metrics shape."""
+    result: Dict[str, Any] = {
+        "r2_mean": float(np.mean(r2s)),
+        "r2_std": float(np.std(r2s)),
+        "rmse_mean": float(np.mean(rmses)),
+        "rmse_std": float(np.std(rmses)),
+        "mae_mean": float(np.mean(maes)),
+        "mae_std": float(np.std(maes)),
+        "train_time_s": float(time.time() - started_at),
+        "predict_time_s": float(predict_time_s),
+        "device": device,
+        "evaluation_protocol": "outer_kfold",
+        "expected_folds": int(cv),
+        "completed_folds": int(len(r2s)),
+        "oof_pred": oof,
+        "oof_y_true": y,
+    }
+    if fold_metadata:
+        result["fold_metadata"] = fold_metadata
+        first = fold_metadata[0]
+        if "time_limit" in first:
+            result["autogluon_time_limit"] = first.get("time_limit")
+        if "presets" in first:
+            result["autogluon_presets"] = first.get("presets")
+        if "num_cpus" in first:
+            result["autogluon_num_cpus"] = first.get("num_cpus")
+        if "random_state_policy" in first:
+            result["autogluon_seed_policy"] = first.get("random_state_policy")
+    return result
 
 
 # ──────────────────────────── 带数值列的 CV 循环 ───────────────────────────── #
@@ -173,26 +226,16 @@ def _cv_with_numeric(
     cv: int,
     svm_subsample: Optional[int],
 ) -> Dict[str, Any]:
-    """KFold CV，在每折 train 集上 fit StandardScaler（防数据泄露）。
-
-    AutoGluon 使用内部 holdout，无法嵌入 KFold；对其使用全局 scaler 并打印警告。
-    """
-    if model_name == "autogluon":
-        print(
-            "[warning] AutoGluon + numeric cols: 使用全局 StandardScaler（非折内归一化）",
-            file=sys.stderr,
-        )
-        scaler = StandardScaler()
-        X_num_scaled = scaler.fit_transform(X_numeric)
-        X_combined = np.hstack([X_smiles, X_num_scaled])
-        return model.cross_validate(X_combined, y, cv=cv)
-
+    """KFold CV with numeric preprocessing fitted inside each train fold."""
     kf = KFold(n_splits=cv, shuffle=True, random_state=42)
     r2s, rmses, maes = [], [], []
     oof = np.full(len(y), np.nan, dtype=np.float64)
-    t0 = time.time()
+    started = time.time()
+    predict_time_s = 0.0
+    device = "cpu"
+    fold_metadata: List[Dict[str, Any]] = []
 
-    for fold_idx, (tr, te) in enumerate(kf.split(X_smiles)):
+    for fold_idx, (tr, te) in enumerate(kf.split(X_smiles), start=1):
         scaler = StandardScaler()
         X_num_tr = scaler.fit_transform(X_numeric[tr])
         X_num_te = scaler.transform(X_numeric[te])
@@ -200,45 +243,37 @@ def _cv_with_numeric(
         X_te = np.hstack([X_smiles[te], X_num_te])
         y_tr, y_te = y[tr], y[te]
 
-        if model_name == "rf":
-            est = model._build()
-            est.fit(X_tr, y_tr)
-        elif model_name in {"xgb", "lightgbm"}:
-            est = model._build()
-            est.fit(X_tr, y_tr)
-        elif model_name == "svm":
-            n_features = X_tr.shape[1]
-            n_train_fold = len(X_tr)
-            if svm_subsample and svm_subsample < n_train_fold:
-                rng = np.random.default_rng(seed=fold_idx)
-                sub_idx = rng.choice(n_train_fold, size=svm_subsample, replace=False)
-                X_tr_fit = X_tr[sub_idx]
-                y_tr_fit = y_tr[sub_idx]
-            else:
-                X_tr_fit = X_tr
-                y_tr_fit = y_tr
-            est = model._build(n_features=n_features, n_train=len(X_tr_fit))
-            est.fit(X_tr_fit, y_tr_fit)
-        else:
-            raise ValueError(f"_cv_with_numeric: 未处理的模型 {model_name!r}")
+        prediction, device, model_metadata = _fit_predict_explicit_fold(
+            model_name,
+            args=argparse.Namespace(),
+            X_train=X_tr,
+            y_train=y_tr,
+            X_valid=X_te,
+            fold_index=fold_idx,
+            svm_subsample=svm_subsample,
+            model_instance=model,
+            context={"evaluation_protocol": "outer_kfold", "outer_seed": 42},
+        )
+        oof[te] = prediction
+        r2s.append(float(r2_score(y_te, prediction)))
+        rmses.append(float(np.sqrt(mean_squared_error(y_te, prediction))))
+        maes.append(float(mean_absolute_error(y_te, prediction)))
+        if model_metadata:
+            fold_metadata.append(model_metadata)
+            predict_time_s += float(model_metadata.get("predict_time_s", 0.0))
 
-        pred = est.predict(X_te)
-        oof[te] = pred
-        r2s.append(r2_score(y_te, pred))
-        rmses.append(float(np.sqrt(mean_squared_error(y_te, pred))))
-        maes.append(float(mean_absolute_error(y_te, pred)))
-
-    elapsed = time.time() - t0
-    return {
-        "r2_mean": float(np.mean(r2s)),
-        "r2_std": float(np.std(r2s)),
-        "rmse_mean": float(np.mean(rmses)),
-        "mae_mean": float(np.mean(maes)),
-        "train_time_s": float(elapsed),
-        "device": "cpu",
-        "oof_pred": oof,
-        "oof_y_true": y,
-    }
+    return _fold_metric_result(
+        r2s=r2s,
+        rmses=rmses,
+        maes=maes,
+        started_at=started,
+        predict_time_s=predict_time_s,
+        device=device,
+        oof=oof,
+        y=y,
+        cv=cv,
+        fold_metadata=fold_metadata or None,
+    )
 
 
 # ────────────────────────── 配置文件读取 ──────────────────────────────────── #
@@ -261,6 +296,26 @@ _MODEL_NAME_MAP = {
 def _map_model_name(display_name: str) -> str:
     """将显示名称映射为内部模型标识符。"""
     return _MODEL_NAME_MAP.get(display_name, display_name.lower())
+
+
+def _model_params_for(config: Dict[str, Any], internal_name: str) -> Dict[str, Any]:
+    """Return model_params for either internal or display model keys."""
+    raw = config.get('model_params', {})
+    if not isinstance(raw, dict):
+        return {}
+    candidate_keys = [internal_name]
+    candidate_keys.extend(
+        display_name for display_name, mapped in _MODEL_NAME_MAP.items()
+        if mapped == internal_name
+    )
+    lowered = {str(key).strip().lower(): key for key in raw}
+    for key in candidate_keys:
+        if key in raw and isinstance(raw[key], dict):
+            return dict(raw[key])
+        matched = lowered.get(str(key).strip().lower())
+        if matched is not None and isinstance(raw[matched], dict):
+            return dict(raw[matched])
+    return {}
 
 
 def load_config_from_json(config_path: Path, csv_override: Optional[Path] = None) -> Dict[str, Any]:
@@ -374,6 +429,7 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
 
     # 解析元信息
     metadata = config.get('metadata', {})
+    ag_params = _model_params_for(config, 'autogluon')
 
     # 解析输出格式
     report_formats = config.get('report_formats', ['HTML', 'Markdown'])
@@ -414,6 +470,9 @@ def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namesp
         rf_max_depth=None,
         mfp_radius=3,
         mfp_fp_size=1024,
+        autogluon_time_limit=int(ag_params.get('time_limit', 300)),
+        autogluon_presets=str(ag_params.get('presets', 'medium_quality')),
+        autogluon_num_cpus=int(ag_params.get('num_cpus', 1)),
         ohe_cols=None,
         ohe_missing_policy="as_category",
         dataset_citation=metadata.get('doi'),
@@ -672,6 +731,9 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--rf-n-jobs", type=int, default=-1)
     p.add_argument("--rf-n-estimators", type=int, default=300)
     p.add_argument("--rf-max-depth", type=int, default=None)
+    p.add_argument("--autogluon-time-limit", type=int, default=300, help="AutoGluon 每个外层折的 time_limit")
+    p.add_argument("--autogluon-presets", default="medium_quality", help="AutoGluon presets 参数")
+    p.add_argument("--autogluon-num-cpus", type=int, default=1, help="AutoGluon 每个外层折可用 CPU 数")
     p.add_argument("--mfp-radius", type=int, default=3, help="MFP 的 Morgan 半径")
     p.add_argument("--mfp-fp-size", type=int, default=1024, help="MFP 每组分的 count 指纹维度")
     p.add_argument(
@@ -1050,6 +1112,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             finally:
                 hb.stop()
 
+            metrics.setdefault("evaluation_protocol", "outer_kfold")
+            metrics.setdefault("expected_folds", args.cv)
+            metrics.setdefault("completed_folds", args.cv)
+            metrics.setdefault("rmse_std", np.nan)
+            metrics.setdefault("mae_std", np.nan)
+            metrics.setdefault("predict_time_s", np.nan)
+
             row: dict = {
                 "task_name":     task_name,
                 "feature_id":    spec.id,
@@ -1175,14 +1244,20 @@ def _fit_predict_explicit_fold(
     *,
     fold_index: int,
     svm_subsample: Optional[int],
-) -> tuple[np.ndarray, str]:
-    """Build a fresh supported estimator for an externally defined CV fold."""
+    model_instance: Optional[Any] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> tuple[np.ndarray, str, Dict[str, Any]]:
+    """Fit a supported model for one externally defined CV fold."""
+    model = model_instance or _make_model(model_name, args)
     if model_name == "autogluon":
-        raise ValueError(
-            "OHE 需要显式的训练折/验证折边界；AutoGluon 当前仅提供内部 holdout，"
-            "因此不能用于 OHE 的无泄漏 CV。请选择 rf、xgb、svm 或 lightgbm。"
+        prediction, metadata = model.fit_predict_fold(
+            X_train,
+            y_train,
+            X_valid,
+            fold_index=fold_index,
+            context=context or {"evaluation_protocol": "outer_kfold", "outer_seed": 42},
         )
-    model = _make_model(model_name, args)
+        return np.asarray(prediction, dtype=np.float64), "cpu", metadata
     if model_name in {"rf", "xgb", "lightgbm"}:
         estimator = model._build()
         estimator.fit(X_train, y_train)
@@ -1194,8 +1269,8 @@ def _fit_predict_explicit_fold(
         estimator = model._build(n_features=X_train.shape[1], n_train=len(train_index))
         estimator.fit(X_train[train_index], y_train[train_index])
     else:  # Keep this exhaustive if a future CLI model is added.
-        raise ValueError(f"OHE 显式 CV 尚未支持模型 {model_name!r}")
-    return np.asarray(estimator.predict(X_valid), dtype=np.float64), str(getattr(model, "device", "cpu"))
+        raise ValueError(f"显式 CV 尚未支持模型 {model_name!r}")
+    return np.asarray(estimator.predict(X_valid), dtype=np.float64), str(getattr(model, "device", "cpu")), {}
 
 
 def _cv_with_ohe_feature(
@@ -1238,6 +1313,7 @@ def _cv_with_ohe_feature(
     maes: List[float] = []
     audits: List[Dict[str, Any]] = []
     started = time.time()
+    predict_time_s = 0.0
     device = "cpu"
 
     for fold_index, (train_idx, valid_idx) in enumerate(splitter.split(component_frame), start=1):
@@ -1275,12 +1351,15 @@ def _cv_with_ohe_feature(
         # atomic state/metadata contract without refitting on validation rows.
         OHEFeature.load(fold_dir, expected_context=context)
 
-        prediction, device = _fit_predict_explicit_fold(
+        prediction, device, model_metadata = _fit_predict_explicit_fold(
             model_name, args, X_train, y[train_idx], X_valid,
             fold_index=fold_index, svm_subsample=svm_subsample,
+            context={"evaluation_protocol": "outer_kfold", "outer_seed": 42},
         )
         if not np.isfinite(prediction).all():
             raise ValueError(f"OHE 第 {fold_index} 折模型预测包含 NaN 或 inf")
+        if model_metadata:
+            predict_time_s += float(model_metadata.get("predict_time_s", 0.0))
         oof[valid_idx] = prediction
         r2s.append(float(r2_score(y[valid_idx], prediction)))
         rmses.append(float(np.sqrt(mean_squared_error(y[valid_idx], prediction))))
@@ -1293,6 +1372,7 @@ def _cv_with_ohe_feature(
             "train_sample_ids_hash": metadata["train_sample_ids_hash"],
             "valid_unseen_count": int(metadata["valid_unseen_count"]),
             "valid_missing_count": int(metadata["valid_missing_count"]),
+            "model_metadata": model_metadata or None,
         })
 
     summary = {
@@ -1311,17 +1391,20 @@ def _cv_with_ohe_feature(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    return {
-        "r2_mean": float(np.mean(r2s)),
-        "r2_std": float(np.std(r2s)),
-        "rmse_mean": float(np.mean(rmses)),
-        "mae_mean": float(np.mean(maes)),
-        "train_time_s": float(time.time() - started),
-        "device": device,
-        "oof_pred": oof,
-        "oof_y_true": y,
-        "fold_transform_summary": summary,
-    }
+    result = _fold_metric_result(
+        r2s=r2s,
+        rmses=rmses,
+        maes=maes,
+        started_at=started,
+        predict_time_s=predict_time_s,
+        device=device,
+        oof=oof,
+        y=y,
+        cv=args.cv,
+        fold_metadata=[item["model_metadata"] for item in audits if item.get("model_metadata")],
+    )
+    result["fold_transform_summary"] = summary
+    return result
 
 
 # ─────────────────────────────── 入口 ────────────────────────────────────── #
