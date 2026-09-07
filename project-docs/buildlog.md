@@ -5560,3 +5560,29 @@ for desc_name in args.descriptors:
 - ✅ 用户限定的两步工作均完成。若需“完全复现”论文其余图表或模型，应另行授权并锁定论文原始软件环境。
 
 ---
+
+## [2026-09-07 21:03] 步骤 26.1–26.2 完成：AutoGluon 外层折适配器首阶段
+
+### 执行的任务
+- 将 AutoGluon 旧单次 holdout 路径保留为 `fit_evaluate_holdout()`，并明确输出 `evaluation_protocol=autogluon_internal_holdout`、`expected_folds=1`、`completed_folds=1`。
+- 新增 `fit_predict_fold(X_train, y_train, X_valid, fold_index, context)`，每折只接收外部训练矩阵和验证矩阵，验证折不传入 `TabularPredictor.fit()`。
+- 将 `cross_validate()` 改为真实外层 KFold 循环，逐折调用 `fit_predict_fold()`，合成完整 OOF，并输出 `outer_kfold`、fold metadata、`rmse_std` 和 `mae_std`。
+- 新增 AutoGluon adapter mock 测试，覆盖训练/验证数据边界、独立 fold path、参数传递、旧 holdout 协议标记和输入校验错误。
+
+### 关键变更
+- `yonod/models/autogluon_model.py`：实现外部单折训练预测适配器和真实 outer-KFold CV；旧 internal holdout 不再与外层 CV 混淆。
+- `tests/test_autogluon_fold_adapter.py`：新增 4 个 adapter 合同测试，使用 fake `TabularPredictor` 验证接口与协议字段。
+
+### 验证结果
+- `git diff --check -- yonod/models/autogluon_model.py tests/test_autogluon_fold_adapter.py`：通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -m unittest tests/test_autogluon_fold_adapter.py -v`：4/4 通过。
+
+### 遇到的问题及解决方案
+- `apply_patch` 和普通沙箱命令多次触发 `bwrap: loopback: Failed RTM_NEWADDR`，改为经授权的非沙箱限定路径写入；本次只写入 adapter、测试和本构建日志。
+- `conda` 不在当前 shell 的 PATH 中，已定位到 `/home/wangzh685/miniconda3/bin/conda` 并使用绝对路径执行。
+- `yonod` 环境未安装 `pytest`，因此未自动安装依赖，改用标准库 `unittest` 在同一 conda 环境中运行等价测试。
+
+### 下一步计划
+- 步骤 26.3：改造普通 `main.py` 的 MFP/静态矩阵、OHE 和数值列路径，让 AutoGluon 统一走外层折边界，并删除数值列全局 scaler 与 OHE 禁用分支。
+
+---
