@@ -1,0 +1,5 @@
+dataset_id,paper_dataset_id,descriptor,model,metric,unit,published_table_s3_mean,published_table_s3_std,official_json_mean,official_json_std,independent_native_mean,independent_native_std,native_minus_official_mean,native_minus_official_std,official_json_matches_table_s3_display,valid_fold_count
+SL1,SLAP,MFP,RF,mae,LC-MS product ratio,18.0,1.8,18.04338125379474,1.8406673610385011,18.04338125379474,1.8406673610385005,0.0,-6.661338147750939e-16,True,25
+SL1,SLAP,MFP,RF,rmse,LC-MS product ratio,35.1,5.1,35.122995676523296,5.089889091350841,35.122995676523296,5.089889091350842,0.0,8.881784197001252e-16,True,25
+SL1,SLAP,MFP,RF,r2,LC-MS product ratio,0.77,0.05,0.7681948782217961,0.0522919478029916,0.7681948782217961,0.0522919478029916,0.0,0.0,True,25
+SL1,SLAP,MFP,RF,kendall_tau,LC-MS product ratio,0.51,0.04,0.5095152925758325,0.0357339404447818,0.5095152925758325,0.0357339404447818,0.0,0.0,True,25

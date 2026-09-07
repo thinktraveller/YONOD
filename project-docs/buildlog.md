@@ -5514,3 +5514,25 @@ for desc_name in args.descriptors:
 - 步骤 2：仅在论文自带数据、脚本和产物范围内开展独立复跑与差异审计，不修改 YONOD 本体。
 
 ---
+
+## [2026-09-07] 步骤 2 增量完成：SL1 MFP + RF 论文原生独立复跑
+
+### 执行的任务
+- 新增 `reference-proejct/vjethbkm/scripts/run_paper_native_mfp_rf.py`：直接调用未改动的论文随附 `yieldsmarter/Src/Featurize/Gen_MFP.py`，从官方 `SL1.csv` 重建 MFP；随后逐项镜像 `Train_descriptors.py` 的 RF 分支（`n_estimators=500`、`max_features=0.30`、`n_jobs=-1`、5 个随机种子 1000–1004、每个 seed 的 5 折 KFold）。
+- 未使用官方 MFP NPZ 训练；它只作为输入特征重建后的逐元素对照。未改动 `yonod/`、`configs/`、YONOD 报告或基准框架。
+- 生成可提交的比较 CSV、结构化 JSON 和 Markdown；原始生成特征缓存与逐折记录只保留在未提交的 `outputs/runs/native_sl1_mfp_rf_20260907/`。
+
+### 验证结果
+- 用官方 CSV 重建的 `X` 为 `(1150, 3072)`，与随附 `Bode_MFP.npz` 的特征、标签和组分列均逐元素一致，`X` 最大绝对差为 0。
+- 独立 5×5 复跑与官方 RF JSON 的均值完全一致：MAE `18.04338125379474`、RMSE `35.122995676523296`、R² `0.7681948782217961`、Kendall τ `0.5095152925758325`；标准差最大差异为 `8.88e-16`，属于浮点舍入。
+- `uv run --no-sync pytest tests/test_paper_native_mfp_rf.py tests/test_final_metrics_report.py tests/test_official_metrics_extraction.py -q`：7/7 通过；`git diff --check`：通过。
+
+### 已知边界
+- 论文 SI 标注 RDKit `2025.03.6`、scikit-learn `1.6.1`；本地实际为 RDKit `2026.03.4`、scikit-learn `1.4.0`，因此此次结果是数值相同的独立复跑证据，不宣称跨环境的位级复现。
+- 原始 `Train_descriptors.py` 在选择 RF 前无条件导入本地未安装的 LightGBM，不能原样运行；包装器仅复刻其 RF 分支，且未编辑上游文件。
+- 本增量仅覆盖 SL1/MFP/RF，不推断 BH1、BH2、SM 或 OHE；SM 的 MFP 4620 与 OHE 5760 审计边界继续保留。
+
+### 下一步计划
+- 在相同边界内逐项扩展到 OHE 及其余可追溯数据集，并先验证原始特征/切分/模型路径，再判定每项是否可完成独立复现。
+
+---

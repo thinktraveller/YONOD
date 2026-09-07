@@ -1,0 +1,149 @@
+{
+  "run_type": "independent_paper_native_mfp_rf",
+  "dataset_id": "SL1",
+  "paper_dataset_id": "SLAP",
+  "source_csv": "yieldsmarter/Data/HTE_datasets/SL1/SL1.csv",
+  "source_csv_sha256": "3fc0481e46d69bf8657b739a3872ba4c77682b68fd8b3af64fac6feaefc42d6a",
+  "upstream_feature_generator": "yieldsmarter/Src/Featurize/Gen_MFP.py",
+  "upstream_training_reference": "yieldsmarter/Src/Train/Train_descriptors.py",
+  "upstream_training_config": "yieldsmarter/Src/Train/SL1.json",
+  "implementation_boundary": "RF-only wrapper required because upstream trainer imports unavailable LightGBM before RF branch selection; upstream files were not modified.",
+  "actual_versions": {
+    "python": "3.11.15",
+    "numpy": "1.26.4",
+    "pandas": "3.0.5",
+    "scikit-learn": "1.4.0",
+    "scipy": "1.17.1",
+    "rdkit": "2026.3.4",
+    "rdkit_runtime": "2026.03.4"
+  },
+  "paper_reported_versions": {
+    "rdkit": "2025.03.6",
+    "scikit-learn": "1.6.1"
+  },
+  "cv": {
+    "outer_splits": 5,
+    "splits": 5,
+    "seed": 1000,
+    "repeat_seeds": [
+      1000,
+      1001,
+      1002,
+      1003,
+      1004
+    ],
+    "valid_fold_count": 25
+  },
+  "rf": {
+    "n_estimators": 500,
+    "max_features": 0.3,
+    "n_jobs": -1
+  },
+  "mfp_alignment": {
+    "generated_shape": [
+      1150,
+      3072
+    ],
+    "official_shape": [
+      1150,
+      3072
+    ],
+    "x_exact": true,
+    "x_max_abs_diff": 0,
+    "y_exact": true,
+    "smiles_columns_exact": true
+  },
+  "independent_native_metrics": {
+    "mae": {
+      "mean": 18.04338125379474,
+      "std": 1.8406673610385005
+    },
+    "rmse": {
+      "mean": 35.122995676523296,
+      "std": 5.089889091350842
+    },
+    "r2": {
+      "mean": 0.7681948782217961,
+      "std": 0.0522919478029916
+    },
+    "kendall": {
+      "mean": 0.5095152925758325,
+      "std": 0.0357339404447818
+    }
+  },
+  "official_summary_json": "yieldsmarter/Results/Compare_Complexity/Bode_2023/MFP/Bode_MFP_metrics_summaries_RF.json",
+  "comparison_rows": [
+    {
+      "dataset_id": "SL1",
+      "paper_dataset_id": "SLAP",
+      "descriptor": "MFP",
+      "model": "RF",
+      "metric": "mae",
+      "unit": "LC-MS product ratio",
+      "published_table_s3_mean": 18.0,
+      "published_table_s3_std": 1.8,
+      "official_json_mean": 18.04338125379474,
+      "official_json_std": 1.8406673610385011,
+      "independent_native_mean": 18.04338125379474,
+      "independent_native_std": 1.8406673610385005,
+      "native_minus_official_mean": 0.0,
+      "native_minus_official_std": -6.661338147750939e-16,
+      "official_json_matches_table_s3_display": true,
+      "valid_fold_count": 25
+    },
+    {
+      "dataset_id": "SL1",
+      "paper_dataset_id": "SLAP",
+      "descriptor": "MFP",
+      "model": "RF",
+      "metric": "rmse",
+      "unit": "LC-MS product ratio",
+      "published_table_s3_mean": 35.1,
+      "published_table_s3_std": 5.1,
+      "official_json_mean": 35.122995676523296,
+      "official_json_std": 5.089889091350841,
+      "independent_native_mean": 35.122995676523296,
+      "independent_native_std": 5.089889091350842,
+      "native_minus_official_mean": 0.0,
+      "native_minus_official_std": 8.881784197001252e-16,
+      "official_json_matches_table_s3_display": true,
+      "valid_fold_count": 25
+    },
+    {
+      "dataset_id": "SL1",
+      "paper_dataset_id": "SLAP",
+      "descriptor": "MFP",
+      "model": "RF",
+      "metric": "r2",
+      "unit": "LC-MS product ratio",
+      "published_table_s3_mean": 0.77,
+      "published_table_s3_std": 0.05,
+      "official_json_mean": 0.7681948782217961,
+      "official_json_std": 0.0522919478029916,
+      "independent_native_mean": 0.7681948782217961,
+      "independent_native_std": 0.0522919478029916,
+      "native_minus_official_mean": 0.0,
+      "native_minus_official_std": 0.0,
+      "official_json_matches_table_s3_display": true,
+      "valid_fold_count": 25
+    },
+    {
+      "dataset_id": "SL1",
+      "paper_dataset_id": "SLAP",
+      "descriptor": "MFP",
+      "model": "RF",
+      "metric": "kendall_tau",
+      "unit": "LC-MS product ratio",
+      "published_table_s3_mean": 0.51,
+      "published_table_s3_std": 0.04,
+      "official_json_mean": 0.5095152925758325,
+      "official_json_std": 0.0357339404447818,
+      "independent_native_mean": 0.5095152925758325,
+      "independent_native_std": 0.0357339404447818,
+      "native_minus_official_mean": 0.0,
+      "native_minus_official_std": 0.0,
+      "official_json_matches_table_s3_display": true,
+      "valid_fold_count": 25
+    }
+  ]
+}
