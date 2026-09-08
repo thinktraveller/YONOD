@@ -1,0 +1,113 @@
+{
+  "version": "1.0",
+  "project_name": "yieldmaster_bh1_mfp_ohe_outercv_20260908",
+  "origin_dataset_path": "../../dataset/yieldmaster/BH1.csv",
+  "column_mapping": [
+    {
+      "origin_name": "Aryl_halide_SMILES",
+      "role": "reactant",
+      "new_name": "Aryl_halide_SMILES"
+    },
+    {
+      "origin_name": "Additive_SMILES",
+      "role": "others",
+      "new_name": "Additive_SMILES"
+    },
+    {
+      "origin_name": "Base_SMILES",
+      "role": "others",
+      "new_name": "Base_SMILES"
+    },
+    {
+      "origin_name": "Ligand_SMILES",
+      "role": "others",
+      "new_name": "Ligand_SMILES"
+    },
+    {
+      "origin_name": "Yield",
+      "role": "label",
+      "new_name": "Yield"
+    }
+  ],
+  "column_roles": {
+    "label": "Yield",
+    "reactants": [
+      "Aryl_halide_SMILES"
+    ],
+    "products": [],
+    "others": [
+      "Additive_SMILES",
+      "Base_SMILES",
+      "Ligand_SMILES"
+    ],
+    "conditions": []
+  },
+  "descriptors": [
+    {
+      "id": "mfp_vjethbkm",
+      "descriptor": "mfp",
+      "mode": "concat",
+      "columns": [
+        "Aryl_halide_SMILES",
+        "Additive_SMILES",
+        "Base_SMILES",
+        "Ligand_SMILES"
+      ],
+      "params": {
+        "radius": 3,
+        "fp_size": 1024,
+        "profile": "vjethbkm"
+      }
+    },
+    {
+      "id": "ohe_train_fold",
+      "descriptor": "ohe",
+      "mode": "concat",
+      "columns": [
+        "Aryl_halide_SMILES",
+        "Additive_SMILES",
+        "Base_SMILES",
+        "Ligand_SMILES"
+      ],
+      "params": {
+        "missing_policy": "zero_block",
+        "dtype": "float64",
+        "handle_unknown": "ignore"
+      }
+    }
+  ],
+  "models": [
+    "XGBoost",
+    "Random Forest",
+    "SVM",
+    "AutoGluon",
+    "LightGBM"
+  ],
+  "metadata": {
+    "doi": "10.1021/jacs.6c02213",
+    "run_batch": "yieldmaster_mfp_ohe_outercv_20260908",
+    "evaluation_protocol": "outer_kfold",
+    "cv_folds": 5,
+    "feature_scope": "仅 MFP(vjethbkm 参数) 与训练折 OHE；OHE 编码器只在训练折拟合，测试折仅 transform。",
+    "model_scope": "XGBoost、Random Forest、SVM、AutoGluon、LightGBM。",
+    "autogluon": {
+      "time_limit_per_outer_fold_seconds": 300,
+      "presets": "medium_quality",
+      "num_cpus_per_fold": 19,
+      "seed_strategy": "逐外层折训练；每折单独 TabularPredictor，随机种子由 YONOD 外层折适配器固定/派生。"
+    },
+    "notes": "正式 outercv 复现配置：数据集 BH1 使用 dataset/yieldmaster/BH1.csv，只评估论文相关的 MFP 与 OHE 两类特征，并纳入 YONOD 当前全部可用模型。本配置必须通过普通 main.py JSON 入口执行，以获得 Markdown/HTML/CSV 报告；输出根目录为本配置所在目录，与历史 internal holdout 结果隔离，旧结果仅保留展示不参与严格排名。AutoGluon 不再使用单次 internal holdout 冒充 5 折；每个外层折独立 fit/predict，time_limit=300 秒、presets=medium_quality、num_cpus=19。当前 conda yonod 环境未安装 pyarrow/fastparquet，严格 benchmark parquet 路径不可用；本批次使用普通 YONOD CSV/Markdown/HTML 输出路径。"
+  },
+  "report_formats": [
+    "HTML",
+    "Markdown"
+  ],
+  "model_params": {
+    "autogluon": {
+      "time_limit": 300,
+      "presets": "medium_quality",
+      "num_cpus": 19,
+      "seed_strategy": "outer_fold_seed = base_seed + fold_index；由 YONOD AutoGluon 外层折适配器逐折固定"
+    }
+  }
+}

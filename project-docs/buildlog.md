@@ -5649,3 +5649,40 @@ for desc_name in args.descriptors:
 - 步骤 26.7：重跑四个 yieldmaster 数据集并隔离正式 `outercv` 产物；正式运行时使用 AutoGluon `time_limit=300`、`num_cpus=19`，旧 holdout 报告不得合并进新排行榜。
 
 ---
+
+
+## [2026-09-08 10:13] 步骤 26.7 完成：正式 outercv 运行准备与启动
+
+### 执行的任务
+- 审计近一小时提交、暂存区、工作区和现有建模进程；确认 HEAD 为上一阶段提交 `7e85f71d`，暂存区为空，用户既有配置删除/重命名、生成结果、`goal.md` 和论文复现材料均未触碰。
+- 确认 conda `yonod` 环境中 AutoGluon 可用：`autogluon.tabular=1.1.1`；同时确认 `pyarrow`/`fastparquet` 未安装，parquet 写入会失败，因此本批次采用普通 `main.py` 的 CSV/Markdown/HTML outer_kfold 输出路径，不使用 strict benchmark parquet 路径。
+- 在 `/tmp/yonod_ag_smoke_zuPxvl` 执行真实 AutoGluon tiny smoke：MFP、2 折 outer CV、`time_limit=5`、`num_cpus=2`，验证 `evaluation_protocol=outer_kfold`、`expected_folds=2`、`completed_folds=2`、`oof_complete=True`，并确认 RMSE/MAE 均值标准差与 AutoGluon 参数字段写出。
+- 为 BH1、BH2、SL1、SM 创建四个互相隔离的正式 outercv 配置目录；每份配置仅包含 `mfp_vjethbkm` 与 `ohe_train_fold`，模型为 XGBoost、Random Forest、SVM、AutoGluon、LightGBM，AutoGluon 每外层折 `time_limit=300`、`presets=medium_quality`、`num_cpus=19`。
+- 新增串行启动脚本，并以 `nohup + setsid` 启动正式批次，避免执行器回收后台进程；当前正式 PID 为 `2137359`，全局日志为 `logs/yieldmaster_mfp_ohe_outercv_20260908_nohup.log`，当前已进入 BH1。
+
+### 关键变更
+- `configs/yieldmaster_bh1_mfp_ohe_outercv_20260908/yieldmaster_bh1_mfp_ohe_outercv_20260908.json`：BH1 正式 outercv 配置，输出根目录即该配置目录。
+- `configs/yieldmaster_bh2_mfp_ohe_outercv_20260908/yieldmaster_bh2_mfp_ohe_outercv_20260908.json`：BH2 正式 outercv 配置，输出根目录即该配置目录。
+- `configs/yieldmaster_sl1_mfp_ohe_outercv_20260908/yieldmaster_sl1_mfp_ohe_outercv_20260908.json`：SL1 正式 outercv 配置，输出根目录即该配置目录。
+- `configs/yieldmaster_sm_mfp_ohe_outercv_20260908/yieldmaster_sm_mfp_ohe_outercv_20260908.json`：SM 正式 outercv 配置，输出根目录即该配置目录。
+- `scripts/run_yieldmaster_mfp_ohe_outercv_20260908.sh`：按 BH1 → BH2 → SL1 → SM 串行执行；写入 per-dataset 日志和运行 manifest；限制外层数据集并发为 1，并设置 `LOKY_MAX_CPU_COUNT=19`、`OMP/OPENBLAS/MKL/NUMEXPR=1`。
+
+### 验证结果
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -c <dependency_probe>`：AutoGluon 1.1.1 可导入；`pyarrow` 与 `fastparquet` 未安装。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -c <parquet_probe>`：parquet 写入按预期失败，错误为缺少 `pyarrow`/`fastparquet`；未安装依赖，改用普通 YONOD 输出路径。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python main.py --csv /tmp/yonod_ag_smoke_zuPxvl/smoke.csv --label-col Yield --smiles-cols smiles --descriptors mfp --models autogluon --cv 2 --mfp-radius 1 --mfp-fp-size 32 --autogluon-time-limit 5 --autogluon-presets medium_quality --autogluon-num-cpus 2 --output-dir /tmp/yonod_ag_smoke_zuPxvl/out --output-format md --heartbeat 0`：通过，生成 `/tmp/yonod_ag_smoke_zuPxvl/out/docs/metrics_summary.csv`。
+- `python3 -c <json_config_assertions>`：四份正式配置均可解析，描述符集合为 `mfp_vjethbkm` 与 `ohe_train_fold`，模型集合完整，AutoGluon 参数为 300/medium_quality/19。
+- `bash -n scripts/run_yieldmaster_mfp_ohe_outercv_20260908.sh`：启动脚本语法通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -c <main_config_to_args_probe>`：四份 JSON 经 `main.py` 入口均映射为 `descriptors=['mfp','ohe']`、`models=['xgb','rf','svm','autogluon','lightgbm']`、`cv=5`、AutoGluon 参数 300/medium_quality/19。
+- `ps -fp 2137359` 与 `pgrep -af ...`：正式脚本已稳定运行，PPID=1，子进程包含 `conda run -n yonod` 与 `python main.py --json ...BH1...`。
+
+### 遇到的问题及解决方案
+- 普通沙箱命令仍触发 `bwrap: loopback: Failed RTM_NEWADDR`；本阶段所有必要读写和 conda 测试均在授权范围内执行，写入仅限四份正式配置、启动脚本、运行日志/manifest 和本构建日志。
+- 第一次 `nohup bash ... &` 由工具执行器启动后顶层 PID 消失，日志只写到 COMMAND 且未发现对应 conda/main.py 子进程；未删除痕迹日志，已将该 manifest 标记为 `launcher_reaped_before_model_output`，随后使用 `nohup setsid bash ... < /dev/null &` 重新启动并确认稳定运行。
+- AutoGluon tiny smoke 因极小样本触发 KNN 子模型样本数不足、fastai 未安装、PyTorch 2.6 权重加载策略变化等 AutoGluon 内部子模型跳过警告；整体 TabularPredictor 仍成功完成外层折预测，故不阻断正式运行。
+- 当前已有两个 13 小时以上的旧 `python main.py` 进程，CPU 占用约 0–0.1%；未终止它们。正式脚本采用数据集串行运行，避免与新批次自身过度订阅。
+
+### 下一步计划
+- 监控 PID `2137359`、全局日志 `logs/yieldmaster_mfp_ohe_outercv_20260908_nohup.log` 及四个配置目录下的 `docs/outercv_*.log`、`docs/outercv_run_manifest_*.json`、`docs/metrics_summary.csv`；待四个数据集完成后，检查 `evaluation_protocol=outer_kfold`、`expected_folds=completed_folds=5`、OOF 完整性和严格排名纳入情况，再与文献结果对比。
+
+---
