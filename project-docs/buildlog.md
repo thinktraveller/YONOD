@@ -5686,3 +5686,38 @@ for desc_name in args.descriptors:
 - 监控 PID `2137359`、全局日志 `logs/yieldmaster_mfp_ohe_outercv_20260908_nohup.log` 及四个配置目录下的 `docs/outercv_*.log`、`docs/outercv_run_manifest_*.json`、`docs/metrics_summary.csv`；待四个数据集完成后，检查 `evaluation_protocol=outer_kfold`、`expected_folds=completed_folds=5`、OOF 完整性和严格排名纳入情况，再与文献结果对比。
 
 ---
+
+
+## [2026-09-08 17:37] 步骤 27 首阶段完成：paper_exact manifest/runner/adapter mock 基础设施
+
+### 执行的任务
+- 按计划书第 27 节审计近期提交、工作区和正在运行任务；确认 HEAD 为 `862f5af9`，步骤 26 的 `outercv_20260908` 产物和历史 holdout 产物均未撤回、删除或覆盖。
+- 扩展 split manifest 生成：在保留旧 `MANIFEST_COLUMNS` 校验兼容性的同时，为新 manifest 增加可审计的 `population_id` 与 `split_hash`，并保持 `repeated_kfold` 使用论文原生的 5 次独立 `KFold(n_splits=5, shuffle=True, random_state=1000..1004)`。
+- 扩展 benchmark contract：只有配置显式声明时，才把 `population_id`、`dataset_id`、`paper_exact`、`evaluation_protocol` 纳入配置哈希和 run manifest，避免改变旧配置的哈希语义。
+- 扩展 executor：支持配置声明 `evaluation_protocol=paper_exact_5x5`，将该协议传入 AutoGluon `fit_predict_fold()` context；在 paper_exact 模式下，预测分片写出 `population_id`、`dataset_id`、`feature_id`、`source_row_index`、`seed`、`dataset_sha256`、`split_hash`、`feature_hash`，折级 metadata 写出 train/valid sample hash 与 valid source row hash。
+- 新增 paper_exact 辅助模块：定义 BH1、BH2、SL1、SM-OHE-5760、SM-MFP-4620 五个总体规格；提供 population manifest、split manifest 验证、fold task 枚举、单折 paper_exact runner、R²/RMSE/MAE/Kendall tau-b 指标 helper。
+- 新增低成本 mock 单测，验证 SM MFP/OHE 总体边界、5×5 seeds、sklearn KFold 逐行等价、RF/AutoGluon 共享同一 manifest、AutoGluon 每折只接收训练折/验证折矩阵、OHE 仍只在训练折 fit。
+
+### 关键变更
+- `yonod/splits/manifest.py`：新增可选 `population_id`、`split_hash` 输出列；`split_id` 由完整 `split_hash` 前缀派生。
+- `yonod/benchmark/config.py`：paper_exact 相关身份字段按显式配置进入 hash/run manifest。
+- `yonod/benchmark/executor.py`：新增 paper_exact 协议识别、manifest seed 注入、AutoGluon context 协议传递，以及 paper_exact 预测/metadata 审计字段。
+- `yonod/benchmark/paper_exact.py`：新增 paper_exact 总体、manifest、任务枚举、单折 runner 与 Kendall tau-b 指标接口。
+- `tests/test_autogluon_paper_exact_repeated_manifest.py`：新增 5 个阶段 27 mock 单测。
+- `tests/test_rf_paper_protocol.py`：为当前 conda `yonod` 缺少 parquet 后端的环境补入 pickle-backed parquet mock，使既有 RF 协议测试仍可低成本运行；未安装新依赖。
+
+### 验证结果
+- `python3 -m py_compile yonod/splits/manifest.py yonod/benchmark/config.py yonod/benchmark/executor.py yonod/benchmark/paper_exact.py tests/test_autogluon_paper_exact_repeated_manifest.py`：通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_autogluon_paper_exact_repeated_manifest.py -v`：5/5 通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_autogluon_paper_exact_repeated_manifest.py tests/test_repeated_kfold_manifest.py tests/test_benchmark_autogluon_executor.py tests/test_rf_paper_protocol.py -v`：11/11 通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_autogluon_fold_adapter.py tests/test_main_autogluon_outer_cv_paths.py -v`：7/7 通过。
+
+### 遇到的问题及解决方案
+- 当前普通沙箱仍触发 `bwrap: loopback: Failed RTM_NEWADDR`；本阶段沿用授权的受控文件写入方式，写入范围限制在本阶段源码、测试和 `project-docs/buildlog.md`。
+- conda `yonod` 环境缺少 `pyarrow/fastparquet`；未安装依赖，阶段 27 首阶段测试继续使用 pickle-backed parquet mock。正式 paper_exact 路径后续仍需补齐 parquet 后端或实现受控 CSV fallback，不能退回普通 1×5 `main.py` 结果冒充 paper_exact。
+- 26.7 的 `outercv_20260908` 正在生成未跟踪产物；本阶段未触碰这些结果目录，新的 paper_exact 接口不会读写该路径。
+
+### 下一步计划
+- 步骤 27 下一阶段：生成真实 paper_exact 五个总体的配置/YAML 与 population manifest，补齐 SM-MFP 4620 行筛选/特征对齐路径；随后先跑 RF paper_exact 25 折对齐，确认与原生 RF 指标展示精度一致，再进入高成本 AutoGluon 25 折正式运行。
+
+---

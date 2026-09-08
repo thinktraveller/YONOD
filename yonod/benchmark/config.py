@@ -256,7 +256,7 @@ class BenchmarkConfig:
 
     def normalized_for_hash(self, dataset_sha256: str) -> Dict[str, Any]:
         """Return every result-affecting setting in a deterministic structure."""
-        return {
+        normalized = {
             "dataset_path": str(self.dataset_path),
             "dataset_sha256": dataset_sha256,
             "sample_id_col": self.sample_id_col,
@@ -271,6 +271,10 @@ class BenchmarkConfig:
             "cv": self.cv,
             "outputs_root": str(self.outputs_root),
         }
+        for optional_field in ("population_id", "dataset_id", "paper_exact", "evaluation_protocol"):
+            if optional_field in self.raw:
+                normalized[optional_field] = self.raw[optional_field]
+        return normalized
 
 
 @dataclass(frozen=True)
@@ -316,6 +320,9 @@ def create_benchmark_contract(config: BenchmarkConfig) -> BenchmarkContract:
             "report": "report",
         },
     }
+    for optional_field in ("population_id", "dataset_id", "paper_exact", "evaluation_protocol"):
+        if optional_field in config.raw:
+            manifest[optional_field] = config.raw[optional_field]
     return BenchmarkContract(
         config=config,
         dataset_sha256=dataset_sha256,

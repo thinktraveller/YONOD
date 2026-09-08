@@ -26,9 +26,28 @@ MANIFEST_COLUMNS = [
     "grouping_params_json",
 ]
 
+# Newer paper-exact workflows need these columns, but they remain optional for
+# legacy manifests already written by earlier strict benchmark runs.
+OPTIONAL_MANIFEST_COLUMNS = ["population_id", "split_hash"]
+MANIFEST_WRITE_COLUMNS = MANIFEST_COLUMNS + OPTIONAL_MANIFEST_COLUMNS
+
 
 def _canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _population_id_for_contract(contract: BenchmarkContract) -> str:
+    raw = contract.config.raw
+    paper_exact = raw.get("paper_exact", {})
+    if isinstance(paper_exact, Mapping) and paper_exact.get("population_id"):
+        return str(paper_exact["population_id"])
+    if raw.get("population_id"):
+        return str(raw["population_id"])
+    return contract.run_id
+
+
+def _split_hash(payload: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
 def _assign_groups_to_folds(group_sizes: pd.Series, n_splits: int, seed: int) -> Dict[str, int]:
@@ -55,6 +74,7 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
     n_repeats = int(config.cv["n_repeats"])
     seed_start = int(config.cv["seed"])
     strategy = str(config.grouping["strategy"])
+    population_id = _population_id_for_contract(contract)
     sample_ids = frame[config.sample_id_col].astype(str).reset_index(drop=True)
     source_row_indices = np.arange(n_samples, dtype=np.int64)
     if n_samples < n_splits:
@@ -70,6 +90,7 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
         grouping_params_json = _canonical_json(config.grouping)
         split_payload = {
             "run_id": contract.run_id,
+            "population_id": population_id,
             "dataset_sha256": contract.dataset_sha256,
             "grouping": config.grouping,
             "cv": config.cv,
@@ -78,9 +99,8 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
                 for row, sample_id in zip(source_row_indices, sample_ids)
             ],
         }
-        split_id = "split-" + hashlib.sha256(
-            _canonical_json(split_payload).encode("utf-8")
-        ).hexdigest()[:12]
+        full_split_hash = _split_hash(split_payload)
+        split_id = "split-" + full_split_hash[:12]
         records: List[Dict[str, Any]] = []
         for repeat in range(1, n_repeats + 1):
             seed = seed_start + repeat - 1
@@ -101,8 +121,10 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
                         "source_row_index": int(source_row_index),
                         "dataset_sha256": contract.dataset_sha256,
                         "grouping_params_json": grouping_params_json,
+                        "population_id": population_id,
+                        "split_hash": full_split_hash,
                     })
-        manifest = pd.DataFrame.from_records(records, columns=MANIFEST_COLUMNS)
+        manifest = pd.DataFrame.from_records(records, columns=MANIFEST_WRITE_COLUMNS)
         validate_split_manifest(manifest, n_splits=n_splits, n_repeats=n_repeats)
         return manifest.sort_values(
             ["repeat", "fold", "role", "sample_id"], kind="mergesort"
@@ -129,6 +151,7 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
     grouping_params_json = _canonical_json(config.grouping)
     split_payload = {
         "run_id": contract.run_id,
+        "population_id": population_id,
         "dataset_sha256": contract.dataset_sha256,
         "grouping": config.grouping,
         "cv": config.cv,
@@ -140,7 +163,8 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
             for row, sample_id in zip(source_row_indices, sample_ids)
         ],
     }
-    split_id = "split-" + hashlib.sha256(_canonical_json(split_payload).encode("utf-8")).hexdigest()[:12]
+    full_split_hash = _split_hash(split_payload)
+    split_id = "split-" + full_split_hash[:12]
     records: List[Dict[str, Any]] = []
     for repeat in range(1, n_repeats + 1):
         seed = seed_start + repeat - 1
@@ -164,8 +188,10 @@ def create_split_manifest(contract: BenchmarkContract) -> pd.DataFrame:
                     "source_row_index": int(source_row_index),
                     "dataset_sha256": contract.dataset_sha256,
                     "grouping_params_json": grouping_params_json,
+                    "population_id": population_id,
+                    "split_hash": full_split_hash,
                 })
-    manifest = pd.DataFrame.from_records(records, columns=MANIFEST_COLUMNS)
+    manifest = pd.DataFrame.from_records(records, columns=MANIFEST_WRITE_COLUMNS)
     validate_split_manifest(manifest, n_splits=n_splits, n_repeats=n_repeats)
     return manifest.sort_values(["repeat", "fold", "role", "sample_id"], kind="mergesort").reset_index(drop=True)
 

@@ -163,6 +163,62 @@ def _json_safe_estimator_params(estimator: Any) -> Dict[str, Any]:
     return json.loads(json.dumps(params, ensure_ascii=False, sort_keys=True, default=str))
 
 
+DEFAULT_EVALUATION_PROTOCOL = "manifest_outer_cv"
+PAPER_EXACT_EVALUATION_PROTOCOL = "paper_exact_5x5"
+
+
+def _protocol_block(contract: BenchmarkContract) -> Mapping[str, Any]:
+    block = contract.config.raw.get("reproduction_protocol", {})
+    return block if isinstance(block, Mapping) else {}
+
+
+def _contract_evaluation_protocol(contract: BenchmarkContract) -> str:
+    raw_protocol = contract.config.raw.get("evaluation_protocol")
+    if raw_protocol:
+        return str(raw_protocol)
+    block = _protocol_block(contract)
+    if block.get("evaluation_protocol"):
+        return str(block["evaluation_protocol"])
+    name = str(block.get("name", ""))
+    if "paper_exact" in name:
+        return PAPER_EXACT_EVALUATION_PROTOCOL
+    return DEFAULT_EVALUATION_PROTOCOL
+
+
+def _fold_manifest_seed(part: pd.DataFrame) -> int:
+    seeds = pd.to_numeric(part["seed"], errors="coerce").dropna().astype(int).unique().tolist()
+    if len(seeds) != 1:
+        raise FoldExecutionError("manifest 当前折必须恰有一个 seed")
+    return int(seeds[0])
+
+
+def _optional_fold_value(part: pd.DataFrame, column: str, default: Any = None) -> Any:
+    if column not in part.columns:
+        return default
+    values = part[column].dropna().astype(str).unique().tolist()
+    if len(values) == 1:
+        return values[0]
+    if not values:
+        return default
+    raise FoldExecutionError("manifest 当前折的 {0} 不唯一".format(column))
+
+
+def _hash_values(values: Sequence[Any]) -> str:
+    payload = [str(value) for value in values]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _dataset_id_for_contract(contract: BenchmarkContract, population_id: Optional[str]) -> str:
+    if contract.config.raw.get("dataset_id"):
+        return str(contract.config.raw["dataset_id"])
+    block = _protocol_block(contract)
+    if block.get("dataset_id"):
+        return str(block["dataset_id"])
+    if population_id:
+        return str(population_id).split("_")[0].upper()
+    return Path(contract.config.dataset_path).stem
+
+
 def _fit_predict_model(
     *,
     model: str,
@@ -175,6 +231,7 @@ def _fit_predict_model(
     config_seed: Any,
     layout: Any,
     suffix: str,
+    evaluation_protocol: str = DEFAULT_EVALUATION_PROTOCOL,
 ) -> tuple[np.ndarray, float, float, Dict[str, Any], Dict[str, Any]]:
     """Fit one external fold and return predictions plus audit metadata."""
     if model == "autogluon":
@@ -197,7 +254,8 @@ def _fit_predict_model(
             X_valid,
             fold_index=fold,
             context={
-                "evaluation_protocol": "manifest_outer_cv",
+                "evaluation_protocol": evaluation_protocol,
+                "protocol_family": DEFAULT_EVALUATION_PROTOCOL,
                 "outer_seed": outer_seed,
                 "model_artifact_path": str(artifact_path),
                 "cleanup": cleanup,
@@ -239,24 +297,26 @@ def _effective_model_kwargs(
     model: str,
     requested: Optional[Mapping[str, Any]],
 ) -> tuple[Dict[str, Any], Optional[int]]:
-    """Inject the manifest repeat seed only for the explicit paper RF protocol."""
+    """Inject manifest seeds for paper protocols without changing legacy runs."""
     requested_kwargs = dict(requested or {})
     effective_kwargs = dict(requested_kwargs)
-    protocol = contract.config.raw.get("reproduction_protocol", {})
-    protocol_name = str(protocol.get("name", "")) if isinstance(protocol, Mapping) else ""
-    if model != "rf" or protocol_name != "vjethbkm_rf_5x5":
+    protocol_name = str(_protocol_block(contract).get("name", ""))
+    evaluation_protocol = _contract_evaluation_protocol(contract)
+    uses_paper_seed = (
+        evaluation_protocol == PAPER_EXACT_EVALUATION_PROTOCOL
+        or (model == "rf" and protocol_name == "vjethbkm_rf_5x5")
+    )
+    if not uses_paper_seed:
         return effective_kwargs, None
 
-    seeds = pd.to_numeric(part["seed"], errors="coerce").dropna().astype(int).unique().tolist()
-    if len(seeds) != 1:
-        raise FoldExecutionError("论文 RF 协议的 manifest 当前折必须恰有一个 seed")
-    seed = int(seeds[0])
-    if "random_state" in requested_kwargs and int(requested_kwargs["random_state"]) != seed:
-        raise FoldExecutionError(
-            "论文 RF 协议禁止 model_params.rf.random_state 与 manifest seed 冲突；"
-            "请删除该参数，当前折应使用 {0}".format(seed)
-        )
-    effective_kwargs["random_state"] = seed
+    seed = _fold_manifest_seed(part)
+    if model == "rf":
+        if "random_state" in requested_kwargs and int(requested_kwargs["random_state"]) != seed:
+            raise FoldExecutionError(
+                "论文 RF 协议禁止 model_params.rf.random_state 与 manifest seed 冲突；"
+                "请删除该参数，当前折应使用 {0}".format(seed)
+            )
+        effective_kwargs["random_state"] = seed
     return effective_kwargs, seed
 
 
@@ -340,6 +400,7 @@ def execute_fold(
         if numeric_array.ndim != 2 or not np.isfinite(numeric_array).all():
             raise FoldExecutionError("X_numeric 必须是无 NaN/inf 的二维数组")
     part = split_manifest[(split_manifest["repeat"] == repeat) & (split_manifest["fold"] == fold)]
+    evaluation_protocol = _contract_evaluation_protocol(contract)
     if part.empty:
         raise FoldExecutionError("manifest 中不存在 repeat={0}, fold={1}".format(repeat, fold))
     valid_ids = set(part.loc[part["role"] == "valid", "sample_id"].astype(str))
@@ -397,13 +458,20 @@ def execute_fold(
         config_seed=contract.config.cv["seed"],
         layout=layout,
         suffix=suffix,
+        evaluation_protocol=evaluation_protocol,
     )
     if not np.isfinite(prediction).all():
         raise FoldExecutionError("模型预测包含 NaN 或 inf")
-    group_by_id = part.drop_duplicates("sample_id").set_index("sample_id")["group_id"].astype(str)
+    unique_part = part.drop_duplicates("sample_id").set_index("sample_id")
+    group_by_id = unique_part["group_id"].astype(str)
+    source_row_by_id = unique_part["source_row_index"].astype(int) if "source_row_index" in unique_part else None
     split_id = str(part["split_id"].iloc[0])
+    split_hash = _optional_fold_value(part, "split_hash")
+    population_id = _optional_fold_value(part, "population_id", contract.config.raw.get("population_id"))
+    dataset_id = _dataset_id_for_contract(contract, population_id)
+    manifest_seed = _fold_manifest_seed(part)
     schema_hash = _feature_schema_hash(schema_source, X_numeric, feature_metadata)
-    prediction_frame = pd.DataFrame({
+    prediction_payload = {
         "run_id": contract.run_id,
         "config_hash": contract.config_hash,
         "split_id": split_id,
@@ -418,7 +486,23 @@ def execute_fold(
         "feature_schema_hash": schema_hash,
         "train_time_s": train_time_s,
         "predict_time_s": predict_time_s,
-    })
+    }
+    if evaluation_protocol == PAPER_EXACT_EVALUATION_PROTOCOL:
+        if source_row_by_id is None:
+            raise FoldExecutionError("paper_exact 预测输出必须包含 source_row_index")
+        prediction_payload.update({
+            "evaluation_protocol": evaluation_protocol,
+            "protocol_family": DEFAULT_EVALUATION_PROTOCOL,
+            "population_id": population_id,
+            "dataset_id": dataset_id,
+            "feature_id": descriptor,
+            "source_row_index": [int(source_row_by_id.loc[sample_id]) for sample_id in ids[valid_idx]],
+            "seed": manifest_seed,
+            "dataset_sha256": contract.dataset_sha256,
+            "split_hash": split_hash,
+            "feature_hash": schema_hash,
+        })
+    prediction_frame = pd.DataFrame(prediction_payload)
     expected = set(ids[valid_idx])
     if len(prediction_frame) != len(expected) or set(prediction_frame["sample_id"]) != expected:
         raise FoldExecutionError("预测分片与 manifest 验证集不能一一对应")
@@ -429,7 +513,11 @@ def execute_fold(
         "split_id": split_id,
         "descriptor": descriptor,
         "model": model,
-        "evaluation_protocol": "manifest_outer_cv",
+        "evaluation_protocol": evaluation_protocol,
+        "protocol_family": DEFAULT_EVALUATION_PROTOCOL if evaluation_protocol == PAPER_EXACT_EVALUATION_PROTOCOL else evaluation_protocol,
+        "population_id": population_id,
+        "dataset_id": dataset_id,
+        "split_hash": split_hash,
         "repeat": repeat,
         "fold": fold,
         "n_train": int(len(train_idx)),
@@ -439,7 +527,14 @@ def execute_fold(
         "train_time_s": train_time_s,
         "predict_time_s": predict_time_s,
         "model_random_seed": estimator_params_snapshot.get("random_state"),
-        "manifest_seed": protocol_seed,
+        "manifest_seed": manifest_seed,
+        "outer_seed": protocol_seed if protocol_seed is not None else manifest_seed,
+        "train_sample_ids_hash": _hash_values(ids[train_idx]),
+        "valid_sample_ids_hash": _hash_values(ids[valid_idx]),
+        "valid_source_row_index_hash": _hash_values(
+            [int(source_row_by_id.loc[sample_id]) for sample_id in ids[valid_idx]]
+            if source_row_by_id is not None else []
+        ),
         "model_kwargs": effective_model_kwargs,
         "requested_model_kwargs": requested_model_kwargs,
         "effective_model_kwargs": effective_model_kwargs,

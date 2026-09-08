@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -15,6 +17,20 @@ from sklearn.ensemble import RandomForestRegressor
 from yonod.benchmark.config import BenchmarkConfig, create_benchmark_contract
 from yonod.benchmark.executor import FoldExecutionError, execute_fold
 from yonod.splits.manifest import create_split_manifest
+
+
+@contextmanager
+def _pickle_backed_parquet_io():
+    def to_parquet_pickle(self, path, *args, index=False, **kwargs):
+        frame = self if index else self.reset_index(drop=True)
+        frame.to_pickle(path)
+
+    def read_parquet_pickle(path, *args, **kwargs):
+        return pd.read_pickle(path)
+
+    with patch.object(pd.DataFrame, "to_parquet", to_parquet_pickle), \
+            patch("pandas.read_parquet", side_effect=read_parquet_pickle):
+        yield
 
 
 class PaperRFProtocolTests(unittest.TestCase):
@@ -46,12 +62,13 @@ class PaperRFProtocolTests(unittest.TestCase):
             manifest = create_split_manifest(contract)
             X = np.arange(len(frame) * 4, dtype=float).reshape(len(frame), 4)
             metadata = []
-            for repeat in range(1, 6):
-                result = execute_fold(
-                    contract, manifest, frame["sample_id"].tolist(), X, frame["yield"].to_numpy(),
-                    "mfp", "rf", repeat, 1, model_kwargs=params,
-                )
-                metadata.append(json.loads(result.metadata_path.read_text(encoding="utf-8")))
+            with _pickle_backed_parquet_io():
+                for repeat in range(1, 6):
+                    result = execute_fold(
+                        contract, manifest, frame["sample_id"].tolist(), X, frame["yield"].to_numpy(),
+                        "mfp", "rf", repeat, 1, model_kwargs=params,
+                    )
+                    metadata.append(json.loads(result.metadata_path.read_text(encoding="utf-8")))
 
         self.assertEqual([item["manifest_seed"] for item in metadata], list(range(1000, 1005)))
         self.assertEqual([item["model_random_seed"] for item in metadata], list(range(1000, 1005)))
