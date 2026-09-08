@@ -5757,3 +5757,42 @@ for desc_name in args.descriptors:
 - 步骤 27 下一阶段：在 RF 对齐已通过的同一 `paper_exact_5x5` population/split manifest 上接入正式 AutoGluon 25 折执行；启动前必须再次确认不会复用普通 `outercv_20260908`、`autogluon_internal_holdout` 或 SM 5760 行 MFP 结果。
 
 ---
+
+## [2026-09-08 18:52] 步骤 27 第三阶段完成：AutoGluon paper_exact 5×5 runner 与启动材料
+
+### 执行的任务
+- 审计当前工作区：保留四份旧配置删除、`project-docs/goal.md`、`reference-proejct/expansion-ml-comparison` 及各类既有/未跟踪结果；未撤回任何提交，未启动全量 AutoGluon。
+- 新增正式 AutoGluon paper_exact 执行路径：直接消费第二阶段生成并验收的 population、feature 与 `split_manifest`，不复用普通 `outercv_20260908` 或 internal holdout 结果。
+- 实现每个 `(population_id, feature_id, repeat, fold)` 独立调用 `AutoGluonYieldModel.fit_predict_fold()`：只传入训练折 `X_train/y_train` 与验证折 `X_valid`，外层验证折仅用于预测和指标计算。
+- 为 OHE 路径保留训练折内拟合语义；每折记录 R²、RMSE、MAE、Kendall tau-b、population/split/feature hash、source row hash、AutoGluon 参数、版本、seed policy、耗时与 artifact 路径。
+- 新增严格完整性闸门：正式 RF-vs-AG paired input 只有在对应模型/特征拥有完整 25 折、`evaluation_protocol=paper_exact_5x5` 且 RF alignment gate 已通过时才生成；partial smoke 只能写入 `_partial` 文件。
+- 生成正式启动材料：五个 population 的 AutoGluon-only 配置、全局 `autogluon_descriptor_tasks.csv`、`autogluon_launch_manifest.json` 与 nohup 启动脚本。
+
+### 关键变更
+- `yonod/benchmark/paper_exact_autogluon.py`：新增 AutoGluon paper_exact material 加载、单 population runner、完整性校验、RF-vs-AG paired input 构造、launch material 生成与矩阵 runner。
+- `scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py`：新增 CLI；`--prepare-only` 只生成配置/启动材料，正式运行默认要求 RF gate，`--max-folds-per-task` 必须配合 `--allow-partial`。
+- `scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.sh`：新增直接执行脚本，默认每折 `time_limit=300`、`presets=medium_quality`、`num_cpus=19`，并记录完整命令行与 CPU/BLAS 线程策略。
+- `scripts/start_yieldmaster_autogluon_paper_exact_5x5_20260908_nohup.sh` 与 `configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`：新增正式 nohup 启动入口；本阶段仅写入脚本，未执行。
+- `configs/yieldmaster_*_paper_exact_5x5*_20260908/paper_exact_autogluon_config.json`：五份 AutoGluon-only 配置，均为 `evaluation_protocol=paper_exact_5x5`。
+- `configs/yieldmaster_paper_exact_5x5_20260908/autogluon_descriptor_tasks.csv` 与 `autogluon_launch_manifest.json`：记录 8 个 AG descriptor task、预期 200 个外层 fold fit、RF gate 文件与正式启动入口。
+- `tests/test_yieldmaster_paper_exact_autogluon_runner.py`：新增 launch materials、mock 25 折 runner、OHE 防泄漏、不完整 fold 阻断、paired input 和 opt-in 真实 AG 单折 smoke 测试。
+
+### 验证结果
+- `python3 -m py_compile yonod/benchmark/paper_exact_autogluon.py scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py tests/test_yieldmaster_paper_exact_autogluon_runner.py`：通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py --prepare-only ...`：通过，生成 8 个 AutoGluon descriptor task，预期 200 个 fold fit，五份配置均为 `paper_exact_5x5` 且只含 `autogluon`。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_yieldmaster_paper_exact_autogluon_runner.py -v`：4/4 默认测试通过，1 个真实 AG smoke 默认跳过。
+- `YONOD_RUN_REAL_AG_SMOKE=1 /home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_yieldmaster_paper_exact_autogluon_runner.py -v`：5/5 通过；真实 SL1/OHE 单折 AutoGluon 在临时目录完成 fit/predict。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_yieldmaster_paper_exact_autogluon_runner.py tests/test_yieldmaster_paper_exact_populations.py tests/test_yieldmaster_paper_exact_rf_alignment.py tests/test_autogluon_paper_exact_repeated_manifest.py tests/test_repeated_kfold_manifest.py tests/test_rf_paper_protocol.py -v`：18/18 通过，1 个真实 smoke 默认跳过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_autogluon_fold_adapter.py tests/test_main_autogluon_outer_cv_paths.py tests/test_benchmark_autogluon_executor.py -v`：9/9 通过。
+- `bash -n scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.sh scripts/start_yieldmaster_autogluon_paper_exact_5x5_20260908_nohup.sh configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`：通过。
+
+### 遇到的问题及解决方案
+- `apply_patch` 和普通 `py_compile` 仍受 `bwrap: loopback: Failed RTM_NEWADDR` 影响；本阶段在授权范围内使用受控 Python 写入明确文件，并用 conda `yonod` 完成验证。
+- 第一版测试在临时目录释放后继续读取 material manifest，导致 `FileNotFoundError`；已将相关完整性断言移动到临时目录生命周期内。
+- 调试模式 `require_rf_alignment=False` 下，矩阵 runner 仍在完整结果后尝试生成 paired input；已修正为只有正式 RF gate 开启且完整时才构造 paired input，避免 mock/partial 误依赖真实 RF 文件。
+- 真实 AG 单折 smoke 中 AutoGluon 对临时 artifact 目录给出 “path already exists” 警告，且 KNN 子模型因特征条件不足被跳过；TabularPredictor 整体成功完成 fit/predict，故不阻断。
+
+### 下一步计划
+- 步骤 27 下一阶段：在用户确认后执行正式 AutoGluon paper_exact 5×5 长作业。建议命令入口为 `bash configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`；预计 8 个 descriptor task × 25 folds = 200 次 AutoGluon fit，按 `time_limit=300` 理论上限约 16.7 小时，不含特征转换和 AutoGluon 额外开销。完成后检查 `autogluon_fold_metrics.csv`、`rf_vs_autogluon_paired_fold_input.csv`、run manifest 和每折 metadata，再进入 paper_exact 报告/统计检验阶段。
+
+---

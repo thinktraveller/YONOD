@@ -1,0 +1,49 @@
+{
+  "autogluon_config_paths": {
+    "bh1_paper_exact": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_bh1_mfp_ohe_paper_exact_5x5_20260908/paper_exact_autogluon_config.json",
+    "bh2_paper_exact": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_bh2_mfp_ohe_paper_exact_5x5_20260908/paper_exact_autogluon_config.json",
+    "sl1_paper_exact": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_sl1_mfp_ohe_paper_exact_5x5_20260908/paper_exact_autogluon_config.json",
+    "sm_mfp_paper_exact_4620": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_sm_mfp_paper_exact_5x5_4620_20260908/paper_exact_autogluon_config.json",
+    "sm_ohe_paper_exact_5760": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_sm_ohe_paper_exact_5x5_5760_20260908/paper_exact_autogluon_config.json"
+  },
+  "autogluon_params": {
+    "cleanup": true,
+    "num_cpus": 19,
+    "presets": "medium_quality",
+    "random_state": 42,
+    "time_limit": 300
+  },
+  "autogluon_seed_policy": "outer split fixed by paper_exact split_manifest seeds 1000-1004; AutoGluon 1.1.1 has no single top-level seed covering all submodels",
+  "descriptor_task_count": 8,
+  "evaluation_protocol": "paper_exact_5x5",
+  "expected_autogluon_fold_fits": 200,
+  "formal_nohup_launcher": "bash configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh",
+  "notes": "本 manifest 只描述正式启动材料；真实运行时 git commit、开始/结束时间和耗时由 runner 写入 run_manifest。",
+  "population_dirs": {
+    "bh1_paper_exact": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_bh1_mfp_ohe_paper_exact_5x5_20260908",
+    "bh2_paper_exact": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_bh2_mfp_ohe_paper_exact_5x5_20260908",
+    "sl1_paper_exact": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_sl1_mfp_ohe_paper_exact_5x5_20260908",
+    "sm_mfp_paper_exact_4620": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_sm_mfp_paper_exact_5x5_4620_20260908",
+    "sm_ohe_paper_exact_5760": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_sm_ohe_paper_exact_5x5_5760_20260908"
+  },
+  "population_ids": [
+    "bh1_paper_exact",
+    "bh2_paper_exact",
+    "sl1_paper_exact",
+    "sm_ohe_paper_exact_5760",
+    "sm_mfp_paper_exact_4620"
+  ],
+  "rf_gate_files": {
+    "alignment": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_paper_exact_5x5_20260908/rf_alignment.csv",
+    "fold_metrics": "/home/wangzh685/桌面/ord-data/YONOD/configs/yieldmaster_paper_exact_5x5_20260908/rf_fold_metrics.csv"
+  },
+  "rf_gate_required": true,
+  "schema_version": 1,
+  "seeds": [
+    1000,
+    1001,
+    1002,
+    1003,
+    1004
+  ]
+}

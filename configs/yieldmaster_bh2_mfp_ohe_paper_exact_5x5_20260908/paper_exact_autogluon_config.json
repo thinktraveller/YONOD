@@ -1,0 +1,123 @@
+{
+  "benchmark": {
+    "cv": {
+      "n_repeats": 5,
+      "n_splits": 5,
+      "seed": 1000
+    },
+    "dataset_id": "BH2",
+    "dataset_path": "data/population.csv",
+    "evaluation_protocol": "paper_exact_5x5",
+    "feature_sets": [
+      {
+        "component_cols": [
+          "Amine_SMILES",
+          "Bromide_SMILES",
+          "Ligand_SMILES",
+          "Solvent_SMILES",
+          "Base_SMILES"
+        ],
+        "kind": "precomputed_descriptor",
+        "name": "mfp",
+        "params": {
+          "algorithm": "morgan_count",
+          "blank_or_invalid_component": "zero_block_keep_row",
+          "fp_size": 1024,
+          "input_normalization": "raw_csv_value",
+          "profile": "vjethbkm",
+          "radius": 3
+        }
+      },
+      {
+        "component_cols": [
+          "Amine_SMILES",
+          "Bromide_SMILES",
+          "Ligand_SMILES",
+          "Solvent_SMILES",
+          "Base_SMILES"
+        ],
+        "kind": "fold_transform",
+        "name": "ohe",
+        "params": {
+          "encoder": "OneHotEncoder",
+          "fit_scope": "train_only_per_fold",
+          "handle_unknown": "ignore",
+          "missing_policy": "zero_block",
+          "missing_token": "__MISSING__",
+          "zero_out_missing": true
+        }
+      }
+    ],
+    "grouping": {
+      "source_order": "raw_csv",
+      "strategy": "repeated_kfold"
+    },
+    "label_col": "Yield",
+    "model_params": {
+      "autogluon": {
+        "cleanup": true,
+        "keep_autogluon_artifacts": false,
+        "num_cpus": 19,
+        "presets": "medium_quality",
+        "random_state": 42,
+        "time_limit": 300
+      }
+    },
+    "models": [
+      "autogluon"
+    ],
+    "outputs": {
+      "root": "autogluon"
+    },
+    "paper_exact": {
+      "component_cols": [
+        "Amine_SMILES",
+        "Bromide_SMILES",
+        "Ligand_SMILES",
+        "Solvent_SMILES",
+        "Base_SMILES"
+      ],
+      "dataset_id": "BH2",
+      "expected_rows": 3359,
+      "feature_ids": [
+        "mfp",
+        "ohe"
+      ],
+      "notes": "论文官方 CSV 原始行顺序；MFP 与 OHE 共用总体。",
+      "paper_dataset_id": "BH2",
+      "population_id": "bh2_paper_exact",
+      "rf_alignment_required_before_formal_ag": true,
+      "source_csv": "yieldsmarter/Data/HTE_datasets/BH2/BH2.csv",
+      "source_row_filter": "raw_csv_all_rows",
+      "unit": "yield %"
+    },
+    "population_id": "bh2_paper_exact",
+    "reproduction_protocol": {
+      "autogluon_params": {
+        "cleanup": true,
+        "keep_autogluon_artifacts": false,
+        "num_cpus": 19,
+        "presets": "medium_quality",
+        "random_state": 42,
+        "time_limit": 300
+      },
+      "autogluon_seed_policy": "outer split fixed by paper_exact split_manifest seeds 1000-1004; AutoGluon 1.1.1 has no single top-level seed covering all submodels",
+      "name": "paper_exact_5x5",
+      "paper": "Yield Smarter, Not Harder",
+      "rf_params": {
+        "max_features": 0.3,
+        "n_estimators": 500,
+        "n_jobs": -1
+      },
+      "split": "5 repeats x 5 folds, sklearn KFold shuffle=True, seeds 1000-1004"
+    },
+    "sample_id_col": "sample_id",
+    "smiles_cols": [
+      "Amine_SMILES",
+      "Bromide_SMILES",
+      "Ligand_SMILES",
+      "Solvent_SMILES",
+      "Base_SMILES"
+    ]
+  }
+}
