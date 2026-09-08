@@ -5721,3 +5721,39 @@ for desc_name in args.descriptors:
 - 步骤 27 下一阶段：生成真实 paper_exact 五个总体的配置/YAML 与 population manifest，补齐 SM-MFP 4620 行筛选/特征对齐路径；随后先跑 RF paper_exact 25 折对齐，确认与原生 RF 指标展示精度一致，再进入高成本 AutoGluon 25 折正式运行。
 
 ---
+
+## [2026-09-08 18:06] 步骤 27 第二阶段完成：真实 paper_exact 输入材料与 RF 对齐闸门
+
+### 执行的任务
+- 审计近期提交与工作区：当前基线为 `6e321d79`，未撤回任何提交；用户既有配置删除/重命名、`goal.md`、论文复现材料、`outercv_20260908` 与历史结果均未覆盖。
+- 新增 YieldMaster paper_exact 专用材料/RF pipeline：从原文 YieldSmarter CSV 构造 5 个 population，生成可追溯的 population CSV、population manifest、split manifest、descriptor task manifest、MFP NPZ 或 OHE fold-transform contract。
+- 构造并验证 8 个 descriptor RF 任务：BH1/BH2/SL1 各 MFP+OHE，SM 拆分为 `sm_mfp_paper_exact_4620` 的 MFP 与 `sm_ohe_paper_exact_5760` 的 OHE。
+- 使用论文 RF 固定超参 `n_estimators=500`、`max_features=0.30`、`n_jobs=-1`、`random_state=repeat_seed`，在共享 `paper_exact_5x5` manifest 上重跑全部 8×25=200 个 RF folds。
+- 将 YONOD paper_exact RF 的 25 折均值、标准差和逐折字段与已验收 `native_mfp_rf_matrix_20260907`、`native_ohe_rf_matrix_20260907` 基准逐项对齐；若未通过容差，pipeline 会停止，不进入 AutoGluon。
+
+### 关键变更
+- `yonod/benchmark/paper_exact_pipeline.py`：新增真实 paper_exact population/material/config 生成、MFP 官方 NPZ exact 校验、OHE 训练折 fit 语义、RF 200 折重跑与 native RF 对齐守卫。
+- `scripts/run_yieldmaster_paper_exact_rf_20260908.py`：新增 RF-only CLI；默认只生成/运行 paper_exact RF，不启动 AutoGluon。
+- `scripts/run_yieldmaster_paper_exact_rf_20260908.sh`：新增 conda `yonod` 启动脚本，设置 19 核/BLAS 线程策略并执行 RF 对齐。
+- `configs/yieldmaster_*_paper_exact_5x5*_20260908/paper_exact_rf_config.json`：五个 population 的 RF-only 配置，均为 `evaluation_protocol=paper_exact_5x5`。
+- `configs/yieldmaster_paper_exact_5x5_20260908/run_rf_alignment.sh`：新 paper_exact 路径中的 RF 对齐命令入口。
+- `tests/test_yieldmaster_paper_exact_populations.py`：新增真实数据材料集成测试，验证 5 个 population、8 个 descriptor 任务、25 折 seeds、MFP 官方 NPZ exact。
+- `tests/test_yieldmaster_paper_exact_rf_alignment.py`：新增 RF 对齐守卫测试，验证匹配通过、指标漂移失败、空折集合失败。
+
+### 验证结果
+- `python3 -m py_compile yonod/benchmark/paper_exact_pipeline.py scripts/run_yieldmaster_paper_exact_rf_20260908.py tests/test_yieldmaster_paper_exact_populations.py tests/test_yieldmaster_paper_exact_rf_alignment.py`：通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_yieldmaster_paper_exact_populations.py tests/test_yieldmaster_paper_exact_rf_alignment.py tests/test_autogluon_paper_exact_repeated_manifest.py tests/test_repeated_kfold_manifest.py tests/test_rf_paper_protocol.py -v`：13/13 通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_autogluon_fold_adapter.py tests/test_main_autogluon_outer_cv_paths.py tests/test_benchmark_autogluon_executor.py -v`：9/9 通过。
+- `bash scripts/run_yieldmaster_paper_exact_rf_20260908.sh`：真实 RF 对齐通过，输出 `configs/yieldmaster_paper_exact_5x5_20260908/rf_alignment.csv`，8 个 descriptor 任务、200 个 folds 全部 `passes_tolerance=True`，最大折级指标差异 `1.4210854715202004e-14`。
+- 精确差异范围：全部 32 个 `(population, feature, metric)` 行的 `delta_mean` 绝对值不超过 `7.105427357601002e-15`，`delta_std` 绝对值不超过 `4.440892098500626e-16`；seed 与 train/test 行数逐折一致。
+
+### 遇到的问题及解决方案
+- 普通 `apply_patch` 更新已有文件时仍触发 `bwrap: loopback: Failed RTM_NEWADDR`；本阶段在授权范围内使用受控 Python 修改明确文件，范围仅限新增 pipeline、测试、脚本和 `buildlog.md`。
+- 首次新增测试发现 `Path.write_text(newline=...)` 与当前 Python 不兼容；已移除该参数。
+- 真实材料测试发现通用 split manifest 默认记录 population CSV 内部 0..n-1 行号，不足以表达 SM-MFP 从 5760 原始行筛到 4620 的原文 source row；已在 paper_exact 材料层重映射 `source_row_index` 为原文 CSV 行号并重算 `split_hash/split_id`，不改变普通 split 行为。
+- 本阶段生成的数据、特征、RF 预测与指标结果保留在新的 `configs/*paper_exact*20260908/` 路径下作为未跟踪运行产物；提交仅包含代码、测试、配置与命令材料，不提交大体量结果。
+
+### 下一步计划
+- 步骤 27 下一阶段：在 RF 对齐已通过的同一 `paper_exact_5x5` population/split manifest 上接入正式 AutoGluon 25 折执行；启动前必须再次确认不会复用普通 `outercv_20260908`、`autogluon_internal_holdout` 或 SM 5760 行 MFP 结果。
+
+---

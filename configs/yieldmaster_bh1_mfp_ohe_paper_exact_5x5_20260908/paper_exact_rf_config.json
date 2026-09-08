@@ -1,0 +1,106 @@
+{
+  "benchmark": {
+    "cv": {
+      "n_repeats": 5,
+      "n_splits": 5,
+      "seed": 1000
+    },
+    "dataset_id": "BH1",
+    "dataset_path": "data/population.csv",
+    "evaluation_protocol": "paper_exact_5x5",
+    "feature_sets": [
+      {
+        "component_cols": [
+          "Aryl_halide_SMILES",
+          "Additive_SMILES",
+          "Base_SMILES",
+          "Ligand_SMILES"
+        ],
+        "kind": "precomputed_descriptor",
+        "name": "mfp",
+        "params": {
+          "algorithm": "morgan_count",
+          "blank_or_invalid_component": "zero_block_keep_row",
+          "fp_size": 1024,
+          "input_normalization": "raw_csv_value",
+          "profile": "vjethbkm",
+          "radius": 3
+        }
+      },
+      {
+        "component_cols": [
+          "Aryl_halide_SMILES",
+          "Additive_SMILES",
+          "Base_SMILES",
+          "Ligand_SMILES"
+        ],
+        "kind": "fold_transform",
+        "name": "ohe",
+        "params": {
+          "encoder": "OneHotEncoder",
+          "fit_scope": "train_only_per_fold",
+          "handle_unknown": "ignore",
+          "missing_policy": "zero_block",
+          "missing_token": "__MISSING__",
+          "zero_out_missing": true
+        }
+      }
+    ],
+    "grouping": {
+      "source_order": "raw_csv",
+      "strategy": "repeated_kfold"
+    },
+    "label_col": "Yield",
+    "model_params": {
+      "rf": {
+        "max_features": 0.3,
+        "n_estimators": 500,
+        "n_jobs": -1
+      }
+    },
+    "models": [
+      "rf"
+    ],
+    "outputs": {
+      "root": "runs"
+    },
+    "paper_exact": {
+      "component_cols": [
+        "Aryl_halide_SMILES",
+        "Additive_SMILES",
+        "Base_SMILES",
+        "Ligand_SMILES"
+      ],
+      "dataset_id": "BH1",
+      "expected_rows": 3955,
+      "feature_ids": [
+        "mfp",
+        "ohe"
+      ],
+      "notes": "论文官方 CSV 原始行顺序；MFP 与 OHE 共用总体。",
+      "paper_dataset_id": "BH",
+      "population_id": "bh1_paper_exact",
+      "source_csv": "yieldsmarter/Data/HTE_datasets/BH1/BH1.csv",
+      "source_row_filter": "raw_csv_all_rows",
+      "unit": "yield %"
+    },
+    "population_id": "bh1_paper_exact",
+    "reproduction_protocol": {
+      "name": "paper_exact_5x5",
+      "paper": "Yield Smarter, Not Harder",
+      "rf_params": {
+        "max_features": 0.3,
+        "n_estimators": 500,
+        "n_jobs": -1
+      },
+      "split": "5 repeats x 5 folds, sklearn KFold shuffle=True, seeds 1000-1004"
+    },
+    "sample_id_col": "sample_id",
+    "smiles_cols": [
+      "Aryl_halide_SMILES",
+      "Additive_SMILES",
+      "Base_SMILES",
+      "Ligand_SMILES"
+    ]
+  }
+}
