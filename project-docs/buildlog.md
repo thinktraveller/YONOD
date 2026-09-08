@@ -5831,3 +5831,36 @@ for desc_name in args.descriptors:
 - 启动正式 AutoGluon paper_exact 5×5 长作业：入口 `bash configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`，预计 8 个 descriptor task × 25 folds = 200 次 AutoGluon fit，参数为 `time_limit=300`、`presets=medium_quality`、`num_cpus=19`。启动后监控全局 `.full.log`、PID 文件、每折 metadata 和 `configs/yieldmaster_paper_exact_5x5_20260908/paper_exact_autogluon_run_manifest.json`。
 
 ---
+
+## [2026-09-08 22:22] 步骤 27 第五阶段完成：正式 AutoGluon paper_exact 5×5 长作业启动
+
+### 执行的任务
+- 启动前复核正式门禁：无同名 `yieldmaster_autogluon_paper_exact_5x5` 存活任务；`configs/yieldmaster_paper_exact_5x5_20260908/` 下不存在正式 AutoGluon 汇总输出，避免覆盖未知结果。
+- 复核任务清单：`autogluon_descriptor_tasks.csv` 含 8 个 descriptor task，合计 200 个 paper_exact folds；AutoGluon 参数为 `time_limit=300`、`presets=medium_quality`、`num_cpus=19`。
+- 复核 RF gate：`rf_alignment.csv` 共 32 行，全部 `passes_tolerance=True`。
+- 通过 `configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh` 启动正式长作业；启动脚本先完成真实材料/RF gate 校验，再用 `nohup setsid` 后台运行。
+- 确认启动后状态：PID `4110986` 为 `conda run`，子进程 `4111037` 为正式 Python runner；19:09 失败遗留的首折 incomplete artifact 已移入 `autogluon/incomplete_artifacts/`。
+- 确认首折实际完成：BH1/MFP `r01/f01` 已写出 1 个 fold metadata 和 1 个 prediction 文件；当前活跃 artifact 为 `mfp__autogluon__r01__f02`，即第 2 折正在运行。
+
+### 关键变更
+- `project-docs/buildlog.md`：记录正式 AutoGluon paper_exact 5×5 长作业启动、PID、日志路径、首折状态和监控方式。
+- 运行日志路径：`logs/yieldmaster_autogluon_paper_exact_5x5_20260908_221944.full.log`。
+- PID 文件路径：`logs/yieldmaster_autogluon_paper_exact_5x5_20260908_221944.pid`。
+- 正式输出根目录：`configs/yieldmaster_paper_exact_5x5_20260908/`。
+
+### 验证结果
+- `pgrep -af "yieldmaster_autogluon_paper_exact_5x5|run_yieldmaster_autogluon_paper_exact|paper_exact_autogluon"`：启动前无同名存活进程；启动后发现 PID `4110986` 与子进程 `4111037`。
+- `python3 -c <autogluon_descriptor_tasks_check>`：`existing_formal_outputs=[]`，`task_count=8`，`expected_folds=200`，参数集合为 `("300", "medium_quality", "19")`。
+- `python3 -c <rf_alignment_check>`：`rf_alignment_rows=32`，`all_pass=True`，`failed_rows=0`。
+- `bash configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`：启动成功，返回 PID `4110986`，日志为 `/home/wangzh685/桌面/ord-data/YONOD/logs/yieldmaster_autogluon_paper_exact_5x5_20260908_221944.full.log`。
+- `python3 -c <bh1_autogluon_progress_check>`：BH1/MFP 已有 `fold_metadata_count=1`、`prediction_file_count=1`，当前模型 artifact 为 `mfp__autogluon__r01__f02`。
+
+### 遇到的问题及解决方案
+- 主 `.full.log` 当前只显示命令头和 CPU 策略，原因是 `conda run` 对子进程输出存在缓冲；正式结果和折级进度仍在文件系统中实时产生。后续查看时建议同时使用 `tail -f` 主日志和 `watch` 轮询 fold metadata/prediction 数量。
+- 历史失败日志和被隔离 artifact 均保留，未删除；正式 runner 只隔离未登记 incomplete artifact，不覆盖已有正式汇总。
+- 当前工作区仍包含用户/既有未提交改动和大量未跟踪运行产物；本阶段仅提交 `project-docs/buildlog.md` 的启动记录。
+
+### 下一步计划
+- 等待正式 AutoGluon paper_exact 5×5 长作业完成后，检查 `autogluon_fold_metrics.csv`、`autogluon_predictions.csv`、`autogluon_summary.csv`、`rf_vs_autogluon_paired_fold_input.csv` 与 `paper_exact_autogluon_run_manifest.json`；随后进入 paper_exact 报告/统计检验和与论文 RF 结果的严格平行比较。
+
+---
