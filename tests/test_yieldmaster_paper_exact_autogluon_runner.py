@@ -17,15 +17,30 @@ from yonod.benchmark.paper_exact_autogluon import (
     PAPER_EXACT_EXPECTED_FOLDS_PER_DESCRIPTOR,
     build_rf_autogluon_paired_input,
     load_or_prepare_paper_exact_material,
+    migrate_trusted_mfp_npz_sample_ids_to_unicode,
     run_autogluon_for_material,
     run_paper_exact_autogluon_matrix,
     validate_complete_paper_exact_model_folds,
+    validate_mfp_npz_safe_string_dtype,
+    validate_paper_exact_autogluon_prerequisites,
     write_paper_exact_autogluon_launch_materials,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_ROOT = PROJECT_ROOT / "reference-proejct" / "vjethbkm"
 _FAKE_CALLS: list[dict[str, object]] = []
+
+
+def _rewrite_mfp_string_members_as_object(material) -> str:
+    path = material.feature_paths["mfp"]
+    with np.load(path, allow_pickle=False) as feature:
+        arrays = {name: feature[name] for name in feature.files}
+    feature_hash = str(arrays["feature_hash"])
+    arrays["sample_id"] = np.asarray([str(value) for value in arrays["sample_id"].tolist()], dtype=object)
+    arrays["smiles_columns"] = np.asarray([str(value) for value in arrays["smiles_columns"].tolist()], dtype=object)
+    with path.open("wb") as handle:
+        np.savez_compressed(handle, **arrays)
+    return feature_hash
 
 
 def _fake_fit_predict_fold(self, X_train, y_train, X_valid, *, fold_index, context=None):
@@ -131,6 +146,104 @@ class PaperExactAutoGluonRunnerTests(unittest.TestCase):
         self.assertEqual(_FAKE_CALLS[0]["context"]["protocol_family"], "manifest_outer_cv")
         self.assertEqual(_FAKE_CALLS[0]["context"]["outer_seed"], 1000)
         self.assertNotIn("tuning_data", _FAKE_CALLS[0]["context"])
+
+    def test_mfp_npz_uses_fixed_unicode_and_object_array_is_fail_fast_migrated_without_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary)
+            material = load_or_prepare_paper_exact_material(
+                REFERENCE_ROOT,
+                output_root,
+                "sl1_paper_exact",
+            )
+            validation = validate_mfp_npz_safe_string_dtype(material)
+            self.assertEqual(validation["present"], True)
+            self.assertTrue(str(validation["sample_id_dtype"]).startswith("<U"))
+            before_hash = _rewrite_mfp_string_members_as_object(material)
+
+            with self.assertRaisesRegex(PaperExactError, "object dtype"):
+                validate_mfp_npz_safe_string_dtype(material)
+            with self.assertRaisesRegex(PaperExactError, "object dtype"):
+                validate_paper_exact_autogluon_prerequisites([material])
+            with patch(
+                "yonod.models.autogluon_model.AutoGluonYieldModel.fit_predict_fold",
+                new=_fake_fit_predict_fold,
+            ):
+                with self.assertRaisesRegex(PaperExactError, "object dtype"):
+                    run_paper_exact_autogluon_matrix(
+                        REFERENCE_ROOT,
+                        output_root,
+                        population_ids=["sl1_paper_exact"],
+                        feature_ids=["mfp"],
+                        time_limit=3,
+                        num_cpus=2,
+                        require_rf_alignment=False,
+                        allow_partial=True,
+                        max_folds_per_task=1,
+                    )
+
+            migrated = migrate_trusted_mfp_npz_sample_ids_to_unicode(material, overwrite=True)
+            self.assertEqual(migrated["changed"], True)
+            self.assertEqual(migrated["feature_hash_before"], before_hash)
+            self.assertEqual(migrated["feature_hash_after"], before_hash)
+            self.assertTrue(str(migrated["sample_id_dtype"]).startswith("<U"))
+            validate_paper_exact_autogluon_prerequisites([material])
+
+    def test_mock_mfp_single_fold_reads_prepared_npz_sample_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary)
+            material = load_or_prepare_paper_exact_material(
+                REFERENCE_ROOT,
+                output_root,
+                "sl1_paper_exact",
+            )
+            with patch(
+                "yonod.models.autogluon_model.AutoGluonYieldModel.fit_predict_fold",
+                new=_fake_fit_predict_fold,
+            ):
+                folds, predictions = run_autogluon_for_material(
+                    material,
+                    feature_ids=["mfp"],
+                    time_limit=3,
+                    num_cpus=2,
+                    max_folds_per_task=1,
+                )
+
+            self.assertEqual(len(folds), 1)
+            self.assertEqual(set(folds["feature_id"]), {"mfp"})
+            self.assertEqual(set(predictions["feature_id"]), {"mfp"})
+            self.assertEqual(_FAKE_CALLS[0]["context"]["evaluation_protocol"], PAPER_EXACT_EVALUATION_PROTOCOL)
+            self.assertGreater(_FAKE_CALLS[0]["feature_dim"], 1000)
+
+    def test_quarantine_incomplete_artifact_moves_aside_before_rerun(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary)
+            material = load_or_prepare_paper_exact_material(
+                REFERENCE_ROOT,
+                output_root,
+                "sl1_paper_exact",
+            )
+            artifact = material.population_dir / "autogluon" / "models" / "mfp__autogluon__r01__f01"
+            artifact.mkdir(parents=True)
+            marker = artifact / "partial.txt"
+            marker.write_text("partial artifact from interrupted launch", encoding="utf-8")
+            with patch(
+                "yonod.models.autogluon_model.AutoGluonYieldModel.fit_predict_fold",
+                new=_fake_fit_predict_fold,
+            ):
+                folds, _predictions = run_autogluon_for_material(
+                    material,
+                    feature_ids=["mfp"],
+                    time_limit=3,
+                    num_cpus=2,
+                    max_folds_per_task=1,
+                    quarantine_incomplete_artifacts=True,
+                )
+            quarantines = list((material.population_dir / "autogluon" / "incomplete_artifacts").glob("mfp__autogluon__r01__f01__quarantine_*"))
+
+            self.assertEqual(len(folds), 1)
+            self.assertEqual(len(quarantines), 1)
+            self.assertTrue((quarantines[0] / "partial.txt").is_file())
+            self.assertTrue((material.population_dir / "autogluon" / "predictions" / "mfp__autogluon__r01__f01.csv").is_file())
 
     def test_incomplete_autogluon_folds_are_blocked_from_strict_pairing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

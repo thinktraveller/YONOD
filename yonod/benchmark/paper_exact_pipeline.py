@@ -182,6 +182,12 @@ def _hash_array_payload(**arrays: np.ndarray) -> str:
     return digest.hexdigest()
 
 
+def _fixed_unicode_array(values: Sequence[Any]) -> np.ndarray:
+    strings = [str(value) for value in values]
+    width = max(1, *(len(value) for value in strings))
+    return np.asarray(strings, dtype="<U{0}".format(width))
+
+
 def _write_json(path: Path, payload: Mapping[str, Any], *, overwrite: bool) -> Path:
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\n"
     if path.exists() and not overwrite and path.read_text(encoding="utf-8") != text:
@@ -489,9 +495,9 @@ def prepare_paper_exact_material(
             feature_path,
             X=X,
             y=y,
-            sample_id=population_frame["sample_id"].astype(str).to_numpy(),
+            sample_id=_fixed_unicode_array(population_frame["sample_id"].astype(str).tolist()),
             source_row_index=source_rows,
-            smiles_columns=np.asarray(spec.component_cols),
+            smiles_columns=_fixed_unicode_array(spec.component_cols),
             feature_id="mfp",
             feature_hash=feature_hash,
             population_hash=population_hash,

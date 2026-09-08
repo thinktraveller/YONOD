@@ -21,7 +21,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from yonod.benchmark.paper_exact_autogluon import (  # noqa: E402
     PAPER_EXACT_AUTOGLOON_PARAMS,
     PAPER_EXACT_STAMP,
+    load_or_prepare_all_paper_exact_materials,
+    load_validated_rf_fold_metrics,
+    migrate_all_trusted_mfp_npz_sample_ids_to_unicode,
     run_paper_exact_autogluon_matrix,
+    validate_paper_exact_autogluon_prerequisites,
     write_paper_exact_autogluon_launch_materials,
 )
 
@@ -62,6 +66,16 @@ def _parse_args() -> argparse.Namespace:
         "--prepare-only",
         action="store_true",
         help="只写 AutoGluon 配置、任务 manifest 和启动材料，不训练",
+    )
+    parser.add_argument(
+        "--validate-materials-only",
+        action="store_true",
+        help="只校验启动前材料、RF gate 和 MFP NPZ 字符串 dtype，不训练",
+    )
+    parser.add_argument(
+        "--migrate-trusted-mfp-sample-ids",
+        action="store_true",
+        help="显式迁移本项目已生成的受信 MFP NPZ，将 sample_id/smiles_columns 从 object 改为固定 Unicode dtype",
     )
     parser.add_argument(
         "--overwrite",
@@ -107,6 +121,11 @@ def _parse_args() -> argparse.Namespace:
         help="允许写出 partial smoke 结果；正式运行不要开启",
     )
     parser.add_argument(
+        "--quarantine-incomplete-artifacts",
+        action="store_true",
+        help="遇到 expected fold 的未登记 AutoGluon artifact 时移入 incomplete_artifacts 后重跑；不删除原内容",
+    )
+    parser.add_argument(
         "--max-folds-per-task",
         type=int,
         default=None,
@@ -115,6 +134,13 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.max_folds_per_task is not None and not args.allow_partial:
         parser.error("--max-folds-per-task 只能与 --allow-partial 一起使用，避免 partial 结果冒充正式 25 折")
+    mode_count = sum(bool(value) for value in (
+        args.prepare_only,
+        args.validate_materials_only,
+        args.migrate_trusted_mfp_sample_ids,
+    ))
+    if mode_count > 1:
+        parser.error("--prepare-only、--validate-materials-only、--migrate-trusted-mfp-sample-ids 只能三选一")
     if args.time_limit < 1:
         parser.error("--time-limit 必须 >= 1")
     if args.num_cpus < 1:
@@ -125,6 +151,39 @@ def _parse_args() -> argparse.Namespace:
 def main() -> int:
     args = _parse_args()
     cleanup = not bool(args.keep_autogluon_artifacts)
+    if args.migrate_trusted_mfp_sample_ids:
+        materials = load_or_prepare_all_paper_exact_materials(
+            args.reference_root,
+            args.output_root,
+            population_ids=args.populations,
+            stamp=args.stamp,
+            overwrite=False,
+        )
+        result = migrate_all_trusted_mfp_npz_sample_ids_to_unicode(materials, overwrite=True)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.validate_materials_only:
+        materials = load_or_prepare_all_paper_exact_materials(
+            args.reference_root,
+            args.output_root,
+            population_ids=args.populations,
+            stamp=args.stamp,
+            overwrite=False,
+        )
+        prereq = validate_paper_exact_autogluon_prerequisites(materials)
+        if not args.skip_rf_gate:
+            rf = load_validated_rf_fold_metrics(
+                args.reference_root,
+                args.output_root,
+                materials,
+                stamp=args.stamp,
+                feature_ids=args.features,
+            )
+            prereq["rf_gate"] = {"status": "passed", "fold_rows": int(len(rf))}
+        print(json.dumps(prereq, ensure_ascii=False, indent=2))
+        return 0
+
     if args.prepare_only:
         prepared = write_paper_exact_autogluon_launch_materials(
             args.reference_root,
@@ -164,6 +223,7 @@ def main() -> int:
         require_rf_alignment=not args.skip_rf_gate,
         allow_partial=args.allow_partial,
         max_folds_per_task=args.max_folds_per_task,
+        quarantine_incomplete_artifacts=args.quarantine_incomplete_artifacts,
     )
     print(json.dumps({
         "status": result.status,

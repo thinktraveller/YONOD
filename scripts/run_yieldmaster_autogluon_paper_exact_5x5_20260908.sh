@@ -17,7 +17,7 @@ export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
 
 cd "${PROJECT_ROOT}"
 
-echo "COMMAND: conda run -n yonod python scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py --reference-root reference-proejct/vjethbkm --output-root configs --stamp 20260908 --time-limit ${AG_TIME_LIMIT} --presets ${AG_PRESETS} --num-cpus ${AG_NUM_CPUS} --random-state ${AG_RANDOM_STATE}"
+echo "COMMAND: conda run -n yonod python scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py --reference-root reference-proejct/vjethbkm --output-root configs --stamp 20260908 --time-limit ${AG_TIME_LIMIT} --presets ${AG_PRESETS} --num-cpus ${AG_NUM_CPUS} --random-state ${AG_RANDOM_STATE} --quarantine-incomplete-artifacts"
 echo "CPU_POLICY: LOKY_MAX_CPU_COUNT=${LOKY_MAX_CPU_COUNT} OMP_NUM_THREADS=${OMP_NUM_THREADS} OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS} MKL_NUM_THREADS=${MKL_NUM_THREADS} NUMEXPR_NUM_THREADS=${NUMEXPR_NUM_THREADS}"
 
 exec /home/wangzh685/miniconda3/bin/conda run -n yonod \
@@ -28,4 +28,5 @@ exec /home/wangzh685/miniconda3/bin/conda run -n yonod \
     --time-limit "${AG_TIME_LIMIT}" \
     --presets "${AG_PRESETS}" \
     --num-cpus "${AG_NUM_CPUS}" \
-    --random-state "${AG_RANDOM_STATE}"
+    --random-state "${AG_RANDOM_STATE}" \
+    --quarantine-incomplete-artifacts

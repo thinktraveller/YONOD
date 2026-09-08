@@ -5796,3 +5796,38 @@ for desc_name in args.descriptors:
 - 步骤 27 下一阶段：在用户确认后执行正式 AutoGluon paper_exact 5×5 长作业。建议命令入口为 `bash configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`；预计 8 个 descriptor task × 25 folds = 200 次 AutoGluon fit，按 `time_limit=300` 理论上限约 16.7 小时，不含特征转换和 AutoGluon 额外开销。完成后检查 `autogluon_fold_metrics.csv`、`rf_vs_autogluon_paired_fold_input.csv`、run manifest 和每折 metadata，再进入 paper_exact 报告/统计检验阶段。
 
 ---
+
+## [2026-09-08 20:49] 步骤 27 第四阶段完成：AutoGluon paper_exact 启动前安全修复
+
+### 执行的任务
+- 复核 18:59 与 19:09 的失败日志：18:59 失败于 MFP NPZ `sample_id` 的 object dtype 在 `allow_pickle=False` 下不可读；19:09 失败于前次中断留下未登记的 AutoGluon artifact，runner 按保护逻辑拒绝覆盖。
+- 修复 MFP NPZ 字符串成员策略：新生成材料将 `sample_id` 与 `smiles_columns` 写为固定 Unicode dtype，正式读取继续使用 `allow_pickle=False`。
+- 增加启动前 fail-fast 校验：正式 AutoGluon 训练前先校验所有 MFP NPZ 字符串 dtype、`sample_id` 顺序、`feature_hash` 与 RF gate。
+- 增加显式受信迁移入口：仅在用户/启动维护流程显式调用时迁移旧 object dtype MFP NPZ，迁移前后重算 `feature_hash`，确认 X/y/source row 内容未漂移。
+- 增加 incomplete artifact 隔离协议：遇到无 metadata/prediction 登记的同名 AutoGluon artifact 时，可移动到 `autogluon/incomplete_artifacts/` 后重跑，不删除旧失败日志或未知正式汇总。
+
+### 关键变更
+- `yonod/benchmark/paper_exact_pipeline.py`：新增固定 Unicode 数组 helper，MFP NPZ 新材料不再写出 object 字符串数组。
+- `yonod/benchmark/paper_exact_autogluon.py`：新增 MFP NPZ dtype 头部校验、受信迁移、启动前 prerequisites 校验和 incomplete artifact quarantine。
+- `scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py`：新增 `--validate-materials-only`、`--migrate-trusted-mfp-sample-ids` 与 `--quarantine-incomplete-artifacts`。
+- `scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.sh`：正式命令记录并传入 `--quarantine-incomplete-artifacts`。
+- `scripts/start_yieldmaster_autogluon_paper_exact_5x5_20260908_nohup.sh`：启动前拒绝覆盖正式汇总输出，先执行真实材料/RF gate 校验，再用 `nohup setsid` 启动长作业。
+- `tests/test_yieldmaster_paper_exact_autogluon_runner.py`：覆盖 object dtype fail-fast、Unicode 可读、迁移 hash 不漂移、MFP 单折读取和 incomplete artifact quarantine。
+
+### 验证结果
+- `python3 -m py_compile yonod/benchmark/paper_exact_autogluon.py yonod/benchmark/paper_exact_pipeline.py scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py tests/test_yieldmaster_paper_exact_autogluon_runner.py`：通过。
+- `bash -n scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.sh scripts/start_yieldmaster_autogluon_paper_exact_5x5_20260908_nohup.sh configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`：通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.py --validate-materials-only --reference-root reference-proejct/vjethbkm --output-root configs --stamp 20260908`：通过；5 个 population ready，MFP NPZ 为固定 Unicode dtype，RF gate `fold_rows=200`。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_yieldmaster_paper_exact_autogluon_runner.py tests/test_yieldmaster_paper_exact_populations.py tests/test_yieldmaster_paper_exact_rf_alignment.py tests/test_autogluon_paper_exact_repeated_manifest.py tests/test_repeated_kfold_manifest.py tests/test_rf_paper_protocol.py -v`：21/21 通过，1 个真实 AG smoke 按环境变量设计跳过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_autogluon_fold_adapter.py tests/test_main_autogluon_outer_cv_paths.py tests/test_benchmark_autogluon_executor.py -v`：9/9 通过。
+
+### 遇到的问题及解决方案
+- 当前普通沙箱仍可能触发 `bwrap: loopback: Failed RTM_NEWADDR`；本阶段必要只读检查与验证在授权范围内执行，写入仅限本阶段源码、脚本、测试和 `project-docs/buildlog.md`。
+- 历史失败日志保留在 `logs/yieldmaster_autogluon_paper_exact_5x5_20260908_*.full.log`；未删除或覆盖。
+- 19:09 失败留下的 `mfp__autogluon__r01__f01` 未登记 artifact 不直接覆盖；正式 runner 将按 `--quarantine-incomplete-artifacts` 移入隔离目录后重跑该 fold。
+- 当前工作区仍有用户/既有未提交改动，包括 `project-docs/goal.md`、旧四份 RF 配置删除、论文材料、数据集与历史输出；本阶段提交不会暂存这些内容。
+
+### 下一步计划
+- 启动正式 AutoGluon paper_exact 5×5 长作业：入口 `bash configs/yieldmaster_paper_exact_5x5_20260908/run_autogluon_paper_exact_nohup.sh`，预计 8 个 descriptor task × 25 folds = 200 次 AutoGluon fit，参数为 `time_limit=300`、`presets=medium_quality`、`num_cpus=19`。启动后监控全局 `.full.log`、PID 文件、每折 metadata 和 `configs/yieldmaster_paper_exact_5x5_20260908/paper_exact_autogluon_run_manifest.json`。
+
+---
