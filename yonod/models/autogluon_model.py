@@ -240,6 +240,7 @@ class AutoGluonYieldModel:
             "autogluon_time_limit": self.time_limit,
             "autogluon_presets": self.presets,
             "autogluon_num_cpus": self.num_cpus,
+            "autogluon_seed_policy": metadata.get("random_state_policy"),
             "oof_pred": oof,
             "oof_y_true": y_array,
             "fold_metadata": [metadata],

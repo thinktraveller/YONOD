@@ -33,53 +33,38 @@ import pandas as pd
 # ─────────────────────────────── 加权排名 ───────────────────────────────────── #
 
 def rank_combinations(metrics_df: pd.DataFrame) -> pd.DataFrame:
-    """按 §14.5.3 公式对 (描述符, 模型) 组合加权排名。
+    """按 §14.5.3 公式对可审计外层 CV 组合加权排名。
 
-    Args:
-        metrics_df: 含列 desc_name / descriptor, model_name / model,
-                    r2 / r2_mean, rmse / rmse_mean, mae / mae_mean 的 DataFrame。
-
-    Returns:
-        含 rank / desc_name / model_name / r2 / rmse / mae / score / reason 的 DataFrame，
-        按 score 降序排列。
+    当输入表包含协议/折数/OOF 守卫字段时，只有同时满足
+    ``evaluation_protocol=outer_kfold``、``expected_folds=completed_folds=cv``、
+    ``oof_complete=True`` 且 RMSE/MAE 均值与标准差完整的条目才进入排名。
+    旧版无守卫字段的表仍按历史逻辑兼容排名。
     """
-    df = metrics_df.copy()
+    guard = ranking_eligibility_table(metrics_df)
+    if guard.empty:
+        return pd.DataFrame(columns=_RANK_OUTPUT_COLUMNS)
 
-    # 列名兼容：run_yonod.py 输出 "descriptor"/"model"/"r2_mean" 等
-    def _col(candidates: List[str]) -> str:
-        for c in candidates:
-            if c in df.columns:
-                return c
-        raise KeyError(f"期望列之一 {candidates} 不存在于 DataFrame 中。")
+    df = guard.loc[guard["ranking_eligible"].fillna(False).astype(bool)].copy()
+    if df.empty:
+        return pd.DataFrame(columns=_RANK_OUTPUT_COLUMNS)
 
-    desc_col  = _col(["desc_name", "descriptor"])
-    model_col = _col(["model_name", "model"])
-    r2_col    = _col(["r2", "r2_mean"])
-    rmse_col  = _col(["rmse", "rmse_mean"])
-    mae_col   = _col(["mae", "mae_mean"])
-
-    df = df.rename(columns={
-        desc_col: "desc_name", model_col: "model_name",
-        r2_col: "r2", rmse_col: "rmse", mae_col: "mae",
-    })
-
-    # 过滤掉 NaN 行
+    for column in ("r2", "rmse", "mae"):
+        df[column] = pd.to_numeric(df[column], errors="coerce")
     df = df.dropna(subset=["r2", "rmse", "mae"]).copy()
     if df.empty:
-        return pd.DataFrame(columns=["rank", "desc_name", "model_name",
-                                     "r2", "rmse", "mae", "score", "reason"])
+        return pd.DataFrame(columns=_RANK_OUTPUT_COLUMNS)
 
-    max_rmse = df["rmse"].max()
-    max_mae  = df["mae"].max()
-
+    max_rmse = float(df["rmse"].max())
+    max_mae = float(df["mae"].max())
     df["score"] = (
-        df["r2"]                            * 0.5
+        df["r2"] * 0.5
         + (1 - df["rmse"] / max(max_rmse, 1e-9)) * 0.3
-        + (1 - df["mae"]  / max(max_mae,  1e-9)) * 0.2
+        + (1 - df["mae"] / max(max_mae, 1e-9)) * 0.2
     )
 
     df = df.sort_values("score", ascending=False).reset_index(drop=True)
     df["rank"] = df.index + 1
+    df["folds"] = df.apply(_folds_display, axis=1)
     df["reason"] = ""
 
     for i in range(min(3, len(df))):
@@ -93,12 +78,13 @@ def rank_combinations(metrics_df: pd.DataFrame) -> pd.DataFrame:
             parts.append(f"MAE={row['mae']:.4f} 典型偏差极小")
         if not parts:
             parts.append(f"综合评分 {row['score']:.3f} 排名靠前")
+        protocol = _scalar_text(row.get("evaluation_protocol"), "legacy_untracked")
+        if protocol != "legacy_untracked":
+            parts.append(f"协议={protocol}，fold={row.get('folds', '—')}，OOF完整")
         df.at[i, "reason"] = "；".join(parts)
 
-    out_cols = ["rank", "desc_name", "model_name", "r2", "rmse", "mae", "score", "reason"]
-    if "train_time_s" in df.columns:
-        out_cols.insert(out_cols.index("reason"), "train_time_s")
-    return df[out_cols]
+    out_cols = [column for column in _RANK_OUTPUT_COLUMNS if column in df.columns]
+    return df.loc[:, out_cols]
 
 
 # ─────────────────────────────── HTML 辅助 ──────────────────────────────────── #
@@ -108,10 +94,18 @@ def _esc(v: Any) -> str:
 
 
 def _fmt(v: Any, digits: int = 4) -> str:
-    if v is None or (isinstance(v, float) and math.isnan(v)):
+    if v is None:
         return "—"
-    if isinstance(v, float):
-        return f"{v:.{digits}f}"
+    try:
+        if pd.isna(v):
+            return "—"
+    except (TypeError, ValueError):
+        pass
+    if isinstance(v, (float, int)):
+        number = float(v)
+        if not math.isfinite(number):
+            return "—"
+        return f"{number:.{digits}f}"
     return _esc(str(v))
 
 
@@ -126,6 +120,14 @@ def _fmt_time(v: Any) -> str:
     if s < 60:
         return f"{s:.1f}s"
     return f"{int(s)//60}m {int(s)%60}s"
+
+
+def _fmt_metric_with_std(mean: Any, std: Any, digits: int = 4) -> str:
+    mean_text = _fmt(mean, digits)
+    std_text = _fmt(std, digits)
+    if mean_text == "—":
+        return "—"
+    return mean_text if std_text == "—" else f"{mean_text} ± {std_text}"
 
 
 def _color_r2(r2: float) -> str:
@@ -160,6 +162,208 @@ _UNIVERSAL_DIMENSION_TIME_COLUMNS = [
     "comparable_combinations", "noncomparable_combinations",
     "is_time_comparable", "time_status", "total_train_time_s",
 ]
+
+_PROTOCOL_GUARD_FIELDS = {"evaluation_protocol", "expected_folds", "completed_folds", "oof_complete"}
+_RANK_OUTPUT_COLUMNS = [
+    "rank", "desc_name", "model_name", "evaluation_protocol", "folds", "oof_complete",
+    "r2", "r2_std", "rmse", "rmse_std", "mae", "mae_std", "score",
+    "train_time_s", "autogluon_time_limit", "autogluon_presets", "autogluon_num_cpus",
+    "autogluon_seed_policy", "reason",
+]
+_RANK_ELIGIBILITY_COLUMNS = [
+    "desc_name", "model_name", "evaluation_protocol", "cv", "expected_folds", "completed_folds",
+    "folds", "oof_complete", "oof_n_observed", "oof_n_total",
+    "r2", "r2_std", "rmse", "rmse_std", "mae", "mae_std",
+    "train_time_s", "autogluon_time_limit", "autogluon_presets", "autogluon_num_cpus",
+    "autogluon_seed_policy", "ranking_eligible", "ranking_exclusion_reason",
+]
+
+
+def _first_existing_column(frame: pd.DataFrame, candidates: List[str]) -> str:
+    for column in candidates:
+        if column in frame.columns:
+            return column
+    raise KeyError(f"期望列之一 {candidates} 不存在于 DataFrame 中。")
+
+
+def _float_or_nan(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+    return number if math.isfinite(number) else float("nan")
+
+
+def _int_or_none(value: Any) -> Optional[int]:
+    number = _float_or_nan(value)
+    if math.isnan(number):
+        return None
+    rounded = int(round(number))
+    if abs(number - rounded) > 1e-9:
+        return None
+    return rounded
+
+
+def _scalar_text(value: Any, default: str = "—") -> str:
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return text if text else default
+
+
+def _truthy_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, (int, float)):
+        return bool(value) if math.isfinite(float(value)) else default
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "是", "完整"}
+
+
+def _yes_no(value: Any, default: str = "—") -> str:
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    return "是" if _truthy_bool(value) else "否"
+
+
+def _folds_display(row: Any) -> str:
+    completed = _int_or_none(row.get("completed_folds"))
+    expected = _int_or_none(row.get("expected_folds"))
+    cv = _int_or_none(row.get("cv"))
+    if completed is not None and expected is not None and cv is not None:
+        return f"{completed}/{expected} (cv={cv})"
+    if completed is not None and expected is not None:
+        return f"{completed}/{expected}"
+    if expected is not None:
+        return f"—/{expected}"
+    if cv is not None:
+        return f"cv={cv}"
+    return "—"
+
+
+def _autogluon_param_summary(row: Any) -> str:
+    pairs = []
+    labels = {
+        "autogluon_time_limit": "time_limit",
+        "autogluon_presets": "presets",
+        "autogluon_num_cpus": "num_cpus",
+        "autogluon_seed_policy": "seed_policy",
+    }
+    for column, label in labels.items():
+        value = row.get(column)
+        text = _scalar_text(value, "")
+        if text:
+            pairs.append(f"{label}={text}")
+    return "; ".join(pairs) if pairs else "—"
+
+
+def _has_protocol_guard_columns(frame: pd.DataFrame) -> bool:
+    return any(column in frame.columns for column in _PROTOCOL_GUARD_FIELDS)
+
+
+def ranking_eligibility_table(metrics_df: pd.DataFrame, expected_cv: Optional[int] = None) -> pd.DataFrame:
+    """Return the row-level protocol guard used before recommendation ranking.
+
+    The table is intentionally display-friendly: non-eligible rows retain their
+    protocol, fold counts, OOF status, and exclusion reason so holdout results
+    remain visible without being blended into outer-CV rankings.
+    """
+    if metrics_df.empty:
+        return pd.DataFrame(columns=_RANK_ELIGIBILITY_COLUMNS)
+
+    df = metrics_df.copy()
+    desc_col = _first_existing_column(df, ["desc_name", "descriptor"])
+    model_col = _first_existing_column(df, ["model_name", "model"])
+    r2_col = _first_existing_column(df, ["r2", "r2_mean"])
+    rmse_col = _first_existing_column(df, ["rmse", "rmse_mean"])
+    mae_col = _first_existing_column(df, ["mae", "mae_mean"])
+    guarded = _has_protocol_guard_columns(df)
+    has_rmse_std = "rmse_std" in df.columns
+    has_mae_std = "mae_std" in df.columns
+
+    records: List[Dict[str, Any]] = []
+    for _, row in df.iterrows():
+        protocol = _scalar_text(row.get("evaluation_protocol"), "legacy_untracked" if not guarded else "missing")
+        cv_value = _int_or_none(row.get("cv", expected_cv))
+        if cv_value is None and expected_cv is not None:
+            cv_value = int(expected_cv)
+        expected = _int_or_none(row.get("expected_folds", cv_value if cv_value is not None else None))
+        completed_default = expected if not guarded else None
+        completed = _int_or_none(row.get("completed_folds", completed_default))
+        oof_default = True if not guarded else False
+        oof_complete = _truthy_bool(row.get("oof_complete", oof_default), default=oof_default)
+        r2 = _float_or_nan(row.get(r2_col))
+        r2_std = _float_or_nan(row.get("r2_std")) if "r2_std" in df.columns else float("nan")
+        rmse = _float_or_nan(row.get(rmse_col))
+        rmse_std = _float_or_nan(row.get("rmse_std")) if has_rmse_std else float("nan")
+        mae = _float_or_nan(row.get(mae_col))
+        mae_std = _float_or_nan(row.get("mae_std")) if has_mae_std else float("nan")
+
+        metric_ok = all(not math.isnan(value) for value in (r2, rmse, mae))
+        std_ok = True
+        if guarded:
+            std_ok = has_rmse_std and has_mae_std and not math.isnan(rmse_std) and not math.isnan(mae_std)
+        protocol_ok = True if not guarded else protocol == "outer_kfold"
+        folds_ok = True
+        if guarded:
+            folds_ok = expected is not None and completed is not None and completed == expected
+            if cv_value is not None:
+                folds_ok = folds_ok and expected == cv_value
+        oof_ok = True if not guarded else bool(oof_complete)
+
+        reasons: List[str] = []
+        if not protocol_ok:
+            reasons.append("协议不是 outer_kfold")
+        if not folds_ok:
+            reasons.append("expected_folds/completed_folds/cv 不一致或缺失")
+        if not oof_ok:
+            reasons.append("OOF 不完整")
+        if not metric_ok:
+            reasons.append("R²/RMSE/MAE 均值缺失或非有限")
+        if not std_ok:
+            reasons.append("RMSE/MAE 标准差缺失或非有限")
+        eligible = bool(protocol_ok and folds_ok and oof_ok and metric_ok and std_ok)
+
+        record = {
+            "desc_name": _scalar_text(row.get(desc_col)),
+            "model_name": _scalar_text(row.get(model_col)),
+            "evaluation_protocol": protocol,
+            "cv": cv_value,
+            "expected_folds": expected,
+            "completed_folds": completed,
+            "oof_complete": oof_complete,
+            "oof_n_observed": _int_or_none(row.get("oof_n_observed")),
+            "oof_n_total": _int_or_none(row.get("oof_n_total")),
+            "r2": r2, "r2_std": r2_std,
+            "rmse": rmse, "rmse_std": rmse_std,
+            "mae": mae, "mae_std": mae_std,
+            "train_time_s": _float_or_nan(row.get("train_time_s")) if "train_time_s" in df.columns else float("nan"),
+            "autogluon_time_limit": row.get("autogluon_time_limit"),
+            "autogluon_presets": row.get("autogluon_presets"),
+            "autogluon_num_cpus": row.get("autogluon_num_cpus"),
+            "autogluon_seed_policy": row.get("autogluon_seed_policy"),
+            "ranking_eligible": eligible,
+            "ranking_exclusion_reason": "可进入排名" if eligible else "; ".join(reasons),
+        }
+        record["folds"] = _folds_display(record)
+        records.append(record)
+    return pd.DataFrame.from_records(records, columns=_RANK_ELIGIBILITY_COLUMNS)
 
 
 def _universal_time_summary(metrics_df: pd.DataFrame) -> pd.DataFrame:
@@ -428,7 +632,7 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
 
 
 def _section_grid(df: pd.DataFrame) -> str:
-    """4×N 描述符 × 模型矩阵，单元格显示 R²/RMSE/MAE。"""
+    """4×N 描述符 × 模型矩阵，单元格显示 R²/RMSE/MAE 及协议。"""
     if df.empty:
         return """
 <section>
@@ -456,15 +660,20 @@ def _section_grid(df: pd.DataFrame) -> str:
                 cells += "<td>—</td>"
             else:
                 row = sub.iloc[0]
-                r2   = float(row.get(r2_col,   float("nan")))
-                rmse = float(row.get(rmse_col, float("nan")))
-                mae  = float(row.get(mae_col,  float("nan")))
-                bg   = _color_r2(r2)
-                fg   = _text_color(r2)
+                r2 = _float_or_nan(row.get(r2_col))
+                rmse = row.get(rmse_col)
+                mae = row.get(mae_col)
+                bg = _color_r2(r2)
+                fg = _text_color(r2)
+                protocol = _scalar_text(row.get("evaluation_protocol"), "legacy_untracked")
+                folds = _folds_display(row)
+                oof = _yes_no(row.get("oof_complete")) if "oof_complete" in df.columns else "—"
                 cells += (
                     f"<td style='background:{bg};color:{fg}'>"
                     f"<span class='cell-r2'>R²={_fmt(r2,3)}</span><br>"
-                    f"<small>RMSE={_fmt(rmse,4)}<br>MAE={_fmt(mae,4)}</small>"
+                    f"<small>RMSE={_fmt_metric_with_std(rmse, row.get('rmse_std'), 4)}<br>"
+                    f"MAE={_fmt_metric_with_std(mae, row.get('mae_std'), 4)}<br>"
+                    f"evaluation_protocol={_esc(protocol)}<br>folds={_esc(folds)}；OOF={_esc(oof)}</small>"
                     f"</td>"
                 )
         rows_html += f"<tr>{cells}</tr>\n"
@@ -472,7 +681,7 @@ def _section_grid(df: pd.DataFrame) -> str:
     return f"""
 <section>
 <h2>1 · 描述符 × 模型结果矩阵</h2>
-<p>单元格颜色：浅蓝（低 R²）→ 深绿（高 R²）；负 R² 为灰色。</p>
+<p>单元格颜色：浅蓝（低 R²）→ 深绿（高 R²）；负 R² 为灰色。RMSE/MAE 以均值 ± 标准差显示；协议、fold 完成度与 OOF 完整性直接列入单元格。</p>
 <table>
 <thead><tr><th></th>{head}</tr></thead>
 <tbody>{rows_html}</tbody>
@@ -524,11 +733,42 @@ def _section_glossary() -> str:
 </section>"""
 
 
+def _section_protocol_guard(metrics_df: pd.DataFrame) -> str:
+    guard = ranking_eligibility_table(metrics_df)
+    if guard.empty:
+        return """
+<section>
+<h2>3 · 协议与排名守卫</h2>
+<p class="note">没有可审计指标记录；推荐排名为空。</p>
+</section>"""
+    shown_columns = [
+        "desc_name", "model_name", "evaluation_protocol", "cv", "expected_folds",
+        "completed_folds", "folds", "oof_complete", "oof_n_observed", "oof_n_total",
+        "rmse", "rmse_std", "mae", "mae_std",
+        "autogluon_time_limit", "autogluon_presets", "autogluon_num_cpus",
+        "autogluon_seed_policy", "ranking_eligible", "ranking_exclusion_reason",
+    ]
+    shown = guard.loc[:, [column for column in shown_columns if column in guard.columns]].copy()
+    for column in ("oof_complete", "ranking_eligible"):
+        if column in shown.columns:
+            shown[column] = shown[column].map(lambda value: "是" if _truthy_bool(value) else "否")
+    for column in ("rmse", "rmse_std", "mae", "mae_std"):
+        if column in shown.columns:
+            shown[column] = shown[column].map(lambda value: _fmt(value, 4))
+    table_html = shown.to_html(index=False, escape=True)
+    return f"""
+<section>
+<h2>3 · 协议与排名守卫</h2>
+<p>推荐排名只纳入 <code>evaluation_protocol=outer_kfold</code>、<code>expected_folds=completed_folds=cv</code>、<code>oof_complete=True</code>，且 RMSE/MAE 均值与标准差均完整的条目。<code>autogluon_internal_holdout</code> 等旧 internal holdout 结果只展示，不参与排名。</p>
+{table_html}
+</section>"""
+
+
 def _section_ranking(ranked: pd.DataFrame) -> str:
     if ranked.empty:
-        return "<section><h2>3 · 推荐组合</h2><p>无有效结果。</p></section>"
+        return "<section><h2>4 · 推荐组合</h2><p>没有满足严格排名守卫的外层 CV 结果；请查看上一节的排除原因。</p></section>"
 
-    has_time = "train_time_s" in ranked.columns
+    has_time = "train_time_s" in ranked.columns and not pd.to_numeric(ranked["train_time_s"], errors="coerce").dropna().empty
 
     rows_html = ""
     for _, r in ranked.head(3).iterrows():
@@ -540,16 +780,18 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
             f"<td>{medal}</td>"
             f"<td><b>{_esc(r['desc_name'])}</b></td>"
             f"<td><b>{_esc(r['model_name'])}</b></td>"
+            f"<td>{_esc(_scalar_text(r.get('evaluation_protocol'), '—'))}</td>"
+            f"<td>{_esc(_scalar_text(r.get('folds'), '—'))}</td>"
+            f"<td>{_yes_no(r.get('oof_complete'))}</td>"
             f"<td>{_fmt(r['r2'], 3)}</td>"
-            f"<td>{_fmt(r['rmse'], 4)}</td>"
-            f"<td>{_fmt(r['mae'], 4)}</td>"
+            f"<td>{_fmt_metric_with_std(r.get('rmse'), r.get('rmse_std'), 4)}</td>"
+            f"<td>{_fmt_metric_with_std(r.get('mae'), r.get('mae_std'), 4)}</td>"
             f"<td>{_fmt(r['score'], 3)}</td>"
             f"{time_cell}"
             f"<td style='text-align:left'>{reason_text}</td>"
             f"</tr>\n"
         )
 
-    # 完整排名（可折叠）
     all_rows = ""
     for _, r in ranked.iterrows():
         time_cell = f"<td>{_fmt_time(r['train_time_s'])}</td>" if has_time else ""
@@ -558,30 +800,32 @@ def _section_ranking(ranked: pd.DataFrame) -> str:
             f"<td>{int(r['rank'])}</td>"
             f"<td>{_esc(r['desc_name'])}</td>"
             f"<td>{_esc(r['model_name'])}</td>"
+            f"<td>{_esc(_scalar_text(r.get('evaluation_protocol'), '—'))}</td>"
+            f"<td>{_esc(_scalar_text(r.get('folds'), '—'))}</td>"
+            f"<td>{_yes_no(r.get('oof_complete'))}</td>"
             f"<td>{_fmt(r['r2'], 3)}</td>"
-            f"<td>{_fmt(r['rmse'], 4)}</td>"
-            f"<td>{_fmt(r['mae'], 4)}</td>"
+            f"<td>{_fmt_metric_with_std(r.get('rmse'), r.get('rmse_std'), 4)}</td>"
+            f"<td>{_fmt_metric_with_std(r.get('mae'), r.get('mae_std'), 4)}</td>"
             f"<td>{_fmt(r['score'], 3)}</td>"
             f"{time_cell}"
             f"</tr>\n"
         )
 
-    time_th       = "<th>用时</th>" if has_time else ""
-    time_th_small = "<th>用时</th>" if has_time else ""
+    time_th = "<th>用时</th>" if has_time else ""
 
     return f"""
 <section>
-<h2>3 · 推荐组合（加权排名前三）</h2>
+<h2>4 · 推荐组合（严格外层 CV 加权排名前三）</h2>
 <table class="rank-tbl">
-<thead><tr><th>名次</th><th>描述符</th><th>模型</th>
-<th>R²</th><th>RMSE</th><th>MAE</th><th>综合分</th>{time_th}<th>推荐理由</th></tr></thead>
+<thead><tr><th>名次</th><th>描述符</th><th>模型</th><th>evaluation_protocol</th><th>folds</th><th>OOF</th>
+<th>R²</th><th>RMSE 均值±标准差</th><th>MAE 均值±标准差</th><th>综合分</th>{time_th}<th>推荐理由</th></tr></thead>
 <tbody>{rows_html}</tbody>
 </table>
 <details style="margin-top:12px">
-  <summary style="cursor:pointer;color:#2563eb">展开完整排名</summary>
+  <summary style="cursor:pointer;color:#2563eb">展开完整严格排名</summary>
   <table style="margin-top:8px">
-  <thead><tr><th>名次</th><th>描述符</th><th>模型</th>
-  <th>R²</th><th>RMSE</th><th>MAE</th><th>综合分</th>{time_th_small}</tr></thead>
+  <thead><tr><th>名次</th><th>描述符</th><th>模型</th><th>evaluation_protocol</th><th>folds</th><th>OOF</th>
+  <th>R²</th><th>RMSE 均值±标准差</th><th>MAE 均值±标准差</th><th>综合分</th>{time_th}</tr></thead>
   <tbody>{all_rows}</tbody>
   </table>
 </details>
@@ -828,6 +1072,7 @@ def generate_report(
         _section_intro(task_info, now)
         + _section_grid(metrics_df)
         + _section_glossary()
+        + _section_protocol_guard(metrics_df)
         + _section_ranking(ranked)
         + _section_column_mapping(task_info)
         + _section_descriptor_config(task_info)
@@ -892,14 +1137,33 @@ def generate_markdown_report(
     mae_col   = "mae_mean"   if "mae_mean"   in metrics_df.columns else "mae"
 
     def _fv(v: Any, d: int = 4) -> str:
-        if v is None or (isinstance(v, float) and math.isnan(float(v))):
+        try:
+            number = float(v)
+        except (TypeError, ValueError):
             return "—"
-        return f"{float(v):.{d}f}"
+        if not math.isfinite(number):
+            return "—"
+        return f"{number:.{d}f}"
 
     def _md(v: Any) -> str:
         if v is None:
             return "—"
+        try:
+            if pd.isna(v):
+                return "—"
+        except (TypeError, ValueError):
+            pass
         return str(v).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+    def _md_metric_with_std(row: Any, mean_col: str, std_col: str, digits: int = 4) -> str:
+        mean_text = _fv(row.get(mean_col), digits)
+        std_text = _fv(row.get(std_col), digits)
+        if mean_text == "—":
+            return "—"
+        return mean_text if std_text == "—" else f"{mean_text} ± {std_text}"
+
+    def _md_autogluon_params(row: Any) -> str:
+        return _md(_autogluon_param_summary(row))
 
     lines: List[str] = []
 
@@ -967,62 +1231,94 @@ def generate_markdown_report(
 
     # ── 详细指标 ─────────────────────────────────────────────────────────────
     has_time = "train_time_s" in metrics_df.columns
-    time_th  = " 用时 |" if has_time else ""
+    time_th = " 用时 |" if has_time else ""
     time_sep = "---|" if has_time else ""
 
     lines += ["---", "", "## 详细指标", ""]
     if metrics_df.empty:
         lines.append("无有效指标记录。")
     else:
-        lines.append(f"| 描述符 | 模型 | R² 均值 | R² 标准差 | RMSE | MAE |{time_th}")
-        lines.append(f"|---|---|---|---|---|---|{time_sep}")
+        lines.append(f"| 描述符 | 模型 | evaluation_protocol | folds | oof_complete | R² 均值 | R² 标准差 | RMSE 均值 | RMSE 标准差 | MAE 均值 | MAE 标准差 | AutoGluon关键参数 | seed policy |{time_th}")
+        lines.append(f"|---|---|---|---|---|---|---|---|---|---|---|---|---|{time_sep}")
         for _, row in metrics_df.iterrows():
-            r2_std = row.get("r2_std", float("nan")) if "r2_std" in row.index else float("nan")
+            protocol = _md(row.get("evaluation_protocol", "legacy_untracked"))
+            folds = _md(_folds_display(row))
+            oof = _yes_no(row.get("oof_complete")) if "oof_complete" in metrics_df.columns else "—"
+            seed_policy = _md(row.get("autogluon_seed_policy", "—"))
             t_cell = f" {_fmt_time(row.get('train_time_s'))} |" if has_time else ""
             lines.append(
-                f"| {row[desc_col]} | {row[model_col]}"
-                f" | {_fv(row.get(r2_col))} | {_fv(r2_std)}"
-                f" | {_fv(row.get(rmse_col))} | {_fv(row.get(mae_col))} |{t_cell}"
+                f"| {_md(row[desc_col])} | {_md(row[model_col])}"
+                f" | {protocol} | {folds} | {oof}"
+                f" | {_fv(row.get(r2_col))} | {_fv(row.get('r2_std'))}"
+                f" | {_fv(row.get(rmse_col))} | {_fv(row.get('rmse_std'))}"
+                f" | {_fv(row.get(mae_col))} | {_fv(row.get('mae_std'))}"
+                f" | {_md_autogluon_params(row)} | {seed_policy} |{t_cell}"
+            )
+    lines.append("")
+
+    # ── 协议与排名守卫 ───────────────────────────────────────────────────────
+    guard = ranking_eligibility_table(metrics_df)
+    lines += [
+        "---", "", "## 协议与排名守卫", "",
+        "推荐排名只纳入 `evaluation_protocol=outer_kfold`、`expected_folds=completed_folds=cv`、`oof_complete=True`，且 RMSE/MAE 均值与标准差均完整的条目；`autogluon_internal_holdout` 只展示，不参与排名。",
+        "",
+    ]
+    if guard.empty:
+        lines.append("无可审计指标记录。")
+    else:
+        lines += [
+            "| 描述符 | 模型 | evaluation_protocol | cv | expected_folds | completed_folds | folds | oof_complete | OOF观测/总数 | RMSE | RMSE标准差 | MAE | MAE标准差 | autogluon_time_limit | autogluon_presets | autogluon_num_cpus | autogluon_seed_policy | 排名资格 | 排除原因 |",
+            "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        ]
+        for _, item in guard.iterrows():
+            observed = item.get("oof_n_observed")
+            total = item.get("oof_n_total")
+            oof_counts = "—" if pd.isna(observed) or pd.isna(total) else f"{int(observed)}/{int(total)}"
+            lines.append(
+                f"| {_md(item.get('desc_name'))} | {_md(item.get('model_name'))}"
+                f" | {_md(item.get('evaluation_protocol'))} | {_md(item.get('cv'))}"
+                f" | {_md(item.get('expected_folds'))} | {_md(item.get('completed_folds'))}"
+                f" | {_md(item.get('folds'))} | {_yes_no(item.get('oof_complete'))}"
+                f" | {oof_counts} | {_fv(item.get('rmse'))} | {_fv(item.get('rmse_std'))}"
+                f" | {_fv(item.get('mae'))} | {_fv(item.get('mae_std'))}"
+                f" | {_md(item.get('autogluon_time_limit'))} | {_md(item.get('autogluon_presets'))}"
+                f" | {_md(item.get('autogluon_num_cpus'))} | {_md(item.get('autogluon_seed_policy'))}"
+                f" | {_yes_no(item.get('ranking_eligible'))} | {_md(item.get('ranking_exclusion_reason'))} |"
             )
     lines.append("")
 
     # ── 推荐组合 ─────────────────────────────────────────────────────────────
     ranked = rank_combinations(metrics_df)
-    lines += ["---", "", "## 推荐组合（加权排名）", ""]
+    lines += ["---", "", "## 推荐组合（严格外层 CV 加权排名）", ""]
     if not ranked.empty:
-        has_rk_time = "train_time_s" in ranked.columns
-        rk_time_th  = " 用时 |" if has_rk_time else ""
+        has_rk_time = "train_time_s" in ranked.columns and not pd.to_numeric(ranked["train_time_s"], errors="coerce").dropna().empty
+        rk_time_th = " 用时 |" if has_rk_time else ""
         rk_time_sep = "---|" if has_rk_time else ""
-        rk_header = f"| 名次 | 描述符 | 模型 | R² | RMSE | MAE | 综合分 |{rk_time_th} 推荐理由 |"
-        rk_sep    = f"|---|---|---|---|---|---|---|{rk_time_sep}---|"
+        rk_header = f"| 名次 | 描述符 | 模型 | evaluation_protocol | folds | OOF | R² | RMSE 均值±标准差 | MAE 均值±标准差 | 综合分 |{rk_time_th} 推荐理由 |"
+        rk_sep = f"|---|---|---|---|---|---|---|---|---|---|{rk_time_sep}---|"
         lines += [rk_header, rk_sep]
         for _, r in ranked.head(3).iterrows():
-            medal  = ["🥇", "🥈", "🥉"][int(r["rank"]) - 1]
+            medal = ["🥇", "🥈", "🥉"][int(r["rank"]) - 1]
             t_cell = f" {_fmt_time(r['train_time_s'])} |" if has_rk_time else ""
             reason = r.get("reason") or "综合指标较优"
             lines.append(
-                f"| {medal} {int(r['rank'])} | **{r['desc_name']}** | **{r['model_name']}**"
-                f" | {_fv(r['r2'], 3)} | {_fv(r['rmse'], 4)} | {_fv(r['mae'], 4)}"
-                f" | {_fv(r['score'], 3)} |{t_cell} {reason} |"
+                f"| {medal} {int(r['rank'])} | **{_md(r['desc_name'])}** | **{_md(r['model_name'])}**"
+                f" | {_md(r.get('evaluation_protocol'))} | {_md(r.get('folds'))} | {_yes_no(r.get('oof_complete'))}"
+                f" | {_fv(r['r2'], 3)} | {_md_metric_with_std(r, 'rmse', 'rmse_std', 4)} | {_md_metric_with_std(r, 'mae', 'mae_std', 4)}"
+                f" | {_fv(r['score'], 3)} |{t_cell} {_md(reason)} |"
             )
-        lines += [
-            "",
-            "<details>",
-            "<summary>展开完整排名</summary>",
-            "",
-            rk_header,
-            rk_sep,
-        ]
+        lines += ["", "<details>", "<summary>展开完整严格排名</summary>", "", rk_header, rk_sep]
         for _, r in ranked.iterrows():
             t_cell = f" {_fmt_time(r['train_time_s'])} |" if has_rk_time else ""
             lines.append(
-                f"| {int(r['rank'])} | {r['desc_name']} | {r['model_name']}"
-                f" | {_fv(r['r2'], 3)} | {_fv(r['rmse'], 4)} | {_fv(r['mae'], 4)}"
+                f"| {int(r['rank'])} | {_md(r['desc_name'])} | {_md(r['model_name'])}"
+                f" | {_md(r.get('evaluation_protocol'))} | {_md(r.get('folds'))} | {_yes_no(r.get('oof_complete'))}"
+                f" | {_fv(r['r2'], 3)} | {_md_metric_with_std(r, 'rmse', 'rmse_std', 4)} | {_md_metric_with_std(r, 'mae', 'mae_std', 4)}"
                 f" | {_fv(r['score'], 3)} |{t_cell}|"
             )
         lines += ["", "</details>", ""]
     else:
-        lines += ["无有效结果。", ""]
+        lines += ["没有满足严格排名守卫的外层 CV 结果；请查看上一节的排除原因。", ""]
 
     # ── 建模耗时与成本对比 ───────────────────────────────────────────────────
     time_summary = _universal_time_summary(metrics_df)

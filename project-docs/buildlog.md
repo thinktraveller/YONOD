@@ -5616,3 +5616,36 @@ for desc_name in args.descriptors:
 - 步骤 26.5：统一指标、OOF、报告与公平排名口径，确保 AutoGluon 与其他模型只在相同协议、相同完成 fold 数和完整指标字段下进入排行榜。
 
 ---
+
+## [2026-09-08 09:54] 步骤 26.5–26.6 完成：报告协议守卫与严格比较口径
+
+### 执行的任务
+- 在普通 `main.py` 指标 CSV 中补充 OOF 完整性字段：`oof_complete`、`oof_n_observed`、`oof_n_total`，用于判断外层 CV 预测是否覆盖全部样本。
+- 改造普通 Markdown/HTML 报告：详细指标、结果矩阵和推荐排名展示 `evaluation_protocol`、expected/completed folds、OOF 完整性、RMSE/MAE mean±std、AutoGluon time_limit/presets/num_cpus/seed policy。
+- 新增普通报告排名守卫：只有 `evaluation_protocol=outer_kfold`、`expected_folds=completed_folds=cv`、OOF 完整且 RMSE/MAE 均值与标准差完整的条目进入排行榜；`autogluon_internal_holdout` 只展示，不参与排名。
+- 改造 strict benchmark 指标与报告：折级指标、完整性、组合/维度耗时、bootstrap summary 和统计比较携带 `evaluation_protocol`；比较函数过滤 internal holdout，`run_benchmark.py` 只把 `manifest_outer_cv` 完整折结果送入正式 summary/paired/Tukey 比较。
+- strict benchmark Markdown/HTML 报告新增“模型协议与严格排名守卫”表，展示协议、fold 完成度、AutoGluon 关键参数和排除原因。
+
+### 关键变更
+- `main.py`：CSV schema 与每个组合的 OOF 完整性计算。
+- `yonod/universal/report.py`：新增 `ranking_eligibility_table()`、严格排名过滤、协议守卫表、RMSE/MAE 标准差展示和 AutoGluon 参数展示。
+- `yonod/benchmark/metrics.py`：指标/完整性/时间汇总/统计比较均纳入 `evaluation_protocol`；internal holdout 不进入严格比较。
+- `yonod/benchmark/report.py`：性能矩阵展示 RMSE/MAE 标准差，新增 strict protocol inventory。
+- `scripts/run_benchmark.py`：正式汇总前只保留 `manifest_outer_cv` 且完整的组合。
+- `yonod/models/autogluon_model.py`：旧 holdout 返回中补齐 `autogluon_seed_policy`。
+- `tests/test_report_autogluon_protocol_guard.py`：新增报告协议守卫、OOF/CSV 字段和 benchmark protocol-scoped comparison 测试。
+
+### 验证结果
+- `python3 -m py_compile main.py yonod/models/autogluon_model.py yonod/universal/report.py yonod/benchmark/metrics.py yonod/benchmark/report.py scripts/run_benchmark.py`：通过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests/test_report_autogluon_protocol_guard.py tests/test_autogluon_fold_adapter.py tests/test_main_autogluon_outer_cv_paths.py tests/test_benchmark_autogluon_executor.py tests/test_main_feature_library.py tests/test_wizard_model_selection.py -v`：23/23 通过，1 个 Tukey 子测试因 `statsmodels` 未安装按测试设计跳过。
+- `/home/wangzh685/miniconda3/bin/conda run -n yonod python -W ignore -m unittest tests.test_benchmark_timing.BenchmarkTimingTests.test_time_summary_preserves_completeness_and_rejects_invalid_values -v`：1/1 通过。
+
+### 遇到的问题及解决方案
+- `apply_patch` 仍受当前沙箱 `bwrap: loopback: Failed RTM_NEWADDR` 限制，已在授权范围内使用等价脚本写入；所有写入均限制在本阶段源码、测试和 `project-docs/buildlog.md`。
+- conda `yonod` 环境未安装 `statsmodels`，Tukey 协议过滤测试使用 `skipTest`，paired comparison 协议过滤测试已实际运行通过。
+- 未提交用户已有配置重命名、生成结果、`project-docs/goal.md`、论文复现材料和日志。
+
+### 下一步计划
+- 步骤 26.7：重跑四个 yieldmaster 数据集并隔离正式 `outercv` 产物；正式运行时使用 AutoGluon `time_limit=300`、`num_cpus=19`，旧 holdout 报告不得合并进新排行榜。
+
+---

@@ -26,7 +26,8 @@ class MetricRebuildError(RuntimeError):
 
 
 FOLD_METRIC_COLUMNS = [
-    "run_id", "config_hash", "split_id", "descriptor", "model", "repeat", "fold",
+    "run_id", "config_hash", "split_id", "evaluation_protocol",
+    "descriptor", "model", "repeat", "fold",
     "n_valid", "r2", "rmse", "mae", "train_time_s", "predict_time_s",
     "prediction_path", "metadata_path",
 ]
@@ -35,21 +36,24 @@ EXCLUSION_COLUMNS = [
     "reason_code", "reason_detail", "prediction_path",
 ]
 COMPLETENESS_COLUMNS = [
-    "run_id", "config_hash", "split_id", "descriptor", "model", "expected_folds",
+    "run_id", "config_hash", "split_id", "evaluation_protocol",
+    "descriptor", "model", "expected_folds",
     "available_folds", "valid_metric_folds", "is_complete", "missing_or_excluded_reason",
 ]
 COMBINATION_TIME_SUMMARY_COLUMNS = [
-    "run_id", "config_hash", "split_id", "descriptor", "model",
+    "run_id", "config_hash", "split_id", "evaluation_protocol", "descriptor", "model",
     "expected_folds", "completed_folds", "is_complete", "time_status", "time_status_detail",
     "is_time_comparable", "total_train_time_s", "mean_train_time_s", "median_train_time_s",
     "max_train_time_s", "total_predict_time_s", "total_model_time_s",
 ]
 DIMENSION_TIME_SUMMARY_COLUMNS = [
-    "run_id", "config_hash", "split_id", "aggregation_dimension", "item",
+    "run_id", "config_hash", "split_id", "evaluation_protocol",
+    "aggregation_dimension", "item",
     "expected_combinations", "comparable_combinations", "noncomparable_combinations",
     "is_time_comparable", "time_status", "time_status_detail",
     "total_train_time_s", "total_predict_time_s", "total_model_time_s",
 ]
+STRICT_COMPARABLE_PROTOCOLS = {"manifest_outer_cv", "outer_kfold"}
 
 
 @dataclass(frozen=True)
@@ -198,6 +202,7 @@ def rebuild_fold_metrics(run_dir: Path | str) -> MetricRebuildResult:
                 raise ValueError("constant_validation_label")
             rows.append({
                 "run_id": run_id, "config_hash": config_hash, "split_id": split_id,
+                "evaluation_protocol": str(metadata.get("evaluation_protocol") or "missing"),
                 "descriptor": descriptor, "model": model, "repeat": repeat, "fold": fold,
                 "n_valid": int(len(y_true)), "r2": float(r2_score(y_true, y_pred)),
                 "rmse": float(np.sqrt(mean_squared_error(y_true, y_pred))),
@@ -232,12 +237,22 @@ def rebuild_fold_metrics(run_dir: Path | str) -> MetricRebuildResult:
             (fold_metrics["split_id"] == split_id) & (fold_metrics["descriptor"] == descriptor) & (fold_metrics["model"] == model)
         ] if not fold_metrics.empty else _empty(FOLD_METRIC_COLUMNS)
         actual_pairs = set(zip(actual.get("repeat", []), actual.get("fold", [])))
+        actual_protocols = (
+            sorted({str(value) for value in actual.get("evaluation_protocol", pd.Series(dtype=str)).dropna().tolist()})
+            if not actual.empty else []
+        )
+        protocol = actual_protocols[0] if len(actual_protocols) == 1 else ("missing" if not actual_protocols else "mixed_protocols")
         reasons = []
         missing_pairs = expected_pairs.difference(actual_pairs)
         if missing_pairs:
             reasons.append("missing_or_excluded_folds={0}".format(sorted(missing_pairs)))
+        if len(actual_protocols) > 1:
+            reasons.append("mixed_evaluation_protocols={0}".format(actual_protocols))
+        if protocol in {"autogluon_internal_holdout", "internal_holdout"}:
+            reasons.append("internal_holdout_not_rankable")
         complete_rows.append({
             "run_id": run_id, "config_hash": config_hash, "split_id": split_id,
+            "evaluation_protocol": protocol,
             "descriptor": descriptor, "model": model, "expected_folds": len(expected_pairs),
             "available_folds": len(seen.intersection({(run_id, config_hash, split_id, descriptor, model, repeat, fold) for repeat, fold in expected_pairs})),
             "valid_metric_folds": len(actual_pairs), "is_complete": not reasons,
@@ -259,17 +274,41 @@ def _bootstrap_mean_ci(values: Sequence[float], n_bootstrap: int, seed: int, con
     return float(np.quantile(samples, alpha)), float(np.quantile(samples, 1.0 - alpha))
 
 
+def _ensure_evaluation_protocol(frame: pd.DataFrame, default: str = "legacy_untracked") -> pd.DataFrame:
+    copy = frame.copy()
+    if "evaluation_protocol" not in copy.columns:
+        copy["evaluation_protocol"] = default
+    else:
+        copy["evaluation_protocol"] = copy["evaluation_protocol"].fillna(default).astype(str)
+    return copy
+
+
+def _strict_comparable_protocol_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    frame = _ensure_evaluation_protocol(frame)
+    return frame.loc[frame["evaluation_protocol"].isin(STRICT_COMPARABLE_PROTOCOLS)].copy()
+
+
+def _group_columns_with_protocol(*, include_dimension: Optional[str] = None) -> List[str]:
+    columns = ["run_id", "config_hash", "split_id", "evaluation_protocol"]
+    if include_dimension:
+        columns.append(include_dimension)
+    return columns
+
+
 def summarize_combinations(fold_metrics: pd.DataFrame, *, n_bootstrap: int = 2000, seed: int = 42) -> pd.DataFrame:
     """Summarise complete fold metrics with bootstrap CIs over folds."""
     if fold_metrics.empty:
-        return _empty(["run_id", "config_hash", "split_id", "descriptor", "model", "metric"])
+        return _empty(["run_id", "config_hash", "split_id", "evaluation_protocol", "descriptor", "model", "metric"])
+    frame = _ensure_evaluation_protocol(fold_metrics)
     rows: List[Dict[str, Any]] = []
-    for keys, part in fold_metrics.groupby(["run_id", "config_hash", "split_id", "descriptor", "model"], sort=True):
+    group_columns = ["run_id", "config_hash", "split_id", "evaluation_protocol", "descriptor", "model"]
+    for keys, part in frame.groupby(group_columns, sort=True):
+        key_map = dict(zip(group_columns, keys))
         for metric in ("r2", "rmse", "mae"):
             values = part[metric].to_numpy(dtype=float)
             low, high = _bootstrap_mean_ci(values, n_bootstrap, seed + len(rows))
             rows.append({
-                "run_id": keys[0], "config_hash": keys[1], "split_id": keys[2], "descriptor": keys[3], "model": keys[4],
+                **key_map,
                 "metric": metric, "n_folds": int(len(values)), "mean": float(np.mean(values)),
                 "median": float(np.median(values)), "std": float(np.std(values, ddof=0)),
                 "q25": float(np.quantile(values, 0.25)), "q75": float(np.quantile(values, 0.75)),
@@ -290,21 +329,23 @@ def summarize_combination_times(
     ``is_time_comparable`` is false so neither report charts nor rankings can
     mistake a partially executed job for a faster complete one.
     """
+    completeness = _ensure_evaluation_protocol(completeness)
+    fold_metrics = _ensure_evaluation_protocol(fold_metrics) if not fold_metrics.empty else fold_metrics
     required_completeness = {
-        "run_id", "config_hash", "split_id", "descriptor", "model",
+        "run_id", "config_hash", "split_id", "evaluation_protocol", "descriptor", "model",
         "expected_folds", "valid_metric_folds", "is_complete", "missing_or_excluded_reason",
     }
     if missing := required_completeness.difference(completeness.columns):
         raise MetricRebuildError("完整性表缺少组合耗时汇总字段：{0}".format(sorted(missing)))
     required_metrics = {
-        "run_id", "config_hash", "split_id", "descriptor", "model",
+        "run_id", "config_hash", "split_id", "evaluation_protocol", "descriptor", "model",
         "train_time_s", "predict_time_s",
     }
     if not fold_metrics.empty and (missing := required_metrics.difference(fold_metrics.columns)):
         raise MetricRebuildError("折级指标表缺少组合耗时字段：{0}".format(sorted(missing)))
 
     rows: List[Dict[str, Any]] = []
-    group_columns = ["run_id", "config_hash", "split_id", "descriptor", "model"]
+    group_columns = ["run_id", "config_hash", "split_id", "evaluation_protocol", "descriptor", "model"]
     for _, complete_row in completeness.sort_values(group_columns).iterrows():
         keys = {column: complete_row[column] for column in group_columns}
         if fold_metrics.empty:
@@ -396,7 +437,7 @@ def summarize_dimension_times(
     if missing:
         raise MetricRebuildError("组合耗时汇总表缺少维度聚合字段：{0}".format(sorted(missing)))
 
-    group_columns = ["run_id", "config_hash", "split_id", dimension]
+    group_columns = ["run_id", "config_hash", "split_id", "evaluation_protocol", dimension]
     rows: List[Dict[str, Any]] = []
     for keys, part in combination_time_summary.groupby(group_columns, sort=True, dropna=False):
         expected = int(len(part))
@@ -422,7 +463,8 @@ def summarize_dimension_times(
             )
         rows.append({
             "run_id": keys[0], "config_hash": keys[1], "split_id": keys[2],
-            "aggregation_dimension": dimension, "item": str(keys[3]),
+            "evaluation_protocol": keys[3],
+            "aggregation_dimension": dimension, "item": str(keys[4]),
             "expected_combinations": expected,
             "comparable_combinations": comparable_count,
             "noncomparable_combinations": expected - comparable_count,
@@ -482,21 +524,26 @@ def paired_comparisons(
         raise MetricRebuildError("需要 scipy >= 1.11 才能进行配对统计比较") from exc
     compare_col = dimension
     fixed_col = "descriptor" if dimension == "model" else "model"
+    fold_metrics = _strict_comparable_protocol_rows(fold_metrics)
+    completeness = _strict_comparable_protocol_rows(completeness)
     records: List[Dict[str, Any]] = []
     exclusions: List[Dict[str, Any]] = []
+    if fold_metrics.empty:
+        return pd.DataFrame.from_records(records), pd.DataFrame.from_records(exclusions)
     complete_keys = set(
-        tuple(row) for row in completeness.loc[completeness["is_complete"], ["split_id", "descriptor", "model"]].itertuples(index=False, name=None)
+        tuple(row) for row in completeness.loc[completeness["is_complete"], ["split_id", "evaluation_protocol", "descriptor", "model"]].itertuples(index=False, name=None)
     )
-    for (run_id, config_hash, split_id, fixed_value), fixed_part in fold_metrics.groupby(["run_id", "config_hash", "split_id", fixed_col], sort=True):
+    for (run_id, config_hash, split_id, protocol, fixed_value), fixed_part in fold_metrics.groupby(["run_id", "config_hash", "split_id", "evaluation_protocol", fixed_col], sort=True):
         candidates = sorted(fixed_part[compare_col].unique())
         for metric in ("r2", "rmse", "mae"):
             pending: List[Dict[str, Any]] = []
             for left, right in itertools.combinations(candidates, 2):
-                left_key = (split_id, fixed_value, left) if dimension == "model" else (split_id, left, fixed_value)
-                right_key = (split_id, fixed_value, right) if dimension == "model" else (split_id, right, fixed_value)
+                left_key = (split_id, protocol, fixed_value, left) if dimension == "model" else (split_id, protocol, left, fixed_value)
+                right_key = (split_id, protocol, fixed_value, right) if dimension == "model" else (split_id, protocol, right, fixed_value)
                 if left_key not in complete_keys or right_key not in complete_keys:
                     exclusions.append({
                         "comparison_dimension": dimension, "fixed_value": fixed_value, "metric": metric,
+                        "evaluation_protocol": protocol,
                         "left": left, "right": right, "reason_code": "incomplete_fold_set",
                     })
                     continue
@@ -506,6 +553,7 @@ def paired_comparisons(
                 if len(paired) != len(left_values) or len(paired) != len(right_values):
                     exclusions.append({
                         "comparison_dimension": dimension, "fixed_value": fixed_value, "metric": metric,
+                        "evaluation_protocol": protocol,
                         "left": left, "right": right, "reason_code": "unmatched_fold_keys",
                     })
                     continue
@@ -524,6 +572,7 @@ def paired_comparisons(
                 ci_low, ci_high = _bootstrap_mean_ci(difference, n_bootstrap, seed + len(records) + len(pending))
                 pending.append({
                     "run_id": run_id, "config_hash": config_hash, "split_id": split_id,
+                    "evaluation_protocol": protocol,
                     "comparison_dimension": dimension, "fixed_value": fixed_value, "metric": metric,
                     "metric_direction": _metric_direction(metric), "left": left, "right": right,
                     "n_folds": int(len(difference)), "effect_mean_difference": float(np.mean(difference)),
@@ -549,8 +598,11 @@ def tukey_hsd_comparisons(fold_metrics: pd.DataFrame, *, dimension: str, alpha: 
         raise MetricRebuildError("需要 statsmodels >= 0.14 才能生成 Tukey HSD 结果") from exc
     compare_col = dimension
     fixed_col = "descriptor" if dimension == "model" else "model"
+    fold_metrics = _strict_comparable_protocol_rows(fold_metrics)
     records: List[Dict[str, Any]] = []
-    for (run_id, config_hash, split_id, fixed_value), part in fold_metrics.groupby(["run_id", "config_hash", "split_id", fixed_col], sort=True):
+    if fold_metrics.empty:
+        return pd.DataFrame.from_records(records)
+    for (run_id, config_hash, split_id, protocol, fixed_value), part in fold_metrics.groupby(["run_id", "config_hash", "split_id", "evaluation_protocol", fixed_col], sort=True):
         if part[compare_col].nunique() < 2:
             continue
         for metric in ("r2", "rmse", "mae"):
@@ -560,6 +612,7 @@ def tukey_hsd_comparisons(fold_metrics: pd.DataFrame, *, dimension: str, alpha: 
             for index, (left_index, right_index) in enumerate(zip(first, second)):
                 records.append({
                     "run_id": run_id, "config_hash": config_hash, "split_id": split_id,
+                    "evaluation_protocol": protocol,
                     "comparison_dimension": dimension, "fixed_value": fixed_value, "metric": metric,
                     "left": str(groups[left_index]), "right": str(groups[right_index]),
                     "mean_difference_right_minus_left": float(result.meandiffs[index]),

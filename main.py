@@ -80,6 +80,7 @@ _CSV_COLUMNS = [
     "n_smiles_cols", "n_numeric_cols",
     "n_samples", "n_total", "coverage", "feature_dim",
     "cv", "evaluation_protocol", "expected_folds", "completed_folds",
+    "oof_complete", "oof_n_observed", "oof_n_total",
     "r2_mean", "r2_std", "rmse_mean", "rmse_std", "mae_mean", "mae_std",
     "train_time_s", "predict_time_s", "device",
     "holdout_frac", "autogluon_time_limit", "autogluon_presets",
@@ -1138,6 +1139,31 @@ def main(argv: Optional[List[str]] = None) -> int:
             }
             oof_pred   = metrics.get("oof_pred")
             oof_y_true = metrics.get("oof_y_true")
+            oof_n_total = int(len(oof_y_true)) if oof_y_true is not None else int(mask.sum())
+            oof_n_observed = 0
+            oof_complete = False
+            if oof_pred is not None and oof_y_true is not None:
+                try:
+                    pred_arr = np.asarray(oof_pred, dtype=np.float64)
+                    true_arr = np.asarray(oof_y_true, dtype=np.float64)
+                    same_shape = pred_arr.shape == true_arr.shape
+                    finite_pred = np.isfinite(pred_arr)
+                    finite_true = np.isfinite(true_arr)
+                    oof_n_observed = int(finite_pred.sum())
+                    oof_complete = bool(
+                        same_shape
+                        and pred_arr.ndim == 1
+                        and true_arr.ndim == 1
+                        and len(pred_arr) == oof_n_total
+                        and oof_n_observed == oof_n_total
+                        and finite_true.all()
+                    )
+                except (TypeError, ValueError):
+                    oof_n_observed = 0
+                    oof_complete = False
+            metrics.setdefault("oof_complete", oof_complete)
+            metrics.setdefault("oof_n_observed", oof_n_observed)
+            metrics.setdefault("oof_n_total", oof_n_total)
             for k, v in metrics.items():
                 if k not in ("oof_pred", "oof_y_true"):
                     row[k] = v

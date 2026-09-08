@@ -134,8 +134,14 @@ def _prepare_feature_artifacts(config: BenchmarkConfig, frame, run_dir: Path):
 
 
 def _complete_metrics(rebuilt):
-    complete = rebuilt.completeness.loc[rebuilt.completeness["is_complete"], ["split_id", "descriptor", "model"]]
-    return rebuilt.fold_metrics.merge(complete, on=["split_id", "descriptor", "model"], how="inner")
+    complete = rebuilt.completeness.loc[rebuilt.completeness["is_complete"]].copy()
+    fold_metrics = rebuilt.fold_metrics.copy()
+    key_columns = ["split_id", "descriptor", "model"]
+    if "evaluation_protocol" in complete.columns and "evaluation_protocol" in fold_metrics.columns:
+        complete = complete.loc[complete["evaluation_protocol"].astype(str).eq("manifest_outer_cv")].copy()
+        key_columns.insert(1, "evaluation_protocol")
+    complete = complete.loc[:, key_columns]
+    return fold_metrics.merge(complete, on=key_columns, how="inner")
 
 
 def main() -> int:

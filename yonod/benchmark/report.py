@@ -201,13 +201,102 @@ def _table_markdown(frame: pd.DataFrame, *, max_rows: int = 150) -> str:
     return text
 
 
+def _with_protocol(frame: pd.DataFrame, default: str = "legacy_untracked") -> pd.DataFrame:
+    copy = frame.copy()
+    if "evaluation_protocol" not in copy.columns:
+        copy["evaluation_protocol"] = default
+    else:
+        copy["evaluation_protocol"] = copy["evaluation_protocol"].fillna(default).astype(str)
+    return copy
+
+
 def _performance_matrix(summary: pd.DataFrame, completeness: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "split_id", "evaluation_protocol", "descriptor", "model",
+        "r2", "r2_std", "rmse", "rmse_std", "mae", "mae_std",
+        "complete", "expected_folds", "valid_metric_folds",
+    ]
     if summary.empty:
-        return pd.DataFrame(columns=["descriptor", "model", "r2", "rmse", "mae", "complete", "expected_folds", "valid_metric_folds"])
-    values = summary.pivot_table(index=["descriptor", "model"], columns="metric", values="mean", aggfunc="first").reset_index()
-    complete = completeness[["descriptor", "model", "is_complete", "expected_folds", "valid_metric_folds"]].copy()
+        return pd.DataFrame(columns=columns)
+    summary = _with_protocol(summary)
+    completeness = _with_protocol(completeness)
+    index = ["split_id", "evaluation_protocol", "descriptor", "model"]
+    means = summary.pivot_table(index=index, columns="metric", values="mean", aggfunc="first").reset_index()
+    stds = summary.pivot_table(index=index, columns="metric", values="std", aggfunc="first").reset_index()
+    stds = stds.rename(columns={"r2": "r2_std", "rmse": "rmse_std", "mae": "mae_std"})
+    values = means.merge(stds, on=index, how="left")
+    complete = completeness[index + ["is_complete", "expected_folds", "valid_metric_folds"]].copy()
     complete = complete.rename(columns={"is_complete": "complete"})
-    return values.merge(complete, on=["descriptor", "model"], how="left").sort_values(["descriptor", "model"])
+    result = values.merge(complete, on=index, how="left")
+    return result.loc[:, [column for column in columns if column in result.columns]].sort_values(index)
+
+
+def _model_protocol_inventory(
+    layout: BenchmarkOutputLayout,
+    fold_metrics: pd.DataFrame,
+    completeness: pd.DataFrame,
+) -> pd.DataFrame:
+    """Show protocol, fold completeness, and AutoGluon adapter settings."""
+    columns = [
+        "split_id", "descriptor", "model", "evaluation_protocol",
+        "expected_folds", "valid_metric_folds", "is_complete",
+        "strict_rank_eligible", "strict_rank_exclusion_reason",
+        "autogluon_time_limit", "autogluon_presets", "autogluon_num_cpus",
+        "autogluon_seed_policy", "autogluon_version", "model_artifact_cleanup",
+    ]
+    if completeness.empty:
+        return pd.DataFrame(columns=columns)
+    completeness = _with_protocol(completeness)
+    fold_metrics = _with_protocol(fold_metrics) if not fold_metrics.empty else fold_metrics
+
+    records: list[Dict[str, Any]] = []
+    for _, row in completeness.iterrows():
+        protocol = str(row.get("evaluation_protocol", "legacy_untracked"))
+        mask = pd.Series([False] * len(fold_metrics))
+        if not fold_metrics.empty:
+            mask = (
+                fold_metrics["split_id"].astype(str).eq(str(row.get("split_id")))
+                & fold_metrics["evaluation_protocol"].astype(str).eq(protocol)
+                & fold_metrics["descriptor"].astype(str).eq(str(row.get("descriptor")))
+                & fold_metrics["model"].astype(str).eq(str(row.get("model")))
+            )
+        metadata_values: Dict[str, Any] = {}
+        if not fold_metrics.empty and mask.any():
+            for metadata_path in fold_metrics.loc[mask, "metadata_path"].dropna().astype(str).unique():
+                try:
+                    candidate = Path(metadata_path)
+                    if not candidate.is_absolute():
+                        candidate = layout.run_dir / metadata_path
+                    payload = _read_json(candidate)
+                except Exception:
+                    continue
+                for key in (
+                    "autogluon_time_limit", "autogluon_presets", "autogluon_num_cpus",
+                    "autogluon_seed_policy", "autogluon_version", "model_artifact_cleanup",
+                ):
+                    value = payload.get(key)
+                    if value is not None and str(value) != "":
+                        metadata_values.setdefault(key, value)
+        is_complete = bool(row.get("is_complete", False))
+        eligible = bool(is_complete and protocol == "manifest_outer_cv")
+        reasons = []
+        if protocol != "manifest_outer_cv":
+            reasons.append("协议不是 manifest_outer_cv")
+        if not is_complete:
+            reasons.append(str(row.get("missing_or_excluded_reason", "折级结果不完整")) or "折级结果不完整")
+        records.append({
+            "split_id": row.get("split_id"),
+            "descriptor": row.get("descriptor"),
+            "model": row.get("model"),
+            "evaluation_protocol": protocol,
+            "expected_folds": row.get("expected_folds"),
+            "valid_metric_folds": row.get("valid_metric_folds"),
+            "is_complete": is_complete,
+            "strict_rank_eligible": eligible,
+            "strict_rank_exclusion_reason": "可进入 strict benchmark 比较/排名" if eligible else "; ".join(reasons),
+            **metadata_values,
+        })
+    return pd.DataFrame.from_records(records, columns=columns).sort_values(["split_id", "descriptor", "model", "evaluation_protocol"])
 
 
 def _protocol_alignment_table(
@@ -462,6 +551,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     tables.update(_load_or_rebuild_time_summaries(layout, tables))
     split_audit = _split_audit(split_manifest)
     performance = _performance_matrix(tables["combination_summary"], tables["completeness"])
+    protocol_inventory = _model_protocol_inventory(layout, tables["fold_metrics"], tables["completeness"])
     state = _state_summary(layout)
     descriptor_status_path = layout.docs / "descriptor_status.csv"
     descriptor_status = (
@@ -538,7 +628,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     conclusion_html = "<ul>" + "".join("<li>{0}</li>".format(html.escape(line)) for line in model_conclusions + descriptor_conclusions) + "</ul>"
     html_content = """<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>YONOD Benchmark {run}</title>{css}</head><body>
 <h1>YONOD 严谨模型比较报告</h1><p>生成时间：{now}；本报告只读取已保存 artefacts，不会重新训练模型。</p>
- {trace}{protocol}{descriptors}{split}{performance}{time}{figures}{statistics}{tukey}{costs}{limits}
+ {trace}{protocol}{descriptors}{split}{protocol_guard}{performance}{time}{figures}{statistics}{tukey}{costs}{limits}
 </body></html>""".format(
         run=html.escape(run_id), css=css, now=html.escape(now),
         trace=section("实验可追溯性", _table_html(traceability)),
@@ -553,6 +643,11 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
             + _table_html(descriptor_status),
         ),
         split=section("切分审计", _table_html(split_audit)),
+        protocol_guard=section(
+            "模型协议与严格排名守卫",
+            "<p>strict benchmark 的比较/排名只纳入 <code>evaluation_protocol=manifest_outer_cv</code> 且 expected/valid fold 完整的组合；旧 <code>autogluon_internal_holdout</code> 只展示并明确排除。</p>"
+            + _table_html(protocol_inventory),
+        ),
         performance=section("性能矩阵与完成度", _table_html(performance) + _table_html(tables["completeness"])),
         time=section("建模耗时与成本对比", time_section_html),
         figures=section("预测与稳定性", figures_html or "<p class='empty'>没有可用预测图；请检查 fold_metrics 中的预测路径。</p>"),
@@ -572,6 +667,9 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "", "## 描述符预计算状态", "",
         "建模任务只读取 `descriptors/*.npz`；失败描述符的模型任务被隔离跳过。", "",
         _table_markdown(descriptor_status),
+        "", "## 模型协议与严格排名守卫", "",
+        "strict benchmark 的比较/排名只纳入 `evaluation_protocol=manifest_outer_cv` 且 expected/valid fold 完整的组合；旧 `autogluon_internal_holdout` 只展示并明确排除。", "",
+        _table_markdown(protocol_inventory),
         "", "## 性能矩阵与完成度", "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
         "", "## 建模耗时与成本对比", "",
         "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",
