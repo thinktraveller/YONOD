@@ -8893,4 +8893,365 @@ logs/yieldmaster_all_models_outercv_<timestamp>.log
 
 ---
 
+
+## 二十七、AutoGluon 论文完全一致 5×5 重复 KFold 复现升级计划
+
+### 步骤27.1：审计当前 AutoGluon outercv 产物并明确协议边界
+
+#### 目标说明
+
+把已经生成的 `yieldmaster_mfp_ohe_outercv_20260908` 结果定位为“探索性外层 5 折结果”，不再把它作为与论文 RF 结果严格比较的依据。当前产物修复了 AutoGluon 内部 80/20 holdout 的主要问题，但仍未满足论文协议的两个硬条件：5 repeats × 5 folds，以及 SM 数据集在 MFP 与 OHE 上使用不同总体。
+
+本轮只更新计划，不撤回近期构建提交。最近与 AutoGluon 有关的提交均属于步骤26的实现与运行链路，尚未发现证据表明它们干扰本步骤计划；当前工作区已有大量未跟踪运行产物和 `project-docs/goal.md` 修改，后续构建应保留这些他人/既有改动，避免把它们混入计划或代码提交。
+
+#### 具体操作
+
+构建阶段先生成一份只读审计报告，列出以下证据：
+
+- 论文补充材料要求：RF 结果使用 5×5-fold cross-validation；指标为 MAE、RMSE、R²、Kendall τ，表中 ± 为 25 个验证折上的标准差。
+- 论文补充材料要求：MFP 为 count-based Morgan fingerprint，radius=3、fpSize=1024；OHE 在 train-test split 之后执行，并且只在训练集 fit。
+- 论文原生训练代码要求：`KFold(n_splits=5, shuffle=True, random_state=seed + repeat_index)`，`seed=1000`，即有效 repeat seeds 为 1000、1001、1002、1003、1004。
+- 论文 RF 参数要求：`RandomForestRegressor(n_estimators=500, max_features=0.30, n_jobs=-1, random_state=repeat_seed)`。
+- 已有原生复现证据：`reference-proejct/vjethbkm/outputs/tables/native_mfp_rf_matrix_comparison.csv` 与 `native_ohe_rf_matrix_comparison.csv` 中 MFP/OHE + RF 的 32 个指标行均与官方 JSON 对齐，`valid_fold_count=25`。
+- 当前 YONOD outercv 产物证据：`configs/yieldmaster_*_mfp_ohe_outercv_20260908/fold_transformers/ohe_train_fold/summary.json` 只有 `completed_folds=5`，目录形态只有 `repeat-01/fold-01..05`，不是论文 25 折。
+- 当前 SM outercv 产物证据：报告中 MFP 与 OHE 均为 `5760/5760` OOF 覆盖；论文原生 MFP 结果对应 SM 完整分子总体 `4620`，OHE 对应原始 CSV 总体 `5760`。
+
+#### 验证方法
+
+审计报告必须把当前结果标记为 `outer_kfold_single_repeat` 或等价历史标签，并在后续严格比较报告中排除。报告中不得出现“当前 `outercv_20260908` 已经严格复现论文 5×5 协议”的结论。
+
+#### 风险提示
+
+当前单次 5 折 AutoGluon 结果有参考价值，尤其能说明 AutoGluon 在同一普通 5 折外层验证下通常比 RF 更强；但它不能支撑“论文条件下严格优于 RF”的结论。这里最容易踩的坑，是把 `folds=5/5` 看成论文 `5×5=25` 折。
+
+### 步骤27.2：建立 paper_exact 数据总体与特征一致性清单
+
+#### 目标说明
+
+严格比较的第一条件是“同一原始样本总体”。构建阶段应新增 `paper_exact` 数据总体定义，不覆盖现有 yieldmaster 普通配置和 `outercv_20260908` 输出。
+
+#### 具体操作
+
+新增或生成以下总体定义，每个总体都保存 `dataset_sha256`、`source_row_index`、`sample_id`、标签列、组件列顺序和行数：
+
+| population_id | 数据集 | 特征 | 预期行数 | 说明 |
+| --- | --- | --- | ---: | --- |
+| `bh1_paper_exact` | BH1 | MFP/OHE | 3955 | 使用论文官方 CSV 行顺序 |
+| `bh2_paper_exact` | BH2 | MFP/OHE | 3359 | 使用论文官方 CSV 行顺序 |
+| `sl1_paper_exact` | SL1 | MFP/OHE | 1150 | 使用论文官方 CSV 行顺序 |
+| `sm_ohe_paper_exact_5760` | SM | OHE | 5760 | OHE 使用原始 SM CSV 总体，缺失组件按论文 OHE 路径处理 |
+| `sm_mfp_paper_exact_4620` | SM | MFP | 4620 | MFP 使用 `Gen_MFP.py --skip_rows_with_missing_values` 后的完整组件总体 |
+
+特征生成规则：
+
+- MFP 使用 `mfp_vjethbkm` 等价实现：对每个反应组件分别计算 Morgan count fingerprint，`radius=3`、`fp_size=1024`，再按论文组件列顺序拼接。SM-MFP 必须只在 4620 行总体上生成，不能复用 5760 行普通 MFP 结果。
+- MFP 生成后必须与官方/原生复现工件做 X、y、组件列和行顺序校验；校验结果写入 `paper_exact` 路径下的 manifest。
+- OHE 使用折内转换器：每个外层训练折单独 fit `OneHotEncoder(handle_unknown="ignore")`，验证折只 transform；验证折出现训练折未见类别时走全零/ignore 行为，不得先在全数据上 fit OHE。
+- OHE 的类别 hash、输出维度、训练样本 hash 应保存到每个 repeat/fold 的元数据。
+
+#### 验证方法
+
+- 每个总体 manifest 的行数必须等于上表预期值。
+- SM 必须拆出 `sm_ohe_paper_exact_5760` 与 `sm_mfp_paper_exact_4620` 两个总体；任何把二者合并成 5760 或 4620 的配置都不得进入严格比较。
+- MFP 官方对齐检查必须给出 `x_exact=True`、`y_exact=True`、`component_columns_exact=True` 或清楚说明不可比原因。
+- OHE 元数据必须覆盖 25 个 repeat/fold 组合，而不是 5 个。
+
+#### 风险提示
+
+SM 是本步骤的“暗礁”。普通 YONOD 配置从 `dataset/yieldmaster/SM.csv` 直接读取 5760 行，对 OHE 是合理的；但如果 MFP 也沿用 5760 行，就会与论文 MFP 的 4620 行总体不一致，哪怕数值看起来更好也不能作为论文复现结论。
+
+### 步骤27.3：生成论文一致的 split manifest 并作为唯一分割来源
+
+#### 目标说明
+
+让 RF 与 AutoGluon 使用完全同一批验证样本。后续所有模型比较都基于同一个 `split_manifest`，避免“模型均值来自不同折”导致的不可比。
+
+#### 具体操作
+
+对步骤27.2中的每个总体生成一个 split manifest：
+
+```yaml
+grouping:
+  strategy: repeated_kfold
+  source_order: raw_csv
+cv:
+  n_repeats: 5
+  n_splits: 5
+  seed: 1000
+```
+
+实现要求：
+
+- 使用 `sklearn.model_selection.KFold(n_splits=5, shuffle=True, random_state=seed)`；
+- repeat 1 到 5 的 `seed` 分别为 1000 到 1004；
+- 每个 repeat 内，每个 `sample_id` 恰好一次进入验证集；
+- manifest 字段至少包含 `run_id`、`population_id`、`split_id`、`sample_id`、`source_row_index`、`repeat`、`fold`、`role`、`seed`、`dataset_sha256`、`split_hash`；
+- manifest 生成后只读复用，若目标路径已有内容且 hash 不一致，必须拒绝覆盖。
+
+#### 验证方法
+
+新增或扩展测试：
+
+```bash
+conda run -n yonod python -m pytest tests/test_repeated_kfold_manifest.py tests/test_vjethbkm_protocol_smoke.py -q
+conda run -n yonod python -m pytest tests/test_autogluon_paper_exact_repeated_manifest.py -q
+```
+
+测试要覆盖：
+
+- `set(seed) == {1000, 1001, 1002, 1003, 1004}`；
+- 每个总体有 25 个 `(repeat, fold)`；
+- RF 与 AutoGluon 读取到的每个 `(repeat, fold)` 验证 `sample_id` 集合完全相同；
+- `source_row_index` 与原始 CSV/4620 MFP 总体顺序一致。
+
+#### 风险提示
+
+不能用 `RepeatedKFold(random_state=1000)` 直接替代，除非逐折结果已经被证明与论文代码完全一致。论文原生代码是 5 次独立 `KFold`，每次 seed 递增 1；这点要保持字面一致。
+
+### 步骤27.4：把 AutoGluon 接入 25 折 manifest 外层执行
+
+#### 目标说明
+
+保留步骤26已有的 AutoGluon 外层折适配器，但把执行入口从普通单次 `outer_kfold` 收紧为 `paper_exact_5x5` 的 manifest 驱动。每个外层验证折都重新训练一个独立 `TabularPredictor`，只在该折训练集上 fit，再预测该折验证集。
+
+#### 具体操作
+
+构建阶段优先复用严格 benchmark executor 的 `manifest_outer_cv` 路径，因为它已经支持 split manifest、折级元数据、折级预测落盘和 OHE 折内转换。需要补齐的点包括：
+
+- 允许 AutoGluon executor 遍历 5 repeats × 5 folds，而不是只处理单个 repeat 或普通 `cv=5`；
+- 每折 artifact 路径包含 repeat 与 fold，例如 `models/mfp_vjethbkm__autogluon__r01__f01`；
+- `AutoGluonYieldModel.fit_predict_fold()` 每次只接收 `X_train`、`y_train`、`X_valid`，不得把外层验证折作为 AutoGluon 的 `tuning_data`；
+- `TabularPredictor.fit()` 的 `train_data` 只能包含当前外层训练折；
+- 每折 metadata 记录 `evaluation_protocol=paper_exact_5x5` 或同时记录 `manifest_outer_cv` 与 `paper_exact_5x5`，并写明 `outer_seed=repeat_seed`；
+- 固定正式参数：`autogluon.tabular==1.1.1`、`time_limit=300`、`presets="medium_quality"`、`num_cpus=19`；
+- AutoGluon 1.1.1 没有覆盖所有子模型的单一顶层随机种子，报告中应记录 seed policy：外层 split 完全固定，AutoGluon 内部随机性按版本和可用参数记录，不承诺逐位复现。
+
+如果普通 `main.py` 路径继续用于 Markdown/HTML 汇报，应让它消费同一份 `split_manifest`，而不是内部重新生成 `KFold(cv=5, random_state=42)`。
+
+#### 验证方法
+
+新增或扩展测试：
+
+```bash
+conda run -n yonod python -m pytest tests/test_autogluon_fold_adapter.py tests/test_benchmark_autogluon_executor.py -q
+conda run -n yonod python -m pytest tests/test_main_autogluon_outer_cv_paths.py tests/test_report_autogluon_protocol_guard.py -q
+```
+
+验收点：
+
+- AutoGluon 每个 `(repeat, fold)` 都产生独立 artifact 路径；
+- 预测文件中不存在训练折样本泄漏到验证折的记录；
+- OHE 的 `categories_hash` 与 `train_sample_ids_hash` 是折级元数据；
+- `completed_folds=25`、`expected_folds=25`、`oof_complete=True`。
+
+#### 风险提示
+
+不要为了让 AutoGluon 早停或调参而把外层验证折传给 `tuning_data`；这会把“评估集”变成“调参集”，破坏与 RF 的平行比较。AutoGluon 内部可以在训练折内部自行切分或 bagging，但外层验证折只能用于最终预测和评价。
+
+### 步骤27.5：在同一 manifest 下重跑 RF 与 AutoGluon，形成成对比较
+
+#### 目标说明
+
+严格回答“AutoGluon 是否比论文 RF 更好”，不能只把 AutoGluon 均值与论文表格 RF 均值相减；必须在同一 25 个验证折上得到 RF 与 AutoGluon 的成对 fold-level 指标。
+
+#### 具体操作
+
+每个 `(population_id, feature_id)` 同时运行 RF 与 AutoGluon：
+
+- RF 使用论文参数：`n_estimators=500`、`max_features=0.30`、`n_jobs=-1`、`random_state=repeat_seed`；
+- AutoGluon 使用步骤27.4的参数与外层折边界；
+- 预测明细至少包含 `run_id`、`population_id`、`dataset_id`、`feature_id`、`model`、`repeat`、`fold`、`seed`、`sample_id`、`source_row_index`、`y_true`、`y_pred`；
+- 折级指标包含 R²、RMSE、MAE、Kendall τ、训练时间、预测时间；
+- 总结指标为 25 折 mean ± std，并同时保留每折原始值。
+
+预期正式运行规模：
+
+- BH1、BH2、SL1 各有 MFP 与 OHE，共 6 个 `(总体, 特征)`；
+- SM 拆成 `SM-MFP-4620` 与 `SM-OHE-5760`，共 2 个；
+- 合计 8 个 `(总体, 特征)`；
+- RF + AutoGluon 共 16 个模型-特征任务，每个 25 折，合计 400 次 fold-level fit；其中 AutoGluon 为 200 次 fit。
+
+建议先执行一个低成本 smoke：
+
+```bash
+conda run -n yonod python -m pytest tests/test_autogluon_paper_exact_repeated_manifest.py tests/test_paired_model_comparison.py -q
+```
+
+再用 `nohup` 串行执行正式 19 核任务，避免四个数据集并行导致 AutoGluon 与 BLAS 线程叠加。
+
+#### 验证方法
+
+- 每个 `(population_id, feature_id, model)` 都有 25 个折级指标；
+- RF 与 AutoGluon 的 `(repeat, fold, sample_id)` 验证集合逐项相等；
+- RF 复跑结果与 `reference-proejct/vjethbkm/outputs/tables/final_mfp_ohe_rf_metrics.csv` 在展示精度上对齐；若未对齐，应先修 RF/分割/总体，不进入 AutoGluon 结论；
+- 任何缺失折、NaN 预测、样本数不匹配都使该组合标记为 `incomplete`。
+
+#### 风险提示
+
+200 个 AutoGluon 外层折在 `time_limit=300` 下的理论上限约为 16.7 小时，还不含 RF、特征转换和报告开销。可以先跑 BH1 或 SL1 全 25 折估算耗时，但正式矩阵不能因为中途结果好坏临时改 `time_limit`、`presets` 或数据总体。
+
+### 步骤27.6：新增 paper_exact 报告、统计检验与严格结论门槛
+
+#### 目标说明
+
+Markdown/HTML 报告不仅列出均值和标准差，还要明确哪些结果能进入“论文完全一致”比较，并用成对统计判定 AutoGluon 是否显著优于 RF。
+
+#### 具体操作
+
+新增 `paper_exact` 报告目录，禁止覆盖当前 `outercv_20260908`、`*_all_models` 和历史 internal holdout 报告。建议路径：
+
+```text
+configs/yieldmaster_bh1_mfp_ohe_paper_exact_5x5_20260908/
+configs/yieldmaster_bh2_mfp_ohe_paper_exact_5x5_20260908/
+configs/yieldmaster_sl1_mfp_ohe_paper_exact_5x5_20260908/
+configs/yieldmaster_sm_ohe_paper_exact_5x5_5760_20260908/
+configs/yieldmaster_sm_mfp_paper_exact_5x5_4620_20260908/
+logs/yieldmaster_autogluon_paper_exact_5x5_<timestamp>.log
+```
+
+报告应包含四类表：
+
+1. 协议审计表：总体行数、特征生成方式、split seeds、completed folds、是否可进入严格比较。
+2. 指标汇总表：R²、RMSE、MAE、Kendall τ 的 25 折 mean ± std。
+3. RF 论文复现对齐表：YONOD paper_exact RF 与官方/原生 RF 指标差异。
+4. AutoGluon vs RF 成对比较表：每个 `(dataset, feature)` 的 fold-level delta、95% CI、校正后显著性和结论标签。
+
+统计结论建议：
+
+- 主指标以 RMSE 为默认，方向为越低越好；R²、MAE、Kendall τ 作为一致性佐证。
+- 因为 5×5 重复 CV 的 25 个折并非完全独立，不应使用朴素独立样本 t-test 作为最终“显著更好”依据。
+- 使用 corrected repeated-CV paired test（Nadeau–Bengio / corrected resampled t-test）或预先定义的重复 CV bootstrap，并在报告中写明相关性限制。
+- 对 8 个 `(数据集, 特征/总体)` 比较做 Holm 校正。
+- 只有同时满足以下条件，才标记 `strict_better`：
+  - 总体、特征、split manifest、折内预处理审计全部通过；
+  - AutoGluon 在主指标 RMSE 的 25 折均值低于 RF；
+  - 校正后 95% CI 或显著性检验在有利方向排除 0；
+  - 辅助指标没有出现强烈反向证据。若 RMSE 改善但 R²/Kendall τ 反向，应标记 `mixed_evidence`。
+
+#### 验证方法
+
+新增或扩展测试：
+
+```bash
+conda run -n yonod python -m pytest tests/test_report_paper_exact_protocol_guard.py tests/test_paired_model_comparison.py -q
+```
+
+验收点：
+
+- `paper_exact` 报告中不能把 `outer_kfold` 单次 5 折、`autogluon_internal_holdout` 或 5760 行 SM-MFP 结果列入严格排名；
+- 成对比较表至少包含 `delta_rmse_mean`、`delta_rmse_ci_low`、`delta_rmse_ci_high`、`p_value_corrected`、`comparison_label`；
+- `comparison_label` 只能来自 `strict_better`、`no_significant_difference`、`strict_worse`、`mixed_evidence`、`incomparable`；
+- Markdown 和 HTML 报告都显示 “paper_exact_5x5” 协议标识。
+
+#### 风险提示
+
+如果只看均值，AutoGluon 可能“看起来更好”；但论文 Figure 5/SI Figure S6 使用的是重复 CV 下的统计差异思路。为了避免过度声称，报告必须把“数值更好”和“显著更好”分开。
+
+### 步骤27.7：执行顺序、资源约束与日志策略
+
+#### 目标说明
+
+保证正式重跑可追踪、可中断续跑、不会覆盖既有产物，也不会混入当前工作区其他未提交改动。
+
+#### 具体操作
+
+执行顺序建议：
+
+1. 低成本测试：manifest、SM 总体拆分、AutoGluon mock executor、报告守卫；
+2. 单总体 smoke：例如 `SL1-MFP`，`time_limit=30`，验证 25 折结构和报告；
+3. 正式 RF 对齐：先跑 RF 的 8 个 `(总体, 特征)`，确认与论文/原生结果对齐；
+4. 正式 AutoGluon：使用 conda `yonod` 环境，19 CPU，按总体串行执行；
+5. 汇总报告：只读取 `paper_exact` 路径，生成 Markdown/HTML/CSV/JSON；
+6. 最终比较：输出“是否严格优于 RF”的结论标签。
+
+正式运行命令模板：
+
+```bash
+nohup bash scripts/run_yieldmaster_autogluon_paper_exact_5x5_20260908.sh > logs/yieldmaster_autogluon_paper_exact_5x5_20260908.full.log 2>&1 &
+```
+
+脚本内部要求：
+
+- `CONDA_ENV=yonod`；
+- `LOKY_MAX_CPU_COUNT=19`；
+- `OMP_NUM_THREADS=1`、`OPENBLAS_NUM_THREADS=1`、`MKL_NUM_THREADS=1`、`NUMEXPR_NUM_THREADS=1`；
+- 数据集/总体串行，不进行外层并行；
+- 每个总体写独立 per-population log 和 run manifest；
+- 支持发现已有同 hash 完成折时跳过，hash 不一致时拒绝复用。
+
+#### 验证方法
+
+- 每个 `paper_exact` 目录都有 `run_manifest.json`、`split_manifest`、`fold_metrics`、`predictions`、`report.md`、`report.html`；
+- 日志包含完整命令行、Git commit、conda env、AutoGluon 版本、CPU 策略、开始/结束时间和退出码；
+- `rg "outercv_20260908|autogluon_internal_holdout" paper_exact_report.md` 不应命中严格排名表，只能命中历史说明段落；
+- 当前旧输出目录仍然存在且未被改写。
+
+#### 风险提示
+
+如果 conda 环境缺少 parquet 后端，strict benchmark executor 的 parquet 落盘会失败；构建阶段应优先补足依赖或提供 CSV fallback，但不能退回普通 1×5 `main.py` 结果冒充 paper_exact。
+
+### 步骤27.8：最终验收条件
+
+#### 目标说明
+
+给 project-builder-cn 一个明确的完成判据，避免“跑完了”和“可作为论文严格复现结论”之间混淆。
+
+#### 具体操作
+
+最终验收必须全部满足：
+
+- `paper_exact` 路径下存在 5 个总体目录：BH1、BH2、SL1、SM-OHE-5760、SM-MFP-4620；
+- 每个总体的 split manifest 有 25 个 `(repeat, fold)`，seeds 为 1000..1004；
+- 每个 `(population_id, feature_id, model)` 的 `completed_folds=25`、`expected_folds=25`、`oof_complete=True`；
+- RF 的 25 折汇总结果与论文/原生 RF 结果在展示精度上对齐；
+- AutoGluon 和 RF 在每个 fold 上使用完全相同的验证 `sample_id` 和 `source_row_index`；
+- OHE 无全数据 fit 痕迹，metadata 能证明 25 折 train-only fit；
+- SM-MFP 严格使用 4620 行，SM-OHE 严格使用 5760 行；
+- Markdown/HTML/CSV/JSON 报告均包含 R²、RMSE、MAE、Kendall τ 的 mean±std；
+- 报告明确排除 `outercv_20260908`、`autogluon_internal_holdout`、普通 5760 行 SM-MFP；
+- AutoGluon vs RF 结论基于 fold-level paired comparison，而不是跨表均值比较；
+- 若任一组合缺失、RF 不对齐或 SM 总体不符，结论只能写 `incomparable` 或 `incomplete`，不能写 `strict_better`。
+
+#### 验证方法
+
+最终验收命令建议：
+
+```bash
+conda run -n yonod python -m pytest tests/test_repeated_kfold_manifest.py tests/test_vjethbkm_protocol_smoke.py tests/test_rf_paper_protocol.py tests/test_autogluon_fold_adapter.py tests/test_benchmark_autogluon_executor.py tests/test_autogluon_paper_exact_repeated_manifest.py tests/test_yieldmaster_paper_exact_populations.py tests/test_report_paper_exact_protocol_guard.py tests/test_paired_model_comparison.py -q
+```
+
+验收报告中应写出：
+
+- `paper_exact_status: pass/fail/incomplete`；
+- `strict_comparison_ready: true/false`；
+- 每个 `(dataset, feature)` 的 `comparison_label`；
+- 如果 AutoGluon 没有严格显著更好，必须直接写明“在论文完全一致 5×5 协议下未证明 AutoGluon 严格优于 RF”。
+
+#### 风险提示
+
+本步骤的核心不是“让 AutoGluon 数值更高”，而是让比较条件干净、可审计。若 AutoGluon 在部分数据集上均值更优但统计检验不显著，或者 Kendall τ/R² 与 RMSE 方向冲突，应保持保守结论。
+
+### 27 Q&A 记录
+
+### 步骤27.1：审计当前 AutoGluon outercv 产物并明确协议边界
+
+**Q：** 当前 `outercv_20260908` 的 AutoGluon 是否已经能与论文 RF 严格比较？
+**A：** 不能。它已经从 AutoGluon 内部 80/20 holdout 升级到了外层 5 折，但论文结果是 5 repeats × 5 folds，共 25 个验证折；同时当前 SM-MFP 仍按 5760 行普通 CSV 输出，而论文 MFP 对应 4620 行完整组件总体。因此它只能作为探索性结果或工程验证结果。
+
+### 步骤27.5：在同一 manifest 下重跑 RF 与 AutoGluon，形成成对比较
+
+**Q：** 为什么不直接拿论文 RF 表格均值和 AutoGluon 均值比较？
+**A：** 因为严格比较需要同一批验证折上的成对差异。论文表格给的是 RF 的 25 折 mean±std，但如果 AutoGluon 来自另一套 folds、另一套 SM 总体或另一套预处理边界，均值相减只能说明趋势，不能支持“严格更好”。正确做法是在同一 `split_manifest` 下重跑 RF 与 AutoGluon，再按 fold-level delta 统计。
+
+### 步骤27.4：把 AutoGluon 接入 25 折 manifest 外层执行
+
+**Q：** AutoGluon 是否能做到和 RF 一样逐位随机复现？
+**A：** 现阶段不能承诺逐位复现。可严格固定的是外层验证折、数据总体、特征生成、版本、time limit、presets 和 CPU 参数；AutoGluon 1.1.1 没有一个覆盖所有内部子模型的顶层随机种子。因此报告应把 AutoGluon 的 seed policy 写清楚，科学比较基于相同外层验证折，而不是承诺每次运行预测值逐位一致。
+
+### 27 下一步行动建议
+
+由 **project-builder-cn** 按步骤27.1 到 27.8 执行。建议先补齐 paper_exact 总体与 split manifest 测试，再接入 AutoGluon 25 折 manifest executor；RF 对齐通过后，再启动长时间 AutoGluon 正式重跑。所有新产物进入 `paper_exact` 路径，保留当前 `outercv_20260908` 作为历史探索结果。
+
+---
+
 **文档结束**
