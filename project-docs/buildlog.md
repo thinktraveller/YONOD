@@ -5864,3 +5864,35 @@ for desc_name in args.descriptors:
 - 等待正式 AutoGluon paper_exact 5×5 长作业完成后，检查 `autogluon_fold_metrics.csv`、`autogluon_predictions.csv`、`autogluon_summary.csv`、`rf_vs_autogluon_paired_fold_input.csv` 与 `paper_exact_autogluon_run_manifest.json`；随后进入 paper_exact 报告/统计检验和与论文 RF 结果的严格平行比较。
 
 ---
+
+## [2026-09-09 13:50] 修复：全描述符 19 核批任务未生成运行时配置
+
+### 故障与根因
+
+- 2026-09-08 23:47 批次四项均在启动阶段退出，主日志结尾为 `succeeded=0 failed=4 total=4`；运行时 JSON、描述符和指标均未生成。
+- 用真实 `conda run -n yonod python -` 加 heredoc 复现：默认捕获模式未把标准输入传给 Python，代码不执行却返回成功；增加 `--no-capture-output` 后验证标记正常输出。
+- 旧 `--dry-run` 只检查环境和路径，没有执行配置生成；同时 `run_one` 在 Bash 的 `if` 条件中调用，不能依赖 `set -e` 中止配置生成失败后的流程。
+
+### 修复内容
+
+- `scripts/run_yieldmaster_all_descriptors_19cpu_nohup.sh`：配置生成使用 `--no-capture-output`，并显式检查生成退出码及文件非空；在启动模型前调用真实 YONOD 配置加载器，确认输出目录和 AutoGluon 19 核参数。
+- 使用内部模型键写入 AutoGluon 资源参数，保留已有 time_limit/presets，避免内部键覆盖显示名键导致 CPU 参数不生效；CPU 亲和性记录使用实际配置值，预检验证恰好 19 个可用逻辑 CPU。
+- 配置生成及模型阶段均记录标准输出与标准错误，并分别检查子进程和 tee 退出码；单数据集失败时记录阶段、继续后续任务，最终批次返回失败状态。
+- `--dry-run` 现在在独立临时目录执行四份运行时 JSON 的真实生成和加载，使用与正式启动相同的函数。
+- `tests/test_yieldmaster_all_descriptors_launcher.py`：增加显式启用的真实 Conda 集成测试；复制脚本到临时仓库，调用真实 YONOD 配置加载器，仅模拟模型拟合。
+
+### 验证结果
+
+- `bash -n scripts/run_yieldmaster_all_descriptors_19cpu_nohup.sh`：通过。
+- `bash scripts/run_yieldmaster_all_descriptors_19cpu_nohup.sh --dry-run`：四份均通过，均为 8 个特征、5 个模型，AutoGluon.num_cpus=19；CPU 0–18。校验材料位于 `/tmp/yonod-launcher-check.bkUhvcLD/`。
+- `YONOD_RUN_LAUNCHER_INTEGRATION=1 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_yieldmaster_all_descriptors_launcher -v`：4/4 通过，耗时 40.048 秒。
+- 回归覆盖：真实 nohup/setsid 后台四项串行顺序、双路详细日志、有效资源参数；首项配置无效时不调用模型但继续后三项；配置生成器返回 0 却无文件时四项均被拦截；模型返回 7 时 tee 不掩盖错误且继续剩余任务。
+- 四份源配置与原失败主日志 SHA256 均与修复前一致。未启动四个正式数据集的全量训练。
+
+### 执行说明与后续
+
+- 用户指定的 project-bugfix-cn 代理因绑定模型 gpt-5.5 不可用而启动失败，主代理接手完成修复、验证与本构建日志；project-docs 下只修改本文件。
+- 启动脚本此前未纳入 Git，本次将该脚本、专项测试和本构建日志纳入修复提交；其余既有配置删除、数据和结果不纳入。
+- 重新启动命令（YONOD 根目录）：`bash scripts/run_yieldmaster_all_descriptors_19cpu_nohup.sh`；启动后打印新批次 PID、完整日志与 tail 命令。
+
+---
