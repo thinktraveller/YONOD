@@ -9254,4 +9254,140 @@ conda run -n yonod python -m pytest tests/test_repeated_kfold_manifest.py tests/
 
 ---
 
+### 步骤28：基于官方预计算描述符的多模型二次建模与研究假设检验
+
+#### 目标说明
+
+在不重算作者已提供的静态描述符、也不修改 YONOD 本体的前提下，复用已完成的外部折建模流程，建立“官方描述符 × 模型”的可配对实验矩阵。该步骤的目标是检验而非预设结论：在相同数据总体、相同样本映射和相同 5 次重复 × 5 折 split manifest 下，合适的模型选择是否比描述符选择带来更大的性能影响。
+
+主比较只纳入静态 DFT、SOAP、PhysChem、MFP 与外部折可控的 RF、XGBoost、SVM、LightGBM。OHE 因必须在训练折内拟合，只作为独立的补充 baseline/官方对照；AutoGluon 因当前适配器仍含内部 holdout 语义，只进入探索性附录，不进入本步骤的主配对统计。
+
+#### 步骤28.1：冻结输入清单、哈希与数据总体
+
+先为 `reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/` 下的 16 个官方静态描述符矩阵建立只读 inventory。每个输入都必须记录：`dataset_id`、`descriptor`、源 NPZ 相对路径、文件 SHA-256、X/y/样本索引数组名称、形状、dtype、目标单位、官方结果来源和读取时间。不得仅凭文件名或矩阵行数推定样本对齐关系。
+
+预期输入边界如下；实际形状、哈希和数组键以 inventory 为准：
+
+| 数据集 | DFT | SOAP | PhysChem | MFP | 主总体处理 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| BH1 | 3960 × 120 | 3955 × 420 | 3955 × 15 | 3955 × 4096 | DFT 先隔离；其余静态描述符以 3955 为候选总体 |
+| BH2 | 3359 × 130 | 3359 × 525 | 3359 × 36 | 3359 × 5120 | 全部静态描述符的共同候选总体为 3359 |
+| SL1 | 1150 × 99 | 1150 × 315 | 1150 × 39 | 1150 × 3072 | 全部静态描述符的共同候选总体为 1150 |
+| SM | 4620 × 145 | 4620 × 525 | 4620 × 20 | 4620 × 5120 | 静态描述符总体固定为 4620；不得与 OHE 5760 合并 |
+
+验收与 gate：
+
+- 建立 `official_static_descriptor_inventory.(csv|json)`，恰好覆盖 4 数据集 × 4 描述符的 16 个输入，且每个输入都有 SHA-256；
+- 对每个数据集验证目标数组一致、行数一致或能由显式 `sample_id/source_row_index` 映射证明一致；
+- BH1 DFT 的 3960/3955 行差异必须形成逐行映射审计：标明多出的 5 行、其是否有唯一来源、删除后是否与其余三个描述符的样本顺序和 y 完全一致；
+- 在上述审计通过前，`BH1/DFT` 状态固定为 `blocked_alignment`，禁止排入主实验与主结论；审计失败时永久列为 `excluded_alignment`，而不是使用“前 3955 行”等启发式截断；
+- SM 静态描述符只创建 `SM-static-4620` population；`SM-OHE-5760` 保持已有独立 artifact/审计总体，禁止在同一统计表、排名或平均值中混合。
+
+#### 步骤28.2：建立共享样本映射与唯一 split manifest
+
+对每个可用静态总体生成 `population_manifest`，至少保存 `population_id`、`sample_id`、`source_row_index`、`y`、描述符可用性、X/y 哈希、映射方法和排除原因。主矩阵中，同一数据集的不同描述符必须共享同一批样本；若任一描述符存在无法映射或不一致的样本，先显式构造共同交集并记录被排除样本，不能让每个描述符各自静默删行。
+
+在 population 固定后，生成论文一致的 5 repeats × 5 folds split manifest：repeat seeds 固定为 1000、1001、1002、1003、1004，每个 `(population_id, repeat, fold)` 固定训练/验证 `sample_id`、`source_row_index` 和哈希。每个主组合只能读取该 manifest，不得在模型内部另行随机划分或以验证折调参。
+
+具体操作：
+
+1. 先对每个 population 执行一折 smoke，验证四类静态描述符读取后的行号、`sample_id`、y 和 fold 归属完全一致；
+2. 冻结 population 与 split 后，再冻结模型参数、软件版本、CPU 线程策略和随机种子策略；RF 保留论文式参数，其他三个模型采用当前已完成配置中的预声明参数，不得根据正式验证折结果临时调参；
+3. 对每一个模型/描述符/fold 输出 `input_hash`、`population_hash`、`split_hash`、`feature_hash`、`model_config_hash`。任意 hash 不同即视为不可配对；
+4. 若后续需重新执行，只允许跳过 hash 完全相同且结果完整的 fold；不同 hash 不得覆盖历史产物。
+
+#### 步骤28.3：执行主实验矩阵并隔离补充结果
+
+在 BH1 DFT 尚未通过 alignment gate 的默认状态下，主矩阵为：BH1 的 3 个可用静态描述符 × 4 个模型，加上 BH2、SL1、SM-static-4620 的 3 × 4 描述符 × 4 模型，共 60 个模型-描述符组合。每个组合运行 25 个外层 fold，共 1500 次 fold-level fit。只有当 BH1 DFT 对齐审计通过后，才增加 1 × 4 个组合，形成 64 个组合、1600 次 fold-level fit。
+
+执行顺序：
+
+1. 单数据集、单描述符、四模型 smoke：验证读取官方 X、外层 fold 边界、逐折预测和恢复逻辑；
+2. 每个 population 先运行 RF，确认其 MFP 路径能与既有论文 RF 复现产物在可比较范围内对齐；此项只作为协议健康检查，不把不同描述符硬要求与 MFP 官方值相同；
+3. 对同一 `population_id × descriptor` 串行运行 RF、XGBoost、SVM、LightGBM，避免 19 核上模型和 BLAS 线程嵌套；
+4. 完成一个 population 的全部有效描述符和模型后，运行完整性检查，再进入下一 population；
+5. OHE 5760/折内拟合和 AutoGluon 内部 holdout 结果写入独立 `supplementary` 路径，只允许在附录表中展示。
+
+资源与日志要求：
+
+- 正式运行使用 conda `yonod` 环境、19 个 CPU 核，并固定 `OMP_NUM_THREADS=1`、`OPENBLAS_NUM_THREADS=1`、`MKL_NUM_THREADS=1`、`NUMEXPR_NUM_THREADS=1`；
+- 使用 `nohup` 保留完整 stdout/stderr、完整命令行、Git commit、conda 包版本、开始/结束时间、退出码、每 fold 用时和峰值资源摘要；
+- 结果按 `descriptor_model_effect_5x5_<date>/<population>/<descriptor>/<model>/` 隔离，不覆盖 `paper_exact`、`outercv_20260908`、`*_all_models` 或历史结果；
+- 任何失败的组合保留错误、已完成 folds 和 hash，状态为 `incomplete` 或 `failed`，不得以另一样本量、另一 split 或普通 holdout 结果补位。
+
+#### 步骤28.4：定义逐折产物与汇总结构
+
+每个完成的 fold 至少落盘：
+
+- `population_id`、`dataset_id`、`descriptor`、`model`、`repeat`、`fold`、`seed`；
+- 验证集 `sample_id`、`source_row_index`、`y_true`、`y_pred`；
+- `n_train`、`n_valid`、训练/预测耗时、模型和特征 hash；
+- 折级 MAE、RMSE、R²、Kendall τ，以及 Kendall τ 不可定义时的原因和有效折标记；
+- 特征来源、维度、官方输入 SHA-256、population/split/feature/model config hash。
+
+每个组合必须生成 25 折明细和 25 折 `mean`/`std` 汇总。Markdown、HTML、CSV、JSON 报告的字段和数值必须相同；报告需同时列明 `expected_folds=25`、`completed_folds`、`oof_complete` 和 `comparability_status`。仅有均值或只有全量 OOF 单次 Kendall τ 的产物不具备主比较资格。
+
+#### 步骤28.5：预注册统计比较与研究结论判据
+
+主指标为折级 RMSE（越低越好）；MAE、R²、Kendall τ 是必须同时报告的佐证指标。统计分析分三个层级，不能把 25 个有重叠训练集的 fold 当作独立样本随意池化：
+
+1. **数据集内因子分析。** 对每个具备完整矩阵的数据集，以共享 `(repeat, fold)` 为阻断单元，估计模型主效应、描述符主效应及 `model × descriptor` 交互效应；使用适合重复交叉验证相关性的 block bootstrap、置换检验或校正重复 CV 方法构造不确定性区间。输出各主效应的标准化效应量、95% CI 和交互标签。
+2. **成对比较。** 在固定描述符下比较四个模型，在固定模型下比较四个描述符；只使用相同 `population_id × repeat × fold × sample_id` 的成对结果。多重比较在每个指标族内做 Holm 校正；缺失、不完整、不同 hash 或不同 population 的组合统一标为 `incomparable`。
+3. **跨数据集综合。** 先在每个数据集内标准化效应量，再以数据集为分析单元汇总方向、范围和不确定性；禁止直接合并不同单位、不同样本量或不同总体的原始 fold 指标。SM-static-4620 与 SM-OHE-5760 不得共同参与该综合。
+
+“模型选择更重要”只在预先声明的条件同时满足时才可写为 `supported`：
+
+- 至少 3 个可用数据集（BH1 DFT 未通过时不把该单元计入分母）在主指标 RMSE 上显示模型主效应的标准化幅度高于描述符主效应，且相应差异的不确定性区间不跨越零；
+- 成对比较与模型/描述符排序在多数数据集上方向一致，且 MAE、R²、Kendall τ 没有系统性强反向证据；
+- 交互效应没有表明“只有一个特定描述符 × 模型偶然获益”就足以解释全部主效应；若交互主导，应结论为 `mixed_evidence` 或 `partial_support`；
+- 所有进入该判断的组合均为 `complete`、共享 population/split/hash，并通过 BH1/SM 的数据口径 gate。
+
+若上述条件只部分满足，结论应写为 `partial_support`；若模型主效应未稳定大于描述符效应或数据质量 gate 未通过，应写为 `not_supported`、`incomparable` 或 `incomplete`。禁止用单个最优组合、单个数据集、平均排名或 AutoGluon/OHE 附录结果替代这一判据。
+
+#### 步骤28.6：报告、审计与最终验收
+
+生成独立的“描述符与模型效应”结果包，至少包含：
+
+1. 官方输入 inventory 与 16 个矩阵哈希表；
+2. population/样本对齐审计（特别是 BH1 DFT 的 5 行差异与 SM 的 4620/5760 分离）；
+3. split manifest、参数锁定和运行环境清单；
+4. 60 或 64 组合的任务状态表、逐折预测和各指标 mean ± std；
+5. 固定描述符的模型比较、固定模型的描述符比较、主效应/交互效应与校正后成对统计；
+6. OHE/AutoGluon 探索性附录，显著标注其不进入主配对结论的原因；
+7. `supported`、`partial_support`、`not_supported`、`mixed_evidence`、`incomplete`、`incomparable` 中的唯一结论标签及其证据链。
+
+最终验收 gate：
+
+- inventory、population manifest、split manifest 和输入/特征/模型 hash 均已生成并可复核；
+- 所有主比较的完整组合都有 25 个合法 folds，或在任务状态表中明确解释为何不完整；
+- BH1 DFT 未通过对齐时未出现在主图、主排名和主效应估计中；
+- SM-static-4620 与 SM-OHE-5760 未被合并统计；
+- 任何进入主统计的模型/描述符组合共享完全相同的验证样本、split 与数据总体；
+- 结论报告了模型主效应、描述符主效应和交互，且严格使用本步骤的预声明判据；
+- Markdown、HTML、CSV 与 JSON 互相一致，且旧产物未被覆盖。
+
+#### 风险与停止条件
+
+- 如果官方 NPZ 没有足以证明行级映射的元数据，不能根据“目标数组相同”推断样本顺序相同；对应描述符只能降级为不可比较，直到能从官方资料恢复映射。
+- 如果非 RF 模型无法接收外部 fold 或在训练中使用外层验证折作 early stopping/tuning，则该模型必须从主矩阵排除，而不是调整 split 以迁就模型。
+- 如完整矩阵在预算内不可完成，可先交付带状态的部分结果包；但正式研究结论不得基于选择性完成的组合。
+- 本步骤不授权修改 `yonod/`、已有配置、报告框架或论文官方矩阵；需要新能力时先形成单独变更提案，再由用户确认。
+
+### 28 Q&A 记录
+
+**Q：** 为什么 OHE 和 AutoGluon 不进入这次“描述符与模型谁更重要”的主统计？
+**A：** OHE 不是作者已提供的静态预计算矩阵，必须每个训练折独立拟合；AutoGluon 当前又含内部 holdout 语义。二者可以保留为有价值的补充结果，但若与静态描述符/外部折主矩阵混合，会破坏可配对的比较条件。
+
+**Q：** BH1 DFT 是否可以先删掉多出的 5 行继续跑？
+**A：** 不可以。只有在逐行映射证明多出行的来源且删后 X/y/样本顺序与 3955 行共同总体完全一致时，才允许解除 gate；否则该组合必须保持排除。
+
+**Q：** 若最好的单一组合是某模型加某描述符，是否足以证明模型更重要？
+**A：** 不足以。该现象也可能完全来自模型与描述符的交互，因此必须同时报告模型主效应、描述符主效应和交互效应，并按预声明的跨数据集判据给出保守结论。
+
+### 28 下一步行动建议
+
+由 `project-builder-cn` 在不修改 YONOD 本体的边界内，先执行步骤28.1 的 inventory 与 BH1 对齐审计；只有 population 和共享 split manifest 通过 gate 后，才进入 60/64 组合的正式建模。正式运行之前应先用单数据集四模型 smoke 验证产物 schema、外层 fold 边界和恢复机制。
+
+---
+
 **文档结束**
