@@ -1,0 +1,11 @@
+{
+  "completed_at_utc": "2026-09-09T15:28:06+00:00",
+  "metadata_path": "derived/descriptor_model_effect/step28_3_matrix_plan/runs/SL1-static-1150/PhysChem/rf/repeat_00/fold_00/attempts/20260909T152805.523708Z-p3960816/metadata.json",
+  "plan_hash": "71d297cb894f13851e61a8e9aa6341148d70166cc51a40ebc7e6086eae16b599",
+  "predictions_path": "derived/descriptor_model_effect/step28_3_matrix_plan/runs/SL1-static-1150/PhysChem/rf/repeat_00/fold_00/attempts/20260909T152805.523708Z-p3960816/predictions.csv",
+  "predictions_sha256": "367fb81c19c74463ba50c75586b9f1037cfceb8d579d227278c1cd9374c091bb",
+  "schema_version": "1.0",
+  "status": "complete",
+  "task_contract_hash": "78c1e9099daadd1a8fbc85cd33b605db2b9492ad0b2256205c3070bf728dd49f",
+  "task_id": "s28-sl1-physchem-rf-r00-f00-78c1e9099daa"
+}

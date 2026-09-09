@@ -5999,3 +5999,32 @@ for desc_name in args.descriptors:
 - 继续步骤28.3时，先把单折执行器参数化为受任务清单驱动、按`population × descriptor × model × repeat × fold`可恢复执行的正式runner，并生成默认60组合/1500折任务清单；在完整性与资源预检通过后，再单独启动正式nohup训练。
 
 ---
+
+## [2026-09-09 23:28] 步骤 28.3 第二构建单元完成：可恢复主矩阵 runner 与 1500 任务预检
+
+### 执行的任务
+
+- 新增独立脚本 `scripts/run_static_descriptor_model_matrix.py`，复用已验收 smoke 的模型工厂、指标与 hash 逻辑，自动从步骤28.1 inventory、步骤28.2 `descriptor_availability.csv` 和共享 split manifests 生成默认主矩阵；未修改 `yonod/`、已有 configs、报告框架或官方矩阵。
+- 计划固定为 15 个 included 静态矩阵 × RF/XGBoost/SVM/LightGBM × 25 外层折，共 1500 个 pending 任务、60 个模型—描述符组合。每个任务记录稳定 `task_id`、population/dataset/descriptor/model/repeat/fold/seed、NPZ 路径与 SHA-256、population/split/fold/feature/model-config hash、manifest 文件 hash 和隔离输出路径。
+- `BH1/DFT` 继续因 `blocked_alignment` 排除；OHE、AutoGluon 和 `SM-OHE-5760` 均未进入主计划，SM 只使用 `SM-static-4620`。
+- runner 要求 Conda `yonod`，执行时把 CPU affinity 限制为 19 核，固定 BLAS/OpenMP 线程变量为 1，并按选择器严格串行；无 `--task-id` 或过滤器时拒绝启动，默认 `--max-tasks=1` 防止误触全量训练。
+- 每个任务以稳定输出目录加不可变 `task_contract.json` 管理；每次尝试写入独立 `attempts/<timestamp>/`，失败 metadata 原样保留。完整且同 hash 的 completion 自动 skip；计划、输入、manifest、配置或完成产物发生 hash 漂移时拒绝复用。
+
+### 计划与预检结果
+
+- `--prepare` 生成 `derived/descriptor_model_effect/step28_3_matrix_plan/task_plan.csv`、`task_plan.json` 与 `preflight_summary.json`；计划 hash 为 `71d297cb894f13851e61a8e9aa6341148d70166cc51a40ebc7e6086eae16b599`。
+- `--verify-plan` 通过：1500 个唯一 task ID、60 个组合、15 个矩阵各 100 个任务、每个 descriptor-fold 恰好四模型、seeds 恰为 `1000..1004`；任务契约、输入、manifest、fold、feature 与 model config hash 均可复核。
+- 禁用项断言通过：`bh1_dft_present=false`、`ohe_present=false`、`autogluon_present=false`；SM population 仅为 `SM-static-4620`。
+
+### 唯一低成本执行与恢复验证
+
+- 仅执行任务 `s28-sl1-physchem-rf-r00-f00-78c1e9099daa`：`SL1-static-1150 × PhysChem × RF × repeat 0/fold 0`，训练/验证为 920/230，seed 1000；状态 `complete`。
+- 指标为 MAE `19.9470260851`、RMSE `37.1164776417`、R² `0.7084249709`、Kendall tau `0.5477824282`，与步骤28.3固定 smoke 的 RF 结果一致；预测、指标、模型配置、资源摘要和所有输入/折级 hash 已写入独立 attempt metadata。
+- 原命令第二次执行返回 `skipped_complete_same_hash`，没有产生第二个 attempt，证明同 hash 完整任务自动恢复/跳过。
+- 实际 affinity 为 CPU `0..18` 共 19 核，任务内严格串行，`OMP_NUM_THREADS/OPENBLAS_NUM_THREADS/MKL_NUM_THREADS/NUMEXPR_NUM_THREADS=1`。除上述一个 RF 折外未运行任何任务，正式 1500 折全量训练未启动。
+
+### 下一步计划
+
+- 在单独授权启动长作业后，按 `population × descriptor × model` 顺序用 selector 和显式 `--max-tasks` 分批串行执行；每批完成后先跑完整性检查，再进入步骤28.4汇总。当前构建单元不扩展统计或报告。
+
+---

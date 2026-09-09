@@ -1,0 +1,47 @@
+{
+  "completed_at_utc": "2026-09-09T15:28:28+00:00",
+  "plan_hash": "71d297cb894f13851e61a8e9aa6341148d70166cc51a40ebc7e6086eae16b599",
+  "resource_policy": {
+    "affinity_cpu_count": 19,
+    "affinity_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "max_cpus": 19,
+    "serial": true,
+    "thread_environment": {
+      "LOKY_MAX_CPU_COUNT": "19",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "results": [
+    {
+      "status": "skipped_complete_same_hash",
+      "task_id": "s28-sl1-physchem-rf-r00-f00-78c1e9099daa"
+    }
+  ],
+  "schema_version": "1.0",
+  "selected_task_count": 1,
+  "serial_execution": true,
+  "status": "complete"
+}
