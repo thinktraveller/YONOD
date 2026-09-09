@@ -1,0 +1,1175 @@
+{
+  "dataset_audits": [
+    {
+      "bh1_dft_gate_status": "blocked_alignment",
+      "candidate_population_id": "BH1-static-3955",
+      "candidate_population_row_count": 3955,
+      "cross_descriptor_y_audit": [
+        {
+          "descriptor": "DFT",
+          "row_count": 3960,
+          "same_row_count_as_mfp": false,
+          "same_y_sha256_as_mfp": false,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "SOAP",
+          "row_count": 3955,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "PhysChem",
+          "row_count": 3955,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "MFP",
+          "row_count": 3955,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        }
+      ],
+      "dataset_id": "BH1",
+      "main_matrix_inclusion": {
+        "DFT": false,
+        "MFP": true,
+        "PhysChem": true,
+        "SOAP": true
+      },
+      "reason": "BH1/DFT 为 3960 行，MFP/SOAP/PhysChem 为 3955 行；DFT NPZ 只有 X/y，包内没有 BH1 DFT 专属生成配置或 sample_id/source_row_index。禁止用前3955行、按 y 值猜测或任何未证明的删行规则补齐。"
+    },
+    {
+      "candidate_population_id": "BH2-static-3359",
+      "candidate_population_row_count": 3359,
+      "cross_descriptor_y_audit": [
+        {
+          "descriptor": "DFT",
+          "row_count": 3359,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "SOAP",
+          "row_count": 3359,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "PhysChem",
+          "row_count": 3359,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "MFP",
+          "row_count": 3359,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        }
+      ],
+      "dataset_id": "BH2",
+      "main_matrix_inclusion": {
+        "DFT": true,
+        "MFP": true,
+        "PhysChem": true,
+        "SOAP": true
+      },
+      "reason": "四个静态矩阵的行数与 y 哈希摘要已盘点；仍须在步骤28.2生成共享 sample_id/source_row_index population manifest 后才可开始建模。"
+    },
+    {
+      "candidate_population_id": "SL1-static-1150",
+      "candidate_population_row_count": 1150,
+      "cross_descriptor_y_audit": [
+        {
+          "descriptor": "DFT",
+          "row_count": 1150,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "SOAP",
+          "row_count": 1150,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "PhysChem",
+          "row_count": 1150,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "MFP",
+          "row_count": 1150,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        }
+      ],
+      "dataset_id": "SL1",
+      "main_matrix_inclusion": {
+        "DFT": true,
+        "MFP": true,
+        "PhysChem": true,
+        "SOAP": true
+      },
+      "reason": "四个静态矩阵的行数与 y 哈希摘要已盘点；仍须在步骤28.2生成共享 sample_id/source_row_index population manifest 后才可开始建模。"
+    },
+    {
+      "candidate_population_id": "SM-static-4620",
+      "candidate_population_row_count": 4620,
+      "cross_descriptor_y_audit": [
+        {
+          "descriptor": "DFT",
+          "row_count": 4620,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "SOAP",
+          "row_count": 4620,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "PhysChem",
+          "row_count": 4620,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        },
+        {
+          "descriptor": "MFP",
+          "row_count": 4620,
+          "same_row_count_as_mfp": true,
+          "same_y_sha256_as_mfp": true,
+          "y_exact_match_uses": "NPZ y dtype/shape/value canonical hash"
+        }
+      ],
+      "dataset_id": "SM",
+      "main_matrix_inclusion": {
+        "DFT": true,
+        "MFP": true,
+        "PhysChem": true,
+        "SOAP": true
+      },
+      "reason": "SM 静态矩阵均为 4620 行；不能与使用原始 SM.csv 的 5760 行 OHE 总体合并统计、排名或平均。",
+      "separate_from_population_id": "SM-OHE-5760"
+    }
+  ],
+  "entries": [
+    {
+      "dataset_id": "BH1",
+      "descriptor": "DFT",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/DFT/Doyle_DFT_metrics_summaries_RF.json",
+      "official_result_source_sha256": "51cdc1d1b4734a1c61717f35c528513a02f72596f1cc2013343c6acb248ca171",
+      "primary_gate_status": "blocked_alignment",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3955,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "ce5803a8d1b4c912c08fab134ab74a6aac3f4d63167cdd739008ec5196a42eab",
+        "candidate_y_sha256": "375e455c02f11042b67d59dc94d8a37d1cf6881c78bccc814cb87dd257d52b42",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [],
+          "descriptor_generator_config": null,
+          "evidence_scope": "当前随附包没有该数据集/描述符的专属生成配置；不得把其他描述符的配置外推为行级映射证据。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "unresolved_source_mapping",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": false,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH1/BH1.csv",
+        "source_csv_row_count": 3955,
+        "source_csv_sha256": "ea448500b1a121ff9158b1787b8eeebae25ba1940d0e993bff5702947b43af86",
+        "source_selection_rule": "保留 BH1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/DFT/Doyle_DFT.npz",
+      "source_npz_sha256": "5990fc9175691b73033e41c096058d3eea18d9fe23b053001eea77354e89680d",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        3960,
+        120
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "f3e8e4502431de83b9b9a8ad6bbc6f5e9a0359ac655669d6015397b46f77ae06",
+      "y_shape": [
+        3960
+      ]
+    },
+    {
+      "dataset_id": "BH1",
+      "descriptor": "SOAP",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/SOAP/Doyle_SOAP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "7ed36043bb52474f81e1794f8cc0b8bcbac961a465ac8cd5c7e614784bfafaee",
+      "primary_gate_status": "candidate_population_3955_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3955,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "ce5803a8d1b4c912c08fab134ab74a6aac3f4d63167cdd739008ec5196a42eab",
+        "candidate_y_sha256": "375e455c02f11042b67d59dc94d8a37d1cf6881c78bccc814cb87dd257d52b42",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_SOAP.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/BH1_SOAP.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH1/BH1.csv",
+        "source_csv_row_count": 3955,
+        "source_csv_sha256": "ea448500b1a121ff9158b1787b8eeebae25ba1940d0e993bff5702947b43af86",
+        "source_selection_rule": "保留 BH1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/SOAP/Doyle_SOAP.npz",
+      "source_npz_sha256": "3ca162a63fec3a969fcde911d8425c19482ad979b3e4be3dede0bfd2c3bd25a3",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        3955,
+        420
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "375e455c02f11042b67d59dc94d8a37d1cf6881c78bccc814cb87dd257d52b42",
+      "y_shape": [
+        3955
+      ]
+    },
+    {
+      "dataset_id": "BH1",
+      "descriptor": "PhysChem",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/PhysChem/Doyle_PhysChem_metrics_summaries_RF.json",
+      "official_result_source_sha256": "a1e50c7706179c09a6d63268a1001723b894362d510c4a6280ea8495da8a4c41",
+      "primary_gate_status": "candidate_population_3955_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3955,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "ce5803a8d1b4c912c08fab134ab74a6aac3f4d63167cdd739008ec5196a42eab",
+        "candidate_y_sha256": "375e455c02f11042b67d59dc94d8a37d1cf6881c78bccc814cb87dd257d52b42",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_PhysChem.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/BH1_PhysChem.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH1/BH1.csv",
+        "source_csv_row_count": 3955,
+        "source_csv_sha256": "ea448500b1a121ff9158b1787b8eeebae25ba1940d0e993bff5702947b43af86",
+        "source_selection_rule": "保留 BH1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/PhysChem/Doyle_PhysChem.npz",
+      "source_npz_sha256": "84024fd6c217265b0dd289c4a94f9ea66345ee701e6e291ffb1a1b1cb8e34af3",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        3955,
+        15
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "375e455c02f11042b67d59dc94d8a37d1cf6881c78bccc814cb87dd257d52b42",
+      "y_shape": [
+        3955
+      ]
+    },
+    {
+      "dataset_id": "BH1",
+      "descriptor": "MFP",
+      "npz_keys": [
+        "X",
+        "y",
+        "smiles_columns",
+        "yield_column"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/MFP/Doyle_MFP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "108f26d2e1f18e009bcbc5142aa5bb9c68366d7e72418dd62ef3c0e94893714e",
+      "primary_gate_status": "candidate_population_3955_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3955,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "ce5803a8d1b4c912c08fab134ab74a6aac3f4d63167cdd739008ec5196a42eab",
+        "candidate_y_sha256": "375e455c02f11042b67d59dc94d8a37d1cf6881c78bccc814cb87dd257d52b42",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_MFP.py"
+          ],
+          "descriptor_generator_config": null,
+          "evidence_scope": "通用生成器说明其按输入表顺序处理；包内没有每个MFP产物的运行配置。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH1/BH1.csv",
+        "source_csv_row_count": 3955,
+        "source_csv_sha256": "ea448500b1a121ff9158b1787b8eeebae25ba1940d0e993bff5702947b43af86",
+        "source_selection_rule": "保留 BH1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Doyle_2018/MFP/Doyle_MFP.npz",
+      "source_npz_sha256": "a831627c49e41b1c59f71517ddd2cf089b685346affada6762f40b14b8dddd6b",
+      "target_unit": "yield_percent",
+      "x_dtype": "uint32",
+      "x_key": "X",
+      "x_shape": [
+        3955,
+        4096
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "375e455c02f11042b67d59dc94d8a37d1cf6881c78bccc814cb87dd257d52b42",
+      "y_shape": [
+        3955
+      ]
+    },
+    {
+      "dataset_id": "BH2",
+      "descriptor": "DFT",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/DFT/Denmark_DFT_metrics_summaries_RF.json",
+      "official_result_source_sha256": "d7ef6a573fbed3f4410d0fa5ab0eec58e95bfeba3fcf9cbe66be2b479761a780",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3359,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "b6ba4c2e43570bc65400ff43e4740befae24cae20f301e6323a1dd5836cbc20e",
+        "candidate_y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_DFT.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/BH2_DFT.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH2/BH2.csv",
+        "source_csv_row_count": 3359,
+        "source_csv_sha256": "cdd9bfda16a790ec3be91a0dd618fbc476d576942e274deae3494a7897513a65",
+        "source_selection_rule": "保留 BH2.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/DFT/Denmark_DFT.npz",
+      "source_npz_sha256": "19f8a52d33d94a390bf915b01221b380ebe85dc93c466e7c71192dbb830c0937",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        3359,
+        130
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+      "y_shape": [
+        3359
+      ]
+    },
+    {
+      "dataset_id": "BH2",
+      "descriptor": "SOAP",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/SOAP/Denmark_SOAP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "454b8533b4c1456d3153e6d8c7890fad186cb1815cc8d8e254f5fdc300b2222d",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3359,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "b6ba4c2e43570bc65400ff43e4740befae24cae20f301e6323a1dd5836cbc20e",
+        "candidate_y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_SOAP.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/BH2_ConfGen.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH2/BH2.csv",
+        "source_csv_row_count": 3359,
+        "source_csv_sha256": "cdd9bfda16a790ec3be91a0dd618fbc476d576942e274deae3494a7897513a65",
+        "source_selection_rule": "保留 BH2.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/SOAP/Denmark_SOAP.npz",
+      "source_npz_sha256": "88baa0ce8dbb2bfb5534b8d6086125f98e11400a0833d152fa0cb324063d34b4",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        3359,
+        525
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+      "y_shape": [
+        3359
+      ]
+    },
+    {
+      "dataset_id": "BH2",
+      "descriptor": "PhysChem",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/PhysChem/Denmark_PhysChem_metrics_summaries_RF.json",
+      "official_result_source_sha256": "3fcf1e7408a3bdf29708ccf327891743377922a61939efdd7359855f62701767",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3359,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "b6ba4c2e43570bc65400ff43e4740befae24cae20f301e6323a1dd5836cbc20e",
+        "candidate_y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_PhysChem.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/BH2_PhysChem.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH2/BH2.csv",
+        "source_csv_row_count": 3359,
+        "source_csv_sha256": "cdd9bfda16a790ec3be91a0dd618fbc476d576942e274deae3494a7897513a65",
+        "source_selection_rule": "保留 BH2.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/PhysChem/Denmark_PhysChem.npz",
+      "source_npz_sha256": "bcfcfe996f2e1a8f1a0d6e4990c90bcc4fd31668a40c6e93b65f8ec4b8c3150d",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        3359,
+        36
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+      "y_shape": [
+        3359
+      ]
+    },
+    {
+      "dataset_id": "BH2",
+      "descriptor": "MFP",
+      "npz_keys": [
+        "X",
+        "y",
+        "smiles_columns",
+        "yield_column"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/MFP/Denmark_MFP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "26b96deb75a1a66be40cc9aca4b39e2117d34c62bdb8501aaa3dc7bc611d106c",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 3359,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "b6ba4c2e43570bc65400ff43e4740befae24cae20f301e6323a1dd5836cbc20e",
+        "candidate_y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_MFP.py"
+          ],
+          "descriptor_generator_config": null,
+          "evidence_scope": "通用生成器说明其按输入表顺序处理；包内没有每个MFP产物的运行配置。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/BH2/BH2.csv",
+        "source_csv_row_count": 3359,
+        "source_csv_sha256": "cdd9bfda16a790ec3be91a0dd618fbc476d576942e274deae3494a7897513a65",
+        "source_selection_rule": "保留 BH2.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Denmark_2023/MFP/Denmark_MFP.npz",
+      "source_npz_sha256": "f38b8f412c0bd3df58585fad6b510e3b5609fdfe7d7899e3dc4c1d4432d9be85",
+      "target_unit": "yield_percent",
+      "x_dtype": "uint32",
+      "x_key": "X",
+      "x_shape": [
+        3359,
+        5120
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ecc8cd0de4df8172e155a64146101a3ef4da557b91d122ec8da0aa0b006af867",
+      "y_shape": [
+        3359
+      ]
+    },
+    {
+      "dataset_id": "SL1",
+      "descriptor": "DFT",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/DFT/Bode_DFT_metrics_summaries_RF.json",
+      "official_result_source_sha256": "e057e3e0ed00d3a6295f1071d7dee5b63ea75d72b984716e8f0fed4551b65943",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 1150,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "8d96a1e2077653004d8baceaa502de376cf61a5fd4a1cec7a9ff4967547359b0",
+        "candidate_y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [],
+          "descriptor_generator_config": null,
+          "evidence_scope": "当前随附包没有该数据集/描述符的专属生成配置；不得把其他描述符的配置外推为行级映射证据。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SL1/SL1.csv",
+        "source_csv_row_count": 1150,
+        "source_csv_sha256": "3fc0481e46d69bf8657b739a3872ba4c77682b68fd8b3af64fac6feaefc42d6a",
+        "source_selection_rule": "保留 SL1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/DFT/Bode_DFT.npz",
+      "source_npz_sha256": "c69141e70f4156bc78d28c0a32b9745c2aa099f9fd890a08f728a1445dd6becb",
+      "target_unit": "lc_ms_product_ratio",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        1150,
+        99
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+      "y_shape": [
+        1150
+      ]
+    },
+    {
+      "dataset_id": "SL1",
+      "descriptor": "SOAP",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/SOAP/Bode_SOAP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "64d5f09d1cf61c35ac5f483c825411b4ee4e089b458dea34da10194c76ce43df",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 1150,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "8d96a1e2077653004d8baceaa502de376cf61a5fd4a1cec7a9ff4967547359b0",
+        "candidate_y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_SOAP.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/SL1_ConfGen.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SL1/SL1.csv",
+        "source_csv_row_count": 1150,
+        "source_csv_sha256": "3fc0481e46d69bf8657b739a3872ba4c77682b68fd8b3af64fac6feaefc42d6a",
+        "source_selection_rule": "保留 SL1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/SOAP/Bode_SOAP.npz",
+      "source_npz_sha256": "53a04e3b2ba6de9d62958ac0fe8988391cddb8ad08d7b019a32ab4234609e868",
+      "target_unit": "lc_ms_product_ratio",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        1150,
+        315
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+      "y_shape": [
+        1150
+      ]
+    },
+    {
+      "dataset_id": "SL1",
+      "descriptor": "PhysChem",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/PhysChem/Bode_PhysChem_metrics_summaries_RF.json",
+      "official_result_source_sha256": "592f72e3dcdf1bddf5fc1e5f88a74c36b80331b1682a969b1a8f6e4294fcf75c",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 1150,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "8d96a1e2077653004d8baceaa502de376cf61a5fd4a1cec7a9ff4967547359b0",
+        "candidate_y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_PhysChem.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/SL1_PhysChem.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SL1/SL1.csv",
+        "source_csv_row_count": 1150,
+        "source_csv_sha256": "3fc0481e46d69bf8657b739a3872ba4c77682b68fd8b3af64fac6feaefc42d6a",
+        "source_selection_rule": "保留 SL1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/PhysChem/Bode_PhysChem.npz",
+      "source_npz_sha256": "c073b3175a6b2ecfc69cf2b8c78c6cab3c06203ff590d3af9d294981c6852dc5",
+      "target_unit": "lc_ms_product_ratio",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        1150,
+        39
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+      "y_shape": [
+        1150
+      ]
+    },
+    {
+      "dataset_id": "SL1",
+      "descriptor": "MFP",
+      "npz_keys": [
+        "X",
+        "y",
+        "smiles_columns",
+        "yield_column"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/MFP/Bode_MFP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "8795b549f8be6aab1369b8a04bf2304c83cf88af84f2554fd13335a786016a31",
+      "primary_gate_status": "candidate_population_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 1150,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "8d96a1e2077653004d8baceaa502de376cf61a5fd4a1cec7a9ff4967547359b0",
+        "candidate_y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_MFP.py"
+          ],
+          "descriptor_generator_config": null,
+          "evidence_scope": "通用生成器说明其按输入表顺序处理；包内没有每个MFP产物的运行配置。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SL1/SL1.csv",
+        "source_csv_row_count": 1150,
+        "source_csv_sha256": "3fc0481e46d69bf8657b739a3872ba4c77682b68fd8b3af64fac6feaefc42d6a",
+        "source_selection_rule": "保留 SL1.csv 的全部行，原始 CSV 行号从 0 开始。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Bode_2023/MFP/Bode_MFP.npz",
+      "source_npz_sha256": "2847bb88dcfe6fd1374f1a3830f1ea22f529cd08d4543dec960171b786e50595",
+      "target_unit": "lc_ms_product_ratio",
+      "x_dtype": "uint32",
+      "x_key": "X",
+      "x_shape": [
+        1150,
+        3072
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "460f9cd88d8e48fe3ce834a4c4e4ee2582987e31f0fbbe4496f4f9e6537edc70",
+      "y_shape": [
+        1150
+      ]
+    },
+    {
+      "dataset_id": "SM",
+      "descriptor": "DFT",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/DFT/Suzuki_DFT_metrics_summaries_RF.json",
+      "official_result_source_sha256": "79e026b1d3e73098c81949e218955b93730046fe37cc1852864f5d65a4a473cc",
+      "primary_gate_status": "candidate_static_4620_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 4620,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "900f759b579dc0be32295558c72c2ca890086941e4c99fa47223ec6548e6bb67",
+        "candidate_y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [],
+          "descriptor_generator_config": null,
+          "evidence_scope": "当前随附包没有该数据集/描述符的专属生成配置；不得把其他描述符的配置外推为行级映射证据。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SM/SM.csv",
+        "source_csv_row_count": 5760,
+        "source_csv_sha256": "111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a",
+        "source_selection_rule": "仅保留 SM.csv 中五个静态特征组分及 Yield 都非空的行；保留其原始 CSV 行号，不把 5760 行 OHE 总体混入。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/DFT/Suzuki_DFT.npz",
+      "source_npz_sha256": "e547ef2f6ec65df5e619621ab1a8856b80a45c0718edff013e287d0967ce3bff",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        4620,
+        145
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+      "y_shape": [
+        4620
+      ]
+    },
+    {
+      "dataset_id": "SM",
+      "descriptor": "SOAP",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/SOAP/Suzuki_SOAP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "9e389b623c51a8333152ef2ac3a208282d2900f7a32b2a0bdf7cd0fecabccb50",
+      "primary_gate_status": "candidate_static_4620_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 4620,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "900f759b579dc0be32295558c72c2ca890086941e4c99fa47223ec6548e6bb67",
+        "candidate_y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_SOAP.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/SM_ConfGen.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SM/SM.csv",
+        "source_csv_row_count": 5760,
+        "source_csv_sha256": "111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a",
+        "source_selection_rule": "仅保留 SM.csv 中五个静态特征组分及 Yield 都非空的行；保留其原始 CSV 行号，不把 5760 行 OHE 总体混入。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/SOAP/Suzuki_SOAP.npz",
+      "source_npz_sha256": "dfe369603ceb79838608cfc46eeccaba06048ef1468df425f2fb5afbb12bb9cc",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        4620,
+        525
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+      "y_shape": [
+        4620
+      ]
+    },
+    {
+      "dataset_id": "SM",
+      "descriptor": "PhysChem",
+      "npz_keys": [
+        "X",
+        "y"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/PhysChem/Suzuki_PhysChem_metrics_summaries_RF.json",
+      "official_result_source_sha256": "3ae02bda4d99709640422f9dcf8b5f544fab932ae5a9c5a0439c1244e1065442",
+      "primary_gate_status": "candidate_static_4620_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 4620,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "900f759b579dc0be32295558c72c2ca890086941e4c99fa47223ec6548e6bb67",
+        "candidate_y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_PhysChem.py"
+          ],
+          "descriptor_generator_config": "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/SM_PhysChem.json",
+          "evidence_scope": "配置可说明候选输入 CSV/处理规则；NPZ 是否可配对仍以行级标识与步骤28.2校验为准。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SM/SM.csv",
+        "source_csv_row_count": 5760,
+        "source_csv_sha256": "111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a",
+        "source_selection_rule": "仅保留 SM.csv 中五个静态特征组分及 Yield 都非空的行；保留其原始 CSV 行号，不把 5760 行 OHE 总体混入。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/PhysChem/Suzuki_PhysChem.npz",
+      "source_npz_sha256": "fae846b7a168de5b77fd0642f1d42f6a807ab73093db14d792d00b2be96838ac",
+      "target_unit": "yield_percent",
+      "x_dtype": "float64",
+      "x_key": "X",
+      "x_shape": [
+        4620,
+        20
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+      "y_shape": [
+        4620
+      ]
+    },
+    {
+      "dataset_id": "SM",
+      "descriptor": "MFP",
+      "npz_keys": [
+        "X",
+        "y",
+        "smiles_columns",
+        "yield_column"
+      ],
+      "official_result_source": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/MFP/Suzuki_MFP_metrics_summaries_RF.json",
+      "official_result_source_sha256": "17b4d0ae40715d1faf9994b34d9ca3647686e1aeb62585c14aebcd5cd36ca66e",
+      "primary_gate_status": "candidate_static_4620_pending_step28_2",
+      "read_at_utc": "2026-09-09T14:00:51+00:00",
+      "row_selection_performed": false,
+      "sample_mapping": {
+        "alignment_basis": "NPZ 不含 sample_id/source_row_index；仅有作者生成脚本所指 CSV 与目标向量的逐元素相等候选证据，不能单独证明反应身份。",
+        "candidate_row_count": 4620,
+        "candidate_source_row_index_preview": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "candidate_source_row_index_sha256": "900f759b579dc0be32295558c72c2ca890086941e4c99fa47223ec6548e6bb67",
+        "candidate_y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+        "descriptor_generator_evidence": {
+          "descriptor_generator_code": [
+            "reference-proejct/vjethbkm/yieldsmarter/Src/Featurize/Gen_MFP.py"
+          ],
+          "descriptor_generator_config": null,
+          "evidence_scope": "通用生成器说明其按输入表顺序处理；包内没有每个MFP产物的运行配置。"
+        },
+        "mapping_available_in_npz": false,
+        "mapping_status": "candidate_source_order_only",
+        "npz_embedded_identifier_keys": [],
+        "source_candidate_y_exact_match": true,
+        "source_csv": "reference-proejct/vjethbkm/yieldsmarter/Data/HTE_datasets/SM/SM.csv",
+        "source_csv_row_count": 5760,
+        "source_csv_sha256": "111da4e67305f0e00ae7551a0252b78aee4438d434dd5f20e80917e2d0ab596a",
+        "source_selection_rule": "仅保留 SM.csv 中五个静态特征组分及 Yield 都非空的行；保留其原始 CSV 行号，不把 5760 行 OHE 总体混入。",
+        "source_target_column": "Yield"
+      },
+      "source_npz": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity/Suzuki_2018/MFP/Suzuki_MFP.npz",
+      "source_npz_sha256": "8ab04a9fee5fb6633fb68e1542962cbf2b665be003460354bfda1a2f71794892",
+      "target_unit": "yield_percent",
+      "x_dtype": "uint32",
+      "x_key": "X",
+      "x_shape": [
+        4620,
+        5120
+      ],
+      "y_dtype": "float64",
+      "y_key": "y",
+      "y_sha256": "ded90624c3d6e567c7bed69f1be0622eac00a4ea8def52f67c20d0f67ebb8389",
+      "y_shape": [
+        4620
+      ]
+    }
+  ],
+  "expected_matrix_count": 16,
+  "purpose": "步骤28.1官方静态描述符只读inventory；不执行截断、重排或建模。",
+  "read_at_utc": "2026-09-09T14:00:51+00:00",
+  "schema_version": "1.0",
+  "source_root": "reference-proejct/vjethbkm/yieldsmarter/Results/Compare_Complexity"
+}

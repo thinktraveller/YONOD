@@ -5896,3 +5896,32 @@ for desc_name in args.descriptors:
 - 重新启动命令（YONOD 根目录）：`bash scripts/run_yieldmaster_all_descriptors_19cpu_nohup.sh`；启动后打印新批次 PID、完整日志与 tail 命令。
 
 ---
+
+## [2026-09-09 20:34] 步骤 28.1 完成：官方静态描述符 inventory 与 BH1 对齐 gate
+
+### 执行的任务
+
+- 新增 `scripts/audit_official_static_descriptors.py`，只读枚举 `Compare_Complexity` 的 `BH1/BH2/SL1/SM × DFT/SOAP/PhysChem/MFP` 共 16 个 NPZ；未修改官方矩阵、YONOD 本体、既有配置或模型结果，也未启动建模。
+- 在 `derived/descriptor_model_effect/step28_1_input_audit/` 生成 JSON/CSV inventory、BH1 DFT 对齐审计与 SM 总体边界审计。每项记录源相对路径、NPZ/官方 RF 汇总 SHA-256、NPZ keys、X/y 形状与 dtype、y SHA-256、目标单位、候选源 CSV 与候选样本顺序证据。
+- 审计明确区分“候选来源 CSV 的 y 逐元素一致”与“NPZ 内嵌 sample_id/source_row_index”。16 个 NPZ 均没有行级样本标识；因此候选行顺序不能单独被视为反应身份映射，步骤 28.2 仍须建立共享 population manifest。
+
+### 关键结果
+
+- BH1：SOAP `(3955,420)`、PhysChem `(3955,15)`、MFP `(3955,4096)` 的 y 与 `Data/HTE_datasets/BH1/BH1.csv` 3955 行候选向量完全一致；DFT 为 `(3960,120)`，NPZ 仅有 `X/y`、不存在 BH1 DFT 专属生成配置或行级 ID，无法唯一确定多出的五条反应。
+- `BH1/DFT` 已固定为 `blocked_alignment`，`main_experiment_allowed=false`。审计显式禁止“取前3955行”、按 y 值猜测、重排或删除；不会进入步骤28主矩阵与主结论。
+- BH2、SL1 的四个静态输入分别稳定在 3359 与 1150 行；SM 四个静态输入均为 4620 行。SM OHE 官方汇总明确指向原始 `SM.csv`、`fit_scope=train_only_per_fold`，保留为独立的 `SM-OHE-5760` 补充总体；与 `SM-static-4620` 禁止混合统计。
+
+### 产物与验证
+
+- `derived/descriptor_model_effect/step28_1_input_audit/official_static_descriptor_inventory.json`
+- `derived/descriptor_model_effect/step28_1_input_audit/official_static_descriptor_inventory.csv`
+- `derived/descriptor_model_effect/step28_1_input_audit/bh1_dft_alignment_audit.json`
+- `derived/descriptor_model_effect/step28_1_input_audit/population_boundary_audit.json`
+- `python3 scripts/audit_official_static_descriptors.py`：通过，生成 4 个隔离审计产物。
+- `python3 scripts/audit_official_static_descriptors.py --verify`：通过，断言 16 个唯一输入、16 个固定 X 形状、所有 NPZ SHA-256、BH1 DFT `blocked_alignment`（差异为 5 行）、SM static-4620/OHE-5760 严格分离，以及审计过程未进行行选择。
+
+### 下一步计划
+
+- 仅为 BH1 的 SOAP/PhysChem/MFP、BH2、SL1 与 SM-static-4620 构造带 `sample_id/source_row_index` 的共享 population manifest，再生成唯一 5×5 split manifest；在取得作者提供的 BH1 DFT 行级映射之前，继续永久跳过该 DFT 组合。
+
+---
