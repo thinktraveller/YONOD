@@ -1,0 +1,66 @@
+{
+  "autogluon_present": false,
+  "complete_model_count": 4,
+  "expected_model_count": 4,
+  "hashes_recomputed": {
+    "feature_hash": "e07d339be95de2d7f86427b4540c519eec7a61b31833ec6102a1dfed967c7c3b",
+    "input_hash": "c073b3175a6b2ecfc69cf2b8c78c6cab3c06203ff590d3af9d294981c6852dc5",
+    "population_hash": "5c91651bcda1059546d6d91bdeec448029169a003ff711b159a96c923b17c0fd",
+    "split_hash": "cf6fbdde26782a8618dfa14d08723ba108b4bb8944ffd483ca71b1b1c38daeed"
+  },
+  "metrics_recomputed": {
+    "lightgbm": {
+      "kendall_tau": 0.56341235265754,
+      "kendall_tau_defined": true,
+      "kendall_tau_pvalue": 5.1220373101415056e-36,
+      "kendall_tau_reason": "",
+      "mae": 18.30153811114493,
+      "r2": 0.6752152260063466,
+      "rmse": 39.17323354080518
+    },
+    "rf": {
+      "kendall_tau": 0.5477824281589033,
+      "kendall_tau_defined": true,
+      "kendall_tau_pvalue": 3.861787360436922e-34,
+      "kendall_tau_reason": "",
+      "mae": 19.94702608508161,
+      "r2": 0.7084249709469912,
+      "rmse": 37.11647764170662
+    },
+    "svm": {
+      "kendall_tau": 0.4898279061317801,
+      "kendall_tau_defined": true,
+      "kendall_tau_pvalue": 1.2386817372691468e-27,
+      "kendall_tau_reason": "",
+      "mae": 29.309014994133182,
+      "r2": -0.07003567751068274,
+      "rmse": 71.10345764601257
+    },
+    "xgboost": {
+      "kendall_tau": 0.5662752596201616,
+      "kendall_tau_defined": true,
+      "kendall_tau_pvalue": 2.2904557402820087e-36,
+      "kendall_tau_reason": "",
+      "mae": 18.43691770768076,
+      "r2": 0.7107151426240832,
+      "rmse": 36.97042487652976
+    }
+  },
+  "models": [
+    "rf",
+    "xgboost",
+    "svm",
+    "lightgbm"
+  ],
+  "no_internal_holdout_or_external_valid_tuning": true,
+  "ohe_present": false,
+  "rf_parameters_verified": true,
+  "run_dir": "derived/descriptor_model_effect/step28_3_smoke/smoke_sl1_physchem_r00_f00_20260909T150000Z",
+  "same_valid_samples_across_models": true,
+  "schema_version": "1.0",
+  "status": "passed",
+  "train_sample_count": 920,
+  "train_valid_overlap": false,
+  "valid_sample_count": 230,
+  "verified_at_utc": "2026-09-09T14:36:28+00:00"
+}

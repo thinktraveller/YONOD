@@ -5962,3 +5962,40 @@ for desc_name in args.descriptors:
 
 ---
 
+## [2026-09-09 22:36] 步骤 28.3 第一构建单元完成：共享外层折四模型 smoke
+
+### 执行的任务
+
+- 新增 `scripts/run_static_descriptor_model_smoke.py`，在 YONOD 本体之外读取步骤28.1官方静态描述符 inventory 和步骤28.2共享 population/split manifest，按同一外层训练/验证折依次执行 RF、XGBoost、SVM、LightGBM。
+- 固定 smoke 为 `SL1-static-1150 × PhysChem × repeat 0/fold 0`；训练集920行、验证集230行、repeat seed为1000。未修改 `yonod/`、已有 configs、报告框架或官方矩阵，未启动正式60组合/1500折训练。
+- RF 使用论文式核心参数 `n_estimators=500`、`max_features=0.3`、`random_state=1000`；其余模型使用当前YONOD适配器默认参数并显式固定随机种子、CPU和线程上限。所有模型禁止内部holdout、禁止把外层验证折用于early stopping或调参。
+- 每个模型均保存逐样本预测、折级MAE/RMSE/R²/Kendall tau、训练/预测耗时、环境版本，以及input/population/split/fold/feature/model config哈希。
+
+### Smoke结果
+
+| 模型 | MAE | RMSE | R² | Kendall tau | 训练时间（秒） |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| RF | 19.947026 | 37.116478 | 0.708425 | 0.547782 | 0.2820 |
+| XGBoost | 18.436918 | 36.970425 | 0.710715 | 0.566275 | 0.1547 |
+| SVM | 29.309015 | 71.103458 | -0.070036 | 0.489828 | 0.0130 |
+| LightGBM | 18.301538 | 39.173234 | 0.675215 | 0.563412 | 0.9834 |
+
+这些数值只用于验证执行器与输出契约，不构成“模型比描述符更重要”的研究结论；正式结论仍须完成共享5×5主矩阵和预注册统计。
+
+### 产物与验证
+
+- 成功运行目录：`derived/descriptor_model_effect/step28_3_smoke/smoke_sl1_physchem_r00_f00_20260909T150000Z/`。
+- `taskset -c 0-18 /home/wangzh685/miniconda3/bin/conda run -n yonod python scripts/run_static_descriptor_model_smoke.py --run-id smoke_sl1_physchem_r00_f00_20260909T150000Z`：通过，四个模型均为`complete`。
+- `conda run -n yonod python scripts/run_static_descriptor_model_smoke.py --verify --run-dir derived/descriptor_model_effect/step28_3_smoke/smoke_sl1_physchem_r00_f00_20260909T150000Z`：通过。
+- 验证确认四模型使用完全相同的230个valid `sample_id/source_row_index`；train/valid无交叠并与步骤28.2 manifest一致；预测均为有限值；指标可从预测文件重算；所有关键hash可重算；OHE和AutoGluon未出现；不存在内部holdout或外层valid调参。
+
+### 遇到的问题及处理
+
+- 第一次经`taskset`调用普通`conda`时，非交互PATH中无法定位可执行文件，命令在进入Python前以127退出；改用`/home/wangzh685/miniconda3/bin/conda`绝对路径后成功。该失败没有产生模型结果。
+- 专用构建代理的第一次运行在写入`run_started`后被中断；对应半成品目录仅保留为中断证据，不纳入本步骤提交或后续结果汇总。正式验证只针对显式成功目录。
+
+### 下一步计划
+
+- 继续步骤28.3时，先把单折执行器参数化为受任务清单驱动、按`population × descriptor × model × repeat × fold`可恢复执行的正式runner，并生成默认60组合/1500折任务清单；在完整性与资源预检通过后，再单独启动正式nohup训练。
+
+---
