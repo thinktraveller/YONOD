@@ -1,0 +1,38 @@
+{
+  "bh1_dft_policy": "BH1/DFT is excluded until an author row-level mapping resolves the 3960-vs-3955 mismatch.",
+  "cv_config": {
+    "n_repeats": 5,
+    "n_splits": 5,
+    "seed": 1000,
+    "strategy": "repeated_kfold"
+  },
+  "excluded_descriptor_matrix_count": 1,
+  "included_descriptor_matrix_count": 15,
+  "mapping_policy": "All source_row_index values are candidate CSV-order mappings.  They are not author-embedded row identifiers because the official NPZ files do not contain row-level IDs.",
+  "ohe_policy": "OHE is not part of this static descriptor main manifest; SM-OHE-5760 remains separate.",
+  "outputs": {
+    "descriptor_availability": "derived/descriptor_model_effect/step28_2_population_splits/descriptor_availability.csv",
+    "descriptor_exclusion_manifest": "derived/descriptor_model_effect/step28_2_population_splits/descriptor_exclusion_manifest.csv",
+    "fold_manifest": "derived/descriptor_model_effect/step28_2_population_splits/fold_manifest.csv",
+    "population_index": "derived/descriptor_model_effect/step28_2_population_splits/population_index.csv",
+    "population_manifests": {
+      "BH1-static-3955": "derived/descriptor_model_effect/step28_2_population_splits/population_manifests/BH1-static-3955_population_manifest.csv",
+      "BH2-static-3359": "derived/descriptor_model_effect/step28_2_population_splits/population_manifests/BH2-static-3359_population_manifest.csv",
+      "SL1-static-1150": "derived/descriptor_model_effect/step28_2_population_splits/population_manifests/SL1-static-1150_population_manifest.csv",
+      "SM-static-4620": "derived/descriptor_model_effect/step28_2_population_splits/population_manifests/SM-static-4620_population_manifest.csv"
+    },
+    "split_index": "derived/descriptor_model_effect/step28_2_population_splits/split_index.csv",
+    "split_manifests": {
+      "BH1-static-3955": "derived/descriptor_model_effect/step28_2_population_splits/split_manifests/BH1-static-3955_split_manifest.csv",
+      "BH2-static-3359": "derived/descriptor_model_effect/step28_2_population_splits/split_manifests/BH2-static-3359_split_manifest.csv",
+      "SL1-static-1150": "derived/descriptor_model_effect/step28_2_population_splits/split_manifests/SL1-static-1150_split_manifest.csv",
+      "SM-static-4620": "derived/descriptor_model_effect/step28_2_population_splits/split_manifests/SM-static-4620_split_manifest.csv"
+    }
+  },
+  "population_count": 4,
+  "purpose": "步骤28.2共享静态描述符population与唯一5x5 split manifest；不执行建模。",
+  "schema_version": "1.0",
+  "source_inventory": "derived/descriptor_model_effect/step28_1_input_audit/official_static_descriptor_inventory.json",
+  "total_fold_count": 100,
+  "total_split_rows": 327100
+}

@@ -1,0 +1,2 @@
+population_id,dataset_id,descriptor,status,exclusion_reason,main_matrix_inclusion
+BH1-static-3955,BH1,DFT,excluded,blocked_alignment: BH1/DFT has 3960 rows and no author row-level mapping for the extra five rows,False

@@ -5925,3 +5925,40 @@ for desc_name in args.descriptors:
 - 仅为 BH1 的 SOAP/PhysChem/MFP、BH2、SL1 与 SM-static-4620 构造带 `sample_id/source_row_index` 的共享 population manifest，再生成唯一 5×5 split manifest；在取得作者提供的 BH1 DFT 行级映射之前，继续永久跳过该 DFT 组合。
 
 ---
+
+## [2026-09-09 22:17] 步骤 28.2 完成：共享样本映射与唯一 5×5 split manifest
+
+### 执行的任务
+
+- 新增 `scripts/build_static_descriptor_population_splits.py`，基于步骤28.1 inventory 与官方 `Compare_Complexity` NPZ/CSV 生成静态描述符二次建模的共享 population 与 split manifest；未修改 `yonod/` 本体、既有 configs、报告框架或官方矩阵，也未启动任何正式训练。
+- 为 `BH1-static-3955`、`BH2-static-3359`、`SL1-static-1150`、`SM-static-4620` 生成 row-level population manifest，保存 `sample_id`、`source_row_index`、`y`、描述符可用性、X/y/mapping hash、候选 CSV 行映射证据等级与排除原因。
+- 生成每个 population 唯一的 5 repeats × 5 folds split manifest，repeat seeds 固定为 `1000..1004`；每个 fold 保存 train/valid 的 `sample_id`、`source_row_index`、`y` 与折级 hash，供后续所有静态描述符/模型共享。
+- 保守处理行级证据：官方 NPZ 不含作者内嵌 `sample_id/source_row_index`，因此 manifest 将 `source_row_index` 标记为 `candidate_order_mapping`，证据等级为 `csv_y_exact_plus_generator_order_evidence_no_npz_row_ids`，不把候选 CSV 顺序过度声称为作者提供的反应 ID。
+
+### 关键变更
+
+- `scripts/build_static_descriptor_population_splits.py`：步骤28.2材料生成与 `--verify` 校验脚本。
+- `derived/descriptor_model_effect/step28_2_population_splits/population_index.csv`：4 个静态 population 的行数、描述符纳入/排除、mapping hash 与 population hash 索引。
+- `derived/descriptor_model_effect/step28_2_population_splits/descriptor_availability.csv`：16 个官方静态矩阵的纳入状态；15 个 included，`BH1/DFT` 1 个 excluded。
+- `derived/descriptor_model_effect/step28_2_population_splits/population_manifests/`：4 个 row-level population manifest。
+- `derived/descriptor_model_effect/step28_2_population_splits/split_manifests/`：4 个唯一 5×5 split manifest。
+- `derived/descriptor_model_effect/step28_2_population_splits/fold_manifest.csv`、`split_index.csv`、`manifest_summary.json`、`verification_summary.json`：折级 hash、split hash 与复核摘要。
+
+### 验证结果
+
+- `python3 -B scripts/build_static_descriptor_population_splits.py`：通过，生成 `population_count=4`、`included_descriptor_matrix_count=15`、`excluded_descriptor_matrix_count=1`、`total_fold_count=100`、`total_split_rows=327100`。
+- `python3 -B scripts/build_static_descriptor_population_splits.py --verify`：通过，确认 4 个 population、4 个 5×5 split、seeds 为 `1000..1004`、每个 repeat 中每个样本恰好一次进入 valid、每个 fold 的 train/valid 不交叠且并集完整、`split_hash` 可重算、`BH1/DFT` 未进入主 manifest、OHE 未进入静态描述符 manifest。
+- 一折 smoke 已由 `--verify` 覆盖：对每个 population 的第 1 repeat / 第 1 fold，逐一读取 included 官方 NPZ，确认 X 行数、y 顺序和 valid fold 位置与 population manifest 一致。
+
+### 遇到的问题及解决方案
+
+- 系统 `python3` 环境缺少 `sklearn`，且当前安全边界不允许 builder 代替用户运行 conda 环境命令；已将脚本内 split 生成改为等价的本地 sklearn KFold 语义实现：`RandomState(seed).shuffle`、sklearn 同款 fold size 分配，并按原始样本索引输出 train/valid，避免新增环境依赖。
+- 多次普通工具调用触发沙箱 `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`；关键生成与验证命令经批准后在项目目录内执行。由于专用 `apply_patch` 同样被该沙箱 helper 拦截，脚本中的两个最小文本修正通过一次性精确替换完成，并已由最终 `--verify` 覆盖。
+- 当前工作区仍包含大量用户/历史未提交配置、数据和运行产物；本步骤仅准备暂存新增脚本、`step28_2_population_splits/` 产物与 `project-docs/buildlog.md`，不纳入其他文件。
+
+### 下一步计划
+
+- 进入步骤28.3 前，先冻结模型参数、软件版本、CPU 线程策略和随机种子策略；随后只在该 shared population/split manifest 上做单数据集、单描述符、四模型 smoke。不得启动正式大规模训练，直到 smoke schema、fold 边界和恢复机制通过 gate。
+
+---
+
