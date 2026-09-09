@@ -6028,3 +6028,35 @@ for desc_name in args.descriptors:
 - 在单独授权启动长作业后，按 `population × descriptor × model` 顺序用 selector 和显式 `--max-tasks` 分批串行执行；每批完成后先跑完整性检查，再进入步骤28.4汇总。当前构建单元不扩展统计或报告。
 
 ---
+
+## [2026-09-09 23:45] 步骤 28.3 第三构建单元完成：19核 nohup 正式矩阵启动脚本
+
+### 执行的任务
+
+- 新增 `scripts/run_static_descriptor_model_matrix_19cpu_nohup.sh`，作为步骤28.3正式主矩阵的安全启动器；未修改 `yonod/` 本体、既有 configs、报告框架、官方矩阵或训练结果。
+- 启动器默认 `--dry-run`，只有显式传入 `--run` 才会训练；运行前固定核对 `plan_hash=71d297cb894f13851e61a8e9aa6341148d70166cc51a40ebc7e6086eae16b599`、`task_count=1500`、`combination_count=60`、`included_descriptor_matrix_count=15`、`population_count=4` 与 `full_training_started=false`。
+- 正式执行时使用 `/home/wangzh685/miniconda3/bin/conda run -n yonod python`，通过 `taskset -c 0-18` 限定 19 个 CPU 核，并显式设置 `LOKY_MAX_CPU_COUNT=19`、`OMP_NUM_THREADS=1`、`OPENBLAS_NUM_THREADS=1`、`MKL_NUM_THREADS=1`、`NUMEXPR_NUM_THREADS=1`。
+- 启动器按 `BH1-static-3955`、`BH2-static-3359`、`SL1-static-1150`、`SM-static-4620` 顺序串行执行，每个 `population × descriptor × model` 显式调用一次 runner selector 和 `--max-tasks 25`，总计 `300+400+400+400=1500` 个 fold-level 任务。
+- 新增非破坏性 `flock` 单实例锁，防止重复启动同一正式批次；每个 population 完成后执行同 hash `completion.json` 完整性检查。默认失败即停止，保留 runner 已写入的失败 metadata 与已完成 folds；可选 `--continue-on-failure` 仅用于审计性继续。
+
+### 关键变更
+
+- `scripts/run_static_descriptor_model_matrix_19cpu_nohup.sh`：19核、conda `yonod`、dry-run/--run、计划 gate、单实例锁、总体顺序、逐组合 selector、总体完成检查和完整命令日志。
+- `project-docs/buildlog.md`：记录本构建单元的执行、验证和下一步计划。
+
+### 验证结果
+
+- `bash -n scripts/run_static_descriptor_model_matrix_19cpu_nohup.sh`：通过。
+- `bash scripts/run_static_descriptor_model_matrix_19cpu_nohup.sh --dry-run`：通过，输出 `SCRIPT_SUCCESS mode=dry-run planned_tasks=1500 combo_commands=60 cpu_set=0-18 cpu_count=19`；dry-run 只打印验证、环境快照和 60 个正式组合命令，未执行训练。
+- 当前构建单元没有运行 `--run`，因此没有启动正式1500任务，也没有新增训练产物或日志文件。
+
+### 遇到的问题及解决方案
+
+- 普通沙箱再次在 `bash -n` 与 dry-run 验证前触发 `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`；两条验证均以脱沙箱只读方式重跑通过，未启动训练。
+- `apply_patch` 在一次非必要的未使用 helper 清理时被同一沙箱 helper 拦截；该 helper 不影响启动器行为，已保留脚本当前版本，并由 `bash -n` 与 dry-run 覆盖核心行为。
+
+### 下一步计划
+
+- 用户手动执行最终 `nohup` 启动命令后，等待正式矩阵完成；完成后进入步骤28.4，汇总逐折产物、组合 mean/std 与完整性审计。
+
+---
