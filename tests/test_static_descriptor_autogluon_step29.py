@@ -46,6 +46,37 @@ class Step29StaticDescriptorAutoGluonTests(unittest.TestCase):
         self.assertEqual(model_config["params"]["time_limit"], 300)
         self.assertEqual(model_config["params"]["num_cpus"], 19)
 
+    def test_smoke_clone_task_id_is_stable_without_changing_formal_task_id(self):
+        payload = self.runner._load_plan(ROOT / self.runner.DEFAULT_PLAN_DIR)
+        formal = next(
+            row for row in payload["tasks"]
+            if row["population_id"] == "SL1-static-1150"
+            and row["descriptor"] == "PhysChem"
+            and int(row["repeat_zero_based"]) == 0
+            and int(row["fold_zero_based"]) == 0
+        )
+        formal_contract_hash = self.runner.smoke._hash_payload(self.runner._task_contract(formal))
+        formal_task_id = formal["task_id"]
+
+        self.assertEqual(formal["task_contract_hash"], formal_contract_hash)
+        self.assertEqual(self.runner._task_id(formal, formal_contract_hash), formal_task_id)
+        self.assertTrue(formal_task_id.startswith("s29-sl1-physchem-autogluon-r00-f00-"))
+
+        smoke_task = self.runner._clone_smoke_task(
+            formal,
+            ROOT / self.runner.DEFAULT_PLAN_DIR,
+            time_limit=30,
+            num_cpus=2,
+        )
+        smoke_contract_hash = self.runner.smoke._hash_payload(self.runner._task_contract(smoke_task))
+
+        self.assertEqual(smoke_task["task_contract_hash"], smoke_contract_hash)
+        self.assertEqual(self.runner._task_id(smoke_task, smoke_contract_hash), smoke_task["task_id"])
+        self.assertTrue(smoke_task["task_id"].startswith("s29-smoke-sl1-physchem-autogluon-r00-f00-"))
+        self.assertNotEqual(smoke_task["task_id"], formal_task_id)
+        self.assertEqual(formal["task_id"], formal_task_id)
+        self.runner._verify_task_inputs(smoke_task, verify_feature_array=False)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -341,10 +341,16 @@ def _task_contract(task: Mapping[str, Any]) -> dict[str, Any]:
     return {field: task[field] for field in CONTRACT_FIELDS}
 
 
+def _task_id_prefix(task: Mapping[str, Any]) -> str:
+    output_path = str(task.get("output_path", ""))
+    return "s29-smoke" if "/smoke_runs/" in f"/{output_path}" else "s29"
+
+
 def _task_id(task: Mapping[str, Any], contract_hash: str) -> str:
     return (
-        f"s29-{str(task['dataset_id']).lower()}-{str(task['descriptor']).lower()}-"
-        f"autogluon-r{int(task['repeat_zero_based']):02d}-"
+        f"{_task_id_prefix(task)}-{str(task['dataset_id']).lower()}-"
+        f"{str(task['descriptor']).lower()}-autogluon-"
+        f"r{int(task['repeat_zero_based']):02d}-"
         f"f{int(task['fold_zero_based']):02d}-{contract_hash[:12]}"
     )
 
@@ -1087,7 +1093,7 @@ def _clone_smoke_task(task: Mapping[str, Any], plan_dir: Path, time_limit: int, 
     cloned["status"] = "pending"
     contract_hash = smoke._hash_payload(_task_contract(cloned))
     cloned["task_contract_hash"] = contract_hash
-    cloned["task_id"] = _task_id(cloned, contract_hash).replace("s29-", "s29-smoke-", 1)
+    cloned["task_id"] = _task_id(cloned, contract_hash)
     return cloned
 
 

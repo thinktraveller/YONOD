@@ -6145,3 +6145,51 @@ nohup bash scripts/run_static_descriptor_autogluon_19cpu_nohup.sh --run --resume
 - 先由用户手动执行上面的单折 smoke 命令；确认通过后，再由用户决定是否启动正式 19 核 nohup 长任务。正式 275 folds 完成后进入步骤29.5，生成 AutoGluon vs RF 的成对统计分析和保守结论标签。
 
 ---
+
+## [2026-09-10 11:20] 步骤 29 smoke 修复完成：稳定重算 AutoGluon smoke 任务 ID
+
+### 执行的任务
+
+- 复核真实 smoke 失败现象：`SL1-static-1150 / PhysChem / autogluon / repeat_00 / fold_00` 在训练前触发 `AssertionError: task_id is not stable/recomputable`。
+- 定位根因：smoke 任务先按正式输出路径计算正式 `task_id`，再通过字符串替换改成 `s29-smoke-*`；但输入校验阶段重新计算 `task_id` 时不知道该任务是 smoke 派生任务，因此回算为正式前缀，导致稳定性断言失败。
+- 修改 `scripts/run_static_descriptor_autogluon_matrix.py`：新增基于 `output_path` 是否位于 `smoke_runs/` 的任务 ID 前缀派生逻辑，使 smoke 与正式任务都能通过同一 `_task_id()` 稳定重算；正式 275 折任务的 ID/hash 未改变。
+- 新增回归测试覆盖 `SL1-static-1150 / PhysChem / r00 / f00` 的 smoke 克隆任务，验证 smoke `task_id` 可重算、正式 `task_id` 不被污染，且 smoke 任务输入校验通过。
+- 保留失败 smoke 审计产物，未删除 `derived/descriptor_model_effect/step29_autogluon_static_rf_compare/smoke_runs/` 下的既有失败尝试；本步骤未启动正式 275 折长任务。
+
+### 关键变更
+
+- `scripts/run_static_descriptor_autogluon_matrix.py`：新增 `_task_id_prefix()`，并让 `_clone_smoke_task()` 直接调用统一 `_task_id()`，避免 smoke 专用字符串替换造成的 contract/hash/task_id 校验分歧。
+- `tests/test_static_descriptor_autogluon_step29.py`：新增 smoke 派生任务 ID 稳定性回归测试。
+- `derived/descriptor_model_effect/step29_autogluon_static_rf_compare/dry_run_summary.json`：更新 dry-run 时间戳，计划 hash 仍为 `9a445c753718b49226532a11e1172d8cd53b3e5dd5b806e22662eb539325e1a2`，任务数仍为 275。
+- `derived/descriptor_model_effect/step29_autogluon_static_rf_compare/verification_summary.json`：更新 verify 时间戳，正式完成状态仍为 `completed_folds=0`、`pending_folds=275`。
+
+### 验证结果
+
+- `python3 -m py_compile scripts/run_static_descriptor_autogluon_matrix.py scripts/verify_static_descriptor_autogluon_step29.py tests/test_static_descriptor_autogluon_step29.py`：通过。
+- `python3 -m unittest tests.test_static_descriptor_autogluon_step29 -v`：通过，2 个测试 OK。
+- `python3 scripts/run_static_descriptor_autogluon_matrix.py --verify-plan`：通过，`task_count=275`、`combination_count=11`、`rf_reference_complete=true`，且 MFP/OHE/SVM/BH1-DFT 均未进入任务清单。
+- `python3 scripts/run_static_descriptor_autogluon_matrix.py --dry-run`：通过，`command_count=275`，未启动训练。
+- `bash scripts/run_static_descriptor_autogluon_19cpu_nohup.sh --dry-run`：通过，输出 `SCRIPT_SUCCESS mode=dry-run planned_tasks=275 combo_commands=11 cpu_set=0-18 cpu_count=19`。
+- `python3 scripts/verify_static_descriptor_autogluon_step29.py`：通过，正式 AutoGluon 当前仍为 `completed_folds=0`、`pending_folds=275`，符合尚未启动正式长任务的状态。
+
+### 遇到的问题及解决方案
+
+- 问题：真实 smoke 在训练前失败，失败 metadata 保存在 `derived/descriptor_model_effect/step29_autogluon_static_rf_compare/smoke_runs/SL1-static-1150/PhysChem/autogluon/repeat_00/fold_00/time_limit_30_cpus_2/attempts/20260910T031227.996871Z-p1622077/metadata.json`。
+- 解决：将 smoke/正式前缀选择纳入 `_task_id()` 的稳定重算路径，消除克隆阶段字符串替换与校验阶段回算逻辑不一致的问题；失败 smoke 产物保留用于审计。
+- 普通沙箱在少数只读检查中仍可能出现 `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`；已按只读受控方式重跑相关检查，未影响文件内容和训练状态。
+
+### 精确复跑 smoke 命令
+
+```bash
+taskset -c 0-1 env LOKY_MAX_CPU_COUNT=2 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
+  /home/wangzh685/miniconda3/bin/conda run -n yonod python scripts/run_static_descriptor_autogluon_matrix.py \
+  --plan-dir derived/descriptor_model_effect/step29_autogluon_static_rf_compare \
+  --population-id SL1-static-1150 --descriptor PhysChem --model autogluon \
+  --repeat 0 --fold 0 --max-tasks 1 --smoke --time-limit 30 --num-cpus 2
+```
+
+### 下一步计划
+
+- 由用户或主代理复跑上述真实 smoke；若通过，再决定是否启动正式 19 核 nohup 的 275 folds AutoGluon 长任务。
+
+---
