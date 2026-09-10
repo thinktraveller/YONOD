@@ -6083,3 +6083,65 @@ for desc_name in args.descriptors:
 - `bash scripts/run_static_descriptor_model_matrix_19cpu_resume_no_svm.sh --dry-run`：通过，输出 `SCRIPT_SUCCESS mode=dry-run planned_tasks=250 combo_commands=10 cpu_set=0-18 cpu_count=19 svm_excluded=true`；未启动训练。
 
 ---
+
+
+## [2026-09-10 11:06] 步骤 29.1-29.3 自动构建部分完成：AutoGluon 静态描述符任务清单、dry-run 与 19 核启动器
+
+### 执行的任务
+
+- 新增独立步骤29 runner `scripts/run_static_descriptor_autogluon_matrix.py`，从步骤28冻结的 population/split manifest、静态描述符矩阵和 RF 完成产物派生 AutoGluon 任务清单；未修改 `yonod/` 本体，也未修改 `project-docs/project-plan.md`。
+- 新增独立验收脚本 `scripts/verify_static_descriptor_autogluon_step29.py`，用于复核 275 folds、11 个组合、RF 引用完整性和正式完成状态。
+- 新增 19 核启动器 `scripts/run_static_descriptor_autogluon_19cpu_nohup.sh`，默认 `--dry-run`，显式 `--run --resume` 才会通过 conda `yonod` 串行执行正式 275 folds。
+- 新增测试 `tests/test_static_descriptor_autogluon_step29.py`，锁定步骤29范围：仅 DFT/SOAP/PhysChem，排除 MFP、OHE、SVM 和 BH1/DFT。
+- 生成派生产物 `derived/descriptor_model_effect/step29_autogluon_static_rf_compare/`，包括 `task_manifest.csv/json`、`run_manifest.json`、`preflight_summary.json`、`verification_summary.json`、`dry_run_commands.txt`、`dry_run_summary.json` 和 `completion_summary.json`。
+
+### 关键变更
+
+- `scripts/run_static_descriptor_autogluon_matrix.py`：正式 manifest 为 11 个 `(population, descriptor)` 单元 × 25 folds = 275 个 AutoGluon fold 任务；每个任务记录输入 hash、feature hash、split/fold hash、sample/source-row hash、AutoGluon config hash、RF completion/metadata/prediction 引用和输出路径。
+- `scripts/run_static_descriptor_autogluon_matrix.py`：AutoGluon 执行改为 runner 内直接封装 `autogluon.tabular.TabularPredictor`，外层 valid 只用于最终 `predict()`；不传 `tuning_data`，缺失值由 AutoGluon 在训练折内部处理，`inf` 仍会失败。
+- `scripts/run_static_descriptor_autogluon_19cpu_nohup.sh`：正式组合顺序为 BH1 SOAP/PhysChem，BH2 DFT/SOAP/PhysChem，SL1 DFT/SOAP/PhysChem，SM DFT/SOAP/PhysChem；每个组合显式 `--max-tasks 25`。
+- `derived/descriptor_model_effect/step29_autogluon_static_rf_compare/task_manifest.json`：当前冻结 `plan_hash=9a445c753718b49226532a11e1172d8cd53b3e5dd5b806e22662eb539325e1a2`。
+
+### 验证结果
+
+- `python3 -m py_compile scripts/run_static_descriptor_autogluon_matrix.py scripts/verify_static_descriptor_autogluon_step29.py tests/test_static_descriptor_autogluon_step29.py`：通过。
+- `bash -n scripts/run_static_descriptor_autogluon_19cpu_nohup.sh`：通过。
+- `python3 -m unittest tests.test_static_descriptor_autogluon_step29 -v`：通过，1 个测试 OK。
+- `python3 scripts/run_static_descriptor_autogluon_matrix.py --prepare`：通过，生成 `task_count=275`、`combination_count=11`、`population_count=4`、`full_training_started=false`。
+- `python3 scripts/run_static_descriptor_autogluon_matrix.py --verify-plan`：通过，`rf_reference_complete=true`、`bh1_dft_present=false`、`mfp_present=false`、`ohe_present=false`、`svm_present=false`。
+- `python3 scripts/run_static_descriptor_autogluon_matrix.py --dry-run`：通过，写出 `dry_run_commands.txt`，`command_count=275`，未启动训练。
+- `bash scripts/run_static_descriptor_autogluon_19cpu_nohup.sh --dry-run`：通过，输出 `SCRIPT_SUCCESS mode=dry-run planned_tasks=275 combo_commands=11 cpu_set=0-18 cpu_count=19`，未启动训练。
+- `python3 scripts/verify_static_descriptor_autogluon_step29.py`：通过，manifest gate passed；正式 AutoGluon 当前 `completed_folds=0`、`pending_folds=275`，符合尚未启动正式长任务的状态。
+
+### 遇到的问题及解决方案
+
+- 系统 `python3` 不含 `scipy`，最初导入步骤28 smoke helper 失败；已将步骤29 runner 的 hash、atomic 写入与基础指标 helper 独立出来，使 prepare/dry-run/verify 可在系统 Python 下运行。真实 AutoGluon 训练仍要求 conda `yonod`。
+- `SM-static-4620/DFT` 特征矩阵含 NaN，最初 verify 将 NaN 当作输入错误；已改为只拒绝 `inf`，允许 AutoGluon 在训练折内部处理缺失值，并在 metadata 中记录缺失值策略。外层 valid 仍不参与 fit/tuning。
+- 真实 AutoGluon smoke 需要在 conda `yonod` 中执行，当前 builder 安全边界不自动运行虚拟环境命令；本次仅完成工程准备、manifest/dry-run/验证和启动命令生成，没有启动 smoke 或正式 275 folds。
+
+### 手动 smoke 验证命令
+
+```bash
+taskset -c 0-1 env LOKY_MAX_CPU_COUNT=2 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
+  /home/wangzh685/miniconda3/bin/conda run -n yonod python scripts/run_static_descriptor_autogluon_matrix.py \
+  --plan-dir derived/descriptor_model_effect/step29_autogluon_static_rf_compare \
+  --population-id SL1-static-1150 --descriptor PhysChem --model autogluon \
+  --repeat 0 --fold 0 --max-tasks 1 --smoke --time-limit 30 --num-cpus 2
+```
+
+成功标志：输出 JSON 中 `status="complete"`，并在 `derived/descriptor_model_effect/step29_autogluon_static_rf_compare/smoke_runs/SL1-static-1150/PhysChem/autogluon/repeat_00/fold_00/time_limit_30_cpus_2/` 下产生 `completion.json`、`attempts/*/metadata.json` 和 `predictions.csv`；metadata 中 `external_valid_used_for_tuning=false`、预测行数为 230 且 `y_pred` 全部有限。
+
+### 正式启动命令
+
+```bash
+nohup bash scripts/run_static_descriptor_autogluon_19cpu_nohup.sh --run --resume \
+  > logs/step29_static_descriptor_autogluon_19cpu.full.log 2>&1 &
+```
+
+成功标志：日志末尾出现 `SCRIPT_SUCCESS mode=run planned_tasks=275 combo_commands=11 cpu_set=0-18 cpu_count=19`，随后 `python3 scripts/verify_static_descriptor_autogluon_step29.py --require-complete` 通过且 `completed_folds=275`。
+
+### 下一步计划
+
+- 先由用户手动执行上面的单折 smoke 命令；确认通过后，再由用户决定是否启动正式 19 核 nohup 长任务。正式 275 folds 完成后进入步骤29.5，生成 AutoGluon vs RF 的成对统计分析和保守结论标签。
+
+---

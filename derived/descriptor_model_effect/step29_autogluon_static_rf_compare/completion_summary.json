@@ -1,0 +1,812 @@
+{
+  "checked_at_utc": "2026-09-10T03:05:56+00:00",
+  "completed_folds": 0,
+  "expected_folds": 275,
+  "failed_or_drifted_folds": 0,
+  "incomplete_preview": [
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-soap-autogluon-r00-f00-82ad76fcc402"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-soap-autogluon-r00-f01-1bf3c9ae6be4"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-soap-autogluon-r00-f02-01ffca92223f"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-soap-autogluon-r00-f03-f3c0ce810dc7"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-soap-autogluon-r00-f04-83284dc02374"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-soap-autogluon-r01-f00-680365b6bb29"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-soap-autogluon-r01-f01-f0e8d88b82e0"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-soap-autogluon-r01-f02-3822448579d1"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-soap-autogluon-r01-f03-c9a9ae7263b7"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-soap-autogluon-r01-f04-bc11093963aa"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-soap-autogluon-r02-f00-707c4cda29d7"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-soap-autogluon-r02-f01-61a6a386111a"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-soap-autogluon-r02-f02-602d3f8ec8c1"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-soap-autogluon-r02-f03-59c2fa82c64b"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-soap-autogluon-r02-f04-5eb94c4ace95"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-soap-autogluon-r03-f00-d9e58504c668"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-soap-autogluon-r03-f01-703005b38e73"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-soap-autogluon-r03-f02-3ade8ae85cc3"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-soap-autogluon-r03-f03-08c3b8697043"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-soap-autogluon-r03-f04-d37023e5e9b1"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-soap-autogluon-r04-f00-10360de85a58"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-soap-autogluon-r04-f01-070f0515b8df"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-soap-autogluon-r04-f02-1643d231b01e"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-soap-autogluon-r04-f03-7806787235a1"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-soap-autogluon-r04-f04-cee4bff16fa9"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-physchem-autogluon-r00-f00-38a0178737a6"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-physchem-autogluon-r00-f01-2a18be4814bc"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-physchem-autogluon-r00-f02-255a7812ca49"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-physchem-autogluon-r00-f03-3d0937024663"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh1-physchem-autogluon-r00-f04-af9ac62c5f11"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-physchem-autogluon-r01-f00-9e23b55943fa"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-physchem-autogluon-r01-f01-a64addaefe6f"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-physchem-autogluon-r01-f02-ee26f4e2a28c"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-physchem-autogluon-r01-f03-dfec93bf6bb4"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh1-physchem-autogluon-r01-f04-46bafce27a84"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-physchem-autogluon-r02-f00-18aed8c3320b"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-physchem-autogluon-r02-f01-4aa61902336a"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-physchem-autogluon-r02-f02-aee516331b58"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-physchem-autogluon-r02-f03-ea3dc127b7de"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh1-physchem-autogluon-r02-f04-490aaad31a84"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-physchem-autogluon-r03-f00-78e0d79b0cb1"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-physchem-autogluon-r03-f01-d4e8a0e2b610"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-physchem-autogluon-r03-f02-246c234bb5ec"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-physchem-autogluon-r03-f03-ce5a486d20c8"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh1-physchem-autogluon-r03-f04-fd5665f90444"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "0",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-physchem-autogluon-r04-f00-6e25e1f907bf"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "1",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-physchem-autogluon-r04-f01-9f3842912294"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "2",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-physchem-autogluon-r04-f02-212ba8acb507"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "3",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-physchem-autogluon-r04-f03-8b1ad4c2485d"
+    },
+    {
+      "descriptor": "PhysChem",
+      "fold_zero_based": "4",
+      "population_id": "BH1-static-3955",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh1-physchem-autogluon-r04-f04-d48a570485e3"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-dft-autogluon-r00-f00-546b9bb1c923"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-dft-autogluon-r00-f01-88564113c726"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-dft-autogluon-r00-f02-9076e1289750"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-dft-autogluon-r00-f03-dab22572c429"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-dft-autogluon-r00-f04-29bea59ef156"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-dft-autogluon-r01-f00-03613046bd09"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-dft-autogluon-r01-f01-efce19363a27"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-dft-autogluon-r01-f02-9c7f8ddb48a9"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-dft-autogluon-r01-f03-ec40baf9d46f"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-dft-autogluon-r01-f04-2057d9765d03"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-dft-autogluon-r02-f00-b8957cc05005"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-dft-autogluon-r02-f01-232032c33cb4"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-dft-autogluon-r02-f02-68637408e5fc"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-dft-autogluon-r02-f03-4695741bc3ac"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-dft-autogluon-r02-f04-1b58c82c7446"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-dft-autogluon-r03-f00-a160e92fa1f2"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-dft-autogluon-r03-f01-2b5b8402b559"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-dft-autogluon-r03-f02-71830d92c834"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-dft-autogluon-r03-f03-e850c841aff0"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-dft-autogluon-r03-f04-091c798a4cc3"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-dft-autogluon-r04-f00-1cb4620619dc"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-dft-autogluon-r04-f01-ed168651ae86"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-dft-autogluon-r04-f02-b5be9b240e72"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-dft-autogluon-r04-f03-518e2ce8aa0e"
+    },
+    {
+      "descriptor": "DFT",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-dft-autogluon-r04-f04-17102234a68a"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-soap-autogluon-r00-f00-2fdbe011aa61"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-soap-autogluon-r00-f01-49482bc45148"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-soap-autogluon-r00-f02-36015f9c00ef"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-soap-autogluon-r00-f03-fde73b17f7db"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "0",
+      "task_id": "s29-bh2-soap-autogluon-r00-f04-b666642f7341"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-soap-autogluon-r01-f00-dc12cc55369c"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-soap-autogluon-r01-f01-fb26239f2554"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-soap-autogluon-r01-f02-af27a3cb4247"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-soap-autogluon-r01-f03-13ba54709ce6"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "1",
+      "task_id": "s29-bh2-soap-autogluon-r01-f04-8da7eea353c3"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-soap-autogluon-r02-f00-0affa345210e"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-soap-autogluon-r02-f01-ce341f8ab163"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-soap-autogluon-r02-f02-4747885a8275"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-soap-autogluon-r02-f03-d76748dc048d"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "2",
+      "task_id": "s29-bh2-soap-autogluon-r02-f04-5d2d820b02a8"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-soap-autogluon-r03-f00-e28c3c17aa82"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-soap-autogluon-r03-f01-5df2b6038454"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-soap-autogluon-r03-f02-10e7017d155c"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-soap-autogluon-r03-f03-1b5a04a0b489"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "3",
+      "task_id": "s29-bh2-soap-autogluon-r03-f04-bcf0d2cba5aa"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "0",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-soap-autogluon-r04-f00-7e1699ff17af"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "1",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-soap-autogluon-r04-f01-f6727293ec46"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "2",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-soap-autogluon-r04-f02-0db2a3d0107c"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "3",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-soap-autogluon-r04-f03-7e0390decd47"
+    },
+    {
+      "descriptor": "SOAP",
+      "fold_zero_based": "4",
+      "population_id": "BH2-static-3359",
+      "reason": "completion.json missing",
+      "repeat_zero_based": "4",
+      "task_id": "s29-bh2-soap-autogluon-r04-f04-7bc591196320"
+    }
+  ],
+  "pending_folds": 275,
+  "plan_hash": "9a445c753718b49226532a11e1172d8cd53b3e5dd5b806e22662eb539325e1a2",
+  "schema_version": "1.0",
+  "status": "incomplete"
+}
