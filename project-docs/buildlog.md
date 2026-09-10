@@ -6060,3 +6060,26 @@ for desc_name in args.descriptors:
 - 用户手动执行最终 `nohup` 启动命令后，等待正式矩阵完成；完成后进入步骤28.4，汇总逐折产物、组合 mean/std 与完整性审计。
 
 ---
+
+## [2026-09-10 08:14] 修复：新增排除 SVM 的 step28.3 续跑脚本
+
+### 问题描述
+- 现象：步骤28.3正式主矩阵在 `SM-static-4620 / DFT / svm` 处因 `Input X contains NaN` 失败后停止；当前同 hash 完成 `1150/1500` 个任务，剩余 `350` 个任务中包含 `250` 个非 SVM 任务和 `100` 个 SVM 任务。
+- 影响范围：继续使用原 `scripts/run_static_descriptor_model_matrix_19cpu_nohup.sh` 会再次选择 SVM；用户当前只希望排除 SVM，并补跑剩余 RF、XGBoost、LightGBM 任务。
+
+### 根本原因
+旧正式启动器固定 `MODELS=(rf xgboost svm lightgbm)`，且按完整 1500 任务矩阵串行执行。底层 runner 已具备 `completion.json`、`task_contract_hash` 与 `plan_hash` 的恢复跳过能力，但缺少一个只选择剩余非 SVM 组合的安全续跑入口。
+
+### 修复方案
+新增独立脚本 `scripts/run_static_descriptor_model_matrix_19cpu_resume_no_svm.sh`，不修改 YONOD 本体、旧 runner 或旧全量启动器。该脚本默认 `--dry-run`，显式 `--run` 才执行训练；运行前校验冻结计划 hash、任务总量和当前 pending 状态，只允许 `SM-static-4620` 下预期的 10 个非 SVM 组合进入续跑，总计 `250` 个 fold-level 任务。脚本继续使用 conda `yonod`、CPU `0-18`、19 核线程策略和原 runner 的同 hash 恢复机制；SVM 失败与未运行任务均保持排除，不重试。
+
+### 变更文件
+- `scripts/run_static_descriptor_model_matrix_19cpu_resume_no_svm.sh`：新增排除 SVM 的 19 核续跑启动器，支持 `--dry-run` 与 `--run`，并内置只读 pending 状态门禁。
+- `project-docs/buildlog.md`：追加本次修复记录。
+
+### 验证方法
+- `bash -n scripts/run_static_descriptor_model_matrix_19cpu_resume_no_svm.sh`：通过。
+- 只读计数验证：`complete=1150`、`pending_non_svm=250`、`pending_svm=100`、`unexpected_pending_non_svm=0`。
+- `bash scripts/run_static_descriptor_model_matrix_19cpu_resume_no_svm.sh --dry-run`：通过，输出 `SCRIPT_SUCCESS mode=dry-run planned_tasks=250 combo_commands=10 cpu_set=0-18 cpu_count=19 svm_excluded=true`；未启动训练。
+
+---
