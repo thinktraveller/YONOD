@@ -6193,3 +6193,39 @@ taskset -c 0-1 env LOKY_MAX_CPU_COUNT=2 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 - 由用户或主代理复跑上述真实 smoke；若通过，再决定是否启动正式 19 核 nohup 的 275 folds AutoGluon 长任务。
 
 ---
+
+## [2026-09-10 11:28] 步骤 29 smoke 验收完成：AutoGluon 单折真实运行通过
+
+### 执行的任务
+
+- 记录主代理复跑后的真实 smoke 验收结果；本步骤只更新构建日志，未修改 runner、测试、manifest 或 `yonod/` 本体。
+- 确认 smoke 目标为 `SL1-static-1150 / PhysChem / autogluon / repeat_00 / fold_00`，旧失败 attempt 继续保留用于审计。
+- 确认本步骤未启动正式 275 folds 长任务，当前正式完成数 `formal_completions=0`。
+
+### smoke 验收结果
+
+- `completion_status=complete`，AutoGluon 进程退出码为 0。
+- `prediction_rows=230`、`n_valid=230`、`finite_y_pred=True`。
+- 外层验证集边界检查通过：`external_valid_used_for_early_stopping=false`、`external_valid_used_for_tuning=false`、`external_valid_used_for_preprocessing_fit=false`。
+- 内部 holdout 范围为 `internal_holdout_scope=autogluon_training_fold_only`，符合外层 valid 只用于最终 `predict()` 的约束。
+- smoke 指标：`RMSE=37.61704227422362`、`MAE=21.05005165916827`、`R2=0.7005073917388303`、`Kendall tau=0.5114931480110785`。
+
+### 环境警告与正式运行边界
+
+- AutoGluon 警告 `FastAI` 未安装，因此 `NeuralNetFastAI` 子模型被跳过。
+- 当前 PyTorch 2.7 与 `weights_only` 兼容问题导致 `NeuralNetTorch` 子模型被跳过。
+- AutoGluon 其余子模型正常完成，且 smoke 总体退出码为 0；上述警告记录为正式运行环境边界，但当前不阻塞正式启动 gate。
+- 正式 275 folds 如启动，必须保留完整 nohup 日志，尤其是 `logs/step29_static_descriptor_autogluon_19cpu.full.log`，用于后续确认每个 fold 的子模型跳过情况、退出码和完整性状态。
+
+### 正式启动 gate 判定
+
+- smoke 任务已真实完成且预测有限，外层 valid 未参与 early stopping、tuning 或 preprocessing fit。
+- 正式任务尚未启动，`formal_completions=0`，不会与已有正式结果混杂。
+- 失败 smoke attempt 已保留，成功 smoke 结果与失败记录共同构成审计链。
+- 结论：满足正式启动 gate；是否启动正式 275 folds 仍需由用户或主代理显式决定。
+
+### 下一步计划
+
+- 等待用户或主代理授权后，再执行正式 19 核 nohup 命令；启动后不得删除完整日志，完成后进入步骤29.5汇总 AutoGluon vs RF 成对统计分析。
+
+---
