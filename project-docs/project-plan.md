@@ -9390,4 +9390,207 @@ conda run -n yonod python -m pytest tests/test_repeated_kfold_manifest.py tests/
 
 ---
 
+
+### 步骤29：AutoGluon + DFT/SOAP/PhysChem 补跑与 RF 成对比较
+
+#### 目标说明
+
+本步骤在步骤28已经冻结的官方静态描述符总体、split manifest 和 RF/XGBoost/LightGBM 结果基础上，补跑 `AutoGluon + DFT/SOAP/PhysChem`，并专门回答一个窄问题：在同一官方静态描述符、同一 population、同一 5×5 外层折和同一验证样本上，AutoGluon 是否显著优于 `RF + 同描述符`。
+
+本步骤不修改 `yonod/` 本体，不把 OHE、普通 1×5 结果或不同 population 的结果混入主比较。现有 `paper_exact_5x5` 的 AutoGluon MFP/OHE 结果可作为背景桥接材料保留，但本步骤的新建模范围只覆盖 DFT/SOAP/PhysChem；MFP 不重跑，OHE 不进入主比较。
+
+#### 与步骤27、步骤28和既有 MFP AutoGluon 的关系
+
+- 步骤27解决的是论文一致 `MFP/OHE × AutoGluon vs RF` 的 5×5 协议问题，且已有 MFP 四数据集 100 folds 可与旧 RF 和步骤28 RF 逐折桥接。
+- 步骤28解决的是官方静态描述符 `DFT/SOAP/PhysChem/MFP × RF/XGBoost/LightGBM/SVM` 的二次建模；当前主矩阵中 RF、XGBoost、LightGBM 各有 15 个描述符单元 × 25 folds = 375 folds，SVM 仅保留已完成的 275 folds 且后续排除。
+- 步骤29只补步骤28中尚缺的 AutoGluon 静态描述符结果，且只补 DFT/SOAP/PhysChem。由于 BH1 DFT 仍是 `blocked_alignment`，默认任务矩阵为 11 个描述符单元 × 25 folds = 275 个 AutoGluon fold-level fit。
+
+默认纳入范围如下：
+
+| population | DFT | SOAP | PhysChem | 本步骤 AutoGluon folds |
+| --- | --- | --- | --- | ---: |
+| `BH1-static-3955` | 排除，`blocked_alignment` | 纳入 | 纳入 | 50 |
+| `BH2-static-3359` | 纳入 | 纳入 | 纳入 | 75 |
+| `SL1-static-1150` | 纳入 | 纳入 | 纳入 | 75 |
+| `SM-static-4620` | 纳入 | 纳入 | 纳入 | 75 |
+| **合计** | 3 个 DFT 单元 | 4 个 SOAP 单元 | 4 个 PhysChem 单元 | **275** |
+
+#### 技术约束与运行参数
+
+正式运行使用现有 conda 环境 `yonod`，固定 `autogluon.tabular == 1.1.1`、`presets="medium_quality"`、`time_limit=300`、`num_cpus=19`。任务按 fold 串行执行，CPU 亲和性固定为 0-18，并设置：
+
+```bash
+LOKY_MAX_CPU_COUNT=19
+OMP_NUM_THREADS=1
+OPENBLAS_NUM_THREADS=1
+MKL_NUM_THREADS=1
+NUMEXPR_NUM_THREADS=1
+```
+
+AutoGluon 只能在训练折内部自行划分 holdout；外层 valid fold 不得传给 `tuning_data`，不得参与特征缩放、缺失值填补、模型选择、早停或任何预处理 fit。每折必须记录 AutoGluon 版本、`time_limit`、`presets`、`num_cpus`、训练/预测耗时、模型目录、leaderboard 摘要、资源策略和 seed policy。
+
+#### 步骤29.1：冻结任务清单与 RF 复用条件
+
+先读取并校验步骤28已有产物：
+
+- `derived/descriptor_model_effect/step28_2_population_splits/` 下的 population manifest、split manifest、descriptor availability 和 fold hash；
+- `derived/descriptor_model_effect/step28_3_matrix_plan/` 下的 task plan、RF 完成状态、RF fold metadata 和 RF predictions；
+- BH1 DFT 对齐审计，确认其仍未解除 `blocked_alignment`；
+- 现有 AutoGluon MFP/OHE 结果的协议说明，只作为背景参考，不纳入本步骤主任务。
+
+生成新的步骤29任务清单，建议路径：
+
+```text
+derived/descriptor_model_effect/step29_autogluon_static_rf_compare/
+├── task_manifest.csv
+├── task_manifest.json
+├── run_manifest.json
+├── dry_run_commands.txt
+├── runs/<population>/<descriptor>/autogluon/repeat_XX/fold_YY/
+└── reports/
+```
+
+验收 gate：
+
+- `task_manifest` 恰好包含 275 个 AutoGluon fold 任务；
+- 每个任务都有 `population_id`、`descriptor`、`repeat`、`fold`、`sample_id_hash`、`source_row_index_hash`、`feature_hash`、`split_hash` 和 `model_config_hash`；
+- 主任务中不出现 `MFP`、`OHE`、`SVM` 或 `BH1/DFT`；
+- RF 对照只复用步骤28中 hash 完全匹配且状态完整的 RF folds；若 RF hash 不匹配，该比较单元标为 `incomparable`，不得临时重跑或替换为其他 RF 结果。
+
+#### 步骤29.2：实现独立 AutoGluon 静态描述符执行器
+
+由于步骤28执行器明确把 AutoGluon 作为主矩阵外模型排除，本步骤应新增独立伴随脚本，而不是改动 `yonod/` 本体。建议由 `project-builder-cn` 创建或扩展以下脚本：
+
+- `scripts/run_static_descriptor_autogluon_matrix.py`：读取步骤28 population/split/feature manifest，执行单个或多个 AutoGluon fold；
+- `scripts/run_static_descriptor_autogluon_19cpu_nohup.sh`：生成 dry-run、正式 nohup 和 resume 命令；
+- `scripts/analyze_static_descriptor_autogluon_vs_rf.py`：从 AutoGluon 与 RF 预测重建指标和统计比较；
+- `scripts/verify_static_descriptor_autogluon_step29.py`：独立验收 275 folds、hash、样本集合和报告一致性。
+
+执行器必须复用步骤28的静态特征读取、population/split 边界、预测落盘 schema 和指标计算口径；若需要调用 AutoGluon，可通过现有 AutoGluon 适配器或直接封装 `TabularPredictor`，但外层 valid fold 只能用于最终 `predict()`。
+
+每折产物至少包括：
+
+- `predictions.csv`：`sample_id`、`source_row_index`、`y_true`、`y_pred`；
+- `fold_metadata.json`：输入 hash、population hash、split hash、feature hash、model config hash、AutoGluon metadata、资源策略和时间；
+- `completion.json`：状态、退出码、错误信息、是否可恢复跳过；
+- 可选 `leaderboard.csv/json`，但不得要求保留完整模型目录作为验收前提。
+
+#### 步骤29.3：dry-run、smoke 与恢复策略
+
+正式长跑前必须完成三层预检：
+
+1. **dry-run**：只生成 275 条命令和任务哈希，不训练；检查任务数、范围和输出路径。
+2. **单折 smoke**：建议 `SL1-static-1150 / PhysChem / repeat_00 / fold_00`，`time_limit=30`、`num_cpus=2`，验证 AutoGluon 能读入训练折、预测验证折并写出完整 metadata。
+3. **一单元 smoke**：可选跑完一个小单元 25 folds，用于估算 `time_limit=300` 的正式耗时和磁盘占用。
+
+恢复规则：
+
+- 已完成 fold 只有在 `input_hash/population_hash/split_hash/feature_hash/model_config_hash/autogluon_config_hash` 全部一致且 `predictions.csv` 可重算指标时才能跳过；
+- hash 不一致、预测行数不一致、存在 NaN/inf 或 metadata 缺失时，该 fold 必须失败并保留错误，不得静默覆盖；
+- 中断后重新启动只补缺失或失败 folds，完整日志追加到新 attempt，不覆盖原始 attempt。
+
+#### 步骤29.4：正式执行计划
+
+正式执行采用单个 nohup 串行任务，保留完整命令行日志。命令模板由构建阶段生成，形态应接近：
+
+```bash
+nohup bash scripts/run_static_descriptor_autogluon_19cpu_nohup.sh --run --resume \
+  > logs/step29_static_descriptor_autogluon_19cpu.full.log 2>&1 &
+```
+
+脚本内部应显式写出：
+
+- 当前 Git commit、dirty 状态摘要、conda 环境名和 Python/AutoGluon 版本；
+- CPU 亲和性与线程环境；
+- `time_limit=300`、`presets=medium_quality`、`num_cpus=19`；
+- 275 个 fold 的开始/结束时间、退出码、耗时、失败原因和恢复判断；
+- 最终任务状态汇总：`expected_folds=275`、`completed_folds`、`failed_folds`、`skipped_folds`、`incomplete_folds`。
+
+预计最坏训练时长上限为 275 × 300 秒，约 22.9 小时，不含 I/O 与报告时间；实际耗时可能更低，但正式参数一旦启动，不得根据中途结果临时调参。
+
+#### 步骤29.5：AutoGluon vs RF 成对统计分析
+
+主比较单位为 11 个 `(population_id, descriptor)` 单元。每个单元内，将 AutoGluon 与 RF 按 `population_id + descriptor + repeat + fold` 严格配对；配对前还要检查验证 `sample_id/source_row_index` 集合和顺序 hash 完全一致。
+
+指标要求：
+
+- 主指标：RMSE，越低越好；
+- 辅指标：MAE、R²、Kendall τ；
+- 每个模型和每个单元报告 25 折 `mean ± std`，并可补充全量 OOF 指标，但 OOF 单次指标不能替代 fold-level 汇总；
+- 方向定义为 `delta_rmse = AutoGluon_RMSE - RF_RMSE`，负值代表 AutoGluon 更好。
+
+统计方法必须在看正式结果前固定。推荐采用校正重复 5×5 CV 的成对检验或预注册等价方法，例如基于 5 repeats 的 block bootstrap/置换检验，并在报告中解释训练集重叠带来的相关性处理。不得把 25 个重叠 folds 当作 25 个独立样本直接做普通 t 检验。
+
+多重比较：
+
+- 主指标 RMSE 对 11 个单元进行 Holm 校正；
+- MAE、R²、Kendall τ 作为辅指标分别报告校正或明确标为探索性佐证；
+- 报告 `mean_delta`、95% CI、校正后 p 值、标准化效应量、胜负方向和结论标签。
+
+#### 步骤29.6：结论标签与保守表述
+
+每个 `(population_id, descriptor)` 单元必须给出一个局部标签：
+
+- `supported`：AutoGluon 的 RMSE 均值低于 RF，95% CI 支持改善，Holm 校正后达到预设显著性，且 MAE/R²/Kendall τ 没有系统性反向证据；
+- `mixed`：AutoGluon 均值更好但统计不显著、或不同指标方向冲突、或改善只集中在少数 repeat/fold；
+- `not_supported`：RF 更好或 AutoGluon 未显示稳定改善；
+- `incomplete`：AutoGluon 或 RF 缺少必要 folds、metadata 或预测；
+- `incomparable`：population、descriptor、split、sample hash、feature hash 或模型配置 hash 不一致。
+
+全局结论也必须从 `supported`、`mixed`、`not_supported`、`incomplete`、`incomparable` 中选择。只有当多数可比较单元在主指标上方向一致，整体校正/分层分析支持 AutoGluon 改善，且辅指标无系统性反向证据时，才可写“AutoGluon + DFT/SOAP/PhysChem 相比 RF + 同描述符得到支持”。禁止用单个最优单元、单个数据集、MFP/OHE 历史结果或不同 population 的平均值声称全局优于。
+
+#### 步骤29.7：报告与产物
+
+最终结果包至少包含：
+
+1. `task_manifest.csv/json`：275 个 AutoGluon fold 任务；
+2. `autogluon_fold_metrics.csv` 和 `autogluon_predictions.csv`；
+3. `rf_reference_fold_metrics.csv` 和 `rf_reference_predictions_index.csv`，只记录复用的 RF 来源与 hash；
+4. `paired_fold_deltas.csv`：按 `population_id/descriptor/repeat/fold` 配对后的 RMSE/MAE/R²/Kendall τ 差值；
+5. `autogluon_vs_rf_summary.csv/json`：11 个单元的 mean±std、95% CI、效应量、校正 p 值和标签；
+6. `step29_static_descriptor_autogluon_report.md` 与 `.html`；
+7. `acceptance_summary.json`：任务完整性、hash gate、统计 gate 和结论标签。
+
+报告正文需单独列出：
+
+- BH1 DFT 排除原因；
+- 为什么本步骤不纳入 MFP/OHE；
+- AutoGluon 内部 holdout 只发生在训练折内的证据；
+- RF 复用来源与 hash；
+- 任何失败、缺失、NaN、Kendall τ 不可定义或资源异常。
+
+#### 步骤29.8：最终验收 gate
+
+只有全部满足以下条件，步骤29才能进入正式结论：
+
+- `task_manifest` 为 275 folds，且范围严格等于 11 个 DFT/SOAP/PhysChem 静态描述符单元；
+- AutoGluon 完成 275 folds，或未完成 fold 被明确标记且对应单元结论为 `incomplete`；
+- 每个可比较单元的 AutoGluon 与 RF 共享完全相同的 population、split、验证样本、feature hash 和目标值；
+- 外层 valid fold 未进入 AutoGluon 训练、调参、早停或预处理 fit；
+- 所有 `y_pred` 为有限值，预测行数和验证样本数完全一致；
+- Markdown、HTML、CSV、JSON 的指标数值一致；
+- 统计检验使用预注册方法，包含 Holm 校正、95% CI、效应量和标签；
+- 报告没有把 25 个重叠 folds 当作独立样本，也没有把 `MFP/OHE/BH1-DFT/不同 population` 混入主比较；
+- 结论遵守 `supported/mixed/not_supported/incomplete/incomparable` 标签体系，且不以单个最优单元作全局声明。
+
+### 29 Q&A 记录
+
+**Q：** 为什么这一步只跑 DFT/SOAP/PhysChem，不再重跑 MFP？
+**A：** MFP 的 AutoGluon 5×5 结果已经在步骤27形成桥接材料，本步骤的新增价值是补齐官方静态描述符中的 DFT/SOAP/PhysChem，让它们能与步骤28已有 RF 在同一折上成对比较。重跑 MFP 会增加成本，但不会回答新的缺口问题。
+
+**Q：** AutoGluon 是否可以使用自己的内部 holdout？
+**A：** 可以，但只允许在训练折内部产生。外层 valid fold 是最终评估集，不能作为 `tuning_data`，也不能进入缺失值处理、特征筛选、模型选择或早停。
+
+**Q：** 如果 AutoGluon 只在某一个描述符或某一个数据集上超过 RF，能否说明 AutoGluon 全局更优？
+**A：** 不能。那最多支持该单元的局部标签。全局结论必须基于 11 个可比较单元的成对统计、Holm 校正、效应量和辅指标一致性；单个最优单元只能作为现象报告，不能替代全局证据。
+
+**Q：** 如果部分 folds 失败，是否可以用已有 MFP/OHE 或普通 AutoGluon 结果补位？
+**A：** 不可以。缺失单元应标为 `incomplete`；不同 descriptor、不同 population 或不同协议的结果只能放在背景或附录，不能补进主配对统计。
+
+### 29 下一步行动建议
+
+由 `project-builder-cn` 先实现步骤29.1到29.3：生成 275 fold 任务清单、完成 dry-run 和一个低成本 AutoGluon smoke；通过后再启动 19 CPU 的正式 nohup 长跑。正式结果完成后，再由分析脚本产出 `AutoGluon vs RF` 的 11 单元成对统计报告和保守结论标签。
+
+---
+
 **文档结束**
