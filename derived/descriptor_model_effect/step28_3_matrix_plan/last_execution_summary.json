@@ -1,5 +1,5 @@
 {
-  "completed_at_utc": "2026-09-09T15:28:28+00:00",
+  "completed_at_utc": "2026-09-10T00:31:03+00:00",
   "plan_hash": "71d297cb894f13851e61a8e9aa6341148d70166cc51a40ebc7e6086eae16b599",
   "resource_policy": {
     "affinity_cpu_count": 19,
@@ -36,12 +36,333 @@
   },
   "results": [
     {
-      "status": "skipped_complete_same_hash",
-      "task_id": "s28-sl1-physchem-rf-r00-f00-78c1e9099daa"
+      "metrics": {
+        "kendall_tau": 0.7356620401095805,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.9230258817875802e-245,
+        "kendall_tau_reason": "",
+        "mae": 8.091051418875761,
+        "r2": 0.8345260030046688,
+        "rmse": 11.54487021357362
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r00-f00-58658e8fc073"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7550523844925038,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 3.388894367793214e-258,
+        "kendall_tau_reason": "",
+        "mae": 7.343591518863668,
+        "r2": 0.8597726366726948,
+        "rmse": 10.78540137011385
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r00-f01-391247923a67"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7380002957275293,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 6.47937137110262e-247,
+        "kendall_tau_reason": "",
+        "mae": 7.996205042258505,
+        "r2": 0.8499872673212473,
+        "rmse": 11.310563750036732
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r00-f02-2c7077149f44"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7486663693002786,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 6.96646467225512e-254,
+        "kendall_tau_reason": "",
+        "mae": 7.833064488449651,
+        "r2": 0.8411420320679595,
+        "rmse": 11.368533562973859
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r00-f03-84d35c3cd65e"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7470219522336622,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.2651988901860015e-252,
+        "kendall_tau_reason": "",
+        "mae": 7.65060463289874,
+        "r2": 0.8532224141032869,
+        "rmse": 10.98318745566258
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r00-f04-5c1b88c6dd2d"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7539145112420002,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 2.247198381340755e-257,
+        "kendall_tau_reason": "",
+        "mae": 7.653063795259741,
+        "r2": 0.8512656066745201,
+        "rmse": 10.966849497543283
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r01-f00-08077d01b169"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7436186500236388,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.0725131500751846e-250,
+        "kendall_tau_reason": "",
+        "mae": 7.75159116793722,
+        "r2": 0.8609105267648632,
+        "rmse": 10.836456278442359
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r01-f01-8fd608dc1bde"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.734708686631069,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 8.948697230404006e-245,
+        "kendall_tau_reason": "",
+        "mae": 7.7583285595110105,
+        "r2": 0.8330100116952347,
+        "rmse": 11.555733860153683
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r01-f02-08f7ccb64267"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7548402318789973,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 4.0047417627458795e-258,
+        "kendall_tau_reason": "",
+        "mae": 7.618846861007197,
+        "r2": 0.8613376513525448,
+        "rmse": 10.932538435093559
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r01-f03-0a62c6d94fb2"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7426863851128013,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.0676517907212659e-249,
+        "kendall_tau_reason": "",
+        "mae": 7.839769890951265,
+        "r2": 0.845489031243609,
+        "rmse": 11.167826117772432
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r01-f04-6c5ed1c682a7"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7532208851434858,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 4.745185746515183e-257,
+        "kendall_tau_reason": "",
+        "mae": 7.495112557412209,
+        "r2": 0.8547077277120894,
+        "rmse": 10.756006996629775
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r02-f00-ba27ca0cc927"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7424064873284171,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.146787541583173e-249,
+        "kendall_tau_reason": "",
+        "mae": 7.802749462242467,
+        "r2": 0.8575921048043407,
+        "rmse": 10.915184555410617
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r02-f01-873e488d94be"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7268429542466629,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 2.1366081062494233e-239,
+        "kendall_tau_reason": "",
+        "mae": 8.123915452674478,
+        "r2": 0.8331132722250906,
+        "rmse": 11.752990308430086
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r02-f02-152ff9918d1b"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7545109393548229,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 7.458933141028545e-258,
+        "kendall_tau_reason": "",
+        "mae": 7.694074122681076,
+        "r2": 0.842313225873619,
+        "rmse": 11.277955084335495
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r02-f03-a90c94c18146"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7621490380152903,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 3.0799695696249885e-263,
+        "kendall_tau_reason": "",
+        "mae": 7.249767141733072,
+        "r2": 0.8782929500032792,
+        "rmse": 10.214305270112062
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r02-f04-aa33cbbfc675"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7161249810489063,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.9869292321432452e-232,
+        "kendall_tau_reason": "",
+        "mae": 8.301381964638036,
+        "r2": 0.8332201025729072,
+        "rmse": 11.764416341038306
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r03-f00-303695b9b1e5"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7525243101601129,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.2689671567339136e-256,
+        "kendall_tau_reason": "",
+        "mae": 7.598956542039894,
+        "r2": 0.8536197652636383,
+        "rmse": 10.781560536428463
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r03-f01-021c9a669468"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.759631459671152,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.4193400487299947e-261,
+        "kendall_tau_reason": "",
+        "mae": 7.52378026016232,
+        "r2": 0.8550516791966829,
+        "rmse": 11.004094233939414
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r03-f02-845723523d54"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7442699230382493,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 7.335890081941823e-251,
+        "kendall_tau_reason": "",
+        "mae": 7.845476095328252,
+        "r2": 0.8531613728323968,
+        "rmse": 11.31415074327979
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r03-f03-1aeabc6750a7"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7482950804213928,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.3098714364522862e-253,
+        "kendall_tau_reason": "",
+        "mae": 7.614060400610615,
+        "r2": 0.8485778627599039,
+        "rmse": 10.948035407746515
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r03-f04-5d0577be0a9c"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7396514192046559,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 5.709209379739166e-248,
+        "kendall_tau_reason": "",
+        "mae": 8.082095982754607,
+        "r2": 0.8375681774093261,
+        "rmse": 11.675593687238598
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r04-f00-15da6d929d71"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7482234683511197,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 1.0604731481289961e-253,
+        "kendall_tau_reason": "",
+        "mae": 7.81875325437623,
+        "r2": 0.8463373382049441,
+        "rmse": 11.386669541770527
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r04-f01-e5d3ee610081"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7572598449200384,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 7.396882825342993e-260,
+        "kendall_tau_reason": "",
+        "mae": 7.339827343821501,
+        "r2": 0.8534872902781129,
+        "rmse": 10.84539178066579
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r04-f02-d491dd41752a"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7427060347738106,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 8.121036771110986e-250,
+        "kendall_tau_reason": "",
+        "mae": 7.894773093596195,
+        "r2": 0.8444584515592807,
+        "rmse": 11.415344205953847
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r04-f03-905587c5f33c"
+    },
+    {
+      "metrics": {
+        "kendall_tau": 0.7414933223069021,
+        "kendall_tau_defined": true,
+        "kendall_tau_pvalue": 4.927979765952901e-249,
+        "kendall_tau_reason": "",
+        "mae": 7.723144668174667,
+        "r2": 0.8428342464061961,
+        "rmse": 11.167080798490959
+      },
+      "status": "complete",
+      "task_id": "s28-sm-mfp-lightgbm-r04-f04-61dc5be0c852"
     }
   ],
   "schema_version": "1.0",
-  "selected_task_count": 1,
+  "selected_task_count": 25,
   "serial_execution": true,
   "status": "complete"
 }
