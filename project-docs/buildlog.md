@@ -2,6 +2,154 @@
 
 ---
 
+## [2026-09-14] 步骤 30.7：真实模型失败隔离
+
+- 训练服务现在将已经确定 identity 的 feature × model 运行时失败原子发布为独立 failed run，包含失败原因及原始/生效 YAML；failed run 不含不完整 predictions 或 metrics，重复尝试使用 UUID attempt 根，不覆盖证据或成功 sibling。
+- run_train/run_all 继续其余组合；公开 main.py schema-2 dispatcher 在任一组合 failed 时返回 2。
+- 独立 12 行 fixture 经 yonod.py headless 运行：Morgan × RF 的 n_estimators=0 在 sklearn 真实 fit 中失败并发布 train-be3e395e356ffa6e8689，Morgan × SVM 成功发布 train-20f713e58095a6e8b691 的 12 条有限预测和两行指标。证据见 derived/interface_migration/step30_acceptance/training_failure_isolation_evidence.md。
+
+---
+
+## [2026-09-14] 步骤 30 strict benchmark schema-2、Conda parquet 与完成 smoke
+
+### 执行的任务
+
+- 新增 stage benchmark 与显式 SQLite task-state 契约；yonod.py 在报告 YAML 合法前额外运行 strict adapter，随后只分派 manifest_outer_cv runner，绝不经普通 main.py outer CV。
+- strict benchmark adapter 只接收 schema-2 YAML，保留 feature ID、algorithm、lifecycle、mode、grouping、CV、同一 artifacts/outputs 根、模型配置和 state 到身份哈希与 run manifest。旧根、outer_kfold、外部 split 导入、无法映射的额外反应物和没有内层 manifest 的 tree early stopping 都明确拒绝。
+- Conda-forge 安装固定 pyarrow 16.1.0 并锁定 numpy 1.26.4，未接受 Anaconda ToS 或回退默认 channel。为 Matplotlib 新旧 labels API 加入仅限该关键字 TypeError 的窄回退；其他绘图错误保持可见。
+
+### 验证
+
+- 聚焦 schema/manifest/OHE/executor/paper archive/report compatibility 回归 21/21 通过。
+- 使用独立 benchmark_schema2_report_compat_smoke.yaml，通过 yonod.py headless 运行 12 行 Morgan × RF、2 fold component-holdout strict benchmark。run ID benchmark-smoke-fixture-23c8cf6854c6 的 SQLite state 为 succeeded=2、failed=0；split、预测、metrics parquet、HTML/Markdown 报告和五张图均存在。完整命令、依赖计划和核验见 derived/interface_migration/step30_acceptance/benchmark_schema2_preflight_evidence.md。
+- Matplotlib 仅发出本机缺中文 glyph warning；不影响图文件、预测或指标。
+
+---
+
+## [2026-09-14] 步骤 30.6–30.10：模型工厂、独立训练、YAML 入口与真实 smoke
+
+### 执行的任务
+
+- 新增 `yonod.model_factory`：根据已安装受支持库的参数目录路由 RF/XGBoost/SVR/LightGBM/AutoGluon 的 `estimator`/`predictor`、`fit`、`preprocessing` 和 `runtime` 区段。省略字段不回填旧项目默认；显式 `sample_weight` 只能引用数据列并在当前训练折切片。SVM scaler/PCA/子采样均需显式声明；XGBoost 设备策略和 AutoGluon predictor label/外部数据边界被审计和校验。
+- 新增 `yonod.pipeline.training` 的 `run_train()` 和 `run_all()`：训练只通过 schema-2 reader 消费 manifest，按 ID 对齐标签；静态特征、数值缩放和 OHE 的生命周期均在训练折边界内执行。SVM 子采样现在仅减少最终 SVR 的训练行数，scaler/PCA 始终先在完整训练折拟合。训练结果以单独身份原子发布，包含预测、逐折指标、折内 OHE 状态、原始 YAML 和生效 YAML 快照。
+- 新增 `yonod.provenance.feature_dataset_identity()`；它只含 sample ID 与特征输入列，不含标签或训练期数值辅助列。因此标签修订会产生新的训练身份，而不使未依赖标签的静态特征失效。
+- `main.py --config` 改为 schema-2 YAML 的公开 dispatcher；`features` 可在没有模型依赖的解释器中运行。`--json` 不再加载或运行旧文件，只输出一次性迁移指引。`yonod.py` 向导现在只接收 schema-2 YAML、拒绝 JSON 运行配置、要求用户选择唯一稳定 sample ID，并通过同一 loader 验证后生成 YAML。新增 `scripts/manage_features.py` 的 inspect/derive CLI，以及 `scripts/migrate_config_to_yaml.py`：能安全恢复的旧 JSON/benchmark YAML 被显式转换并记录报告；普通向导 JSON 按历史入口的实际 adapter defaults 恢复，曾被旧入口忽略的字段写入报告。
+- 更新 `example.yaml`、`example.md`、`README.md` 为当前 YAML interface。历史 benchmark/paper_exact 和批处理入口仍使用旧独立协议，尚未在本工作包中改写；旧 JSON 实验和结果文件未删除或改写。
+
+### 验证
+
+- `conda activate yonod && python -m unittest tests.test_step30_contracts tests.test_step30_yaml_loader tests.test_step30_artifact_reader tests.test_step30_feature_service tests.test_step30_artifact_operations tests.test_step30_model_factory tests.test_step30_training_service tests.test_step30_config_migration tests.test_step30_main_yaml_cli -v`：38 项通过；向导 YAML 聚焦回归另有 3 项通过。
+- Conda `yonod` 环境实际为 Python 3.9.23、pandas 2.0.3、scikit-learn 1.4.0、XGBoost 2.0.3、LightGBM 4.3.0、AutoGluon Tabular 1.1.1。`five_model_smoke.yaml` 在 12 行 Morgan fixture 上完成 RF/XGB/SVM/LightGBM/AutoGluon 两折真实 fit/predict；每项 12 条预测均为有限值、结果含 source/effective YAML。独立 features→train 的五份 predictions.csv 与 all 精确一致，证据见 `derived/interface_migration/step30_acceptance/five_model_smoke_summary.json`。
+- `main.py --json ...` 与向导 JSON 输入明确拒绝。另以 `fold_local_transform_smoke.yaml` 完成 Morgan/OHE × XGB/LightGBM/SVM 的六项真实运行：OHE/数值缩放仅在外层训练折拟合，SVM 实际采用 scaler→PCA→SVR，树模型 early-stopping 的 inner validation 仅取自外层训练折。详见 `derived/interface_migration/step30_acceptance/fold_local_transform_smoke_summary.json`。
+- benchmark/paper_exact、批处理、shell 和 `different_order` 仍是未迁移入口；精确协议/配置阻塞及安全迁移路径列于 `derived/interface_migration/step30_acceptance/acceptance_report.md`，未进行猜测性改写。
+
+---
+
+## [2026-09-14] 步骤 30.5：只读 inspect 与不可变特征派生
+
+### 执行的任务
+
+- 新增 `yonod.artifacts.operations` 内部 API：`inspect_feature_artifact()` 通过 schema-2 读取器完整核验包后只返回不可变描述；`derive_features()` 通过共享操作 YAML loader 顺序执行派生，未接入 `main.py` 或任何公开 CLI。
+- 实现稳定 `select_samples`（YAML sample ID 顺序）和 `select_features`（命名列顺序），以及仅显式 UTF-8 CSV 列的一对一 `join_features`。拼接按父 sample ID 对齐，外部额外 ID 不扩充 population 且写入忽略数。
+- 每一步经现有原子发布器创建新的 `lifecycle: derived` 包，记录直接父 ID、操作声明/identity、父内容 hash 与输入/输出映射；同名目标、父包内输出、缺失/重复 ID、未知/冲突列、非数值/缺失外部值及标签泄漏均拒绝，父包不改写。
+- 对操作契约窄幅补充可选 `protected_columns`，用于登记项目特有标签名；保持既有运行入口、训练/实验产物和历史文件不变。
+
+### 新增文件
+
+- `yonod/artifacts/operations.py`
+- `tests/test_step30_artifact_operations.py`
+
+### 验证
+
+- `python3 -m unittest tests.test_step30_artifact_operations -v`：4 项通过，覆盖 inspect 不变性、样本/列顺序、重排外表数值对齐、外部额外行审计、血缘，以及缺失/重复 ID、未知列、冲突、标签泄漏、覆盖和父包内输出拒绝。
+
+---
+
+## [2026-09-14] 步骤 30.4：独立 features 服务与特征就绪状态
+
+### 执行的任务
+
+- 新增内部 `yonod.pipeline.features.run_features()`：使用统一 YAML loader 消费 `stage: features` 配置，返回持久化 manifest/status 引用而非 DataFrame 或训练对象。
+- 静态候选惰性委派给既有 `build_universal_features` 生产实现；逐项发布/复用 schema-2 包，所有候选结束后写入 `ready`、`partial` 或 `failed` 的 feature-run status。
+- 将 OHE 作为未拟合的 `fold_transform` 包保存原始类别列、完整 sample ID 和训练折拟合声明，未构造 OHE 编码器或任何预测模型。
+- 相同数据/特征 identity 只验证并复用缓存；失败候选记录理由且不覆盖/删除成功包。未修改 `main.py`、向导、benchmark、训练输出或既有实验文件。
+
+### 新增文件
+
+- `yonod/pipeline/__init__.py`
+- `yonod/pipeline/features.py`
+- `tests/test_step30_feature_service.py`
+
+### 验证
+
+- `python3 -m unittest tests.test_step30_contracts tests.test_step30_yaml_loader tests.test_step30_artifact_reader tests.test_step30_feature_service -v`：20 项通过。
+- 临时目录真实 Morgan smoke：无标签 `stage: features` 配置得到 `ready`、`(3, 1024)` 静态矩阵和 3 个有效行；未创建训练目录。
+
+---
+
+## [2026-09-14] 步骤 30.3：独立产物 manifest 读取层
+
+### 执行的任务
+
+- 新增不导入 RDKit、Torch 或特征生成器的 schema-2 YAML manifest 读取器；校验包内路径、文件存在性/字节数/SHA-256、矩阵 dtype/shape/列结构、唯一 sample ID、bool 有效性掩码及行映射。
+- 新增新版本产物的同级临时目录发布：写完实体文件和 manifest 后使用公开读取 API 复验，再原子重命名；已有目标一律拒绝覆盖。
+- 新增显式 v1 NPZ 导入器。它只读原 `X_smiles/sample_ids/valid_mask/metadata_json`，要求调用方提供数据/特征身份与列结构，不推测标签、辅助表或样本顺序。
+- 未改动既有描述符 NPZ、训练/实验产物、`main.py`、向导、benchmark 或批处理入口；标签绑定及训练编排仍待步骤 30.7。
+
+### 新增文件
+
+- `yonod/artifacts/reader.py`
+- `tests/test_step30_artifact_reader.py`
+
+### 验证
+
+- `python3 -m unittest tests.test_step30_contracts tests.test_step30_yaml_loader tests.test_step30_artifact_reader -v`：16 项通过。
+- 对现有 BH2 MFP v1 NPZ 执行只读、临时目录导入检查：得到 `(3359, 5120)` 矩阵、`3359` 个样本和 `3359` 个有效行；未写入源文件。
+
+---
+
+## [2026-09-14] 步骤 30.2：YAML 单一解析、覆盖与校验
+
+### 执行的任务
+
+- 新增 `yonod.config.loader`：只安全读取 `.yaml/.yml`，拒绝重复键、多文档、空文档、非 mapping 根节点、锚点别名与不支持 schema 版本。
+- 解析后先经过步骤 30.1 静态契约；仅随后合并库默认、YAML 显式值和调用方明确标识的 CLI 覆盖。
+- 以 `MISSING` 区分无 CLI 覆盖与显式 `null`；`false`、`0` 也作为有效显式覆盖。增加有限模型别名的归一化和完整字段路径冲突报错。
+- 未修改 `main.py`、`yonod.py`、benchmark、paper-exact、批处理或 shell 入口；这些入口的 YAML 切换仍待步骤 30.8。
+
+### 新增文件
+
+- `yonod/config/loader.py`
+- `tests/test_step30_yaml_loader.py`
+
+### 验证
+
+- 运行 `python3 -m unittest tests.test_step30_contracts tests.test_step30_yaml_loader -v`，11 项通过。
+- `example.yaml` 经新 loader 与 30.1 契约通过静态校验。
+
+---
+
+## [2026-09-14] 步骤 30.1：冻结配置、产物和迁移契约
+
+### 执行的任务
+
+- 新增纯 Python 的运行配置、操作配置与版本化特征 manifest 契约；验证不导入 RDKit、Torch 或模型库。
+- 明确 `features`、`train`、`all` 的最小字段边界，以及 `derive_features` 操作配置不得混入模型参数。
+- 固化 manifest 的相对包内引用、实体文件 SHA-256、矩阵/样本 ID/有效性映射、来源身份及派生血缘字段。
+- 登记所有活跃运行入口的当前 JSON/YAML 用途和步骤 30.8 的迁移验收边界；补充模型参数区段到目标接口的路由表。
+
+### 新增文件
+
+- `yonod/config/contracts.py`、`yonod/artifacts/contracts.py`
+- `project-docs/step30-contracts.md`
+- `tests/test_step30_contracts.py`
+
+### 验证
+
+- 运行 `python -m unittest tests.test_step30_contracts -v`；覆盖有效/无效三类契约、阶段字段、路径和身份语义。
+
+---
+
 ## [2026-05-16] v1.0.0 首个公开发布：酰胺缩合反应产率预测专题
 
 ### 执行的任务
@@ -6229,3 +6377,183 @@ taskset -c 0-1 env LOKY_MAX_CPU_COUNT=2 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 - 等待用户或主代理授权后，再执行正式 19 核 nohup 命令；启动后不得删除完整日志，完成后进入步骤29.5汇总 AutoGluon vs RF 成对统计分析。
 
 ---
+
+## [2026-09-14] 步骤 31.1–31.2：Chemical VAE 资产/环境与输入覆盖预审计
+
+### 已完成的范围
+
+- 新增 `scripts/audit_chemical_vae.py`，在不加载 TensorFlow/Keras、不执行模型推理、不修改参考资产的条件下，生成步骤31.1和31.2的可复查证据。脚本使用冻结的 `zinc` 字符表，预处理明确为原始 CSV 文本 identity：不 trim、不 canonicalize、不拆盐/替换分隔符、不截断、不扩展字符表。
+- 通过 `pip install --dry-run 'h5py>=3.10,<4'` 解析到 Python 3.9 / NumPy 1.26.4 的 `h5py 3.14.0` wheel；随后只安装 `h5py==3.14.0`，`pip check` 通过。未安装或降级 TensorFlow、Keras、PyTorch 或其他主环境依赖。`requirements.txt` 已明确记录此 HDF5 读取/转换依赖。
+- HDF5 审计确认 `zinc` 编码器为 Keras 2.0.5 / TensorFlow 格式：输入 `[None, 120, 35]`、float32，输出第一节点 `z_mean_sample` 是 196 维 linear Dense；卷积依次为 valid/tanh 的 9×35→9、9×9→9、11×9→10，包含 BatchNorm epsilon=0.001、Flatten、196维 tanh Dense、推理时关闭的 Dropout、BatchNorm 和 z_mean。`exp.json`、字符表、HDF5 结构和权重形状相互一致。
+- 选择“PyTorch + h5py 的仅编码器重建”作为步骤31.3的暂定工程路径；这不是数值等价性验收。`zinc_properties` 单独保持不可选，且两套 encoder 的 SHA-256 不同，不能互相替代。
+
+### 新增证据与回归
+
+- `derived/chemical_vae/step31_1_audit/`：`environment_snapshot.json`、`asset_manifest.json`、`dependency_resolution.md`、`backend_decision.md`。
+- `derived/chemical_vae/step31_2_coverage/`：逐 `sample_id × role` 的 `sample_role_diagnostics.csv`、角色统计、反应级 concat/严格共同子集统计及含数据哈希/扫描范围的 manifest。
+- 新增 `tests/fixtures/chemical_vae_boundary_smiles.csv`，显式覆盖空值、非法 SMILES、`[Ni]`、`[Pd]`、`.`、`,`、`;` 和121字符超长输入；新增 `tests/test_chemical_vae_audit.py`，覆盖 identity 失败语义、HDF5 契约和诊断落盘。
+- `python -m unittest tests.test_chemical_vae_audit -v`：3 项通过；`python scripts/audit_chemical_vae.py`：通过，且显式输出 `numerical_parity=not_verified`。
+
+### 覆盖结果与边界
+
+- smoke fixture：12/12 行在两个反应物角色都可预检编码。
+- amide-coupling（47,015 行、6个审计角色）：concat 保留 47,015 行，严格全部角色可编码 4,162 行。`activation` 中逗号导致 30,802 个字符表/解析失败；`additive` 中有 23,220 个缺失和 1,537 个逗号失败。该结果不改变数据或输入语义。
+- ORD Suzuki 金属组分（5,760 行、12个审计角色）：concat 保留 5,760 行，严格全部角色可编码为 0；含 Pd/点分隔符的催化剂、试剂和部分反应物超出冻结字符表。该数据集只能在后续若采用当前“失败列零块”的 concat 语义时保留，不能作为严格共同子集的 Chemical VAE 对照。
+- 上述均为“预检可编码”，不是推理成功；数值参考、转换器、模型描述符接口、缓存身份和端到端 smoke 仍未实施。
+
+### 下一步
+
+- 步骤31.3：依据已冻结的 HDF5 层/权重契约实现仅编码器 PyTorch 转换，先获得独立可信的原实现参考向量并预先冻结容差；没有该参考时不得注册或公开 `chemical_vae` 描述符。
+
+---
+
+## [2026-09-14] 步骤 31.3：真实 ZINC 编码器迁移与数值等价性
+
+### 实现和资产
+
+- 新增 `yonod/descriptors/chemical_vae_backend.py`，仅实现经严格 HDF5 结构验证的 ZINC encoder：原始 Keras-layout 权重读取、Chemical VAE 原始 right-padding one-hot、独立 NumPy channels-last 参考前向、PyTorch Conv1d/BatchNorm/Dense 候选和已持久化 state dict 的严格加载。它不注册描述符、不读取 decoder/TerminalGRU/性质头/训练 CSV，也不估计或应用潜空间标准化。
+- 新增 `scripts/convert_chemical_vae_encoder.py`。转换状态写入 `WEIGHTS/chemical_vae/zinc-37e96cd3bc8f9680/v2/`，manifest 绑定原始 encoder SHA-256 `37e96cd3bc8f9680d3c2aa4d294a39e78f00a0decc22501bde23d5a464ac314a`、字符表、层顺序、所有权重形状/dtype、转换器代码 hash 和转换后 state hash；原 HDF5 只读保留。
+- 增加 `tests/test_chemical_vae_encoder_parity.py`，覆盖原始 space-padding、超长/未知字符的前置失败，以及临时持久化 state dict 与独立 NumPy 前向的逐层一致性。
+
+### 冻结协议和数值证据
+
+- 在任何比较前写入 `parity_protocol.json`：CPU/float32/inference mode、`atol=2e-5`、`rtol=2e-5`、近零参考阈值 `1e-7`、全部12层、batch size 1/2/3/8，以及有效 SMILES、重复项、119/120 字符边界的固定输入/one-hot hash。
+- 参考实现直接读取原始 HDF5 的 Keras channels-last kernel，按 valid Conv1D、tanh、BatchNorm running statistics/epsilon、C-order Flatten、Dense 和 inference Dropout identity 独立计算；候选只读取实际持久化的 PyTorch state dict，并以转置 kernel/Dense 布局的 channels-first Conv1d 前向。两者不共享转换后权重路径。
+- 通过的 v2 证据目录为 `derived/chemical_vae/step31_3_parity/zinc-37e96cd3bc8f9680-27deeef6e33f/`：最终 `z_mean` 各批最大绝对误差不超过 `5.364418029785156e-07`；所有层最大为 `encoder_norm1` 的 `1.3560056686401367e-06`，均远低于冻结容差；候选跨 batch 最大差 `2.8312206268310547e-07`。
+- 当前没有可执行的历史 Keras 2.0.5/TensorFlow 参考 runtime；因此 C03 的通过依据为经逐层审查的独立 NumPy forward，而非“模型文件能加载”的弱证据。此限制已嵌入 parity protocol/report，后续如获得历史 runtime 输出可追加更强参考，不能覆盖本次证据。
+
+### 失败隔离
+
+- 首次 v1 转换在持久化候选前发现构造顺序缺陷：state dict 未载入源权重，parity 最大误差约 `0.39467`，正确标记 failed。失败 state/manifest 和报告保留在 `WEIGHTS/chemical_vae/zinc-37e96cd3bc8f9680/`、`derived/chemical_vae/step31_3_parity/zinc-37e96cd3bc8f9680-046fa7e1aaeb/`，没有删除、覆盖或作为可用资产引用。
+- 修正后提升 converter 版本为 v2 并写入独立目录；已持久化候选加载时构造空架构，再严格载入 state dict，避免从源 HDF5 初始权重污染候选对照。
+
+### 验证
+
+- `python -m unittest tests.test_chemical_vae_audit tests.test_chemical_vae_encoder_parity -v`：6 项通过。
+- `python scripts/convert_chemical_vae_encoder.py --weights-root <mktemp>/weights --parity-root <mktemp>/parity`：真实独立临时转换/数值对照通过，生成 state、manifest、输入、参考/候选向量/逐层向量和报告。
+- `python main.py --config example.yaml`：仍为 `features=ready` 与 `morgan × rf: reused`；步骤31.3未改变普通描述符入口。
+
+### 下一步
+
+- v2 是保留的初步 NumPy 证据；补充的直接 HDF5 参考完成后，C03 数值闸门以 v4 转换 manifest 为唯一可接受的 `zinc` 资产。可进入31.4，但注册/参数传递/逐行失败语义仍需独立实现和测试；`zinc_properties` 继续不可选。
+
+---
+
+## [2026-09-14] 步骤 31.3 补充：原始 HDF5 的直接可执行参考（v4）
+
+- 在保留 v1 failed 与 v2/v3 历史证据、不覆盖任何既有文件的前提下，新增 `requirements-chemical-vae-parity.txt`，将 `tensorflow-cpu==2.15.1` 明确限定为**数值验证专用**依赖；普通项目和未来描述符运行时不导入 TensorFlow/Keras。该依赖可在 Python 3.9 / NumPy 1.26.4 解析；安装后 `tensorflow-cpu==2.15.1`、`keras==2.15.0`、`protobuf==4.25.9`，`python -m pip check` 为 `No broken requirements found`。安装因 TensorFlow 的 `<5` 约束将环境中 protobuf 从 6.33.6 改为 4.25.9；这是实际依赖变更，不属于 PyTorch/NumPy/RDKit/项目运行时要求，也没有被隐瞒或写成无变化。
+- `scripts/convert_chemical_vae_encoder.py` 的 v4 路径在写入冻结协议和输入 hash 后，以 CPU float32、`TF_ENABLE_ONEDNN_OPTS=0`、推理模式和请求的单线程设置，使用 `tf.keras.models.load_model(original_hdf5, compile=False)` 直接执行原始 `zinc_encoder.h5`。它同时保留读取原始 Keras-layout 张量的独立 NumPy channels-last 前向；候选只从新写入且严格加载的 v4 PyTorch state dict 读取，三者没有共享转换后的 state dict。
+- v4 的不可变通过报告为 `derived/chemical_vae/step31_3_parity/zinc-37e96cd3bc8f9680-87cc6d2bd858/parity_report.json`，绑定源 HDF5 SHA-256 `37e96cd3bc8f9680d3c2aa4d294a39e78f00a0decc22501bde23d5a464ac314a`、转换器代码 hash、输入/向量/逐层 NPZ 和环境。对 batch 1/2/3/8、重复及 119/120 字符边界，冻结 `atol=rtol=2e-5`；直接 TensorFlow 对已持久化 PyTorch 的最终向量最大绝对误差为 `9.313225746154785e-07`、逐层最大为 `3.6656856536865234e-06`，独立 NumPy 对 TensorFlow 的最终向量最大为 `1.0356307029724121e-06`，全部零失败坐标。
+- `tests/test_chemical_vae_encoder_parity.py` 增加可选直接 HDF5 回归：原模型图与独立 NumPy 层/输出必须在同一冻结容差内；缺少 TensorFlow 时显式 skip，不影响普通运行时测试。数值闸门 C03 现由可执行源模型参考支持；`chemical_vae` 仍未注册，31.4 的参数路由、逐行失败处理、缓存和端到端 smoke 仍未开始。
+- 在仓库根、激活 `yonod` 后，`TF_ENABLE_ONEDNN_OPTS=0 python scripts/convert_chemical_vae_encoder.py` 生成上述 v4 passed 报告；`python -m unittest tests.test_chemical_vae_audit tests.test_chemical_vae_encoder_parity -v` 为 7/7 通过（其中一项实际加载原 HDF5）；`python -m pip check` 通过；`python main.py --config example.yaml` 保持 `[all] features=ready` 与 `morgan × rf: reused`。这些均不是建模任务，未创建 schema-2 建模 YAML 或启动建模流程。
+
+---
+
+## [2026-09-14] 步骤 31.4：受限的 Chemical VAE 描述符、注册与参数路由
+
+- 新增 `yonod/descriptors/chemical_vae.py`，并在 `yonod.descriptors.registry`、延迟包导出和 `yonod.universal.feature_builder` 接入 `chemical_vae` static/concat 描述符。唯一可接受的资产为 `chemical_vae_torch_encoder/v5`；`model_manifest` 必填，`backend=pytorch`、`input_preprocessing=identity`、`output=z_mean_sample` 固定，`device` 与正整数 `batch_size` 显式路由。未知参数、v1–v4 资产、坏 hash、坏 device 或缺 state 都早期报错。
+- 新增 HDF5-free runtime loader：conversion manifest 绑定相邻 `encoder_state_dict.pt` SHA-256；state payload 的源 SHA、字表、MAX_LEN、padding、层顺序和权重形状必须匹配已验证的 ZINC 契约，再 strict-load 至空 PyTorch 架构。描述符不读取原 HDF5、`h5py` 或 TensorFlow，不加载 decoder/性质头，也不执行 sampling/标准化。相对 `model_manifest` 由其 YAML 所有者路径解析；当前路径变化后的缓存内容身份仍属31.5，尚未宣称完成。
+- `featurize` 对唯一的 identity SMILES 作 RDKit 有效性与冻结长度/字符表预检，批量编码后恢复原行序；无效单输入输出零块和 False mask，concat 使用“任一列成功保留整行”的既有语义。实现特意绕过旧 builder 的逗号/点号替换、trim、拆盐和 canonicalization，不能以提高覆盖率改变31.2口径。
+- 由于添加了 HDF5-free runtime loader 会改变转换器的完整代码身份，保留 v1–v4 证据后重新生成 v5，不复用旧 code hash。当前可接受 state 为 `WEIGHTS/chemical_vae/zinc-37e96cd3bc8f9680/v5/encoder_state_dict.pt`；不可变直接参考报告为 `derived/chemical_vae/step31_3_parity/zinc-37e96cd3bc8f9680-f9202cd6fa2e/parity_report.json`，冻结 `atol=rtol=2e-5`、batch 1/2/3/8，状态 passed，TensorFlow-vs-PyTorch 向量最大绝对误差 `9.313225746154785e-07`、逐层最大 `3.6656856536865234e-06`，零失败坐标。
+- 新增 `tests/test_chemical_vae_descriptor.py`；与31.1–31.3及步骤30特征服务回归合计 16/16 通过，覆盖真实 v5 state、无 HDF5 fallback、重复与 batch 1/8、identity 失败、partial concat 零块、v3 拒绝、相对 YAML、以及 Chemical VAE 坏资产不阻断 Morgan。未创建描述符建模 YAML、未运行建模任务；31.5 的资产内容身份、诊断 sidecar、派生同步仍待实现，`zinc_properties` 仍不可选。
+
+---
+
+## [2026-09-14] 步骤 31.5：资产内容身份、诊断 sidecar 与派生同步
+
+- `yonod.pipeline.features` 在**缓存查询前**解析 Chemical VAE conversion manifest 与其相邻 state：feature identity 排除 `model_manifest` 的位置字符串，改为绑定 manifest bytes SHA-256、state bytes SHA-256、源 encoder SHA-256、converter version/code hash。相同内容的搬迁可复用；同路径 state 或 manifest 内容变化会得到新的 feature/artifact identity。生成后再次核对该身份，避免计算期间替换资产后以旧身份发布。
+- artifact schema 2.0 增加可选、版本化 `diagnostics` sidecar 声明；publisher 将全量 `sample_id` 顺序的 `chemical_vae_diagnostics/v1` JSON 写入包内 `data/diagnostics.json`，与矩阵/sample/mask 同样记录 SHA-256 与字节数。无生成依赖的 reader 在装载时验证 file hash、schema、全量行数及 sample_id 顺序；侧车篡改、漏行、错序或 schema 不一致均拒绝读取。
+- 诊断逐 `sample_id × 输入列/role` 保存 raw/preprocessed identity 文本、长度、未知字符、状态和失败原因；缺失、非字符串、超长、字符表失败、RDKit 无效与成功编码分开记录。`select_samples`、`select_features`、`join_features` 派生通过 artifact 操作层同步 sidecar 的完整行映射，发布新包而不写回父包。
+- 新增 `tests/test_chemical_vae_artifact_lineage.py`。33 项聚焦测试通过，实际覆盖同一路径的 state 序列化内容重写（且 manifest hash 相应更新）后不命中旧缓存、diagnostics 同字节长度篡改触发 SHA-256 拒绝、样本重排与特征筛选后 sidecar 保持匹配，以及坏 Chemical VAE 资产仍使 Morgan 候选 ready。无建模任务、无 YAML 建模运行、无依赖安装或版本变更；保留现有 TensorFlow 2.15.1/Keras 2.15.0/protobuf 4.25.9 审计状态，`python -m pip check` 通过。
+- 31.6 的公开 smoke YAML、features→train 新进程证明和真实 Chemical VAE×RF 仍未实施；31.7/31.8 也未开始，`zinc_properties` 继续不可选。
+
+---
+
+## [2026-09-14] 步骤 31.6：公开 YAML、两进程隔离与真实 Chemical VAE×RF smoke
+
+### 配置与真实运行
+
+- 新增三个互相独立的 schema-2 YAML：`configs/chemical_vae/step31_6_features.yaml`、`step31_6_train.yaml` 和 `step31_6_all.yaml`。三个配置均使用仓库内 12 行 fixture、经 C03 验证的 `zinc`/v5 PyTorch asset、确定性 RF（16 trees、2-fold）以及各自独立的 `artifacts.output_dir`/`outputs.root`；没有修改 `example.yaml`。
+- 严格经 `yonod.py`（不是直接 `main.py`）以 Linux `nohup setsid` headless 方式启动 features、train 和 all；各进程日志/PID 分别在 `logs/step31_6_chemical_vae_{features,train,all}.{log,pid}`。features 先发布 hash-verified manifest，train YAML 随后只引用该已发布 manifest；训练进程没有声明或加载任何描述符资产。
+- features 真实 CPU 推理发布 `chemical-vae-zinc-v5-bc01a1e755f0-25e0e6f2c5d9`：12 个有效样本、392 个特征（两个 196 维角色块）以及全量 12 行 `chemical_vae_diagnostics/v1` sidecar。train 的 RF run 为 `train-c8ba17e0bb1b27cdf89b`，状态 `complete`；all 在自身的 artifact/output 根下同样完成。
+
+### 隔离与对齐证据
+
+- 新增 `tests/test_chemical_vae_training_isolation.py`：以真实 artifact reader、schema-2 train service 和 fake fold runner 运行独立训练路径，同时阻止 `yonod.descriptors.chemical_vae` import；测试通过，证明 train 的 artifact 消费路径不会实例化编码器。
+- `derived/chemical_vae/step31_6_smoke/verification.json` 保存 C08 核对：features→train 与 all 的 feature artifact ID/content identity 一致、392 维矩阵逐元素完全一致、diagnostics 完全一致；两边 run/artifact/dataset/label/split identity 一致，OOF predictions 与核心 fold metrics 完全一致。
+- 通过 `yonod.py` 重新运行既有 `example.yaml`，日志为 `logs/step31_6_morgan_regression.log`：`[all] features=ready`、`morgan × rf: complete`。该运行没有更改 example YAML；历史 artifact/run 仅按现有可验证身份使用。
+
+### 验证与边界
+
+- `python -m unittest tests.test_chemical_vae_audit tests.test_chemical_vae_encoder_parity tests.test_chemical_vae_descriptor tests.test_chemical_vae_artifact_lineage tests.test_chemical_vae_training_isolation -v`：15/15 通过。
+- `python -m pip check`：`No broken requirements found`；`git diff --check`：通过。未安装、升级、降级或进一步修改依赖，继续记录 TensorFlow 验证专用的 protobuf 4.25.9 状态。
+- 本 smoke 是小型工程验收，12 个样本均有效，不能作为性能或科学结论。31.7 的严格共同子集 Morgan/MFP 对照、成本报告、Windows CPU 实测仍未开始；`zinc_properties`、GPU 均未纳入本次范围。
+
+---
+
+## [2026-09-14] 步骤 31.7：严格共同子集的 VAE/Morgan/MFP 对照、成本与平台证据
+
+### 配对比较与覆盖
+
+- 新增 `configs/chemical_vae/step31_7_comparison_all.yaml`：真实 `stage: all` 固定两个反应物列、12 行 `benchmark_smoke_fixture.csv`、同一标签、`outer_kfold`（2 folds、seed 42）及同一 RF 参数（16 trees、`n_jobs=1`、`random_state=42`），在各自独立 `comparison_artifacts`/`comparison_outputs` 下比较 `chemical-vae-zinc-v5`、`morgan-ecfp4` 与 `mfp-r3-count`。它没有修改 `example.yaml`、历史产物或参考项目。
+- 实际 Chemical VAE diagnostics 对每个 `sample_id × reactant_1_smiles/reactant_2_smiles` 都记录 `encoded`，输入/预处理文本与 fixture 原文相同；VAE/Morgan/MFP 三个 validity mask 都是 12/12 true。因此本次比较使用的是31.2审计确定的严格全角色共同子集，而不是带零块的 concat 留存集。
+- 三个真实 RF run 完成，dataset/label/split identity 和 OOF 的 `sample_id/repeat/fold/y_true` 逐项一致。总 OOF 指标分别为：VAE（392维）MAE 0.1828125、RMSE 0.222615、R² -0.155185、Kendall τ -0.030303；MFP（2048维）MAE 0.1653125、RMSE 0.207815、R² -0.006693、τ -0.016025；Morgan（2048维）MAE 0.205625、RMSE 0.241892、R² -0.363910、τ -0.164488。12 行/两折样本不足以作性能或科学结论。
+
+### 成本、平台与可复查产物
+
+- 新增每个描述符独立的 cold/warm timing YAML；均经 `yonod.py` + `nohup setsid` headless 运行，第二次精确同配置调用均为 `reused`。顺序端到端 features 阶段 wall time（包含解释器导入、YAML 校验、artifact I/O/校验，不是纯 encoder kernel）为：VAE 1.979s → 0.752s，Morgan 0.882s → 0.835s，MFP 0.868s → 0.748s。各 PID 已退出，完整日志及 `time -p` 输出保留在 `logs/step31_7_timing_*_{cold,warm}.log`。
+- 新增 `scripts/collect_chemical_vae_step31_7.py`，从 hash-verified artifact/run 文件重新断言严格子集、mask、identity、OOF 对齐、指标和 cache 状态，生成 `derived/chemical_vae/step31_7_comparison/{comparison_report.json,metrics_summary.csv,paired_fold_metrics.csv,strict_common_subset.csv}`，并更新 `derived/chemical_vae/step31_acceptance/index.json`。
+- Linux CPU 的真实路径为 passed（Python 3.9.23、torch 2.7.0+cu128，比较配置明确 `device: cpu`）；Windows CPU 没有可用主机，保持 `not_verified`；GPU 未选择，保持 `not_run`；未独立验证的 `zinc_properties` 仍为 `not_supported`。没有将路径单测或 CUDA 可见性写成 Windows/GPU 成功。
+
+### 验证与边界
+
+- `python -m py_compile scripts/collect_chemical_vae_step31_7.py` 和 `python scripts/collect_chemical_vae_step31_7.py` 均通过；后者对真实产物执行强制一致性断言后才发布汇总。
+- 本步骤没有安装、升级、降级或修改任何依赖，也没有 `git add`/commit。C10 在该明确的工程 smoke 范围内为 `passed_with_bounded_scope`；C11 因 Windows/GPU 状态仍是 partial，步骤31整体尚未完成，31.8 文档总验收仍待进行。
+
+---
+
+## [2026-09-14] 步骤 31.8：运行说明、依赖边界与完整验收索引
+
+### 文档与配置一致性
+
+- 更新 `README.md` 和 `example.md`：正式建模示例统一为已保存 schema-2 YAML 经 `yonod.py` 的 Linux `nohup setsid` headless 启动；不再把 `main.py --config` 写成模型启动命令。新增 Chemical VAE 的完整参数片段、v5 asset 定位、每列 196 维原始 `z_mean_sample`、两个反应物列的 392 维 concat、identity 文本规则、诊断/零块语义、features/train/all/comparison YAML 链接和任务专属 output 根说明。
+- README 明确运行时为 PyTorch CPU，`h5py` 是资产审计/转换支持，`requirements-chemical-vae-parity.txt` 的 TensorFlow/Keras 仅作历史 HDF5 数值对照；普通 VAE/Morgan/MFP 运行及 train-only manifest 消费不依赖 TensorFlow。可选 parity 文件也记录了其隔离的 protobuf 约束。
+- 更新 `project-docs/chemical-vae-reference.md` 的当前状态，避免历史“尚未接入”叙述与实现冲突。它明确 ZINC/v5 是唯一可选变体，Windows CPU `not_verified`、GPU `not_run`、`zinc_properties` `not_supported`，并链接实际31.6/31.7证据。
+
+### 验收状态
+
+- `derived/chemical_vae/step31_acceptance/index.json` 升级为 v2，逐项列出 C01–C12 的状态、证据和边界。C01–C10、C12 有真实实现/测试/运行证据；C10 固定为 `passed_with_bounded_scope`，而非研究性能结论；C11 为 `partial`。索引的 `overall_status` 明确为 `in_progress`，完成规则要求所有 C01–C12 通过，因此当前步骤31绝不可标成整体完成。
+- 新增 `tests/test_chemical_vae_documentation.py`，不运行任何模型，校验 README/example/reference 中的冻结 runtime/输入/平台限制，所有链接的 YAML/asset/依赖文件存在，基础 requirements 不含 TensorFlow runtime，且 acceptance index 覆盖 C01–C12 并保留 C11 的未验收状态。
+
+### 剩余验收
+
+- Windows CPU 的真实资产读取、UTF-8 路径和 Chemical VAE smoke 尚未执行；GPU 没有运行；`zinc_properties` 没有独立权重迁移与数值对照。这些是 C11/整体完成的明确阻塞，不能由 Linux 路径兼容性或 CUDA 可见性替代。
+- 本步骤不启动建模、不安装或修改依赖，也没有 `git add`/commit。
+
+---
+
+## [2026-09-14] 步骤 31 C11 闭环补充：真实 Linux GPU、`zinc_properties` encoder 与 Windows 交接
+
+### GPU 审计与真实运行
+
+- 在激活的 `yonod` 环境中实际分配 CUDA tensor 后，`torch 2.7.0+cu128` 报告 `torch.cuda.is_available()=true`、两张 NVIDIA GeForce RTX 5090；`nvidia-smi` 驱动为 595.84。该审计和设备总显存写入 `derived/chemical_vae/step31_9_gpu_smoke/verification.json`，不是仅凭 CUDA 可见性宣布通过。
+- 先创建独立 schema-2 YAML `configs/chemical_vae/step31_9_zinc_v5_gpu_all.yaml`（独立 artifact/output root、`chemical_vae.device: cuda:0`），再从仓库根经 `nohup setsid bash -lc '<activate yonod; printf YAML | python -u yonod.py>'` 启动。PID `652464` 写入 `logs/step31_9_zinc_v5_gpu_all.pid`，日志确认向导校验、`features=ready`、`chemical-vae-zinc-v5-gpu × rf: complete` 和正常完成；事后 PID 已退出。
+- 该作业写出 12×392、12/12 有效、含 12 行 diagnostics 的 GPU feature artifact 和 two-fold RF run。它与保留的 CPU smoke 有相同 sample ID/mask；GPU 对 CPU matrix 的最大绝对差为 `2.8277933597564697e-4`。此数值如实保存，但**不**把 post-hoc GPU/CPU 比较冒充 C03 的 CPU float32 `2e-5` 直接 HDF5 parity gate。
+
+### `zinc_properties` 的独立资产证据与 smoke
+
+- 重新核对 `reference-proejct/chemical_vae/models/zinc_properties/` 的 `exp.json`、35 字符表、encoder HDF5 结构和原始 SHA-256 `9f923d03c5ce558d1f0cb52d2a2f4e28f080e59ac5a8c81a4365d7b63ba9d1e2`。该 encoder 与 ZINC 的哈希不同，绝不复用后者权重。
+- 扩展 `scripts/convert_chemical_vae_encoder.py` 为显式 `--variant zinc|zinc_properties`，并将运行时 loader 限制为这两个分别验证过的 source hash；未知变体或同名不同 hash 会拒绝。以 `--variant zinc_properties` 读取原始 encoder，写入 `WEIGHTS/chemical_vae/zinc_properties-9f923d03c5ce558d/v5/` 和不可覆盖的 parity run。预冻结 CPU float32 `atol=rtol=2e-5` 下，原 HDF5 TensorFlow/Keras、独立 NumPy 和持久化 PyTorch candidate 通过所有 batch/逐层对照：batch-8 TF 向量最大误差 `4.917383193969727e-7`，TF 逐层最大误差 `3.3229589462280273e-6`。
+- 为实际适配器路径另建 `configs/chemical_vae/step31_9_zinc_properties_gpu_all.yaml`，经相同 `yonod.py`/`nohup setsid` 规范运行；PID `657762` 已退出，`logs/step31_9_zinc_properties_gpu_all.log` 记录 ready 和 `chemical-vae-zinc-properties-v5-gpu × rf: complete`。结果为 12×392、12/12 有效 feature 与 two-fold RF run。此处仅支持 encoder 的原始 `z_mean_sample`；`zinc_prop_pred.h5` 性质头、decoder、训练和生成仍没有加载或开放。
+
+### Windows 状态、索引与验证
+
+- 当前没有真实 Windows 执行主机，因此 Windows CPU 严格保持 `not_verified`。新增独立的、portable repository-relative `configs/chemical_vae/step31_9_zinc_v5_windows_cpu_all.yaml` 和 `project-docs/chemical-vae-platform-handoff.md`：它给出 Conda Prompt/PowerShell `yonod.py` 入口、必须保存的 artifact/log/主机证据及 CI 程序；该 YAML/文档不是 Windows 通过证据。
+- 新增非建模 collector `scripts/collect_chemical_vae_step31_9.py`，复核两个 headless 日志/PID、artifact hash/shape/diagnostics、run manifest、直接 HDF5 parity 和 GPU 设备审计，生成 C11 verification。`scripts/collect_chemical_vae_step31_7.py` 更新 acceptance index 至 v3，防止重新收集31.7比较时覆盖 C11 的真实状态。
+- `README.md`、`example.md`、`project-docs/chemical-vae-reference.md` 与计划同步为两套独立验证的 encoder、Linux CPU/GPU 状态和 Windows 限制；C11 仍为 `partial`，步骤31 `overall_status` 仍为 `in_progress`，唯一剩余阻塞是 Windows CPU 的真实运行。
+- 运行 `python -m unittest tests.test_chemical_vae_audit tests.test_chemical_vae_encoder_parity tests.test_chemical_vae_descriptor tests.test_chemical_vae_artifact_lineage tests.test_chemical_vae_training_isolation tests.test_chemical_vae_documentation tests.test_mfp_descriptor -v`：22/22 通过；`python -m pip check` 为 `No broken requirements found`；`git diff --check` 通过。未安装、升级或修改依赖，未执行 `git add` 或 commit。
+
+## [2026-09-14] 步骤 31 用户授权完成、Windows CPU 验证延期
+
+- 用户明确要求暂时跳过 Windows CPU 实测，并将步骤31标记为已经完成。验收收集器和 `derived/chemical_vae/step31_acceptance/index.json` 因而升级为 v4：`overall_status=complete`，并保存 `completion_authorization=user_authorized_deferred_validation`、决策日期和唯一延期项 `C11.windows_cpu`。
+- 此项目状态变更不伪造平台结果：C11 的 `windows_cpu` 仍是 `not_verified`，其状态为 `deferred_by_user`；Linux CPU/GPU 与 `zinc_properties` encoder 证据保持原样。Windows 主机可用后仍应执行 `project-docs/chemical-vae-platform-handoff.md` 中的真实 smoke，并用原始证据替换延期状态。

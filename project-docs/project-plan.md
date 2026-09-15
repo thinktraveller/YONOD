@@ -1,5 +1,11 @@
 # YONOD：酰胺缩合反应产率预测专题 构建计划书
 
+> **当前计划更新：2026-09-15 / 新增步骤32：YAML 工作流程下的报告脚本适配、散点图生成与报告嵌入（待实施）。**
+> 本轮依据用户明确要求：在 YAML 完全替代 JSON 作为 YONOD 配置输入后，改造原报告脚本，使当前工作流程继续正常生成散点图并嵌入报告。执行起点为文末 32.1；本轮仅更新计划，不表示报告功能已实现或验收。
+> 步骤30已实现的 schema-2 配置、features/train/all、向导和 strict benchmark adapter 直接复用；范围和证据以 30.0 的最新状态及构建日志为准，不重新开放 JSON 配置输入，不将已排除的历史 paper-exact/批处理入口重新列为迁移任务。步骤31已按用户授权标记完成，Windows CPU 实测延期且仍为 `not_verified`。
+> 下方 v0.3 说明及章节 1–29 保留为历史计划；配置冲突以步骤30为准，当前报告适配要求以步骤32为准。JSON 结果、审计元数据与历史只读产物不属于 JSON 配置输入，不能因配置迁移而批量改写或删除。
+
+
 > 平台名称：**YONOD**（Your One-stop Notebook Of Descriptors）
 > 专题方向：**酰胺缩合反应产率预测（Amide Bond Formation Yield Prediction）**
 > 最终交付物：一个可直接执行的 Python 脚本 `run_yield_prediction.py`
@@ -9590,6 +9596,422 @@ nohup bash scripts/run_static_descriptor_autogluon_19cpu_nohup.sh --run --resume
 ### 29 下一步行动建议
 
 由 `project-builder-cn` 先实现步骤29.1到29.3：生成 275 fold 任务清单、完成 dry-run 和一个低成本 AutoGluon smoke；通过后再启动 19 CPU 的正式 nohup 长跑。正式结果完成后，再由分析脚本产出 `AutoGluon vs RF` 的 11 单元成对统计报告和保守结论标签。
+
+---
+
+## 三十、独立特征阶段、中间版本操作与 YAML 全量参数配置
+
+### 30.0 依据、范围与当前状态
+
+**依据**：`project-docs/goal.md` 的 2026-09-14 补充及 QA-R013 已确认回答，配套 `example.md`、`example.yaml`。本章是当前软件重构执行计划；章节 1–29 保留历史设计和实验边界，不因本次规划重新标记其完成状态。
+
+**已确认要求（2026-09-14 范围校正）**：描述符与建模可独立运行；中间产物支持查看、筛选、拼接、另存版本；所有受支持的新运行使用 YAML；底层参数完全开放，省略使用库默认；项目参数显式写入 YAML 示例。JSON 运行配置、依赖 JSON 的启动器和 `different_order` 已明确排除，不新增兼容或迁移。
+
+**状态**：30.1–30.7 的配置/产物契约、独立 features/derive、统一模型工厂和 manifest-only train/all 服务已实施并通过聚焦测试；`example.yaml`、`main.py --config` 和 `yonod.py` 向导已提供/生成 schema-2 YAML。30.8–30.10 已补充向导、公开 strict benchmark schema-2 adapter/分派、五模型 smoke、真实 OHE/PCA/数值缩放/inner early-stopping smoke，以及经 `yonod.py` 启动的 parquet/SQLite/report strict fixture smoke。旧 benchmark 根、未经证明等价的外部 split 和 tree outer-fold early stopping 均 fail-closed；JSON/paper-exact/批处理/shell/different_order 为明确排除项，不能恢复为迁移缺口。
+
+**追加验收**：独立 fixture 已验证真实训练失败隔离：一个 feature × model 的 sklearn fit 失败会发布不可覆盖的 failed manifest/reason 与 YAML 快照，另一个同级组合仍保留完整有限 predictions 与 fold metrics；公开运行以返回码 2 表示部分失败。
+
+**范围**：覆盖普通入口、交互向导和通用 strict benchmark 的 schema-2 运行路径。JSON 运行配置、依赖 JSON 的论文/批处理/shell 启动器以及 `different_order` 不在范围内，保留为历史资料。历史步骤 28/29 的“不改本体”属于当时独立实验约束，本章的软件重构包含必要的本体改造；不改作者参考项目，不重算官方描述符，不重跑大规模实验来证明软件接口可用。自动调参平台、全新图形编辑器不列为交付项。
+
+**规划时的代码基线与复用点（历史快照）**：下表记录步骤30实施前的缺口，不代表当前代码仍未改造；当前完成状态以本章状态说明及工作包表为准，步骤31复用已实现能力。
+
+| 当前位置 | 已有能力 / 缺口 | 本章处理 |
+| --- | --- | --- |
+| `main.py` | 有两阶段循环，但依赖 `prepared_features` 和原表；模型工厂只传部分参数 | 抽取服务、拆开进程接口、统一模型工厂 |
+| `yonod/universal/descriptor_artifact.py` | schema v1 NPZ、样本掩码、输入/参数校验 | 保留矩阵存储基础，增加独立 manifest 和版本血缘 |
+| `yonod/universal/feature_builder.py`、描述符注册表 | 描述符构建与延迟加载基础 | 生成端复用，读取端移除无关生成器依赖 |
+| `yonod/models/*_model.py` | 五类适配器及部分固定项目默认 | 按构造/fit/预处理/运行设置开放参数，去掉隐式项目默认 |
+| `yonod/benchmark/config.py`、`executor.py`、`task_state.py` | YAML、外部折、任务状态和恢复 | 接入统一 schema、参数解析和特征引用，复用协议与状态机制 |
+| `yonod.py` | 识别、保存、校验 JSON，并可自动启动训练 | 全部改用 YAML，支持停在特征就绪状态 |
+| `paper_exact_pipeline.py`、`paper_exact_autogluon.py` | 生成/引用 `*_config.json`，同时使用 JSON 指标/manifest | 只迁移运行配置及其引用，保留结果与审计数据格式 |
+| `example.yaml`、`example.md` | 已确认的接口草案与项目参数 | 以实施后的 schema 校验，最终改为真实可运行示例 |
+
+### 30.1 工作包、依赖与执行顺序
+
+| 编号 | 工作包 | 前置条件 | 可审查交付物 | 状态 |
+| --- | --- | --- | --- | --- |
+| 30.1 | 冻结配置、产物和迁移契约 | 已确认目标 | schema、入口清单、参数路由及迁移规则 | 已实施（见 `step30-contracts.md`） |
+| 30.2 | YAML 单一解析与校验 | 30.1 | 共享 loader、字段/阶段校验、CLI 覆盖规则 | 已实施（入口迁移仍待 30.8；见 `step30-contracts.md`） |
+| 30.3 | 独立产物 manifest 与读取层 | 30.1 | 版本化 manifest、纯读取接口、旧 NPZ 导入 | 已实施（入口/训练编排仍待后续工作包；见 `step30-contracts.md`） |
+| 30.4 | 只计算阶段与特征就绪状态 | 30.2、30.3 | 可独立退出的 features 服务和入口 | 已实施（内部 API；公开 CLI 迁移仍待 30.8，见 `step30-contracts.md`） |
+| 30.5 | 查看、筛选、拼接与派生版本 | 30.3、30.4 | inspect/derive 内部 API、操作记录、新 manifest | 已实施（未迁移公开 CLI；见 `step30-contracts.md`） |
+| 30.6 | 完整模型参数与库默认语义 | 30.1、30.2 | 统一模型工厂、参数目录、生效值采集 | 已实施；锁定 Conda 环境五模型真实 smoke 已通过 |
+| 30.7 | 只建模及串联编排 | 30.4、30.5、30.6 | train/all 服务、折内处理与独立结果身份 | 已实施 |
+| 30.8 | 受支持入口迁移 | 30.7 | YAML 向导/脚本、strict benchmark adapter 与迁移/拒绝边界 | 已实施：main/向导/操作 CLI/strict benchmark；JSON、paper-exact、批处理、shell、different_order 明确排除 |
+| 30.9 | 结果溯源、恢复及文档同步 | 30.7、30.8 | 参数/版本报告、恢复校验、可运行示例 | 已实施（批准范围）：训练/benchmark 快照、SQLite 恢复、示例、README/契约/验收证据 |
+| 30.10 | 分层集成验收 | 30.1–30.9 | 验收矩阵、真实低成本 smoke、完整证据 | 已实施（批准范围）：五模型/OHE/PCA/early-stopping 与 strict parquet/SQLite/report fixture 均有证据 |
+
+建议执行次序：30.1 → 30.2 → 30.3 → 30.4 → 30.5 → 30.6 → 30.7 → 30.8 → 30.9 → 30.10。30.2 与 30.3 在契约明确后可独立开发；30.6 不依赖中间编辑实现，可与 30.4/30.5 并行，但集成前统一核对 schema，不同时改同一入口。各工作包合并前完成自身验收，不等所有模块完成才检查基本契约。
+
+### 步骤30.1：冻结配置、产物和迁移契约
+
+**工作**：建立运行配置/操作配置/产物 manifest 三类 schema，字段结构以 `example.yaml` 为起点。新增模块路径建议为 `yonod/config/`、`yonod/artifacts/`、`yonod/pipeline/`；可以根据既有结构微调，但职责及依赖方向必须保持清楚。
+
+- 运行配置确定 `features/train/all` 的必填字段：features 不要求模型或标签；train 必须有产物引用和可对齐标签，不要求重列原始 SMILES/描述符算法参数；all 组合两阶段要求。
+- 操作配置单独使用 `operation: derive_features`，不混入模型参数；查看为只读接口。
+- manifest 字段包含 schema、feature/artifact ID、生命周期、相对文件引用、内容哈希、dtype/形状/列结构、sample_id/矩阵行映射、有效性、关联数据及来源；派生版本另记父 ID、操作声明和输入输出映射。
+- 路径按拥有该引用的文件解析：配置引用相对配置位置，manifest 引用相对 manifest 位置；搬迁完整产物包后仍可读，绝对路径不参与内容身份。
+- 建立明确的运行配置读写清单：`main.py`、`yonod.py`、`scripts/run_benchmark.py`、paper_exact 模块、`scripts/run_yieldmaster*`、静态矩阵脚本、shell 启动器及 `different_order/` 批任务；区分 JSON 运行配置、结果元数据、官方只读资料三类用途。嵌入任务清单并实际控制训练的参数也必须来自统一 YAML 解析结果。
+- 现有 benchmark YAML 的 `benchmark.dataset_path/feature_sets/cv` 与示例 schema 2.0 不同；建立旧 YAML 到统一 schema 的字段映射，不能认为扩展名已是 YAML 就无需迁移。`yonod.py` 中用于读取数据集的 JSON 分支与 JSON 运行配置识别分开审计，保留不属配置的输入能力。
+- 锁定受支持依赖版本范围，盘点底层构造/fit 参数和项目特有设置。不把 `**kwargs` 等同于无条件接受任意字段。
+
+**验收**：三类 schema 有合法与非法样例；运行入口清单每项都有迁移位置和验收方式；模型参数有目标接口归属；QA-R013 三项回答均映射到具体任务。
+
+### 步骤30.2：YAML 单一解析、覆盖与校验
+
+**工作**：共享 loader 接受 `.yaml/.yml`，安全解析、拒绝重复键/多文档歧义和不支持版本；在实际加载昂贵描述符前完成可静态判断的配置错误检查。
+
+- 采用“库默认 → YAML 显式值 → 显式 CLI 覆盖”。使用缺失值标记区分省略与 `null/false/0`；CLI 默认不能覆盖 YAML；别名规范化后冲突时报完整字段路径。
+- 普通任务不隐式灌入 `example.yaml` 或历史 profile。项目自有编排字段明确缺省规则：可选预处理不启用、必要数据缺失时报错、清理默认以保留产物为计划选择并文档化；示例的 `cleanup: true` 属于显式覆盖。
+- 参数分开 `estimator/predictor/fit/preprocessing/runtime/evaluation`；自动设备策略与显式设备冲突、重复标签/路径定义不一致等提前报错。底层对象型选项经注册表解析，禁止 YAML 任意对象构造或代码执行。
+- 运行入口拒绝 JSON；一次性迁移器可以读取旧 JSON，不构成运行期双格式兼容。JSON 指标及历史审计读取仍保留。
+
+**验收**：省略与显式值、未知键、重复键、别名冲突、类型/取值范围、路径搬迁、阶段必填、CLI 覆盖均有聚焦测试；只校验特征配置不要求安装全部 ML 库。
+
+### 步骤30.3：产物读取、身份与旧 NPZ 导入
+
+**工作**：在现有 NPZ 上建立轻量读取层，不能导入 RDKit、Torch、FISD/MolMetaLM 等生成依赖；折内 OHE 编码所需依赖在建模阶段单独加载。
+
+- 静态矩阵、完整 ID、有效性掩码的行语义保持显式；读取时校验文件哈希、矩阵维度、唯一 ID、有效行数量和标签/辅助表连接，不对齐时拒绝训练。
+- 区分特征内容身份、标签/辅助数据身份、population/split 身份及模型运行身份。仅改标签/模型参数/折数不重新计算静态特征；标签改变仍须使训练结果失效。只改描述符输入或算法参数应生成新特征身份。
+- 支持把旧 schema v1 NPZ 与显式标签/辅助表关联后导入新 manifest，不推测不存在的标签或样本顺序，不覆盖原文件。旧产物缺少必要映射时给出修复说明。
+- 写入临时位置，校验全部文件后发布 manifest；失败产物不标就绪。已有版本目标存在时拒绝覆盖；同一有效内容可引用复用。
+- 新 manifest 采用 YAML，NPZ/CSV 等继续保存数值数据；哈希使用明确版本的规范化规则，不以 YAML 注释、键排序或绝对输出路径决定训练身份。
+
+**验收**：新进程且禁止导入生成依赖时读取成功；复制整个包到新目录仍可读取；篡改/缺文件/半成品/重复 ID/掩码错误被拒绝；旧 NPZ 导入不重新调用生成器。
+
+### 步骤30.4：独立 features 服务与状态
+
+**工作**：从 `main.py` 的第一阶段和 benchmark 特征准备逻辑抽出共享服务。仅计算本次选中的静态特征或校验复用；保存 OHE 原始类别输入和转换声明，禁止全量拟合编码。
+
+- 生成无标签产物；不构造预测模型、不打开训练输出目录；所选描述符内部使用预训练模型提取特征不受此限制。
+- 全部候选完成或记录失败后，写特征状态与 manifest 并退出，保留每项失败原因。manifest 标明全部就绪/部分就绪/失败；部分成功不得冒充全部完成。
+- 向上层返回可持久化引用，不返回只能供下一阶段使用的闭包、生成器或原始 dataframe。
+- 拟定公开形式 `main.py --config <yaml> --stage features`；此处为待实现命令，不作为当前可执行说明。
+
+**验收**：无模型/无标签配置成功落盘退出；模型构造调用数为零；重新执行同一配置命中缓存；单描述符失败不删除其他成功文件；退出后不存在训练任务在后台继续执行。
+
+### 步骤30.5：中间查看、筛选、拼接与另存版本
+
+**工作**：提供只读 inspect 和基于操作 YAML 的 derive 接口；建议实现于 `yonod/artifacts/operations.py`，命令入口可使用 `scripts/manage_features.py`。先交付 CLI/Python 接口，不增加新图形界面。
+
+- inspect 展示维度、特征结构、有效性、关联数据、来源及版本链，不修改文件。
+- select_samples 使用稳定 ID 清单；select_features 使用列名清单；合成列名按既有特征结构稳定生成。缺失/重复 ID 或未知列报错，输出顺序按操作契约确定并记录。
+- join_features 支持带样本 ID 的外部表及已登记特征版本，限定明确列和前缀，按 ID 一对一连接；重复键、缺失匹配、列名冲突或把标签拼成特征时报错。额外外部行不得自动扩充当前 population，忽略数量记录在审计中。
+- 操作顺序可复现，输出新目录/ID，保留父版本、文件哈希和映射；不能原地修改父产物。样本变化后重建 split 或显式校验映射，不静默复用旧行索引。
+- 人工筛选保存理由/清单。需要依据数据拟合的筛选、填补、PCA 等保存为训练折内声明，不预拟合后放进静态产物。
+
+**验收**：使用有意重排的外部样本表验证数值逐行正确；原版本哈希不变，新版本可独立训练；重复/缺失/冲突输入失败；步骤顺序及来源可追溯；inspect 前后文件内容一致。
+
+### 步骤30.6：完整模型参数、库默认与生效审计
+
+**工作**：统一模型工厂供普通和 benchmark 调用，改造 RF、XGBoost、SVM、LightGBM、AutoGluon 适配器。省略底层参数不经过旧适配器默认回填；显式项目参数只来自 YAML。
+
+- 为所支持版本建立完整参数目录：构造器、fit、Pipeline/scaler/PCA、AutoGluon predictor/fit/子模型及资源选项。利用库签名/参数接口和受支持版本资料校验，动态 kwargs 参数补上版本依据；不能只支持示例中的少数字段，也不能把错误字段吞掉。
+- 模型原生拟合参数（例如 sample_weight）若关联数据列，按样本 ID 和当前训练折切片。内部验证、调参/早停数据由训练折内部建立；外部验证折仅用于最终评估，任意 fit 参数不能绕开该边界。
+- AutoGluon 当前 `_make_df` 和 predictor 使用硬编码 `yield` 标签；开放 `predictor.label` 时必须同步内部训练表的列名及预测目标映射，若与数据声明冲突则报错，不能只修改构造器字段。
+- SVM scaler/PCA/子采样变成显式步骤；未声明就不启用。记录实际抽样 seed、n_train、PCA 维数，不再由多个入口分别硬编码种子。
+- XGBoost 自动设备策略解析为实际设备后审计；用户显式设备不被默认策略盖掉。AutoGluon preset 与 hyperparameters 分别交给正确 API，不把省略 hyperparameters 变为 `{}`；其 random_state 不伪装成控制所有子模型的全局种子。
+- 在可获得参数的库中记录构造后参数及训练配置；AutoGluon 等拟合后动态确定的子模型另保存拟合后的实际参数、leaderboard/模型信息。不能声称构造前已获得全部动态默认；无法提取的内容明确标记，不编造默认值。
+- 项目示例保留 RF 300、XGBoost 300/0.05/6、普通 SVM 8000 子采样、LightGBM 500/0.05/31、AutoGluon 300 秒等显式值；论文专用示例另列，不成为普通 fallback。
+
+**验收**：五模型分别检查非默认构造/fit 参数到达真实目标接口；空参数与同版本直接库构造参数一致；删除示例参数后不回填项目值；覆盖 SVM epsilon、RF 分裂参数、树模型正则化及 AutoGluon 子模型配置等示例之外字段。编排单测可使用 mock，但最终每种模型必须有真实低成本验证。
+
+### 步骤30.7：train/all 与折内处理
+
+**工作**：train 从 manifest、标签/辅助表和共享 split 启动，不重新进入 features；all 只负责调用两个独立服务。移除对 `prepared_features`、原始 SMILES 表和旧进程对象的隐式依赖。
+
+- fold_transform 保存输入声明与原始类别，训练时只在训练折拟合 OHE、数值标准化及显式预处理，保存每折状态。标签源改变可显式重新绑定并审计，不覆盖特征身份。
+- train 对缺失/过期/损坏产物报错，不自动重算；all 在 features 阶段允许重算且遵守“所有所选特征先完成或失败，再训练成功项”的顺序。
+- 通用和 paper_exact 复用参数/读取服务，保留独立协议校验。严格模式要求 YAML 的 population、split、参数/seed 规则完整，冲突或缺失即失败；普通任务不隐式扩大到 5×5。
+- 建模 ID 使用特征、目标/辅助输入、population、split、预处理、模型参数、版本和种子。运行前请求身份与训练后生效参数快照分开保存；动态子模型配置作为完成证据核查，不能依赖训练后才知道的值创建初始任务。
+
+**验收**：features 进程退出后新进程 train 成功，生成器调用数为零；分阶段与 all 在相同确定性配置下预测一致；改变模型/标签/split 产生新结果但特征哈希不变；使用特殊验证折类别/统计分布检测泄漏；全部特征失败时不开始训练。
+
+### 步骤30.8：入口迁移与历史实验行为保留
+
+**2026-09-14 范围替代**：以下最初规划中关于 JSON、paper-exact、批处理、shell 与 `different_order` 的迁移文字已被用户明确撤销，不执行也不保持兼容。当前完成目标是普通 YAML 入口与 `stage: benchmark` strict adapter；不能证明字段等价的旧 benchmark 结构必须失败，而不是转换为 `outer_kfold`。
+
+**工作**：切换 `main.py --config`、`yonod.py` 的选择/保存/验证/自动启动、benchmark、paper_exact 配置生成、批处理和 shell 引用为 YAML。弃用 `--json` 并显示一次性迁移指引；不保留隐藏的 JSON 执行分支。
+
+- 新增建议工具 `scripts/migrate_config_to_yaml.py`，显式读取旧 JSON 并生成新文件及迁移报告。迁移器根据来源入口恢复旧的实际生效参数，而非把旧文件中曾被忽略的字段直接当作已生效参数；被忽略字段必须列出并要求显式解决差异。
+- 同一迁移工具也接收旧 benchmark YAML，显式转换 `benchmark.dataset_path/feature_sets/cv` 等结构到新 schema，保留特征生命周期、分组与 split 语义。旧格式不在运行 loader 内悄悄自动兼容；新 YAML 通过 schema_version 识别和校验。
+- 对不同来源分别处理：普通 RF 300/SVM 8000、benchmark 原适配器默认、paper_exact RF 500/0.3/逐折 seed、静态矩阵脚本硬编码资源等。来源无法判定时停止该文件转换，不能猜一个默认 profile。
+- 旧 JSON 不再能作为运行配置输入，但可作为历史来源保留；转换不覆盖旧文件/结果。训练恢复不能仅凭旧 config_hash 宣称等价，须核对规范化参数、样本、特征及 split，再建立迁移映射。
+- 向导允许结束于特征就绪，之后选择已有 manifest 建模；无需重新声明或计算描述符。
+- 官方 JSON 指标、NPZ 内部 JSON 元数据、run/fold 状态记录及参考项目文件不做全局替换。运行清单若派生自 YAML，可保留审计格式，但不得成为绕开 YAML 配置与统一校验的第二套调参入口。
+
+**验收**：入口清单逐项有 YAML 读写测试；`.json` 和伪装扩展名的旧 schema 均明确拒绝；旧来源迁移前后的有效参数一致且有差异报告；仍保留的 `json.load/dump` 每项都能说明是结果/审计或迁移用途。
+
+### 步骤30.9：结果溯源、恢复、示例与报告
+
+**工作**：复用 `task_state.py` 与现有报告，保存用户 YAML、规范化有效配置、依赖版本、参数来源、feature/label/split 身份、中间版本链、逐折处理状态和完成证据。
+
+- 省略参数与显式写相同库默认在可静态解析部分形成等价规范化身份；路径/注释变化不重训。动态训练参数保留来源与实际快照，不能为追求哈希等价抹去有语义差异的 preset/子模型声明。
+- 完成任务仅在身份匹配、预测/元数据完整且输出校验通过时恢复跳过；修改超参数/标签/预处理不得误命中。参数变化不触发特征重算，也不覆盖旧结果。
+- 报告区分库默认和 YAML 显式项目值，保留既有 MAE/RMSE/R²/Kendall τ 和协议边界；不把软件重构的小样本 smoke 当作新科研结果。
+- 同步 `README.md`、`example.md`、`example.yaml`、`configs/` 活跃示例、启动脚本帮助及相关教学说明。新增最小库默认示例、显式项目参数示例、只计算/只建模/中间操作示例；实施后再移除“尚不可运行”提示。
+
+**验收**：示例均通过同一解析器且文档代码块与文件一致；按实际命令完成一次中间版本建模；报告可追溯参数与父版本；恢复/重跑规则有证据。不以改动日期代替完整配置身份。
+
+### 步骤30.10：验收矩阵与完成条件
+
+| 验收 ID | 场景 | 必须观察到的结果 | 对应步骤 |
+| --- | --- | --- | --- |
+| A01 | YAML 解析与错误配置 | 重复键/未知参数/非法值/阶段缺字段及时失败；CLI 仅显式覆盖 | 30.1、30.2 |
+| A02 | 五模型省略与非默认参数 | 与同版本库默认一致；示例值只在显式设置时生效；完整路由可核查 | 30.6 |
+| A03 | 无标签只计算 | 无预测模型构造，有就绪 manifest 和状态 | 30.3、30.4 |
+| A04 | 独立进程只建模 | 禁用生成依赖仍可读取静态特征；生成器零调用 | 30.3、30.7 |
+| A05 | 查看/筛选/重排拼接 | 数值、ID、列和父版本一致可追溯；原文件不变 | 30.5 |
+| A06 | 文件错误与失败隔离 | 半成品/篡改/错映射拒绝；成功特征不受另一候选失败影响 | 30.3、30.4、30.7 |
+| A07 | OHE/PCA/标准化/早停 | 训练折内拟合，外部验证只预测；保存折状态 | 30.6、30.7 |
+| A08 | 模型/标签/split 变化及恢复 | 特征不重算；训练身份变化；旧完成任务不误复用 | 30.7、30.9 |
+| A09 | JSON 退出运行入口 | 向导、脚本与配置生成统一 YAML；结果 JSON 仍能复查 | 30.8 |
+| A10 | 历史普通/论文 JSON 及旧 benchmark YAML 迁移 | 显式恢复旧有效参数与字段映射，协议不被悄悄改变 | 30.8 |
+| A11 | 真实 smoke 与串联等价 | 五模型小数据运行通过；确定性条件下 train/all 一致；动态限制可解释 | 30.7、30.10 |
+| A12 | 文档与参数证据 | 示例可运行，版本/有效参数/血缘/预测可追溯 | 30.9 |
+
+测试顺序：先纯 schema/数据契约测试，再模型工厂与折内处理测试，再真实小数据 smoke，最后入口迁移和报告恢复集成。扩展现有 `test_main_feature_library.py`、`test_feature_registry_and_ohe.py`、`test_autogluon_fold_adapter.py`、`test_benchmark_autogluon_executor.py`、`test_autogluon_paper_exact_repeated_manifest.py` 等回归测试；按行为需要增加配置/产物/操作测试，不照搬实现逐行写测试。
+
+真实 smoke 使用固定小型数据和显式资源预算，覆盖至少一个静态描述符及 OHE；AutoGluon 使用短预算并确保真实训练预测成功。重型特征的解耦验证可用已有合法矩阵，无需重新加载全部权重。未安装某库时保留对应未验收项，不能用 mock 成功将全模型验收标为完成。资源预算及实际耗时留存，不预设全量实验耗时。
+
+最终只有 A01–A12 全部具备证据，且所有活跃运行配置入口完成切换，步骤30才可标为完成。证据建议写入 `derived/interface_migration/step30_acceptance/`（配置 YAML、验收清单、逐项结果、smoke 输出），实施日志追加至 `project-docs/buildlog.md`；本次规划不创建伪执行证据。
+
+### 30 Q&A 与后续起点
+
+**Q：库默认会不会改变旧实验？** 省略参数的新配置会采用库默认，这是已确认的新行为；历史实验需迁移成显式参数 YAML 保持原行为，不能只改扩展名。
+
+**Q：完全解耦是否要求预先计算全数据 OHE/PCA？** 不要求。独立产物包含原始输入和转换声明，数据拟合继续限制在训练折内；只建模禁止重新计算静态描述符，不禁止必要的折内转换。
+
+**Q：完整开放参数是否可以随意传入外部验证数据？** 不可以。完整开放的是合法参数能力，样本对齐、训练/评估边界和协议校验仍必须执行。
+
+**后续实施起点（2026-09-14 校正）**：30.1–30.7 已有实施记录，后续核对并复用，不从契约设计重新开始；本章继续补齐 30.8–30.10 剩余入口迁移与验收。新增 Chemical VAE 工作从步骤31.1/31.2 开始，不要求先完成所有历史入口迁移才能研究编码器，但所触及入口必须通过对应回归。当前不存在需要用户再裁决的三项核心需求；实施时发现新的数据语义冲突须具体记录，不能恢复已否定的 JSON 兼容或隐式项目默认方案。
+
+---
+
+## 三十一、Chemical VAE 冻结编码器描述符接入
+
+### 31.0 目标、边界与实施状态
+
+**依据**：[goal.md 的 Chemical VAE 专项补充及 QA-R014](goal.md#2026-09-14-补充chemical-vae-描述符与新依赖兼容)、[参考说明](chemical-vae-reference.md)及本地 `reference-proejct/chemical_vae/`。截至 2026-09-14，31.1/31.2 审计证据位于 `derived/chemical_vae/step31_1_audit/` 和 `derived/chemical_vae/step31_2_coverage/`；ZINC/v5 与独立 hash 的 `zinc_properties` encoder/v5 均有原始 HDF5 的直接 TensorFlow/Keras、独立 NumPy 与持久化 PyTorch 的数值证据；运行时加载器只接受这两套分别验证的 source identity。31.4/31.5 的受限描述符、缓存内容身份和 diagnostics sidecar 已接入；31.6/31.7 的 Linux CPU smoke/配对证据和31.8文档均已完成。C11 另有实际 `cuda:0` ZINC/v5 和 `zinc_properties` encoder VAE×RF smoke；Windows CPU 没有真实主机，严格保持 `not_verified`。用户已授权将该未实测项延期，并将步骤31标为完成；这不是 Windows 平台通过声明。详见 [buildlog.md](buildlog.md)、[C11 verification](../derived/chemical_vae/step31_9_gpu_smoke/verification.json) 和 [acceptance index](../derived/chemical_vae/step31_acceptance/index.json)。
+
+**结果目标**：用户通过 schema-2 YAML 选择 `chemical_vae`，以冻结 `zinc` 编码器提取原始 `z_mean`，按已声明的分子列顺序拼接；特征可独立计算、持久化、查看/派生，并在新进程交给 RF 等现有模型。技术验收不以提高预测分数为条件。
+
+**本期边界**：只迁移编码器推理，不加载解码器、TerminalGRU、性质头或训练 CSV，不随机估计潜空间标准化量；不开展从头训练、微调或分子生成。`zinc_properties` 保留独立变体接口和审计记录，其可用状态须单独通过同样的真实权重与数值验证，不能因 `zinc` 成功而自动开放。官方描述符矩阵、历史结果与参考项目只读保留。
+
+**复用基础**：步骤30的配置 loader、artifact reader/publisher、features/derive/train/all 服务及模型工厂。新增任务聚焦描述符参数路由、缓存前模型内容身份和逐角色失败诊断；不新造并列配置格式或训练执行器。未迁移的历史入口不宣称已支持新描述符，也不要求 Chemical VAE 自动进入 paper_exact 协议。
+
+### 31.1 工作包与依赖总览
+
+31.1–31.8 的工程交付物和文档已更新：C01/C02 的预审计证据已具备，C03 已在预先冻结的 CPU float32 容差下，通过直接加载原始 HDF5 的 TensorFlow/Keras 参考、独立 NumPy 前向和已持久化 PyTorch encoder 的逐层对照；C04 的受限描述符、identity 文本、concat 零块、重复/批量和参数路由已有聚焦回归；C06/C07 已覆盖 model manifest/state 内容变化、sidecar 篡改拒绝和筛选/派生行映射同步。TensorFlow 仅是可选的验证依赖，运行时仍为 PyTorch。31.6 已由三个独立 schema-2 YAML 和 `yonod.py` headless 进程完成：真实 `zinc`/v5 产生 12×392 特征，独立 train 与 all 的 artifact、split、OOF 预测和折指标一致，且 train 隔离回归拒绝编码器导入；证据为 `derived/chemical_vae/step31_6_smoke/verification.json` 与任务日志。31.7 在同一 12 行严格共同子集、标签、外层折和 RF 下完成了 VAE/Morgan/MFP 的 Linux CPU 配对 smoke，并保存 OOF、逐折、覆盖与顺序 cold/warm timing；C10 为 `passed_with_bounded_scope`，不能外推为科学性能结论。其后 C11 补充了两张 RTX 5090 的实际 CUDA 审计、`cuda:0` 的 ZINC/v5 VAE×RF smoke，以及独立 hash 的 `zinc_properties` encoder 直接 HDF5 TensorFlow/NumPy/PyTorch parity 和 GPU smoke；性质头/decoder 未开放。31.8 文档、YAML 链接、基础/可选 parity 依赖说明及验收索引也随之更新。完整 C01–C12 状态在 `derived/chemical_vae/step31_acceptance/index.json`：C01–C10 与 C12 有对应真实证据，C11 的 Linux CPU/GPU 与 `zinc_properties` encoder 均有证据，但 Windows CPU 仍 `not_verified`。用户已授权将该单项验证延期，因此步骤31整体状态为 **complete（user-authorized deferred validation）**；不得将此标记解释为 Windows CPU 已通过。
+
+| 编号 | 工作包 | 前置条件 | 交付物与完成边界 |
+| --- | --- | --- | --- |
+| 31.1 | 环境、模型资产与依赖方案审计 | QA-R014 | 环境快照、资产哈希/结构清单、候选后端与参考方案 |
+| 31.2 | 代表性输入覆盖与失败语义审计 | 31.1 字符表/预处理口径 | 逐角色覆盖表、逐样本诊断、反应保留统计 |
+| 31.3 | 编码器迁移及数值参考验证 | 31.1 | 转换/加载工具、真实权重、独立数值对照和误差报告 |
+| 31.4 | 描述符类、注册与完整参数传递 | 31.2、31.3 数值通过 | 标准适配器、延迟加载、注册/工厂和行为测试 |
+| 31.5 | 缓存身份、诊断持久化与派生 | 31.4；复用 30.3–30.5 | 可校验的特征 manifest、内容失效和诊断血缘 |
+| 31.6 | YAML、向导、两阶段与真实 smoke | 31.5；复用 30.7/已迁移入口 | features/train/all 示例、真实编码+RF、旧流程回归 |
+| 31.7 | 小规模公平对照与平台验收 | 31.6 | 共享样本/分折比较、成本/覆盖报告、平台验证记录 |
+| 31.8 | 文档、证据汇总与完成核验 | 31.1–31.7 | 使用说明、依赖与限制说明、完整验收清单 |
+
+执行顺序：31.1 → 31.2/31.3 → 31.4 → 31.5 → 31.6 → 31.7 → 31.8。31.2 不需要模型推理，在资产和输入口径明确后可独立完成；31.3 未通过时可继续接口设计，但不能将描述符发布为已可用。步骤30剩余迁移单独跟踪，不改其已完成或未完成状态。
+
+### 步骤31.1：环境、资产与后端决策
+
+**工作**：初始化并激活 `yonod`，记录 Python、NumPy、pandas、torch、RDKit、scikit-learn、AutoGluon 和候选新增依赖的实装版本及声明差异。当前起始核查为 Python 3.9.23、torch 2.7.0+cu128、NumPy 1.26.4、pandas 2.0.3；Keras/TensorFlow/h5py 未安装，实施时重新核实，不用这些记录替代依赖解析。
+
+- 清点两套 `exp.json`、字符表、编码器 HDF5 的内容哈希、来源提交、文件大小；在兼容 HDF5 读取工具可用后核对实际序列化架构、输入/输出节点、权重名/形状、dtype 和保存后端。资产维度与声明冲突即停止该资产转换。
+- 优先评估现有 PyTorch 加兼容 h5py 的编码器迁移方案；新增包先解析 Python 3.9 和现有依赖约束，记录安装前后差异。若较新 Keras/TensorFlow 方案更可靠且兼容，保留比较依据后选择，不盲目升级最新版或安装上游旧 requirements。
+- 旧环境仅作为新依赖路径受阻后的备选/参考导出途径；若必须改变主环境核心版本，先提供具体冲突、替代方案和影响，请用户决定。无冲突的必要兼容包与常规实现选择不重复询问。
+- 建立数值参考获取方案：可信原实现输出优先；也可用经过独立审查的参考前向实现，但须说明证据强度，不能把同一转换器生成的两份结果当独立验证。
+
+**交付**：拟存 `derived/chemical_vae/step31_1_audit/`，含环境快照、资产清单、依赖解析记录与 `backend_decision.md`。模型转换文件另存 `WEIGHTS/chemical_vae/<asset_id>/`，不写回参考目录。
+
+**验收**：版本、资产、选择原因和参考生成方案可复查；现有环境不因旧版本约束被降级；尚未打开或运行的资产明确标为未核验。
+
+### 步骤31.2：输入覆盖与预处理契约
+
+**工作**：至少选择现有 smoke fixture、酰胺缩合代表性数据和含金属催化组分的代表性数据做无推理审计；保存数据哈希、列/角色映射与实际扫描范围，不将抽样覆盖率写为全量结果。数据优先使用仓库已有文件，缺失时记录而不编造。
+
+- 明确实际送入编码器的字符串规则；最小方案保留 SMILES 表达、不拆片段，RDKit 用于合法性校验。任何空白清理、缺失值识别或 canonicalization 都须明示、参与身份并用于数值参考；对预处理后的字符串重新检查长度与字符集。
+- 逐 `sample_id × role/column` 记录原始/处理后输入、解析状态、长度、未知字符和失败原因，覆盖空值、非法输入、`[Ni]`、`[Pd]`、`.`、`,`、`;` 与超长串；缺失和编码失败分开统计，禁止拆盐、删金属、截断或扩词表提高覆盖。
+- 保留当前 concat 的“任一列成功保留整行、失败列零块、全列失败剔除”规则，同时报告“全部所选列可编码”的严格共同子集规模。审计阶段区分预检可编码和最终推理成功，前者不保证后者。
+
+**交付与验收**：`derived/chemical_vae/step31_2_coverage/` 保存逐样本诊断、角色覆盖表与反应保留统计；各分类分母/计数可追溯，行映射无丢失。覆盖过低本身是研究限制，不擅自更改策略；确需改变输入语义时才提交具体选项请用户决定。
+
+### 步骤31.3：真实权重迁移与数值等价性
+
+**工作**：拟新增 `scripts/convert_chemical_vae_encoder.py` 及专用后端模块，仅实现真实资产的编码器推理；若最终后端能直接可靠加载，则交付验证过的加载/资产打包工具，不强制进行格式转换。
+
+- 按 HDF5 实际架构映射 Conv1D、Dense、Flatten、激活、Dropout 与 BatchNorm。逐项验证通道顺序、卷积核与全连接权重转置、valid padding、展平顺序、归一化运行统计及 epsilon；明确只取 `z_mean` 输出。
+- 使用 CPU、固定 dtype、推理模式和相同 one-hot 测试；覆盖多种有效分子、重复分子、不同批大小和长度边界。先检查逐层输出再比较最终向量，避免高维有限输出掩盖错误布局。
+- 在比较前冻结容差与依据，保存 `atol`、`rtol`、最大/平均绝对误差、近零值的相对误差处理和失败坐标。参考向量、输入、代码版本、环境和资产都留哈希；误差超界定位原因，不能看到结果后随意放宽阈值。
+- `zinc_properties` 可在本步复用工具验证；若暂不验证则保持不可选/明确未支持。随机权重与 mock 只用于编排测试，不能替代真实资产验收。
+
+**交付**：转换 manifest、版本化编码器资产和 `derived/chemical_vae/step31_3_parity/` 的参考/候选向量及对齐报告。没有可信参考时保留“数值一致性未验证”，提出具体参考获取方案，不越过此验收。
+
+### 步骤31.4：标准描述符与参数路由
+
+**工作**：拟新增 `yonod/descriptors/chemical_vae.py`；修改 `yonod/descriptors/registry.py`、包级延迟导出及 `yonod/universal/feature_builder.py` 的实例化路径。
+
+- 注册 `chemical_vae` 为 `static_descriptor`、SMILES 输入、`concat`。从 `FeatureSpec.params` 完整传递模型资产/变体、backend、device、batch_size、预处理设置，修复仅无参 `cls()` 无法承载资产参数的缺口。
+- 建议配置采用 `model_manifest` 指向31.3验证资产，以 manifest 统一约束权重、字符表、MAX_LEN、padding、latent_dim、输出节点；设备和批大小为执行参数。具体字段在本步冻结，未知值、配置冲突、未支持变体须早期报错，不提供尚不可运行的正式示例。
+- `featurize` 返回完整 `(n,d)` 浮点矩阵和 `(n,)` bool mask；有限值/维度/行序检查必需。按唯一 SMILES 批量编码并恢复顺序，失败行零占位；空批次和全失败形状正确。关闭随机采样、Dropout 和目标数据统计拟合。
+- 缺权重、损坏权重、后端/架构错误属于描述符级异常，进入 `failed`，不包装成成功零向量；已定位的单输入错误才形成逐行失败。仅选此描述符时加载可选依赖，其他描述符和纯产物读取不受缺包影响。
+
+**验收**：真实有效样本与混合异常样本通过；非默认参数确实到达后端；重复/批大小变化在已规定容差内一致；原始 `z_mean` 不被额外标准化，缺包不阻断 Morgan。
+
+### 步骤31.5：缓存前资产身份与诊断落盘
+
+**工作**：扩展 `yonod/pipeline/features.py` 的缓存前身份解析，核查 `yonod/artifacts/` 的发布、读取和派生契约。现有计算器只返回矩阵/mask，必须补齐诊断传递，不能仅在描述符对象内临时保存错误。
+
+- 缓存查询前解析权重、字符表、架构内容哈希，连同预处理、角色顺序、输出语义及实现/转换/数值后端版本计算特征身份；记录执行设备/dtype。批大小是否影响身份须依据31.3确定性证据决定。路径不变但内容变化时旧缓存必须失效。
+- 原始与转换权重哈希都保存；使用验证过的同一份资产计算身份和推理，防止两者指向不同内容。身份解析失败由该描述符状态接管，不阻断整批其他候选。
+- 保持产物矩阵为 `(n_valid, k*d)`、全量 sample_id/mask 的现有契约；逐角色诊断包含全量行，失败零块可定位。推荐通过版本化诊断 sidecar 加 manifest 文件引用/校验和保存，具体 schema 扩展必须兼容旧产物读取或显式版本报错。
+- 查看、筛选、重排、拼接时同步诊断映射和父版本链，不覆盖旧产物；原始失败记录可沿父版本追溯。train 仅读产物，不要求原编码器、h5py 或模型文件仍可访问。
+
+**验收**：同数据资产配置命中；在临时副本中同路径替换权重、词表或结构后缓存失效/明确拒绝，不能污染参考文件；模型/标签/CV 变化不重算冻结特征。诊断篡改能检出，中间操作后 ID、矩阵与诊断仍一致；混合批次缺失 Chemical VAE 资产时 Morgan 可正常完成。
+
+### 步骤31.6：公开入口与小型端到端回归
+
+**工作**：复用 schema-2 loader 和 `main.py --config`，更新 `yonod.py` 的描述符说明、列选择和参数收集。拟新增 `configs/chemical_vae/` 下 features/train/all smoke YAML，运行结果分别写入 `derived/chemical_vae/step31_6_smoke/` 的独立子目录。
+
+- features 配置可无标签/模型；train 配置明确引用真实发布的 manifest 及标签/split，all 使用同样输入和确定性 RF 参数。每个 YAML 的 `stage` 明确填写；现有 `--stage` 只是与 YAML 一致性检查，不能当阶段切换覆盖器。
+- 用两个进程验证 features → train；在 train 中禁止编码器加载/特征生成仍成功。检查特征 `ready`、`chemical_vae × rf: complete`，并对照 all 的样本、特征、split 和预测结果。
+- 混合角色部分失败时测试零块与标签对齐，全反应失败时训练不启动；另测试缺失模型文件的系统失败及成功候选继续执行。
+- 从仓库根、激活 `yonod` 后运行现有 `python main.py --config example.yaml`，检查 `features=ready` 与 `morgan × rf: complete`。新描述符 smoke 不覆盖这一轻量默认示例或历史输出。
+
+**验收**：优先复用现有配置/特征/产物/向导测试，按行为补充 `tests/test_chemical_vae_descriptor.py`、`tests/test_chemical_vae_pipeline.py` 等必要测试。真实权重的 smoke 不可被 mock 替代；确定性限制如实记录，不把小样本分数作为科学结论。
+
+### 步骤31.7：公平对照、运行成本与平台验证
+
+**工作**：先选择31.2中可用的小型固定样本集，用 RF 比较 Chemical VAE 与 Morgan/MFP；不启动全量多模型矩阵。固定共同 sample_id、标签、角色、外层 split 和 RF 参数，保留全部来源数据覆盖率。额外模型或 FISD/MolMetaLM 为后续扩展。
+
+- 共同子集明确采用全部所选分子列有效的标准，并保存筛选 manifest；常规 concat 保留零块的结果如需展示另列，不与严格子集混算。
+- 保存 MAE/RMSE/R²/Kendall τ、逐折预测、特征生成耗时、缓存命中耗时、批大小/设备、特征维度及样本数。所有拟合预处理仅在训练折；不宣称两套上游权重的差异是性质监督的因果效应。
+- Linux CPU 与 Windows CPU 分别验证资产读取、UTF-8/中文空格路径、编码及 smoke；GPU 仅选用时补测。Windows 尚无可用执行环境时标记未验收，不用路径单测代替平台实测。
+
+**交付与验收**：`derived/chemical_vae/step31_7_comparison/` 保存配对结果与成本/覆盖报告；结果可为无增益或负增益。记录平台、真实执行命令与限制，无真实平台证据的格子保持待验收。
+
+### 步骤31.8：文档与验收汇总
+
+同步 `README.md`、`example.md` 的使用说明和新增 YAML 示例；根据实际后端更新依赖声明/可选安装说明，说明 CPU 路径、资产准备、未支持字符和输出语义。Bash 的 Python/测试/依赖命令在同一 shell 中初始化 Conda 并激活 `yonod`；Windows 提供 Conda Prompt/PowerShell 对应方式，应用代码不硬编码开发机路径。参考资产 JSON 是模型元数据，继续保留。
+
+实施后向 `project-docs/buildlog.md` 追加真实变更/验证结果，向 `derived/chemical_vae/step31_acceptance/` 写入验收索引。每项保存状态、命令或方法、环境/资产 ID、证据路径与失败原因；本轮不创建空壳成功证据。
+
+| 验收 ID | 必须证明的行为 | 工作包 |
+| --- | --- | --- |
+| C01 | 当前环境/真实资产可审计，依赖方案无未经确认的核心降级 | 31.1 |
+| C02 | 角色覆盖与失败分类有全量映射和分母，预检不冒充推理成功 | 31.2 |
+| C03 | 真实 `zinc` 权重与可信参考在预定容差内一致 | 31.3 |
+| C04 | 标准矩阵/mask、重复/边界输入、原始均值和参数传递正确 | 31.4 |
+| C05 | 缺包/坏资产是系统失败，混合候选相互隔离 | 31.4–31.6 |
+| C06 | 内容变化在缓存前被识别；相同资产有效复用 | 31.5 |
+| C07 | 全量诊断持久化、校验、筛选/拼接血缘与矩阵一致 | 31.5 |
+| C08 | 新进程 train 不加载编码器；features/train 与 all 对齐 | 31.6 |
+| C09 | 真实 Chemical VAE×RF 和原 Morgan×RF smoke 均成功 | 31.6 |
+| C10 | 共同比较样本/split、指标、覆盖及耗时有证据，无数据泄漏 | 31.7 |
+| C11 | Linux/Windows CPU 实测记录齐全，GPU/额外变体状态单列 | 31.7 |
+| C12 | 示例与实现一致，来源、限制、依赖和验收索引可追溯 | 31.8 |
+
+**完成条件（默认）**：C01–C12 均有真实证据后才标步骤31完成。`zinc_properties` 或 GPU 未纳入首版支持可标“不在首版范围”，不能写“已验证”；Windows 或数值参考缺失则对应必需项保持未验收。2026-09-14 用户授权暂时跳过 C11 的 Windows CPU 实测并标记步骤31完成；验收索引保留 `windows_cpu: not_verified` 与后续交接路径。步骤31完成不等同于步骤30所有历史入口迁移完成。
+
+**下一步**：从31.1资产/环境审计及31.2无推理覆盖审计开始，再以31.3数值证据决定后端。常规实现选择无需再次征询；必须改变主环境、无可信迁移参考或低覆盖迫使输入语义调整时，提供具体证据和方案再请用户裁决。
+
+---
+
+## 三十二、YAML 工作流程下的报告脚本适配、散点图生成与嵌入
+
+### 32.0 目标、现状与范围
+
+**需求来源（2026-09-15）**：用户要求更新计划书，在完全使用 YAML 替换 JSON 配置输入后，修改原有报告生成脚本以兼容当前流程，并保证散点图继续正常生成、嵌入报告。
+
+**本轮状态**：完成代码只读核查与计划更新；32.1–32.6 均为待实施。已有 strict benchmark report smoke 仅证明该路径，不能替代普通 schema-2 train/all 的报告验收。
+
+现状与待补能力：
+
+| 位置 | 当前行为 | 本步骤要求 |
+| --- | --- | --- |
+| `main.py::_run_schema2_config`、`yonod/pipeline/training.py` | schema-2 分派及训练发布 YAML manifest、配置快照、预测和折指标；旧主流程的报告调用未随之形成统一链路 | 在 train/all 完成或复用已有训练结果后接入报告后处理；features 保持独立 |
+| `yonod/universal/report.py` | 接收旧 `metrics_df/task_info`；HTML 从 `pictures/scatter_*.png` 读取图片并 base64 嵌入 | 增加新产物适配，显式传递本次图片清单；补齐 Markdown 的散点图引用 |
+| `yonod/plot.py` 与旧主流程绘图调用 | 已有散点图绘制能力 | 核对输入约定后复用，接入新 `predictions.csv`，避免依赖旧训练分支 |
+| `yonod/benchmark/report.py` | 从 benchmark 结果 manifest/表格绘图并出报告，内部仍读取 JSON 结果；Markdown 预测/稳定性图目前为普通链接 | 保留结果格式与严格协议约束，核验 YAML 启动的新 benchmark 产物可重建报告，并将相关 Markdown 图链接改为图片嵌入 |
+| `scripts/rebuild_benchmark_report.py` | 仅支持 benchmark 目录的离线报告重建 | 保持旧用途；增加普通 schema-2 结果的独立重建入口或共享分派，禁止把普通目录直接当 benchmark 解析 |
+
+**交付边界**：本步骤实施时允许修改报告脚本、必要的流程接入、相关测试和使用说明。运行配置仍仅接受 schema-2 YAML；读取历史 JSON 结果不等于恢复 JSON 配置入口。无需重新训练历史实验、改变描述符算法或评估协议，也不批量迁移结果格式。
+
+### 32.1 冻结报告输入、输出与配置契约
+
+1. 普通报告以完成的 `run_manifest.yaml` 为索引，读取其声明的 `predictions.csv`、`fold_metrics.csv`、`source_config.yaml`、`effective_config.yaml`。核验 kind/schema/status、必需字段及已有身份/哈希约束；不从 YAML 文件名或旧目录命名猜测数据集和模型。
+2. 报告明确记录 `run_id`、`feature_id/artifact_id`、dataset/label/split identity、评估协议、有效参数及依赖版本；派生特征的父版本溯源复用现有 manifest 契约。train-only 不要求重新加载原始 SMILES 或描述符权重。
+3. 冻结旧字段到新字段的映射：预测采用 `sample_id/repeat/fold/y_true/y_pred`；指标采用 `fold_metrics.csv` 实际列名。`model_train_time_s` 与 `elapsed_s` 分别代表模型训练时间和折总时间，不混用、不伪造耗时。
+4. 默认在任务 `outputs.root` 下生成 `pictures/` 和 `report/report.html`、`report/report.md`，每张图关联确定的 run/feature/model 身份。消费已有的 `outputs.report_formats`：本步骤拟定省略时生成 HTML 与 Markdown，显式列表仅生成所选格式，空列表关闭自动报告；实施时统一合法值、大小写规范与校验，更新示例并测试三种行为，禁止另设 JSON 配置。独立重建允许指定新的报告输出根，源训练产物保持只读。
+5. 明确普通训练产物和 benchmark 产物的识别规则及适配器；未知或歧义目录给出可定位错误，不能静默回退为另一种协议。
+
+**交付/验收**：形成字段映射和路径契约，收录至 `project-docs/step30-contracts.md` 或专门报告契约文档；仅使用现有产物即可组装报告数据，无隐式训练或特征计算。
+
+### 32.2 改造原报告脚本与流程接入
+
+1. 将产物读取、指标整理、散点图生成、HTML/Markdown 渲染拆为可复用后处理服务；优先适配原报告函数，避免再维护一套与原报告脱节的模板。
+2. schema-2 `train` 和 `all` 的正常完成与 `reused` 路径均按 `outputs.report_formats` 执行报告后处理；报告缺失时可由已完成训练结果补建，不因缺图重跑模型。聚合仅纳入当前任务明确选定的 run，不能扫描整个 `outputs.root/runs/` 将历史任务混入。
+3. `features` 只写特征和状态，不创建预测模型、训练结果或报告目录，也不因报告模块引入绘图/模型依赖而无法运行。
+4. 多组合任务将成功、失败、缺失、不可比较分别列出。失败组合不进入完整结果排名；报告失败单独记录错误和重建方法，不把已完成的训练 manifest 改成训练失败。
+5. 保留原报告有证据支持的指标、训练耗时、参数和协议说明。R²/RMSE/MAE/Kendall τ 延续现有汇总约定；新折指标缺少 τ 时，从同一折的保存预测计算并标明来源，不能冒充训练阶段已记录。
+
+**验收**：新入口完成后实际返回报告路径；HTML 与 Markdown 的模型、样本、指标、有效参数一致，且报告生成没有调用描述符计算或模型拟合。
+
+### 32.3 散点图生成与两种报告嵌入
+
+1. 使用真实外折验证预测（OOF）绘制真实值横轴、预测值纵轴的散点图，包含 `y=x` 参考线、组合/协议标签、样本量与指标；使用无界面后端并及时释放 figure，支持 Linux headless。
+2. 按 run/feature/model 分图，不把不同模型、描述符、数据总体或 split 的点混在同一张未区分散点图里。重复 CV 默认按 repeat 分图；汇总报告可列出这些图，不把多次预测行数写成独立样本数，也不静默对重复预测取均值。
+3. 校验必需列、有限数值、`sample_id/repeat/fold` 唯一性、每个 repeat 的样本覆盖和真实标签一致性；结合 manifest 的样本/折数检查完整性。不能仅检查 CSV 总行数。重复点、缺折或身份不符须给出明确状态，不生成伪装为完整评估的图。
+4. 图内指标与实际绘图数据一致；折级 mean/std 与 pooled OOF 指标分别标注。常量标签、单样本或不可定义指标显示 N/A 和原因；不将 NaN 写成零。按实际标签单位定轴，不默认把任意目标裁成 0–1 或 0–100。
+5. HTML 继续用有效 PNG 的 base64 data URI 嵌入，单独复制 HTML 后仍能显示散点图；Markdown 显式插入相对于报告的图片链接，移动整个报告/图片目录后链接仍有效。
+6. 图片名称避免重名与 Windows 非法字符，保留身份映射；使用 `pathlib.Path`、UTF-8 和适当的 HTML/URL 转义支持中文、空格路径。两种格式使用同一明确图片清单，避免目录扫描混入旧图。
+
+**验收**：对每个具备有效完整预测的组合确实写出可解码、非空白 PNG，HTML 可解码出对应图片，Markdown 引用逐一解析成功；人工打开代表性图和报告确认点、坐标及布局。仅有 `<img>` 标签或文件存在不算通过。
+
+### 32.4 离线重建、恢复与 benchmark 回归
+
+1. 为普通 schema-2 结果提供报告重建命令，建议新增 `scripts/rebuild_report.py --run-dir <目录>` 并支持明确的输出根；最终参数以实现后的帮助为准。本计划中的建议命令尚不表示脚本已经存在。
+2. 保留 `scripts/rebuild_benchmark_report.py` 及 benchmark 专用读取逻辑；使用 YAML 启动产生的 benchmark fixture 验证原报告及散点/残差图仍能生成。已有 JSON manifest、CSV/Parquet、SQLite 是结果契约，按需要读取，不统一改扩展名。
+3. 重建只读训练结果、写指定报告区域；删除新测试目录中的报告/图片后，能从同一预测恢复。采用临时文件后发布，避免中断留下看似完成的报告；不覆盖用户的历史结果目录。
+4. 图或报告生成失败必须显式暴露状态、原因和缺失项；绘图依赖缺失不能静默产生无图“成功报告”。部分完成报告不得显示为全任务已完成。
+
+**验收**：离线重建不需要原配置路径仍然存在，不依赖原始数据或模型权重；已保存的配置快照及结果足够。重建前后 predictions、fold_metrics、训练 manifest 的内容哈希不变；重复重建的指标、图片清单与身份一致（生成时间可不同）。
+
+### 32.5 验证矩阵与运行约束
+
+| ID | 场景 | 必须观察到的结果 |
+| --- | --- | --- |
+| R01 | YAML 输入及结果读取 | JSON 运行配置仍被拒绝；YAML 新训练产物和 JSON benchmark 结果各按正确契约读取 |
+| R02 | 普通 `all` 与格式选择 | 默认生成 HTML、Markdown 和 OOF 散点图；显式单格式和空列表遵守约定 |
+| R03 | `features` → `train`、派生版本 | features 不生成报告；train 读取已有特征并生成含正确父版本信息的报告 |
+| R04 | 训练复用和离线重建 | 不拟合模型、不计算特征即可补建；源产物哈希不变 |
+| R05 | 多模型/描述符/重复 CV | 图与身份一一对应，无文件覆盖、旧图混入或重复 CV 样本量误报 |
+| R06 | 图像和链接 | PNG 可解码且内容有效；HTML base64 图片有效；Markdown 相对链接存在且可读 |
+| R07 | 缺失/损坏/部分完成 | 缺列、NaN/Inf、重复点、缺折、错身份被识别；失败明确，成功组合不被抹除 |
+| R08 | 指标和协议 | 两种报告数值一致，τ 的计算来源明确；严格 benchmark 协议守卫继续生效 |
+| R09 | 路径和平台 | 中文/空格路径、headless 绘图通过；Windows 实测结果与未验证状态如实记录 |
+| R10 | 文档和追溯 | 命令、输出位置、配置参数、图与 run 的对应关系及重建办法可复查 |
+
+先执行产物/指标/图片嵌入的聚焦测试，再验证现有报告回归（包括 `tests/test_benchmark_report_matplotlib_compat.py`、`tests/test_report_autogluon_protocol_guard.py` 及相关协议守卫），最后运行必要的小数据集成 smoke。针对业务行为补测试，不为本次纯文档修改启动建模。
+
+实施时需要新建模的 smoke 必须遵守 `AGENTS.md`：先保存各自独立、合法的 schema-2 YAML 及专属 `artifacts.output_dir`/`outputs.root`，仅声明所选模型的参数；RF/XGBoost/LightGBM 设置 `estimator.n_jobs: 19`，AutoGluon 设置 `fit.num_cpus: 19`。从仓库根初始化 Conda 并激活 `yonod`，经 `yonod.py` 首次提示输入 YAML，在 Linux 以 `nohup setsid`、`python -u`、19 个可用 CPU 的 taskset 和专属日志/PID 启动。任务串行，不能通过并行模型/折任务扩展资源；不改写 `example.yaml` 或历史实验。
+
+启动确认后按 `AGENTS.md` 提供状态查询命令并结束该次对话，不持续轮询；后续收集实际完成产物再验收，启动成功不等于 R02/R03 通过。纯后处理/测试同样在已激活的 `yonod` 环境运行，不必为重建报告启动训练。
+
+### 32.6 文档、证据与完成条件
+
+同步 `README.md`、`example.md` 和报告契约：说明 YAML → features/train/all → 结果 → 散点图 → HTML/Markdown 的调用关系，自动出报告的时机、离线重建命令、目录结构、重复 CV 口径和错误处理；跨平台命令分别标注 Bash 与 PowerShell/Conda Prompt。
+
+建议将独立验收产物写入 `derived/report_yaml_compat/step32_acceptance/`，包含 smoke YAML、运行命令/日志索引、源结果身份、图清单、嵌入/链接校验、代表性人工检查记录及 R01–R10 状态。构建日志记录真实改动与结果；无证据项保持待验收，Windows 未实测不得写通过。
+
+**顺序**：32.1 契约 → 32.2 流程/适配 → 32.3 绘图/嵌入 → 32.4 重建/回归 → 32.5 验证 → 32.6 文档与证据。只有当前 YAML 普通工作流和 strict benchmark 报告链路都有实际证据，散点图生成与两种格式嵌入均通过，且 R01–R10 已验收或明确记录用户批准的延期项，步骤32才可标记完成。
+
+**当前下一步**：实施32.1，核对 schema-2 输出契约和旧报告字段映射，随后接入原报告脚本。本次仅更新计划书，未修改报告运行代码、未生成报告或启动建模。
 
 ---
 
