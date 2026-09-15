@@ -101,8 +101,8 @@ class PaperExactRepeatedManifestTests(unittest.TestCase):
 
     def _contract(self, directory: Path, frame: pd.DataFrame, *, population_id: str = "fixture_paper_exact"):
         frame.to_csv(directory / "fixture.csv", index=False)
-        config_path = directory / "paper_exact.yaml"
-        config_path.write_text(yaml.safe_dump({"benchmark": {
+        config_path = directory / "paper_exact.json"
+        config_path.write_text(json.dumps({"benchmark": {
             "dataset_path": "fixture.csv",
             "population_id": population_id,
             "dataset_id": "BH1",
@@ -130,8 +130,8 @@ class PaperExactRepeatedManifestTests(unittest.TestCase):
                 "dataset_id": "BH1",
             },
             "outputs": {"root": "paper_exact_results"},
-        }}, allow_unicode=True), encoding="utf-8")
-        config = BenchmarkConfig.from_file(config_path)
+        }}), encoding="utf-8")
+        config = BenchmarkConfig.from_paper_exact_json(config_path)
         return create_benchmark_contract(config)
 
     def test_population_specs_keep_sm_ohe_and_sm_mfp_boundaries_separate(self) -> None:

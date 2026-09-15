@@ -26,25 +26,31 @@ class RepeatedKFoldManifestTests(unittest.TestCase):
         csv_path = directory / "fixture.csv"
         frame.to_csv(csv_path, index=False)
         config_path = directory / "paper.yaml"
-        config_path.write_text(yaml.safe_dump({"benchmark": {
-            "dataset_path": "fixture.csv",
-            "sample_id_col": "sample_id",
-            "label_col": "yield",
-            "smiles_cols": ["component_a", "component_b"],
-            "feature_sets": [
-                {"name": "mfp", "kind": "precomputed_descriptor",
-                 "component_cols": ["component_a", "component_b"],
+        config_path.write_text(yaml.safe_dump({
+            "schema_version": "2.0", "project_name": "repeated-kfold", "stage": "benchmark",
+            "dataset": {
+                "path": "fixture.csv", "sample_id_col": "sample_id",
+                "column_roles": {"label": "yield", "reactants": ["component_a", "component_b"]},
+            },
+            "descriptors": [
+                {"id": "mfp", "descriptor": "mfp", "lifecycle": "static_descriptor", "mode": "concat",
+                 "columns": ["component_a", "component_b"],
                  "params": {"algorithm": "morgan_count", "radius": 3, "fp_size": 1024}},
-                {"name": "ohe", "kind": "fold_transform",
-                 "component_cols": ["component_a", "component_b"],
+                {"id": "ohe", "descriptor": "ohe", "lifecycle": "fold_transform", "mode": "concat",
+                 "columns": ["component_a", "component_b"],
                  "params": {"encoder": "OneHotEncoder", "handle_unknown": "ignore"}},
             ],
-            "models": ["rf"],
-            "grouping": {"strategy": "repeated_kfold", "source_order": "raw_csv"},
-            "cv": {"n_repeats": 5, "n_splits": 5, "seed": 1000},
+            "artifacts": {"output_dir": "results"}, "models": ["rf"], "model_params": {},
+            "evaluation": {
+                "protocol": "manifest_outer_cv", "n_repeats": 5, "n_splits": 5, "seed": 1000,
+                "grouping": {"strategy": "repeated_kfold", "source_order": "raw_csv"},
+            },
             "outputs": {"root": "results"},
-            "reproduction_protocol": {"name": "vjethbkm_rf_5x5"},
-        }}, allow_unicode=True), encoding="utf-8")
+            "benchmark": {
+                "task_state": {"backend": "sqlite", "resumable": True},
+                "reproduction_protocol": {"name": "vjethbkm_rf_5x5"},
+            },
+        }, allow_unicode=True), encoding="utf-8")
         return create_benchmark_contract(BenchmarkConfig.from_file(config_path)), frame
 
     def test_matches_sklearn_row_by_row_and_has_complete_audit_fields(self):
@@ -72,7 +78,7 @@ class RepeatedKFoldManifestTests(unittest.TestCase):
                 ].to_numpy()
                 np.testing.assert_array_equal(np.sort(actual_valid), np.sort(expected_valid))
 
-    def test_legacy_descriptors_expand_to_precomputed_feature_sets(self):
+    def test_legacy_benchmark_root_is_rejected_instead_of_becoming_outer_kfold(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             frame = pd.DataFrame({
@@ -86,11 +92,8 @@ class RepeatedKFoldManifestTests(unittest.TestCase):
                 "grouping": {"strategy": "component_holdout", "component_cols": ["smiles"]},
                 "cv": {"n_repeats": 1, "n_splits": 2, "seed": 7},
             }}), encoding="utf-8")
-            config = BenchmarkConfig.from_file(directory / "legacy.yaml")
-
-        self.assertEqual(config.descriptors, ("morgan",))
-        self.assertEqual(config.feature_sets[0]["kind"], "precomputed_descriptor")
-        self.assertEqual(config.feature_sets[0]["component_cols"], ["smiles"])
+            with self.assertRaisesRegex(Exception, "schema_version"):
+                BenchmarkConfig.from_file(directory / "legacy.yaml")
 
 
 if __name__ == "__main__":

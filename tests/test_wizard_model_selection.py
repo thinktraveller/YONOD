@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import importlib.util
-import json
 import sys
 import tempfile
 import unittest
@@ -19,6 +18,7 @@ import pandas as pd
 from scripts import run_benchmark
 from yonod.universal.descriptor_artifact import load_descriptor_artifact, prepare_descriptor_artifact
 from yonod.universal.report import generate_markdown_report, generate_report
+from yonod.config.loader import load_run_config
 
 _WIZARD_SPEC = importlib.util.spec_from_file_location(
     "yonod_wizard", Path(__file__).resolve().parents[1] / "yonod.py"
@@ -65,7 +65,7 @@ class WizardModelSelectionTests(unittest.TestCase):
                 docs_dir / "run.log",
             )
 
-            frame = pd.DataFrame({"smiles": ["CC"], "yield": [0.5]})
+            frame = pd.DataFrame({"sample_id": ["layout-1"], "smiles": ["CC"], "yield": [0.5]})
             invalid_report = yonod_wizard.step3_1_generate_invalid_report(
                 frame,
                 [{"invalid_rows": [0], "origin_name": "smiles"}],
@@ -75,15 +75,25 @@ class WizardModelSelectionTests(unittest.TestCase):
             fixed_dataset = yonod_wizard.generate_fixed_dataset(
                 frame, {0}, str(root), "layout",
             )
+            normalized_dataset = root / "docs" / "layout_normalized_dataset.csv"
+            frame.to_csv(normalized_dataset, index=False)
             config_path = yonod_wizard.save_config_file(
-                str(root), "layout", "source.csv", None, [],
-                [{"descriptor": "morgan"}], ["RandomForest"], {}, ["Markdown"],
+                str(root), "layout", "source.csv", str(normalized_dataset),
+                [
+                    {"origin_name": "sample_id", "name": "sample_id", "role": "others"},
+                    {"origin_name": "smiles", "name": "smiles", "role": "reactant"},
+                    {"origin_name": "yield", "name": "yield", "role": "label"},
+                ],
+                [{"id": "morgan", "descriptor": "morgan", "mode": "concat", "columns": ["smiles"]}],
+                ["Random Forest"], {}, ["Markdown"], "sample_id",
             )
 
             self.assertEqual(Path(invalid_report), root / "report" / "layout_invalid_report.md")
             self.assertEqual(Path(fixed_dataset), root / "docs" / "layout_fixed_dataset.csv")
-            self.assertEqual(Path(config_path), root / "docs" / "layout_yonod_config.json")
-            self.assertEqual(json.loads(Path(config_path).read_text(encoding="utf-8"))["project_name"], "layout")
+            self.assertEqual(Path(config_path), root / "docs" / "layout_run.yaml")
+            loaded = load_run_config(config_path)
+            self.assertEqual(loaded.effective["project_name"], "layout")
+            self.assertEqual(loaded.effective["dataset"]["sample_id_col"], "sample_id")
 
 
 class DescriptorArtifactTests(unittest.TestCase):

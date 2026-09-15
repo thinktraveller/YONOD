@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import yaml
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 
@@ -52,41 +53,22 @@ class _FoldAutoGluonProbe:
 
 
 class _StaticAutoGluonProbe:
-    def __init__(self, *, time_limit: int, presets: str, num_cpus: int) -> None:
-        self.time_limit = time_limit
-        self.presets = presets
-        self.num_cpus = num_cpus
-        self.calls = []
+    def fit(self, **kwargs):
+        self.fit_kwargs = kwargs
+        return self
 
-    def cross_validate(self, X, y, cv):
-        features = np.asarray(X, dtype=float)
-        target = np.asarray(y, dtype=float)
-        self.calls.append({"X": features.copy(), "y": target.copy(), "cv": int(cv)})
-        return {
-            "r2_mean": 1.0,
-            "r2_std": 0.0,
-            "rmse_mean": 0.0,
-            "rmse_std": 0.0,
-            "mae_mean": 0.0,
-            "mae_std": 0.0,
-            "train_time_s": 0.01,
-            "predict_time_s": 0.001,
-            "device": "cpu",
-            "evaluation_protocol": "outer_kfold",
-            "expected_folds": int(cv),
-            "completed_folds": int(cv),
-            "autogluon_time_limit": self.time_limit,
-            "autogluon_presets": self.presets,
-            "autogluon_num_cpus": self.num_cpus,
-            "autogluon_seed_policy": "fake outer split policy",
-            "oof_pred": target.copy(),
-            "oof_y_true": target.copy(),
-        }
+    def predict(self, frame):
+        self.valid_frame = frame.copy()
+        return np.full(len(frame), self.fit_kwargs["train_data"]["yield"].mean())
+
+    def leaderboard(self, silent=True):
+        return pd.DataFrame()
 
 
 class MainAutoGluonOuterCVPathTests(unittest.TestCase):
-    def test_static_mfp_autogluon_uses_outer_cv_and_json_params(self) -> None:
+    def test_static_mfp_autogluon_uses_outer_cv_and_yaml_params(self) -> None:
         frame = pd.DataFrame({
+            "sample_id": [f"s{i}" for i in range(10)],
             "smiles": ["C", "CC", "CCC", "CCCC", "CO", "CN", "CCO", "CCN", "O", "N"],
             "yield": np.linspace(1.0, 10.0, 10),
         })
@@ -94,58 +76,69 @@ class MainAutoGluonOuterCVPathTests(unittest.TestCase):
             root = Path(temporary)
             project_name = "main-static-ag"
             frame.to_csv(root / f"{project_name}_normalized_dataset.csv", index=False)
-            config_path = root / "config.json"
-            config_path.write_text(json.dumps({
-                "version": "1.1",
+            config_path = root / "config.yaml"
+            config_path.write_text(yaml.safe_dump({
+                "schema_version": "2.0", "stage": "all",
                 "project_name": project_name,
-                "column_roles": {
+                "dataset": {"path": f"{project_name}_normalized_dataset.csv", "sample_id_col": "sample_id", "column_roles": {
                     "label": "yield", "reactants": ["smiles"], "products": [],
                     "others": [], "conditions": [], "categoricals": [],
-                },
+                }},
                 "descriptors": [{
                     "id": "mfp_small", "descriptor": "mfp", "mode": "concat",
                     "columns": ["smiles"],
                     "params": {"radius": 2, "fp_size": 32, "profile": "standard"},
                 }],
-                "models": ["AutoGluon"],
-                "model_params": {"AutoGluon": {"time_limit": 6, "presets": "medium_quality", "num_cpus": 2}},
-                "report_formats": ["Markdown"],
+                "artifacts": {"output_dir": "artifacts"},
+                "models": ["autogluon"],
+                "model_params": {"autogluon": {"fit": {"time_limit": 6, "presets": "medium_quality", "num_cpus": 19}}},
+                "evaluation": {"protocol": "outer_kfold", "n_splits": 5, "seed": 42, "shuffle": True},
+                "outputs": {"root": "results", "report_formats": ["Markdown"]},
                 "metadata": {},
-            }, ensure_ascii=False), encoding="utf-8")
-            probe_box = {}
+            }), encoding="utf-8")
+            probes = []
+            model_paths = []
 
-            def factory(model_name, args):
-                self.assertEqual(model_name, "autogluon")
-                self.assertEqual(args.autogluon_time_limit, 6)
-                self.assertEqual(args.autogluon_presets, "medium_quality")
-                self.assertEqual(args.autogluon_num_cpus, 2)
-                probe = _StaticAutoGluonProbe(
-                    time_limit=args.autogluon_time_limit,
-                    presets=args.autogluon_presets,
-                    num_cpus=args.autogluon_num_cpus,
-                )
-                probe_box["probe"] = probe
-                return probe
+            def factory(resolved, *, label, path):
+                self.assertEqual(resolved.model, "autogluon")
+                self.assertEqual(label, "yield")
+                probe = _StaticAutoGluonProbe()
+                probes.append(probe)
+                model_paths.append(path)
+                return probe, {}
 
-            with patch("main._make_model", side_effect=factory):
-                result = main.main(["--json", str(config_path)])
+            with patch("yonod.pipeline.training.construct_autogluon_predictor", side_effect=factory):
+                result = main.main(["--config", str(config_path)])
 
             self.assertEqual(result, 0)
-            probe = probe_box["probe"]
-            self.assertEqual(len(probe.calls), 1)
-            self.assertEqual(probe.calls[0]["cv"], 5)
-            self.assertEqual(probe.calls[0]["X"].shape, (10, 32))
-            metrics = pd.read_csv(root / "docs" / "metrics_summary.csv")
-
-        row = metrics.iloc[0]
-        self.assertEqual(row["model"], "autogluon")
-        self.assertEqual(row["evaluation_protocol"], "outer_kfold")
-        self.assertEqual(int(row["expected_folds"]), 5)
-        self.assertEqual(int(row["completed_folds"]), 5)
-        self.assertEqual(int(row["autogluon_time_limit"]), 6)
-        self.assertEqual(int(row["autogluon_num_cpus"]), 2)
-        self.assertIn("rmse_std", metrics.columns)
-        self.assertIn("mae_std", metrics.columns)
+            self.assertEqual(len(probes), 5)
+            self.assertEqual(len(set(model_paths)), 5)
+            for probe, (train_idx, _) in zip(probes, KFold(5, shuffle=True, random_state=42).split(frame)):
+                kwargs = probe.fit_kwargs
+                self.assertEqual(kwargs["time_limit"], 6)
+                self.assertEqual(kwargs["presets"], "medium_quality")
+                self.assertEqual(kwargs["num_cpus"], 19)
+                self.assertNotIn("tuning_data", kwargs)
+                self.assertEqual(kwargs["train_data"].shape, (8, 33))
+                np.testing.assert_allclose(kwargs["train_data"]["yield"], frame.iloc[train_idx]["yield"])
+                self.assertEqual(probe.valid_frame.shape, (2, 32))
+                self.assertNotIn("yield", probe.valid_frame)
+            manifests = list((root / "results" / "runs").glob("*/run_manifest.yaml"))
+            self.assertEqual(len(manifests), 1)
+            manifest = yaml.safe_load(manifests[0].read_text(encoding="utf-8"))
+            self.assertEqual(manifest["status"], "complete")
+            self.assertEqual(manifest["evaluation"]["protocol"], "outer_kfold")
+            self.assertEqual(manifest["n_folds"], 5)
+            metrics = pd.read_csv(manifests[0].parent / "fold_metrics.csv")
+            self.assertEqual(len(metrics), 5)
+            self.assertTrue({"rmse", "mae", "r2"}.issubset(metrics.columns))
+            for audit in metrics["model_audit"].map(json.loads):
+                self.assertEqual(audit["effective_fit_parameters"]["num_cpus"], 19)
+            predictions = pd.read_csv(manifests[0].parent / "predictions.csv")
+            self.assertEqual(len(predictions), len(frame))
+            self.assertEqual(set(predictions["sample_id"]), set(frame["sample_id"]))
+            self.assertTrue(predictions["sample_id"].is_unique)
+            self.assertTrue(np.isfinite(predictions["y_pred"]).all())
 
     def test_numeric_autogluon_scales_inside_each_outer_fold(self) -> None:
         X_smiles = np.arange(18, dtype=float).reshape(9, 2)

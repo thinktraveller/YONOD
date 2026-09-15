@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -15,6 +17,24 @@ from yonod.benchmark.config import BenchmarkConfig, create_benchmark_contract
 from yonod.benchmark.executor import execute_fold
 from yonod.benchmark.fold_preprocessors import ReactionComponentOHE
 from yonod.splits.manifest import create_split_manifest
+
+
+@contextmanager
+def _pickle_backed_parquet_io():
+    """Keep executor semantics testable when the optional runtime engine is absent."""
+    original_to_parquet = pd.DataFrame.to_parquet
+    original_read_parquet = pd.read_parquet
+
+    def to_parquet_pickle(self, path, *args, index=False, **kwargs):
+        frame = self if index else self.reset_index(drop=True)
+        frame.to_pickle(path)
+
+    def read_parquet_pickle(path, *args, **kwargs):
+        return pd.read_pickle(path)
+
+    with patch.object(pd.DataFrame, "to_parquet", to_parquet_pickle), \
+            patch("pandas.read_parquet", side_effect=read_parquet_pickle):
+        yield
 
 
 class FoldLocalOHETests(unittest.TestCase):
@@ -53,22 +73,33 @@ class FoldLocalOHETests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             frame.to_csv(directory / "fixture.csv", index=False)
-            (directory / "config.yaml").write_text(yaml.safe_dump({"benchmark": {
-                "dataset_path": "fixture.csv", "sample_id_col": "sample_id", "label_col": "yield",
-                "smiles_cols": ["a", "b"],
-                "feature_sets": [{"name": "ohe", "kind": "fold_transform", "component_cols": ["a", "b"], "params": {}}],
-                "models": ["rf"], "model_params": {"rf": {"n_estimators": 3, "n_jobs": 1}},
-                "grouping": {"strategy": "repeated_kfold"},
-                "cv": {"n_repeats": 1, "n_splits": 2, "seed": 1000},
+            (directory / "config.yaml").write_text(yaml.safe_dump({
+                "schema_version": "2.0", "project_name": "ohe-fold", "stage": "benchmark",
+                "dataset": {
+                    "path": "fixture.csv", "sample_id_col": "sample_id",
+                    "column_roles": {"label": "yield", "reactants": ["a", "b"]},
+                },
+                "descriptors": [{
+                    "id": "ohe", "descriptor": "ohe", "lifecycle": "fold_transform", "mode": "concat",
+                    "columns": ["a", "b"], "params": {},
+                }],
+                "artifacts": {"output_dir": "results"}, "models": ["rf"],
+                "model_params": {"rf": {"estimator": {"n_estimators": 3, "n_jobs": 1}}},
+                "evaluation": {
+                    "protocol": "manifest_outer_cv", "n_repeats": 1, "n_splits": 2, "seed": 1000,
+                    "grouping": {"strategy": "repeated_kfold"},
+                },
                 "outputs": {"root": "results"},
-            }}), encoding="utf-8")
+                "benchmark": {"task_state": {"backend": "sqlite", "resumable": True}},
+            }), encoding="utf-8")
             contract = create_benchmark_contract(BenchmarkConfig.from_file(directory / "config.yaml"))
             manifest = create_split_manifest(contract)
-            result = execute_fold(
-                contract, manifest, frame["sample_id"].tolist(), None, frame["yield"].to_numpy(),
-                "ohe", "rf", 1, 1, model_kwargs={"n_estimators": 3, "n_jobs": 1},
-                component_frame=frame[["a", "b"]], fold_transformer=ReactionComponentOHE(["a", "b"]),
-            )
+            with _pickle_backed_parquet_io():
+                result = execute_fold(
+                    contract, manifest, frame["sample_id"].tolist(), None, frame["yield"].to_numpy(),
+                    "ohe", "rf", 1, 1, model_kwargs={"n_estimators": 3, "n_jobs": 1},
+                    component_frame=frame[["a", "b"]], fold_transformer=ReactionComponentOHE(["a", "b"]),
+                )
             metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
 
         self.assertEqual(metadata["feature_transformer"]["fit_scope"], "train_only_per_fold")

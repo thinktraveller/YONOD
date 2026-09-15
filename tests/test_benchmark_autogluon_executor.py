@@ -89,21 +89,31 @@ class BenchmarkAutoGluonExecutorTests(unittest.TestCase):
     def _contract(self, directory: Path, feature_sets, models):
         frame = self._frame()
         frame.to_csv(directory / "fixture.csv", index=False)
-        (directory / "config.yaml").write_text(yaml.safe_dump({"benchmark": {
-            "dataset_path": "fixture.csv",
-            "sample_id_col": "sample_id",
-            "label_col": "yield",
-            "smiles_cols": ["a", "b"],
-            "feature_sets": feature_sets,
+        descriptors = [{
+            "id": item["name"], "descriptor": item["name"],
+            "lifecycle": "fold_transform" if item["kind"] == "fold_transform" else "static_descriptor",
+            "mode": "concat", "columns": item["component_cols"], "params": item.get("params", {}),
+        } for item in feature_sets]
+        (directory / "config.yaml").write_text(yaml.safe_dump({
+            "schema_version": "2.0", "project_name": "benchmark-ag", "stage": "benchmark",
+            "dataset": {
+                "path": "fixture.csv", "sample_id_col": "sample_id",
+                "column_roles": {"label": "yield", "reactants": ["a", "b"]},
+            },
+            "descriptors": descriptors,
+            "artifacts": {"output_dir": "results"},
             "models": models,
             "model_params": {
-                "rf": {"n_estimators": 3, "n_jobs": 1},
-                "autogluon": {"time_limit": 7, "presets": "medium_quality", "num_cpus": 2},
+                **({"rf": {"estimator": {"n_estimators": 3, "n_jobs": 1}}} if "rf" in models else {}),
+                **({"autogluon": {"fit": {"time_limit": 7, "presets": "medium_quality", "num_cpus": 2}}} if "autogluon" in models else {}),
             },
-            "grouping": {"strategy": "repeated_kfold"},
-            "cv": {"n_repeats": 1, "n_splits": 2, "seed": 901},
+            "evaluation": {
+                "protocol": "manifest_outer_cv", "n_repeats": 1, "n_splits": 2, "seed": 901,
+                "grouping": {"strategy": "repeated_kfold"},
+            },
             "outputs": {"root": "results"},
-        }}), encoding="utf-8")
+            "benchmark": {"task_state": {"backend": "sqlite", "resumable": True}},
+        }), encoding="utf-8")
         config = BenchmarkConfig.from_file(directory / "config.yaml")
         contract = create_benchmark_contract(config)
         manifest = create_split_manifest(contract)

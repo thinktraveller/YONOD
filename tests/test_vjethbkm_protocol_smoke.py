@@ -31,15 +31,18 @@ class VjethbkmProtocolSmokeTests(unittest.TestCase):
             directory = Path(temporary)
             frame.to_csv(directory / "fixture.csv", index=False)
             config_path = directory / "protocol.yaml"
-            config_path.write_text(yaml.safe_dump({"benchmark": {
-                "dataset_path": "fixture.csv", "sample_id_col": "sample_id", "label_col": "yield",
-                "smiles_cols": ["a", "b"],
-                "feature_sets": [
-                    {"name": "mfp", "kind": "precomputed_descriptor", "component_cols": ["a", "b"], "params": {
+            config_path.write_text(yaml.safe_dump({
+                "schema_version": "2.0", "project_name": "vjethbkm-protocol-test", "stage": "benchmark",
+                "dataset": {
+                    "path": "fixture.csv", "sample_id_col": "sample_id",
+                    "column_roles": {"label": "yield", "reactants": ["a", "b"]},
+                },
+                "descriptors": [
+                    {"id": "mfp", "descriptor": "mfp", "lifecycle": "static_descriptor", "mode": "concat", "columns": ["a", "b"], "params": {
                         "algorithm": "morgan_count", "radius": 3, "fp_size": 1024,
                         "input_normalization": "raw_csv_value", "blank_or_invalid_component": "zero_block_keep_row",
                     }},
-                    {"name": "ohe", "kind": "fold_transform", "component_cols": ["a", "b"], "params": {
+                    {"id": "ohe", "descriptor": "ohe", "lifecycle": "fold_transform", "mode": "concat", "columns": ["a", "b"], "params": {
                         "encoder": "OneHotEncoder", "handle_unknown": "ignore",
                     }},
                 ],
@@ -47,15 +50,24 @@ class VjethbkmProtocolSmokeTests(unittest.TestCase):
                 # P4 separately asserts the paper's n_jobs=-1 parameter.
                 # Keep this lifecycle smoke single-threaded so it can run
                 # reliably inside CI without proliferating joblib workers.
-                "model_params": {"rf": {"n_estimators": 500, "max_features": 0.3, "n_jobs": 1}},
-                "grouping": {"strategy": "repeated_kfold", "source_order": "raw_csv"},
-                "cv": {"n_repeats": 5, "n_splits": 5, "seed": 1000},
-                "reproduction_protocol": {"name": "vjethbkm_rf_5x5", "literature_doi": "10.1021/jacs.6c02213"},
+                "artifacts": {"output_dir": "results"},
+                "model_params": {"rf": {"estimator": {"n_estimators": 500, "max_features": 0.3, "n_jobs": 1}}},
+                "evaluation": {
+                    "protocol": "manifest_outer_cv", "n_repeats": 5, "n_splits": 5, "seed": 1000,
+                    "grouping": {"strategy": "repeated_kfold", "source_order": "raw_csv"},
+                },
                 "outputs": {"root": "results"},
-            }}, allow_unicode=True), encoding="utf-8")
+                "benchmark": {
+                    "task_state": {"backend": "sqlite", "resumable": True},
+                    "reproduction_protocol": {"name": "vjethbkm_rf_5x5", "literature_doi": "10.1021/jacs.6c02213"},
+                },
+            }, allow_unicode=True), encoding="utf-8")
             contract = create_benchmark_contract(BenchmarkConfig.from_file(config_path))
-            command = [sys.executable, "scripts/run_benchmark.py", "--config", str(config_path), "--bootstrap-n", "100"]
-            subprocess.run(command, cwd=PROJECT_ROOT, check=True, capture_output=True, text=True, timeout=120)
+            command = [sys.executable, "-u", "yonod.py"]
+            subprocess.run(
+                command, cwd=PROJECT_ROOT, check=True, capture_output=True, text=True,
+                input=str(config_path) + "\n", timeout=120,
+            )
 
             run_dir = contract.run_dir
             manifest = pd.read_parquet(run_dir / "docs" / "manifests" / "split_manifest.parquet")
@@ -72,6 +84,12 @@ class VjethbkmProtocolSmokeTests(unittest.TestCase):
             self.assertTrue(all(item["feature_transformer"] is None for item in mfp_metadata))
             self.assertTrue(all(item["feature_transformer"]["fit_scope"] == "train_only_per_fold" for item in ohe_metadata))
             self.assertTrue(all(item["estimator_params_snapshot"]["max_features"] == 0.3 for item in mfp_metadata + ohe_metadata))
+            for item in mfp_metadata + ohe_metadata:
+                snapshot = item["estimator_params_snapshot"]
+                self.assertEqual(snapshot["construction"], "schema2_model_factory")
+                self.assertEqual(snapshot["effective_estimator_params"]["max_features"], 0.3)
+                self.assertEqual(snapshot["random_state"], item["manifest_seed"])
+                self.assertEqual(item["model_random_seed"], item["manifest_seed"])
 
             subprocess.run(
                 [sys.executable, "scripts/rebuild_benchmark_report.py", "--run-dir", str(run_dir)],

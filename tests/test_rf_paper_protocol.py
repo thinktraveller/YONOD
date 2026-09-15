@@ -42,7 +42,8 @@ class PaperRFProtocolTests(unittest.TestCase):
         })
         frame.to_csv(directory / "fixture.csv", index=False)
         params = {"n_estimators": 500, "max_features": 0.3, "n_jobs": -1}
-        (directory / "config.yaml").write_text(yaml.safe_dump({"benchmark": {
+        config_path = directory / "config.json"
+        config_path.write_text(json.dumps({"benchmark": {
             "dataset_path": "fixture.csv", "sample_id_col": "sample_id", "label_col": "yield",
             "smiles_cols": ["a"], "feature_sets": [
                 {"name": "mfp", "kind": "precomputed_descriptor", "component_cols": ["a"], "params": {}}
@@ -53,7 +54,7 @@ class PaperRFProtocolTests(unittest.TestCase):
             "outputs": {"root": "results"},
             "reproduction_protocol": {"name": "vjethbkm_rf_5x5"},
         }}), encoding="utf-8")
-        config = BenchmarkConfig.from_file(directory / "config.yaml")
+        config = BenchmarkConfig.from_paper_exact_json(config_path)
         return frame, config, create_benchmark_contract(config), params
 
     def test_manifest_seed_overrides_each_paper_rf_repeat_and_snapshots_params(self):
