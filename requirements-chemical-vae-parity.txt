@@ -1,0 +1,8 @@
+# Optional, CPU-only step-31.3 numerical-parity environment; do not install
+# for ordinary feature generation.  The YONOD Chemical VAE runtime is
+# PyTorch-only and reads the verified v5 converted state rather than HDF5.
+# This extra exists solely to execute the immutable historical Keras HDF5
+# encoder as an independent reference.  Its TensorFlow protobuf constraint is
+# intentionally isolated from the ordinary runtime dependency declaration.
+-r requirements.txt
+tensorflow-cpu==2.15.1

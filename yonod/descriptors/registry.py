@@ -79,6 +79,11 @@ _PROVIDERS: dict[str, FeatureProvider] = {
     "maf": FeatureProvider("maf", _STATIC, "smiles", ("sum",), {}, "多分子加和指纹"),
     "rdkit2d": FeatureProvider("rdkit2d", _STATIC, "smiles", ("concat",), {}, "RDKit 2D 描述符"),
     "drfp": FeatureProvider("drfp", _STATIC, "reaction", ("reaction",), {}, "反应差分指纹"),
+    "chemical_vae": FeatureProvider(
+        "chemical_vae", _STATIC, "smiles", ("concat",),
+        {"model_manifest": "path", "backend": "pytorch", "device": "torch device", "batch_size": "int >= 1", "input_preprocessing": "identity", "output": "z_mean_sample"},
+        "冻结 ZINC Chemical VAE 原始 z_mean（仅已验证 v4 PyTorch 资产）",
+    ),
     "ohe": FeatureProvider(
         "ohe", _FOLD, "categorical_columns", ("concat",),
         {"missing_policy": "as_category | zero_block | error", "dtype": "float32 | float64"},
@@ -150,6 +155,29 @@ def _normalise_params(name: str, params: Mapping[str, Any]) -> dict[str, Any]:
         if handle_unknown != "ignore":
             raise FeatureRegistryError("ohe.handle_unknown 当前固定为 ignore")
         return {"missing_policy": policy, "dtype": dtype, "handle_unknown": handle_unknown}
+    if name == "chemical_vae":
+        allowed = {"model_manifest", "backend", "device", "batch_size", "input_preprocessing", "output"}
+        unknown = set(result).difference(allowed)
+        if unknown:
+            raise FeatureRegistryError(f"chemical_vae.params 包含未知字段：{sorted(unknown)}")
+        manifest = result.get("model_manifest")
+        if not isinstance(manifest, str) or not manifest.strip():
+            raise FeatureRegistryError("chemical_vae.model_manifest 必须是非空字符串路径")
+        backend = str(result.get("backend", "pytorch"))
+        device = str(result.get("device", "cpu"))
+        preprocessing = str(result.get("input_preprocessing", "identity"))
+        output = str(result.get("output", "z_mean_sample"))
+        batch_size = result.get("batch_size", 64)
+        if backend != "pytorch":
+            raise FeatureRegistryError("chemical_vae.backend 当前只支持 pytorch")
+        if not device:
+            raise FeatureRegistryError("chemical_vae.device 不能为空")
+        if preprocessing != "identity" or output != "z_mean_sample":
+            raise FeatureRegistryError("chemical_vae 固定使用 input_preprocessing=identity 和 output=z_mean_sample")
+        if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
+            raise FeatureRegistryError("chemical_vae.batch_size 必须是正整数")
+        return {"model_manifest": manifest, "backend": backend, "device": device, "batch_size": batch_size,
+                "input_preprocessing": preprocessing, "output": output}
     if result:
         raise FeatureRegistryError(f"{name}.params 暂不支持参数：{sorted(result)}")
     return {}

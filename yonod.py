@@ -18,13 +18,15 @@ YONOD 数据集输入向导 (Dataset Input Wizard)
 
 import os
 import re
-import json
 import subprocess
 import sys
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Set
 from datetime import datetime
+from pathlib import Path
+
+import yaml
 from rdkit import Chem
 from rdkit import RDLogger
 
@@ -51,7 +53,7 @@ def step1_collect_basic_info() -> Dict:
     收集信息:
     1. 数据集路径或配置文件路径(必选)
        - CSV文件: 进入向导流程,需收集项目名称和文件夹
-       - JSON文件: 直接返回,在main()中验证并启动建模
+       - schema-2 YAML 文件: 直接返回,在 main.py 中验证并启动建模
     2. 项目名称(仅CSV模式必选)
     3. 项目文件夹位置(仅CSV模式,可选,默认为 result/<项目名称>)
 
@@ -59,8 +61,8 @@ def step1_collect_basic_info() -> Dict:
         dict: {
             'dataset_path': str,
             'is_config_file': bool,
-            'project_name': str,      # JSON模式时为None
-            'project_folder': str     # JSON模式时为None
+            'project_name': str,      # YAML 模式时为None
+            'project_folder': str     # YAML 模式时为None
         }
     """
     print("=" * 60)
@@ -72,7 +74,7 @@ def step1_collect_basic_info() -> Dict:
     is_config_file = False
 
     while True:
-        file_path = input("\n请输入数据集路径(CSV)或配置文件路径(JSON): ").strip()
+        file_path = input("\n请输入数据集路径(CSV)或配置文件路径(schema-2 YAML): ").strip()
 
         if not os.path.exists(file_path):
             print("[X] 文件不存在,请重新输入")
@@ -83,19 +85,21 @@ def step1_collect_basic_info() -> Dict:
             dataset_path = file_path
             is_config_file = False
             break
-        elif file_path.endswith('.json'):
-            print(f"[OK] JSON配置文件: {file_path}")
+        elif file_path.lower().endswith(('.yaml', '.yml')):
+            print(f"[OK] YAML配置文件: {file_path}")
             dataset_path = file_path
             is_config_file = True
-            # JSON模式: 立即返回,不再收集项目名称和文件夹
+            # YAML 模式: 立即返回,不再收集项目名称和文件夹。
             return {
                 'dataset_path': dataset_path,
                 'is_config_file': True,
                 'project_name': None,
                 'project_folder': None
             }
+        elif file_path.lower().endswith('.json'):
+            print("[X] JSON 已不再是可执行运行配置；请先运行 scripts/migrate_config_to_yaml.py 迁移。")
         else:
-            print("[X] 文件格式不支持,请输入CSV或JSON文件")
+            print("[X] 文件格式不支持,请输入 CSV 或 schema-2 YAML 文件")
 
     # CSV模式: 继续收集项目名称和文件夹
     print("\n" + "=" * 60)
@@ -1880,7 +1884,7 @@ def step4_orchestrate(all_column_configs):
     descriptor_configs = []
     for desc_name in selected_descriptors:
         # OHE must never receive an implicit set of all strings: make the
-        # user identify the categorical inputs before a JSON can be written.
+        # user identify the categorical inputs before a YAML can be written.
         config = (
             step4_configure_descriptor(desc_name, all_column_configs)
             if desc_name == 'ohe'
@@ -2106,6 +2110,59 @@ def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
     return fixed_path
 
 
+def select_stable_sample_id(normalized_dataset_path: str) -> str:
+    """Require a user-declared unique ID before a schema-2 run is written.
+
+    The old wizard silently relied on a row position.  A row position is not a
+    portable artifact identity, so schema-2 deliberately makes this a visible
+    selection and verifies uniqueness against the normalized population.
+    """
+    frame = pd.read_csv(normalized_dataset_path)
+    if frame.empty:
+        raise ValueError("规范数据集为空，无法声明稳定 sample ID")
+    columns = list(frame.columns)
+    print("\n请选择稳定 sample ID 列（该列必须非空且唯一；不能使用隐含行号）：")
+    for index, column in enumerate(columns, start=1):
+        print(f"  [{index}] {column}")
+    while True:
+        value = input("sample ID 列序号或列名: ").strip()
+        if value.isdigit() and 1 <= int(value) <= len(columns):
+            column = columns[int(value) - 1]
+        elif value in columns:
+            column = value
+        else:
+            print("[X] 请输入显示的列序号或完整列名")
+            continue
+        series = frame[column]
+        if series.isna().any():
+            print(f"[X] {column!r} 包含空值，不能作为稳定 sample ID")
+            continue
+        ids = series.astype(str).str.strip()
+        if (ids == "").any() or ids.duplicated().any():
+            print(f"[X] {column!r} 含空值或重复值，不能作为稳定 sample ID")
+            continue
+        print(f"[OK] stable sample ID: {column}")
+        return column
+
+
+def _canonical_wizard_models(selected_models: List[str]) -> List[str]:
+    aliases = {
+        "xgboost": "xgb", "random forest": "rf", "svm": "svm",
+        "autogluon": "autogluon", "lightgbm": "lightgbm",
+    }
+    result: List[str] = []
+    for value in selected_models:
+        normalized = aliases.get(str(value).strip().lower())
+        if normalized is None:
+            raise ValueError(f"向导选择了不受支持的模型：{value!r}")
+        if normalized in result:
+            raise ValueError(f"向导模型选择重复：{value!r}")
+        result.append(normalized)
+    if not result:
+        raise ValueError("至少要选择一个模型")
+    return result
+
+
 def save_config_file(
     project_folder: str,
     project_name: str,
@@ -2115,10 +2172,11 @@ def save_config_file(
     descriptor_configs: List[Dict],
     selected_models: List[str],
     metadata: Dict,
-    report_formats: List[str]
+    report_formats: List[str],
+    sample_id_col: str,
 ) -> str:
     """
-    保存配置文件 (yonod_config.json)
+    保存 schema-2 YAML 运行配置。
 
     Args:
         project_folder: 项目文件夹路径
@@ -2130,6 +2188,7 @@ def save_config_file(
         selected_models: 选中的模型列表
         metadata: 元信息字典
         report_formats: 报告格式列表
+        sample_id_col: 已在规范数据集中验证的唯一稳定 ID 列
 
     Returns:
         str: 配置文件路径
@@ -2148,7 +2207,7 @@ def save_config_file(
         'others': [],
         'conditions': [],
         # OHE columns are also declared on the FeatureSpec. This duplicate
-        # role-level list keeps exported JSON self-describing for tools that
+        # role-level list keeps the exported run configuration self-describing for tools that
         # inspect column roles before parsing feature declarations.
         'categoricals': list(dict.fromkeys(
             column
@@ -2239,28 +2298,70 @@ def save_config_file(
             'new_name': cfg['name']
         })
 
-    # 构建配置字典
+    if not isinstance(sample_id_col, str) or not sample_id_col.strip():
+        raise ValueError("schema-2 向导配置必须显式提供唯一的 sample_id_col")
+    try:
+        id_frame = pd.read_csv(effective_dataset_path, usecols=[sample_id_col.strip()])
+    except Exception as exc:
+        raise ValueError(f"无法读取或定位 sample_id_col {sample_id_col!r}：{exc}") from exc
+    if id_frame.empty:
+        raise ValueError("规范数据集为空，无法写入 schema-2 运行配置")
+    ids = id_frame[sample_id_col.strip()]
+    normalized_ids = ids.astype(str).str.strip()
+    if ids.isna().any() or (normalized_ids == "").any() or normalized_ids.duplicated().any():
+        raise ValueError("sample_id_col 必须在规范数据集中为唯一且非空的稳定 ID")
+
+    # The config lives under ``docs/`` beside the normalized CSV.  Store all
+    # path references relative to that owning YAML so the project is movable.
+    config_path = Path(project_folder) / "docs" / f"{project_name}_run.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset_reference = os.path.relpath(
+        Path(effective_dataset_path).resolve(), config_path.parent.resolve()
+    ).replace(os.sep, "/")
+
+    # New wizard configs intentionally do not recreate the old hidden model
+    # defaults.  Omitted `model_params` reach the installed libraries as their
+    # documented defaults; the one-time migration tool handles legacy runs
+    # that require historical effective values instead.
     config = {
-        'version': '1.1',
+        'schema_version': '2.0',
         'project_name': project_name,
-        'origin_dataset_path': dataset_path,  # 原始数据集路径（仅用于记录）
-        # 移除 dataset_path 字段：规范数据集默认为 <project_name>_normalized_dataset.csv
-        'column_mapping': column_mapping,  # 列映射信息（人类可读）
+        'stage': 'all',
+        'dataset': {
+            'path': dataset_reference,
+            'sample_id_col': sample_id_col.strip(),
+            'column_roles': column_roles,
+        },
         'descriptors': descriptor_configs,
-        'models': selected_models,
-        'metadata': metadata,
-        'report_formats': report_formats,
-        'column_roles': column_roles  # main.py使用此字段识别列角色
+        'artifacts': {'output_dir': '../feature_artifacts'},
+        'models': _canonical_wizard_models(selected_models),
+        'model_params': {},
+        'evaluation': {
+            'protocol': 'outer_kfold', 'n_splits': 5, 'n_repeats': 1,
+            'shuffle': True, 'seed': 42,
+        },
+        'outputs': {'root': '../training_results', 'report_formats': list(report_formats)},
+        'metadata': {
+            'origin_dataset_path': dataset_path,
+            'wizard_column_mapping': column_mapping,
+            'legacy_metadata': metadata,
+        },
     }
 
-    # 保存配置文件
-    config_path = os.path.join(project_folder, 'docs', f"{project_name}_yonod_config.json")
-    os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
+    # Validate exactly as the public runtime will before publishing.  An
+    # invalid wizard output must never become a delayed main.py failure.
+    temporary = config_path.with_name(f".{config_path.stem}.tmp{config_path.suffix}")
+    try:
+        temporary.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding='utf-8')
+        from yonod.config.loader import load_run_config
+        load_run_config(temporary)
+        os.replace(temporary, config_path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
     print(f"[OK] 配置文件已生成: {config_path}")
-    return config_path
+    return str(config_path)
 
 
 def step9_auto_launch_modeling(config_path: str) -> bool:
@@ -2324,45 +2425,35 @@ def step9_auto_launch_modeling(config_path: str) -> bool:
 
 def validate_config_file(config_path: str) -> bool:
     """
-    验证JSON配置文件是否为有效的yonod_config.json
+    验证 schema-2 YAML 配置文件是否可由公开运行入口加载。
 
     Args:
         config_path: 配置文件路径
 
     Returns:
-        bool: 是否为有效配置文件
+        bool: 是否为有效 schema-2 YAML 配置
     """
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        from yonod.config.contracts import resolve_config_path
+        from yonod.config.loader import load_run_config
 
-        # 检查必需字段（移除 dataset_path 检查）
-        required_fields = ['version', 'project_name', 'descriptors', 'models', 'column_roles']
-        for field in required_fields:
-            if field not in config:
-                print(f"[X] 配置文件缺少必需字段: {field}")
-                return False
-
-        # 检查规范数据集是否存在（使用命名约定）
-        project_name = config['project_name']
-        config_dir = os.path.dirname(os.path.abspath(config_path))
-        normalized_dataset = os.path.join(config_dir, f"{project_name}_normalized_dataset.csv")
-
-        if not os.path.exists(normalized_dataset):
-            print(f"[X] 规范数据集不存在: {normalized_dataset}")
-            print(f"    请确保数据集文件名为: {project_name}_normalized_dataset.csv")
+        loaded = load_run_config(Path(config_path))
+        # ``stage: benchmark`` has additional protocol invariants that are
+        # intentionally stricter than the generic schema.  Validate its
+        # adapter before printing a successful public-entrypoint verdict, so
+        # an ordinary outer_kfold YAML never looks launchable here.
+        if loaded.effective['stage'] == 'benchmark':
+            from yonod.benchmark.config import BenchmarkConfig
+            BenchmarkConfig.from_file(loaded.path)
+        dataset_path = resolve_config_path(loaded.path, loaded.effective['dataset']['path'])
+        if not dataset_path.is_file():
+            print(f"[X] YAML 所引用的数据集不存在: {dataset_path}")
             return False
-
         print("[OK] 配置文件验证通过")
-        print(f"    项目名称: {project_name}")
-        project_folder = os.path.dirname(config_dir) if os.path.basename(config_dir) == 'docs' else config_dir
-        print(f"    项目文件夹: {project_folder}")
-        print(f"    规范数据集: {normalized_dataset}")
+        print(f"    项目名称: {loaded.effective['project_name']}")
+        print(f"    阶段: {loaded.effective['stage']}")
+        print(f"    数据集: {dataset_path}")
         return True
-
-    except json.JSONDecodeError as e:
-        print(f"[X] JSON格式错误: {e}")
-        return False
     except Exception as e:
         print(f"[X] 配置文件验证失败: {e}")
         return False
@@ -2381,14 +2472,35 @@ def main():
     # 步骤1: 收集基本信息
     basic_info = step1_collect_basic_info()
 
-    # 如果是JSON配置文件,验证后直接调用main.py
+    # 如果是 schema-2 YAML 配置文件，验证后在本入口分派运行时。
     if basic_info['is_config_file']:
         print("\n" + "=" * 60)
-        print("检测到JSON配置文件,验证中...")
+        print("检测到 schema-2 YAML 配置文件，验证中...")
         print("=" * 60)
 
         if validate_config_file(basic_info['dataset_path']):
             print("\n[OK] 配置文件有效,直接启动建模")
+
+            # Strict benchmarks are deliberately not routed through main.py:
+            # they require a manifest-defined external-fold plan plus SQLite
+            # recovery state, not the ordinary outer_kfold service.  The
+            # interactive YAML path remains the mandatory public launcher.
+            try:
+                from yonod.config.loader import load_run_config
+                stage = str(load_run_config(Path(basic_info['dataset_path'])).effective['stage'])
+                if stage == 'benchmark':
+                    from scripts.run_benchmark import run_benchmark
+
+                    print("\n[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...")
+                    result_code = run_benchmark(Path(basic_info['dataset_path']))
+                    if result_code == 0:
+                        print("\n[完成] 严格 benchmark 已成功完成!")
+                    else:
+                        print(f"\n[警告] 严格 benchmark 返回码: {result_code}")
+                    return result_code
+            except Exception as exc:
+                print(f"\n[错误] 启动严格 benchmark 失败: {exc}")
+                return 1
 
             # 构建命令
             main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
@@ -2410,13 +2522,14 @@ def main():
                     print("\n[完成] 建模任务已成功完成!")
                 else:
                     print(f"\n[警告] 建模任务返回码: {result.returncode}")
+                return result.returncode
 
             except Exception as e:
                 print(f"\n[错误] 启动建模失败: {e}")
+                return 1
         else:
             print("\n[X] 配置文件无效,请检查文件格式和内容")
-
-        return
+            return 1
 
     # CSV文件流程: 加载并展示数据集
     print("\n" + "=" * 60)
@@ -2510,6 +2623,8 @@ def main():
         basic_info['project_name']
     )
 
+    stable_sample_id = select_stable_sample_id(output_paths['normalized_dataset'])
+
     # 保存配置文件
     config_path = save_config_file(
         project_folder=basic_info['project_folder'],
@@ -2520,7 +2635,8 @@ def main():
         descriptor_configs=descriptor_configs,
         selected_models=selected_models,
         metadata=metadata,
-        report_formats=report_formats
+        report_formats=report_formats,
+        sample_id_col=stable_sample_id,
     )
 
     # 输出最终总结
@@ -2537,7 +2653,7 @@ def main():
     if fixed_dataset_path:
         print(f"  - 修复后数据集: {fixed_dataset_path}")
     print(f"  - 配置文件: {config_path}")
-    print("    (列映射信息已嵌入配置文件中，可通过 column_mapping 字段查看)")
+    print("    (列映射信息已嵌入 metadata.wizard_column_mapping 字段)")
 
     print("\n配置汇总:")
     print(f"  - 描述符: {', '.join([cfg['descriptor'] for cfg in descriptor_configs])}")
@@ -2555,4 +2671,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

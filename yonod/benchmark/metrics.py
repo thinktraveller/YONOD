@@ -592,19 +592,29 @@ def tukey_hsd_comparisons(fold_metrics: pd.DataFrame, *, dimension: str, alpha: 
     """Provide Tukey-HSD multiple-comparison output alongside paired tests."""
     if dimension not in {"model", "descriptor"}:
         raise MetricRebuildError("dimension 必须是 model 或 descriptor")
-    try:
-        from statsmodels.stats.multicomp import pairwise_tukeyhsd
-    except ImportError as exc:  # pragma: no cover - environment dependency
-        raise MetricRebuildError("需要 statsmodels >= 0.14 才能生成 Tukey HSD 结果") from exc
     compare_col = dimension
     fixed_col = "descriptor" if dimension == "model" else "model"
     fold_metrics = _strict_comparable_protocol_rows(fold_metrics)
     records: List[Dict[str, Any]] = []
     if fold_metrics.empty:
         return pd.DataFrame.from_records(records)
-    for (run_id, config_hash, split_id, protocol, fixed_value), part in fold_metrics.groupby(["run_id", "config_hash", "split_id", "evaluation_protocol", fixed_col], sort=True):
-        if part[compare_col].nunique() < 2:
-            continue
+    comparable_parts = [
+        (key, part)
+        for key, part in fold_metrics.groupby(
+            ["run_id", "config_hash", "split_id", "evaluation_protocol", fixed_col], sort=True
+        )
+        if part[compare_col].nunique() >= 2
+    ]
+    # Tukey has no valid question for a one-model/one-descriptor smoke.  Do
+    # not make that otherwise complete, auditable run depend on an optional
+    # statistics package that would never be invoked.
+    if not comparable_parts:
+        return pd.DataFrame.from_records(records)
+    try:
+        from statsmodels.stats.multicomp import pairwise_tukeyhsd
+    except ImportError as exc:  # pragma: no cover - environment dependency
+        raise MetricRebuildError("需要 statsmodels >= 0.14 才能生成 Tukey HSD 结果") from exc
+    for (run_id, config_hash, split_id, protocol, fixed_value), part in comparable_parts:
         for metric in ("r2", "rmse", "mae"):
             result = pairwise_tukeyhsd(endog=part[metric].to_numpy(dtype=float), groups=part[compare_col].astype(str), alpha=alpha)
             groups = result.groupsunique

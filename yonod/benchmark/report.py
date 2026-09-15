@@ -22,6 +22,7 @@ from .metrics import (
     write_dimension_time_summaries,
 )
 from .layout import BenchmarkOutputLayout, resolve_benchmark_output_layout
+from yonod.universal.report import _configure_chinese_matplotlib
 
 
 class BenchmarkReportError(RuntimeError):
@@ -152,21 +153,6 @@ def _format_duration(value: Any) -> str:
     if seconds < 60.0:
         return "{0:.2f}s".format(seconds)
     return "{0}m {1:.1f}s".format(int(seconds // 60), seconds % 60)
-
-
-def _configure_chinese_matplotlib(plt: Any) -> None:
-    """Prefer an installed CJK font so generated Chinese labels stay legible."""
-    try:
-        from matplotlib import font_manager
-        installed = {font.name for font in font_manager.fontManager.ttflist}
-    except Exception:  # pragma: no cover - font discovery is platform-specific
-        return
-    for candidate in ("Microsoft YaHei", "SimHei", "SimSun", "Noto Sans CJK SC"):
-        if candidate in installed:
-            current = list(plt.rcParams.get("font.sans-serif", []))
-            plt.rcParams["font.sans-serif"] = [candidate] + [name for name in current if name != candidate]
-            plt.rcParams["axes.unicode_minus"] = False
-            return
 
 
 def _table_html(frame: pd.DataFrame, *, max_rows: int = 150) -> str:
@@ -358,6 +344,21 @@ def _disk_usage_bytes(root: Path) -> int:
     return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
+def _boxplot_with_label_compat(axis: Any, data: Sequence[Any], labels: Sequence[str]) -> Any:
+    """Use the Matplotlib 3.9 keyword, with a narrow legacy fallback.
+
+    Matplotlib renamed ``labels`` to ``tick_labels``.  The latter is preferred
+    for current installs; an older supported environment raises a TypeError
+    naming that exact keyword.  No other plotting TypeError is hidden.
+    """
+    try:
+        return axis.boxplot(data, tick_labels=labels, showmeans=True)
+    except TypeError as exc:
+        if "tick_labels" not in str(exc):
+            raise
+        return axis.boxplot(data, labels=labels, showmeans=True)
+
+
 def _write_figures(layout: BenchmarkOutputLayout, fold_metrics: pd.DataFrame) -> tuple[Path, ...]:
     """Generate stability/OOF figures from saved tables and shards only."""
     try:
@@ -372,7 +373,7 @@ def _write_figures(layout: BenchmarkOutputLayout, fold_metrics: pd.DataFrame) ->
         figure, axes = plt.subplots(1, 3, figsize=(max(9, len(labels) * 1.6), 4.8), constrained_layout=True)
         for axis, metric in zip(axes, ("r2", "rmse", "mae")):
             data = [fold_metrics.loc[(fold_metrics["descriptor"].astype(str) + " × " + fold_metrics["model"].astype(str)) == label, metric].to_numpy() for label in labels]
-            axis.boxplot(data, tick_labels=labels, showmeans=True)
+            _boxplot_with_label_compat(axis, data, labels)
             axis.set_title(metric.upper() + " across folds")
             axis.tick_params(axis="x", rotation=45, labelsize=8)
         stability = pictures_dir / "fold_metric_stability.png"
@@ -421,7 +422,7 @@ def _write_time_figure(
     except ImportError as exc:  # pragma: no cover - environment dependency
         raise BenchmarkReportError("需要 matplotlib 才能生成组合建模耗时柱状图") from exc
 
-    _configure_chinese_matplotlib(plt)
+    cjk_font = _configure_chinese_matplotlib(plt)
 
     pictures_dir = layout.pictures
     pictures_dir.mkdir(parents=True, exist_ok=True)
@@ -458,7 +459,7 @@ def _write_time_figure(
                 status = str(row.get("time_status", "时间不可比较"))
                 detail = str(row.get("time_status_detail", "")).strip()
                 completed = str(coverage_for_row(row))
-                text = "不可比较（{0}; {1}{2}）".format(
+                text = ("不可比较（{0}; {1}{2}）" if cjk_font else "Not comparable ({0}; {1}{2})").format(
                     completed, status, "; " + detail if detail else "",
                 )
                 axis.text(0.01, position, text, transform=axis.get_yaxis_transform(), va="center", color="#6b7280", fontsize=8)
@@ -469,14 +470,20 @@ def _write_time_figure(
         axis.set_xlim(0.0, max(0.01, max_total * 1.20))
         axis.set_yticks(positions, labels)
         axis.invert_yaxis()
-        axis.set_xlabel("累计 CV 建模时间（秒，训练 + 预测）")
-        axis.set_title(title)
+        axis.set_xlabel("累计 CV 建模时间（秒，训练 + 预测）" if cjk_font else "Cumulative CV model time (s; train + predict)")
+        ascii_titles = {
+            "combination_modeling_time.png": "Descriptor x model: combination modeling time",
+            "descriptor_modeling_time.png": "Descriptor: cumulative modeling time",
+            "model_modeling_time.png": "Model: cumulative modeling time",
+        }
+        axis.set_title(title if cjk_font else ascii_titles.get(filename, "Modeling time"))
         axis.grid(axis="x", alpha=0.2)
         if not comparable.empty:
             axis.legend(loc="lower right")
     figure.text(
         0.01, 0.01,
-        "run_id={0}；仅可在相同硬件、线程设置与 CV 配置下横向比较。".format(run_id),
+        ("run_id={0}；仅可在相同硬件、线程设置与 CV 配置下横向比较。" if cjk_font
+         else "run_id={0}; compare only under identical hardware, thread settings, and CV configuration.").format(run_id),
         fontsize=7, color="#56657a",
     )
     figure.subplots_adjust(left=0.14, right=0.98, top=0.90, bottom=0.16)
@@ -684,7 +691,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "", "## 预测与稳定性", "",
     ]
     markdown.extend([
-        "- [{0}]({1}/{0})".format(path.name, layout.picture_relative_to_report)
+        "![{0}]({1}/{0})".format(path.name, layout.picture_relative_to_report)
         for path in stability_figures
     ] or ["没有可用预测图。"])
     markdown += [

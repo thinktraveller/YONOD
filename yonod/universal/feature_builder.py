@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import re
 import sys
-from typing import List, Optional, Tuple, Dict
+from typing import Any, List, Optional, Tuple, Dict
 
 import numpy as np
 import pandas as pd
@@ -51,6 +51,7 @@ _DESCRIPTOR_IMPORT_MAP: dict[str, tuple[str, str]] = {
     "maf":       ("..descriptors.maf",       "MAFDescriptor"),
     "rdkit2d":   ("..descriptors.rdkit2d",   "RDKit2DDescriptor"),
     "drfp":      ("..descriptors.drfp_desc", "DRFPDescriptor"),
+    "chemical_vae": ("..descriptors.chemical_vae", "ChemicalVaeDescriptor"),
 }
 
 
@@ -73,6 +74,12 @@ def _get_descriptor(
             radius=int(params.get("radius", 3)),
             fp_size=int(params.get("fp_size", 1024)),
         )
+    if name_lower == "chemical_vae":
+        from ..descriptors.chemical_vae import ChemicalVaeDescriptor
+        params = options.get("params", options)
+        if not isinstance(params, dict):
+            raise ValueError("chemical_vae.params 必须是对象")
+        return ChemicalVaeDescriptor(**params)
 
     if name_lower in _DESCRIPTOR_REGISTRY:
         return _DESCRIPTOR_REGISTRY[name_lower]()
@@ -133,6 +140,10 @@ def build_universal_features(
         smiles_roles = {'reactant': [], 'product': [], 'other': smiles_cols}
 
     descriptor = _get_descriptor(desc_name, descriptor_config)
+    options = dict(descriptor_config or {})
+    diagnostic_sink = options.get("_chemical_vae_diagnostic_sink")
+    if diagnostic_sink is not None and not isinstance(diagnostic_sink, list):
+        raise ValueError("_chemical_vae_diagnostic_sink 必须是 list")
     n = len(df)
 
     # The YieldSmarter profile is component-wise count Morgan over raw CSV
@@ -266,11 +277,34 @@ def build_universal_features(
         for col in cols_to_use:
             if col not in df.columns:
                 raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
-            smiles_list = [
-                _norm(s) if isinstance(s, str) else ""
-                for s in df[col].fillna("").tolist()
-            ]
+            if desc_name.lower() == "chemical_vae":
+                raw_values = df[col].tolist()
+                smiles_list = [s if isinstance(s, str) else "" for s in raw_values]
+            else:
+                smiles_list = [
+                    _norm(s) if isinstance(s, str) else ""
+                    for s in df[col].fillna("").tolist()
+                ]
             feats, mask = descriptor.featurize(smiles_list)
+            if desc_name.lower() == "chemical_vae" and diagnostic_sink is not None:
+                records = getattr(descriptor, "last_diagnostics", None)
+                if not isinstance(records, list) or len(records) != n:
+                    raise RuntimeError("chemical_vae 未返回与输入行数一致的逐行诊断")
+                role = next(
+                    (name for name in ("reactant", "product", "other") if col in smiles_roles.get(name, [])),
+                    "other",
+                )
+                adjusted: list[dict[str, Any]] = []
+                for raw, record in zip(raw_values, records):
+                    item = dict(record)
+                    missing = bool(pd.isna(raw))
+                    item["raw_input"] = None if missing else str(raw)
+                    if missing:
+                        item.update(status="failed", reason="missing_input", preprocessed_text="", length=0)
+                    elif not isinstance(raw, str):
+                        item.update(status="failed", reason="non_string_input", preprocessed_text="", length=0)
+                    adjusted.append(item)
+                diagnostic_sink.append({"column": col, "role": role, "records": adjusted})
             col_blocks.append(feats)
             row_mask |= mask  # 任一列有效则保留该行；无效列贡献零向量
 

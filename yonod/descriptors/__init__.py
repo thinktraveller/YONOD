@@ -23,6 +23,7 @@ __all__ = [
     "MAFDescriptor",
     "RDKit2DDescriptor",
     "DRFPDescriptor",
+    "ChemicalVaeDescriptor",
 ]
 
 
@@ -63,5 +64,8 @@ def __getattr__(name: str):
     elif name == "DRFPDescriptor":
         from .drfp_desc import DRFPDescriptor
         return DRFPDescriptor
+    elif name == "ChemicalVaeDescriptor":
+        from .chemical_vae import ChemicalVaeDescriptor
+        return ChemicalVaeDescriptor
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

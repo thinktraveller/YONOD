@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import itertools
 import sys
 from pathlib import Path
@@ -48,6 +49,16 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _require_parquet_engine() -> None:
+    """Fail before publishing a run when strict parquet evidence is unavailable."""
+    if importlib.util.find_spec("pyarrow") is not None or importlib.util.find_spec("fastparquet") is not None:
+        return
+    raise RuntimeError(
+        "严格 benchmark 需要 pyarrow 或 fastparquet 来原子发布/验证 split、预测与指标 parquet；"
+        "当前 yonod 环境均未安装。请安装 requirements.txt 中的 pyarrow 后，通过 yonod.py 重新启动。"
+    )
+
+
 def _prepare_feature_artifacts(config: BenchmarkConfig, frame, run_dir: Path):
     """Precompute only global descriptors; defer fold transformers to execution."""
     layout = resolve_benchmark_output_layout(run_dir)
@@ -62,14 +73,17 @@ def _prepare_feature_artifacts(config: BenchmarkConfig, frame, run_dir: Path):
         # original lightweight config shape instead of BenchmarkConfig.
         feature_sets = tuple({
             "name": descriptor,
+            "algorithm": descriptor,
             "kind": "precomputed_descriptor",
             "component_cols": list(config.smiles_cols),
             "params": {},
         } for descriptor in config.descriptors)
     for feature_set in feature_sets:
         descriptor = str(feature_set["name"])
+        algorithm = str(feature_set.get("algorithm", descriptor))
         kind = str(feature_set["kind"])
         component_cols = list(feature_set["component_cols"])
+        mode = str(feature_set.get("mode", "concat"))
         if kind == "fold_transform":
             # OHE (and any future transformer with this lifecycle) must never
             # be fitted globally or persisted as a whole-dataset artifact.
@@ -87,12 +101,14 @@ def _prepare_feature_artifacts(config: BenchmarkConfig, frame, run_dir: Path):
         try:
             preparation = prepare_descriptor_artifact(
                 layout.descriptors,
-                descriptor=descriptor,
+                descriptor=algorithm,
+                feature_id=descriptor,
                 smiles_cols=component_cols,
                 df=frame,
                 sample_ids=sample_ids,
                 sample_id_name=config.sample_id_col,
                 compute=build_universal_features,
+                mode=mode,
                 descriptor_config=dict(feature_set["params"]),
             )
             # Reload even newly-created artifacts so modelling has one input path.
@@ -144,9 +160,23 @@ def _complete_metrics(rebuilt):
     return fold_metrics.merge(complete, on=key_columns, how="inner")
 
 
-def main() -> int:
-    args = _parse_args()
-    config = BenchmarkConfig.from_file(args.config)
+def run_benchmark(
+    config_path: Path | str,
+    *,
+    rerun_failed: bool = False,
+    task_keys: list[str] | None = None,
+    stale_seconds: float = 3600.0,
+    bootstrap_n: int = 2000,
+) -> int:
+    """Run one already-validated schema-2 strict benchmark configuration.
+
+    This function is called by the public ``yonod.py`` YAML path.  Keeping the
+    orchestration here lets the script remain a thin developer CLI without
+    creating a second configuration parser or changing the manifest/state
+    protocol.
+    """
+    config = BenchmarkConfig.from_file(config_path)
+    _require_parquet_engine()
     contract = create_benchmark_contract(config)
     write_run_manifest(contract)
     split_manifest = create_split_manifest(contract)
@@ -162,16 +192,16 @@ def main() -> int:
     )
     state.sync_tasks(specs)
     requeued = state.audit_succeeded_outputs()
-    interrupted = state.recover_stale_running(args.stale_seconds)
+    interrupted = state.recover_stale_running(stale_seconds)
     print("[plan] run_id={0} theoretical_tasks={1} requeued={2} interrupted={3}".format(contract.run_id, len(specs), requeued, interrupted))
 
     frame = config.validate_dataset()
     sample_ids = frame[config.sample_id_col].astype(str).tolist()
     labels = frame[config.label_col].astype(float).to_numpy()
-    model_params: Dict[str, Dict[str, Any]] = dict(config.raw.get("model_params", {}))
+    model_params: Dict[str, Dict[str, Any]] = dict(config.legacy_model_kwargs)
     feature_cache, descriptor_failures = _prepare_feature_artifacts(config, frame, contract.run_dir)
     feature_sets = {str(item["name"]): item for item in config.feature_sets}
-    while claimed := state.claim_next(rerun_failed=args.rerun_failed, task_keys=args.task_key):
+    while claimed := state.claim_next(rerun_failed=rerun_failed, task_keys=task_keys):
         try:
             if claimed.spec.descriptor in descriptor_failures:
                 raise RuntimeError(
@@ -184,9 +214,11 @@ def main() -> int:
             component_frame = None
             fold_transformer = None
             if feature_set["kind"] == "fold_transform":
-                if claimed.spec.descriptor != "ohe":
+                if str(feature_set.get("algorithm", claimed.spec.descriptor)) != "ohe":
                     raise RuntimeError(
-                        "尚未实现 fold_transform 特征集 {0!r}".format(claimed.spec.descriptor)
+                        "尚未实现 fold_transform 特征集 {0!r}".format(
+                            feature_set.get("algorithm", claimed.spec.descriptor)
+                        )
                     )
                 from yonod.benchmark.fold_preprocessors import ReactionComponentOHE
                 component_frame = frame.loc[:, list(feature_set["component_cols"])].copy()
@@ -196,6 +228,10 @@ def main() -> int:
                 claimed.spec.descriptor, claimed.spec.model, claimed.spec.repeat, claimed.spec.fold,
                 X_numeric=X_numeric, model_kwargs=model_params.get(claimed.spec.model, {}),
                 component_frame=component_frame, fold_transformer=fold_transformer,
+                schema2_model_config=(
+                    config.model_configs.get(claimed.spec.model)
+                    if claimed.spec.model != "autogluon" else None
+                ),
             )
             state.mark_succeeded(claimed, result.prediction_path, result.metadata_path)
             print("[succeeded]", claimed.spec.task_key)
@@ -207,12 +243,12 @@ def main() -> int:
 
     rebuilt = rebuild_fold_metrics(contract.run_dir)
     complete_metrics = _complete_metrics(rebuilt)
-    summary = summarize_combinations(complete_metrics, n_bootstrap=args.bootstrap_n, seed=int(config.cv["seed"]))
+    summary = summarize_combinations(complete_metrics, n_bootstrap=bootstrap_n, seed=int(config.cv["seed"]))
     model_comparisons, model_exclusions = paired_comparisons(
-        complete_metrics, rebuilt.completeness, dimension="model", n_bootstrap=args.bootstrap_n, seed=int(config.cv["seed"]),
+        complete_metrics, rebuilt.completeness, dimension="model", n_bootstrap=bootstrap_n, seed=int(config.cv["seed"]),
     )
     descriptor_comparisons, descriptor_exclusions = paired_comparisons(
-        complete_metrics, rebuilt.completeness, dimension="descriptor", n_bootstrap=args.bootstrap_n, seed=int(config.cv["seed"]),
+        complete_metrics, rebuilt.completeness, dimension="descriptor", n_bootstrap=bootstrap_n, seed=int(config.cv["seed"]),
     )
     model_tukey = tukey_hsd_comparisons(complete_metrics, dimension="model")
     descriptor_tukey = tukey_hsd_comparisons(complete_metrics, dimension="descriptor")
@@ -225,6 +261,17 @@ def main() -> int:
     print("[state]", counts)
     print("[report]", report.html_path)
     return 0 if counts["failed"] == 0 and counts["interrupted"] == 0 and counts["pending"] == 0 else 2
+
+
+def main() -> int:
+    args = _parse_args()
+    return run_benchmark(
+        args.config,
+        rerun_failed=args.rerun_failed,
+        task_keys=args.task_key,
+        stale_seconds=args.stale_seconds,
+        bootstrap_n=args.bootstrap_n,
+    )
 
 
 if __name__ == "__main__":

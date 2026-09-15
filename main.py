@@ -45,9 +45,15 @@ from typing import Any, Dict, List, Optional, TextIO
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
+# The YAML ``features`` stage must remain usable in an environment that does
+# not carry training dependencies.  Legacy direct-CSV helpers still require
+# sklearn when they are actually called.
+try:
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    from sklearn.model_selection import KFold
+    from sklearn.preprocessing import StandardScaler
+except ImportError:  # pragma: no cover - depends on the active environment
+    mean_absolute_error = mean_squared_error = r2_score = KFold = StandardScaler = None  # type: ignore[assignment]
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -59,13 +65,65 @@ from yonod.universal.descriptor_artifact import (
     prepare_descriptor_artifact,
 )
 from yonod.descriptors.base import split_multi_smiles
-from yonod.descriptors.ohe import OHEFeature
 from yonod.descriptors.registry import (
     FeatureRegistryError,
     FeatureSpec,
     available_feature_names,
     normalise_feature_specs,
 )
+
+
+def _run_schema2_config(config_path: Path, requested_stage: Optional[str]) -> int:
+    """Dispatch the public schema-2 YAML interface without legacy JSON state."""
+    from yonod.config.loader import ConfigLoadError, load_run_config
+    from yonod.pipeline.features import FeatureServiceError, run_features
+    from yonod.pipeline.training import TrainingServiceError, run_all, run_train
+    from yonod.pipeline.reporting import ReportServiceError, rebuild_schema2_summary_report
+    from yonod.pipeline.training import _result_root
+
+    def _reports(runs: Any) -> None:
+        """Best-effort post-processing: one report covers all successful runs."""
+        completed = [run.run_dir for run in runs if run.status in {"complete", "reused"}]
+        if not completed:
+            return
+        try:
+            report = rebuild_schema2_summary_report(completed, output_root=_result_root(loaded, loaded.effective))
+            rendered = [str(path) for path in (report.html_path, report.markdown_path) if path]
+            print(f"[report] 最终汇总（{len(completed)} 个组合）: {', '.join(rendered) or 'disabled by outputs.report_formats'}")
+        except ReportServiceError as exc:
+            print(f"[warn] 最终报告生成失败（训练结果仍有效）：{exc}", file=sys.stderr)
+
+    try:
+        loaded = load_run_config(config_path)
+        stage = str(loaded.effective["stage"])
+        if requested_stage is not None and requested_stage != stage:
+            raise ConfigLoadError(
+                f"--stage={requested_stage!r} 与 YAML 声明的 stage={stage!r} 不一致；"
+                "请修改 YAML 后重新运行，避免 CLI 隐式改变实验身份"
+            )
+        if stage == "features":
+            result = run_features(config_path)
+            print(f"[features] status={result.status} status_manifest={result.status_manifest_path}")
+            for item in result.features:
+                print(f"  - {item.feature_id}: {item.status} {item.manifest_path or item.reason}")
+            return 0 if result.status in {"ready", "partial"} else 2
+        if stage == "train":
+            runs = run_train(config_path)
+            for run in runs:
+                print(f"[train] {run.feature_id} × {run.model}: {run.status} {run.manifest_path}")
+            _reports(runs)
+            return 0 if all(run.status in {"complete", "reused"} for run in runs) else 2
+        if stage == "all":
+            result = run_all(config_path)
+            print(f"[all] features={result.feature_status} status_manifest={result.feature_status_path}")
+            for run in result.training_runs:
+                print(f"  - {run.feature_id} × {run.model}: {run.status} {run.manifest_path}")
+            _reports(result.training_runs)
+            return 0 if all(run.status in {"complete", "reused"} for run in result.training_runs) else 2
+        raise ConfigLoadError(f"不支持的 stage：{stage!r}")
+    except (ConfigLoadError, FeatureServiceError, TrainingServiceError, FileNotFoundError, ValueError) as exc:
+        print(f"[error] YAML 运行配置失败：{exc}", file=sys.stderr)
+        return 1
 
 # New features are selectable but are intentionally not silently added to an
 # existing task when the user accepts the legacy default grid.
@@ -684,15 +742,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         description="YONOD 通用化入口：CSV → 特征 → 模型评估",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    # 配置文件模式（优先级最高）
-    p.add_argument("--json", type=Path, default=None,
-                   help="配置文件路径（JSON 格式，由 yonod.py 生成）")
+    # Schema-2 YAML is the only executable configuration surface.  Retain a
+    # hidden --json token solely to give old commands an actionable migration
+    # message, never to deserialize or execute their contents.
+    p.add_argument("--json", type=Path, default=None, help=argparse.SUPPRESS)
     p.add_argument("--config", type=Path, default=None,
-                   help="配置文件路径（向后兼容，等同于 --json）")
+                   help="schema-2 YAML 配置文件（.yaml/.yml）")
+    p.add_argument("--stage", choices=["features", "train", "all"], default=None,
+                   help="可选一致性检查；必须与 YAML 的 stage 完全相同")
 
-    # 数据集路径（可选，用于覆盖 JSON 中的默认路径）
+    # Direct-CSV exploratory path only; durable configuration runs use YAML.
     p.add_argument("--csv", type=Path, default=None,
-                   help="输入数据集 CSV 路径（可选，覆盖 JSON 中的默认路径）")
+                   help="传统直接运行的输入 CSV 路径（schema-2 YAML 不接受此覆盖）")
     p.add_argument("--label-col", default=None, help="标签列名")
     p.add_argument("--smiles-cols", nargs="+", default=None, help="SMILES 列名（传统模式必填，三分类模式可省略）")
     p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
@@ -826,32 +887,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     """CLI pipeline 入口：解析参数 → 加载数据 → 描述符×模型 grid → 输出报告。"""
     args = parse_args(argv)
 
-    # 兼容处理：--config 参数映射到 --json
-    if args.config is not None and args.json is None:
-        args.json = args.config
-
-    # 处理配置文件模式
     if args.json is not None:
-        try:
-            # 将 --csv 参数传递给 load_config_from_json
-            config = load_config_from_json(args.json, csv_override=args.csv)
-            args = config_to_args(config, args.json)
-            print(f"[config] 已从配置文件加载: {args._config_path}")
-            if config.get('_dataset_path'):
-                print(f"[config] 数据集路径: {config['_dataset_path']}")
-        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-            print(f"[error] 配置文件错误: {e}", file=sys.stderr)
-            return 1
+        print(
+            "[error] JSON 已不再是可执行运行配置。请运行："
+            "python scripts/migrate_config_to_yaml.py --input <旧JSON> --output <新YAML>，"
+            "然后使用 python main.py --config <新YAML>。",
+            file=sys.stderr,
+        )
+        return 1
+    if args.config is not None:
+        return _run_schema2_config(args.config, args.stage)
 
-    # 验证必要参数（仅在非配置文件模式下检查）
-    if args.json is None:
-        if args.csv is None:
-            print("[error] 请指定 --json 参数（配置文件模式）或 --csv 参数（传统CLI模式）。", file=sys.stderr)
-            return 1
-
-        if args.label_col is None:
-            print("[error] 请指定 --label-col 参数或使用 --json 配置文件。", file=sys.stderr)
-            return 1
+    # Direct CSV flags remain an exploratory convenience path; all durable
+    # configuration-driven runs must enter through --config YAML above.
+    if args.csv is None:
+        print("[error] 请指定 --config <schema-2.yaml>，或提供传统 --csv 参数。", file=sys.stderr)
+        return 1
+    if args.label_col is None:
+        print("[error] 请指定 --label-col 参数，或使用 --config YAML。", file=sys.stderr)
+        return 1
 
     try:
         feature_specs = _feature_specs_for_args(args, label_col=str(args.label_col))
@@ -1319,6 +1373,7 @@ def _cv_with_ohe_feature(
     """
     if spec.lifecycle != "fold_transform" or spec.descriptor != "ohe":
         raise ValueError("_cv_with_ohe_feature 仅接受 OHE fold_transform")
+    from yonod.descriptors.ohe import OHEFeature
     if len(y) < args.cv:
         raise ValueError("样本数必须不少于 cv 折数")
     component_frame = frame.loc[:, list(spec.columns)]
@@ -1448,11 +1503,11 @@ def _print_usage() -> None:
     print("  场景A: 完整向导流程（首次使用推荐）")
     print("    python yonod.py")
     print()
-    print("  场景B: 使用配置文件建模（向导生成的配置）")
-    print("    python main.py --json path/to/project_yonod_config.json")
+    print("  场景B: 使用 schema-2 YAML 配置建模（向导生成的配置）")
+    print("    python main.py --config path/to/project_run.yaml")
     print()
-    print("    可选：覆盖默认数据集路径")
-    print("    python main.py --json config.json --csv custom_dataset.csv")
+    print("    旧 JSON 请先一次性迁移")
+    print("    python scripts/migrate_config_to_yaml.py --input old.json --output run.yaml --sample-id-col sample_id")
     print()
     print("  场景C: 传统CLI模式（直接指定参数）")
     print("    python main.py --csv data.csv --label-col yield \\")

@@ -15,6 +15,12 @@
 
 # Chemistry / featurization
 rdkit==2023.9.5
+# Chemical VAE HDF5 asset inspection and encoder-only conversion.  This does
+# not install TensorFlow/Keras or make them a runtime dependency.
+h5py==3.14.0
+# For the optional direct Keras-HDF5 parity reference, install
+# requirements-chemical-vae-parity.txt; ordinary Chemical VAE runtime uses
+# converted PyTorch weights and does not import TensorFlow/Keras.
 drfp>=0.3.4
 transformers==4.40.0
 networkx==3.2.1
@@ -27,6 +33,10 @@ xgboost==2.0.3
 # Data processing
 pandas==2.0.3
 numpy==1.26.4
+# 严格 benchmark 的 split、逐折预测和指标使用原子 Parquet 作为可恢复证据。
+pyarrow==16.1.0
+# Strict benchmark reports compare models/descriptors with Tukey HSD.
+statsmodels>=0.14,<0.15
 
 # Plotting
 matplotlib==3.8.4

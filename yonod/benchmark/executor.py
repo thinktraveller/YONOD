@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.metadata
 import json
@@ -232,6 +233,7 @@ def _fit_predict_model(
     layout: Any,
     suffix: str,
     evaluation_protocol: str = DEFAULT_EVALUATION_PROTOCOL,
+    schema2_model_config: Optional[Mapping[str, Any]] = None,
 ) -> tuple[np.ndarray, float, float, Dict[str, Any], Dict[str, Any]]:
     """Fit one external fold and return predictions plus audit metadata."""
     if model == "autogluon":
@@ -280,8 +282,47 @@ def _fit_predict_model(
             metadata,
         )
 
-    estimator = _build_estimator(model, effective_model_kwargs, X_train.shape[1], len(y_train))
-    estimator_params_snapshot = _json_safe_estimator_params(estimator)
+    if schema2_model_config is not None:
+        # The public schema-2 route does not inherit defaults from the legacy
+        # benchmark adapters.  It constructs the exact estimator declared in
+        # the shared model factory, while retaining this executor's immutable
+        # manifest train/valid boundary.
+        from ..model_factory import ModelConfigurationError, construct_estimator, resolve_model_config
+
+        try:
+            model_config = copy.deepcopy(dict(schema2_model_config))
+            if model == "rf" and protocol_seed is not None:
+                estimator_config = model_config.setdefault("estimator", {})
+                if "random_state" in estimator_config and estimator_config["random_state"] != protocol_seed:
+                    raise ModelConfigurationError(
+                        "论文 RF 协议的 estimator.random_state 必须与 manifest seed 一致"
+                    )
+                estimator_config["random_state"] = protocol_seed
+            resolved = resolve_model_config(model, model_config)
+            if resolved.fit:
+                raise ModelConfigurationError(
+                    "strict benchmark executor 不接受 model_params.<model>.fit；"
+                    "此路径尚未实现逐折数据列物化"
+                )
+            if "early_stopping" in resolved.runtime:
+                raise ModelConfigurationError(
+                    "strict benchmark executor 尚未实现 runtime.early_stopping 的内层验证拆分"
+                )
+            estimator, factory_audit = construct_estimator(
+                resolved, n_features=X_train.shape[1], n_train=len(y_train)
+            )
+        except ModelConfigurationError as exc:
+            raise FoldExecutionError("schema-2 模型配置无法构造：{0}".format(exc)) from exc
+        estimator_params_snapshot = {
+            # Preserve the public flat snapshot consumed by fold metadata and
+            # historical reports, together with the full schema-2 factory audit.
+            **factory_audit["effective_estimator_params"],
+            "construction": "schema2_model_factory",
+            **factory_audit,
+        }
+    else:
+        estimator = _build_estimator(model, effective_model_kwargs, X_train.shape[1], len(y_train))
+        estimator_params_snapshot = _json_safe_estimator_params(estimator)
     start = time.perf_counter()
     estimator.fit(X_train, y_train)
     train_time_s = time.perf_counter() - start
@@ -365,6 +406,7 @@ def execute_fold(
     model_kwargs: Optional[Mapping[str, Any]] = None,
     component_frame: Optional[pd.DataFrame] = None,
     fold_transformer: Optional[Any] = None,
+    schema2_model_config: Optional[Mapping[str, Any]] = None,
 ) -> FoldExecutionResult:
     """Fit exactly one manifest-defined fold and write its prediction shard.
 
@@ -459,6 +501,7 @@ def execute_fold(
         layout=layout,
         suffix=suffix,
         evaluation_protocol=evaluation_protocol,
+        schema2_model_config=schema2_model_config,
     )
     if not np.isfinite(prediction).all():
         raise FoldExecutionError("模型预测包含 NaN 或 inf")

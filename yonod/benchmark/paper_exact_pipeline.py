@@ -429,7 +429,10 @@ def prepare_paper_exact_material(
     config = build_paper_exact_config(spec)
     config_path = population_dir / "paper_exact_rf_config.json"
     _write_json(config_path, config, overwrite=overwrite)
-    contract = create_benchmark_contract(BenchmarkConfig.from_file(config_path))
+    # Paper-exact materials deliberately remain archival JSON rather than an
+    # executable benchmark entry point.  Keep their reader isolated from the
+    # schema-2 strict-benchmark launch adapter.
+    contract = create_benchmark_contract(BenchmarkConfig.from_paper_exact_json(config_path))
     split_manifest = _remap_split_manifest_to_source_rows(
         contract, create_split_manifest(contract), population_frame, population_id
     )

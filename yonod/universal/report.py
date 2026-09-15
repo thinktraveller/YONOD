@@ -438,19 +438,31 @@ def _universal_dimension_time_summary(
     return result
 
 
-def _configure_chinese_matplotlib(plt: Any) -> None:
-    """Use an installed CJK font when available for Chinese plot labels."""
+def _configure_chinese_matplotlib(plt: Any) -> Optional[str]:
+    """Use an installed CJK font and return its name, or ``None`` if absent.
+
+    Callers which put Chinese text directly into raster figures can use the
+    return value to render an explicit ASCII fallback instead of silently
+    producing tofu boxes on minimal Linux or Windows installations.
+    """
     try:
         from matplotlib import font_manager
         installed = {font.name for font in font_manager.fontManager.ttflist}
     except Exception:  # pragma: no cover - font discovery varies by platform
-        return
-    for candidate in ("Microsoft YaHei", "SimHei", "SimSun", "Noto Sans CJK SC"):
+        return None
+    # Keep this list deliberately broad: Linux distributions commonly expose
+    # Noto or the AR PL families instead of the Windows Chinese fonts.
+    for candidate in (
+        "Microsoft YaHei", "SimHei", "SimSun", "Noto Sans CJK SC",
+        "Noto Serif CJK SC", "AR PL UMing CN", "AR PL UKai CN",
+        "WenQuanYi Zen Hei", "Droid Sans Fallback",
+    ):
         if candidate in installed:
             current = list(plt.rcParams.get("font.sans-serif", []))
             plt.rcParams["font.sans-serif"] = [candidate] + [name for name in current if name != candidate]
             plt.rcParams["axes.unicode_minus"] = False
-            return
+            return candidate
+    return None
 
 
 def _write_universal_time_figure(
@@ -1009,9 +1021,15 @@ def _section_data_paths(task_info: Dict[str, Any]) -> str:
 </section>"""
 
 
-def _section_scatter(out_dir: Path) -> str:
+def _section_scatter(out_dir: Path, scatter_paths: Optional[List[Path]] = None) -> str:
+    """Render scatter images from an explicit run-scoped inventory when given.
+
+    The legacy directory scan remains for the direct-CSV interface only.  The
+    schema-2 post-processing service always supplies its own inventory so an
+    old image under a shared output root cannot leak into a new report.
+    """
     pics_dir = out_dir / "pictures"
-    pngs = sorted(pics_dir.glob("scatter_*.png")) if pics_dir.exists() else []
+    pngs = list(scatter_paths) if scatter_paths is not None else (sorted(pics_dir.glob("scatter_*.png")) if pics_dir.exists() else [])
     if not pngs:
         return ""
     imgs = ""
@@ -1043,6 +1061,7 @@ def generate_report(
     task_info: Dict[str, Any],
     out_dir: Path,
     filename: str = "report.html",
+    scatter_paths: Optional[List[Path]] = None,
 ) -> Path:
     """生成自包含 HTML 报告。
 
@@ -1079,7 +1098,7 @@ def generate_report(
         + _section_descriptor_precomputation(task_info)
         + _section_data_paths(task_info)
         + _section_modeling_time(metrics_df, out_dir)
-        + _section_scatter(out_dir)
+        + _section_scatter(out_dir, scatter_paths)
     )
 
     html = f"""<!DOCTYPE html>
@@ -1115,6 +1134,7 @@ def generate_markdown_report(
     task_info: Dict[str, Any],
     out_dir: Path,
     filename: str = "report.md",
+    scatter_paths: Optional[List[Path]] = None,
 ) -> Path:
     """生成 Markdown 格式报告，适合二次编辑和版本管理。
 
@@ -1478,6 +1498,18 @@ def generate_markdown_report(
         if config_path:
             lines.append(f"| 配置文件 | `{config_path}` |")
         lines.append("")
+
+    # ── OOF 散点图（schema-2 supplies an explicit inventory) ───────────────
+    markdown_scatters = list(scatter_paths) if scatter_paths is not None else sorted((out_dir / "pictures").glob("scatter_*.png"))
+    if markdown_scatters:
+        lines += ["---", "", "## OOF 预测散点图", ""]
+        for picture in markdown_scatters:
+            # Reports live in ``root/report`` and images in ``root/pictures``.
+            # Use that stable sibling layout instead of an absolute path, so a
+            # copied report bundle remains valid on Windows and Linux.
+            relative = Path("..") / "pictures" / picture.name
+            label = _md(picture.stem.replace("scatter_", "").replace("_", " × "))
+            lines += [f"### {label}", "", f"![{label}]({relative.as_posix()})", ""]
 
     # ── 指标说明 ─────────────────────────────────────────────────────────────
     lines += [

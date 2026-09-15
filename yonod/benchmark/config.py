@@ -7,6 +7,7 @@ benchmark 的数据、列角色和评价配置，使后续 split manifest、预�
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import platform
@@ -21,6 +22,9 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 import pandas as pd
 import yaml
 
+from ..config.contracts import ConfigContractError, resolve_config_path
+from ..config.loader import ConfigLoadError, load_run_config
+from ..model_factory import ModelConfigurationError, resolve_model_config
 from .layout import resolve_benchmark_output_layout
 
 
@@ -87,8 +91,10 @@ def _normalise_feature_sets(
     if value is None:
         return tuple({
             "name": descriptor,
+            "algorithm": descriptor,
             "kind": "precomputed_descriptor",
             "component_cols": list(smiles_cols),
+            "mode": "concat",
             "params": {},
         } for descriptor in descriptors)
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value:
@@ -124,10 +130,18 @@ def _normalise_feature_sets(
         params = item.get("params", {})
         if not isinstance(params, Mapping):
             raise BenchmarkConfigError("feature_sets[{0}].params 必须是 mapping".format(index))
+        algorithm = str(item.get("algorithm", name)).strip().lower()
+        if not algorithm:
+            raise BenchmarkConfigError("feature_sets[{0}].algorithm 不能为空".format(index))
+        mode = str(item.get("mode", "concat")).strip()
+        if mode not in {"concat", "sum"}:
+            raise BenchmarkConfigError("feature_sets[{0}].mode 必须为 concat 或 sum".format(index))
         normalised.append({
             "name": name,
+            "algorithm": algorithm,
             "kind": kind,
             "component_cols": list(component_cols),
+            "mode": mode,
             "params": json.loads(_canonical_json(dict(params))),
         })
         names.add(name)
@@ -157,21 +171,75 @@ class BenchmarkConfig:
     models: tuple[str, ...]
     grouping: Dict[str, Any]
     cv: Dict[str, Any]
+    artifact_output_dir: Path
     outputs_root: Path
+    model_configs: Dict[str, Dict[str, Any]]
+    legacy_model_kwargs: Dict[str, Dict[str, Any]]
+    task_state: Dict[str, Any]
     raw: Dict[str, Any]
 
     @classmethod
     def from_file(cls, path: Path | str) -> "BenchmarkConfig":
+        """Load the only supported executable strict-benchmark YAML.
+
+        The former ``benchmark:`` root is intentionally not adapted here.  It
+        had independent model-parameter, grouping and output conventions, so
+        accepting it would make a failed migration look like an ordinary
+        ``outer_kfold`` run.  Paper-exact archival material remains isolated
+        behind :meth:`from_paper_exact_json` and never reaches this launch
+        path.
+        """
+        source_path = Path(path).resolve()
+        try:
+            loaded = load_run_config(source_path)
+        except (ConfigLoadError, ConfigContractError) as exc:
+            raise BenchmarkConfigError(str(exc)) from exc
+        effective = loaded.effective
+        if effective.get("stage") != "benchmark":
+            raise BenchmarkConfigError(
+                "严格 benchmark 配置必须声明 stage: benchmark；普通 outer_kfold 配置不能替代 manifest 外部折协议"
+            )
+        return cls._from_schema2(source_path, effective)
+
+    @classmethod
+    def from_paper_exact_json(cls, path: Path | str) -> "BenchmarkConfig":
+        """Load pre-existing paper-exact archival material only.
+
+        This is not a runnable configuration compatibility entry point.  The
+        paper-exact modules call it while reading their already-versioned JSON
+        materials; public ``scripts/run_benchmark.py`` and ``yonod.py`` use
+        :meth:`from_file` exclusively.
+        """
         source_path = Path(path).resolve()
         if not source_path.is_file():
-            raise FileNotFoundError(f"benchmark 配置文件不存在：{source_path}")
-        with source_path.open("r", encoding="utf-8") as handle:
-            raw = yaml.safe_load(handle)
+            raise FileNotFoundError(f"paper-exact 配置文件不存在：{source_path}")
+        if source_path.suffix.lower() != ".json":
+            raise BenchmarkConfigError("paper-exact 归档材料必须是既有 .json 文件；新运行请使用 schema-2 YAML")
+        try:
+            raw = json.loads(source_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise BenchmarkConfigError(f"paper-exact JSON 无法解析：{exc}") from exc
         if not isinstance(raw, Mapping):
-            raise BenchmarkConfigError("配置根节点必须是 mapping，且包含 benchmark 节点")
+            raise BenchmarkConfigError("paper-exact JSON 根节点必须是 mapping")
         block = raw.get("benchmark", raw)
         if not isinstance(block, Mapping):
             raise BenchmarkConfigError("benchmark 节点必须是 mapping")
+        protocol = str(block.get("evaluation_protocol", ""))
+        reproduction = block.get("reproduction_protocol", {})
+        reproduction_name = str(reproduction.get("name", "")) if isinstance(reproduction, Mapping) else ""
+        reproduction_protocol = str(reproduction.get("evaluation_protocol", "")) if isinstance(reproduction, Mapping) else ""
+        if (
+            protocol != "paper_exact_5x5"
+            and reproduction_protocol != "paper_exact_5x5"
+            and reproduction_name != "vjethbkm_rf_5x5"
+        ):
+            raise BenchmarkConfigError(
+                "仅 paper-exact 归档材料可使用 from_paper_exact_json；普通 benchmark 必须迁移为 schema-2 YAML"
+            )
+        return cls._from_legacy_paper_exact_block(source_path, block)
+
+    @classmethod
+    def _from_legacy_paper_exact_block(cls, source_path: Path, block: Mapping[str, Any]) -> "BenchmarkConfig":
 
         required = ("dataset_path", "sample_id_col", "label_col", "smiles_cols", "models")
         missing = [key for key in required if not block.get(key)]
@@ -227,9 +295,201 @@ class BenchmarkConfig:
             models=_require_string_list(block["models"], "models"),
             grouping=grouping,
             cv=cv,
+            artifact_output_dir=outputs_root,
             outputs_root=outputs_root,
+            model_configs={},
+            legacy_model_kwargs={
+                str(name): dict(params)
+                for name, params in dict(block.get("model_params", {})).items()
+                if isinstance(params, Mapping)
+            },
+            task_state={"backend": "sqlite", "resumable": True, "legacy_paper_exact": True},
             raw=dict(block),
         )
+
+    @classmethod
+    def _from_schema2(cls, source_path: Path, raw: Mapping[str, Any]) -> "BenchmarkConfig":
+        """Adapt a validated schema-2 declaration without changing protocol."""
+        dataset = raw["dataset"]
+        roles = dataset["column_roles"]
+        label_col = str(roles["label"])
+        smiles_cols = _require_string_list(roles.get("reactants"), "dataset.column_roles.reactants")
+        dataset_path = resolve_config_path(source_path, str(dataset["path"]))
+        artifact_output_dir = resolve_config_path(source_path, str(raw["artifacts"]["output_dir"]))
+        outputs = raw.get("outputs")
+        if not isinstance(outputs, Mapping) or not isinstance(outputs.get("root"), str) or not outputs["root"].strip():
+            raise BenchmarkConfigError("stage: benchmark 必须声明非空 outputs.root")
+        outputs_root = resolve_config_path(source_path, str(outputs["root"]))
+        if artifact_output_dir != outputs_root:
+            raise BenchmarkConfigError(
+                "严格 benchmark 要求 artifacts.output_dir 与 outputs.root 解析为同一任务根目录；"
+                "这样 descriptors、split manifest、SQLite task state 与报告拥有同一不可覆盖的 run identity"
+            )
+
+        evaluation = raw.get("evaluation")
+        if not isinstance(evaluation, Mapping):
+            raise BenchmarkConfigError("stage: benchmark 必须声明 evaluation")
+        if evaluation.get("protocol") != "manifest_outer_cv":
+            raise BenchmarkConfigError(
+                "stage: benchmark 只支持 evaluation.protocol: manifest_outer_cv；不能降级为 outer_kfold"
+            )
+        if evaluation.get("split_manifest") is not None:
+            raise BenchmarkConfigError(
+                "当前严格 adapter 只生成并持久化自己的 manifest 外部折；evaluation.split_manifest 尚未具备逐行等价导入校验，故拒绝运行"
+            )
+        grouping_value = evaluation.get("grouping")
+        if not isinstance(grouping_value, Mapping) or not grouping_value.get("strategy"):
+            raise BenchmarkConfigError("evaluation.grouping.strategy 不能为空；严格 benchmark 不会回退为普通 outer_kfold")
+        grouping = copy.deepcopy(dict(grouping_value))
+        cv: Dict[str, Any] = {}
+        for field in ("n_repeats", "n_splits", "seed"):
+            if field not in evaluation:
+                raise BenchmarkConfigError(f"evaluation.{field} 不能为空")
+            value = evaluation[field]
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise BenchmarkConfigError(f"evaluation.{field} 必须是整数")
+            cv[field] = int(value)
+        if cv["n_repeats"] < 1 or cv["n_splits"] < 2:
+            raise BenchmarkConfigError("evaluation.n_repeats 必须 >= 1，evaluation.n_splits 必须 >= 2")
+
+        feature_sets = cls._schema2_feature_sets(raw["descriptors"], smiles_cols)
+        active_feature_names = tuple(str(item["name"]) for item in feature_sets)
+        model_configs, legacy_model_kwargs = cls._schema2_model_configs(raw.get("model_params", {}), raw["models"])
+        benchmark = raw["benchmark"]
+        task_state = copy.deepcopy(dict(benchmark["task_state"]))
+        internal_raw: Dict[str, Any] = {
+            "schema_version": "2.0",
+            "model_params": legacy_model_kwargs,
+            "schema2_model_params": copy.deepcopy(model_configs),
+            "reproduction_protocol": copy.deepcopy(dict(benchmark.get("reproduction_protocol", {}))),
+            "evaluation_protocol": "manifest_outer_cv",
+            "task_state": task_state,
+            "project_name": raw["project_name"],
+        }
+        for field in ("population_id", "dataset_id"):
+            if field in benchmark:
+                internal_raw[field] = benchmark[field]
+        return cls(
+            source_path=source_path,
+            dataset_path=dataset_path,
+            sample_id_col=str(dataset["sample_id_col"]),
+            label_col=label_col,
+            smiles_cols=smiles_cols,
+            descriptors=active_feature_names,
+            feature_sets=feature_sets,
+            models=_require_string_list(raw["models"], "models"),
+            grouping=grouping,
+            cv=cv,
+            artifact_output_dir=artifact_output_dir,
+            outputs_root=outputs_root,
+            model_configs=model_configs,
+            legacy_model_kwargs=legacy_model_kwargs,
+            task_state=task_state,
+            raw=internal_raw,
+        )
+
+    @staticmethod
+    def _schema2_feature_sets(value: Any, smiles_cols: Sequence[str]) -> tuple[Dict[str, Any], ...]:
+        if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value:
+            raise BenchmarkConfigError("stage: benchmark 的 descriptors 必须是非空列表")
+        feature_sets = []
+        for index, item in enumerate(value, start=1):
+            if not isinstance(item, Mapping):
+                raise BenchmarkConfigError("descriptors[{0}] 必须是 mapping".format(index))
+            # Feature IDs are part of the task and artifact identity.  Do not
+            # case-fold them while adapting schema-2: doing so could silently
+            # merge two distinct user-declared feature sets.
+            feature_id = str(item.get("id", "")).strip()
+            algorithm = str(item.get("descriptor", "")).strip().lower()
+            lifecycle = str(item.get("lifecycle", "")).strip()
+            if not feature_id or not algorithm:
+                raise BenchmarkConfigError("descriptors[{0}] 必须声明 id 和 descriptor".format(index))
+            if lifecycle not in {"static_descriptor", "fold_transform"}:
+                raise BenchmarkConfigError(
+                    "descriptors[{0}].lifecycle 必须显式为 static_descriptor 或 fold_transform".format(index)
+                )
+            columns = _require_string_list(item.get("columns"), "descriptors[{0}].columns".format(index))
+            unknown = [column for column in columns if column not in smiles_cols]
+            if unknown:
+                raise BenchmarkConfigError(
+                    "descriptors[{0}].columns 必须属于 dataset.column_roles.reactants：{1}".format(
+                        index, ", ".join(unknown)
+                    )
+                )
+            if item.get("extra_reactants"):
+                raise BenchmarkConfigError(
+                    "严格 benchmark 尚不能逐字段映射 descriptors[{0}].extra_reactants；"
+                    "为避免改变组件顺序而拒绝运行".format(index)
+                )
+            if lifecycle == "fold_transform" and algorithm != "ohe":
+                raise BenchmarkConfigError(
+                    "严格 benchmark 目前唯一支持的 fold_transform descriptor 是 ohe；收到 {0!r}".format(algorithm)
+                )
+            params = item.get("params", {})
+            if not isinstance(params, Mapping):
+                raise BenchmarkConfigError("descriptors[{0}].params 必须是 mapping".format(index))
+            mode = str(item.get("mode", "concat")).strip()
+            if mode not in {"concat", "sum"}:
+                raise BenchmarkConfigError("descriptors[{0}].mode 必须为 concat 或 sum".format(index))
+            feature_sets.append({
+                "name": feature_id,
+                "algorithm": algorithm,
+                "kind": "fold_transform" if lifecycle == "fold_transform" else "precomputed_descriptor",
+                "component_cols": list(columns),
+                "mode": mode,
+                "params": copy.deepcopy(dict(params)),
+            })
+        names = [str(item["name"]) for item in feature_sets]
+        if len(set(names)) != len(names):
+            raise BenchmarkConfigError("descriptors 的 id 不能重复")
+        return tuple(feature_sets)
+
+    @staticmethod
+    def _schema2_model_configs(value: Any, models: Any) -> tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+        if not isinstance(value, Mapping):
+            raise BenchmarkConfigError("model_params 必须是 mapping")
+        model_names = _require_string_list(models, "models")
+        unknown = sorted(str(name) for name in value if str(name) not in model_names)
+        if unknown:
+            raise BenchmarkConfigError("model_params 包含未列入 models 的模型：{0}".format(", ".join(unknown)))
+        configs: Dict[str, Dict[str, Any]] = {}
+        legacy_kwargs: Dict[str, Dict[str, Any]] = {}
+        for model in model_names:
+            section = value.get(model, {})
+            if not isinstance(section, Mapping):
+                raise BenchmarkConfigError("model_params.{0} 必须是 mapping".format(model))
+            try:
+                resolved = resolve_model_config(model, section)
+            except ModelConfigurationError as exc:
+                raise BenchmarkConfigError(str(exc)) from exc
+            if resolved.fit and model != "autogluon":
+                raise BenchmarkConfigError(
+                    "严格 manifest 外部折尚未实现 model_params.{0}.fit 的逐折数据列物化；为避免改变样本权重或验证边界而拒绝运行".format(model)
+                )
+            if model in {"xgb", "lightgbm"} and "early_stopping" in resolved.runtime:
+                raise BenchmarkConfigError(
+                    "严格 benchmark 尚未为 runtime.early_stopping 建立已审计的内层验证折；请勿把它降级为外层 eval_set"
+                )
+            if model == "autogluon":
+                unsupported_predictor = set(resolved.estimator).difference({"label"})
+                unsupported_fit = set(resolved.fit).difference({"time_limit", "presets", "num_cpus"})
+                if unsupported_predictor or unsupported_fit:
+                    raise BenchmarkConfigError(
+                        "严格 benchmark 的 AutoGluon adapter 仅支持 fit.time_limit、fit.presets、fit.num_cpus；"
+                        "不支持的 predictor/fit 字段：{0}".format(
+                            ", ".join(sorted(unsupported_predictor | unsupported_fit))
+                        )
+                    )
+                if resolved.estimator.get("label") not in {None, "yield"}:
+                    raise BenchmarkConfigError(
+                        "严格 benchmark AutoGluon adapter 的内部标签字段固定为 yield；请不要声明 predictor.label"
+                    )
+                legacy_kwargs[model] = {
+                    **dict(resolved.fit),
+                    **dict(resolved.runtime),
+                }
+            configs[model] = copy.deepcopy(dict(section))
+        return configs, legacy_kwargs
 
     def validate_dataset(self) -> pd.DataFrame:
         """Read and validate the data contract before any training begins."""
@@ -266,10 +526,13 @@ class BenchmarkConfig:
             "feature_sets": [dict(item) for item in self.feature_sets],
             "models": list(self.models),
             "model_params": self.raw.get("model_params", {}),
+            "schema2_model_params": self.raw.get("schema2_model_params", {}),
             "reproduction_protocol": self.raw.get("reproduction_protocol", {}),
             "grouping": self.grouping,
             "cv": self.cv,
+            "artifact_output_dir": str(self.artifact_output_dir),
             "outputs_root": str(self.outputs_root),
+            "task_state": self.task_state,
         }
         for optional_field in ("population_id", "dataset_id", "paper_exact", "evaluation_protocol"):
             if optional_field in self.raw:
