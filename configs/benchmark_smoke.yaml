@@ -1,18 +1,40 @@
-benchmark:
-  dataset_path: ../dataset/benchmark_smoke_fixture.csv
+# 严格 benchmark 最小 smoke；请通过 `python -u yonod.py` 输入本文件启动。
+schema_version: "2.0"
+project_name: benchmark-smoke
+stage: benchmark
+dataset:
+  path: ../dataset/benchmark_smoke_fixture.csv
   sample_id_col: reaction_id
-  label_col: yield
-  smiles_cols: [reactant_1_smiles, reactant_2_smiles]
-  descriptors: [morgan]
-  models: [rf, xgb, lightgbm]
-  model_params:
-    rf: {n_estimators: 10, n_jobs: 1, random_state: 42}
-    xgb: {n_estimators: 10, device: cpu, random_state: 42}
-    lightgbm: {n_estimators: 20, n_jobs: 1, random_state: 42}
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+descriptors:
+  - id: morgan
+    descriptor: morgan
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+    params: {}
+artifacts:
+  output_dir: ../results/benchmark-smoke
+models: [rf, xgb, lightgbm]
+model_params:
+  rf:
+    estimator: {n_estimators: 10, n_jobs: 1, random_state: 42}
+  xgb:
+    estimator: {n_estimators: 10, device: cpu, random_state: 42}
+  lightgbm:
+    estimator: {n_estimators: 20, n_jobs: 1, random_state: 42}
+evaluation:
+  protocol: manifest_outer_cv
+  n_repeats: 2
+  n_splits: 2
+  seed: 42
   grouping:
     strategy: component_holdout
     component_cols: [reactant_1_smiles]
     max_group_fraction: 0.5
-  cv: {n_repeats: 2, n_splits: 2, seed: 42}
-  outputs:
-    root: ../results/benchmark-smoke
+outputs:
+  root: ../results/benchmark-smoke
+benchmark:
+  task_state: {backend: sqlite, resumable: true}

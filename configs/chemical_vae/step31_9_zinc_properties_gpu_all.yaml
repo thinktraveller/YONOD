@@ -1,0 +1,60 @@
+# Step 31.9: a separate post-parity smoke for the zinc_properties *encoder*.
+# The accompanying property-predictor head is intentionally never loaded;
+# this descriptor uses only the independently verified z_mean encoder.
+schema_version: "2.0"
+project_name: step31_9_chemical_vae_zinc_properties_gpu
+stage: all
+
+dataset:
+  path: ../../dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+
+descriptors:
+  - id: chemical-vae-zinc-properties-v5-gpu
+    descriptor: chemical_vae
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+    params:
+      model_manifest: ../../WEIGHTS/chemical_vae/zinc_properties-9f923d03c5ce558d/v5/conversion_manifest.json
+      backend: pytorch
+      device: cuda:0
+      batch_size: 4
+      input_preprocessing: identity
+      output: z_mean_sample
+
+artifacts:
+  output_dir: ../../derived/chemical_vae/step31_9_gpu_smoke/zinc_properties_artifacts
+
+models: [rf]
+model_params:
+  rf:
+    estimator:
+      n_estimators: 16
+      max_depth: null
+      min_samples_leaf: 1
+      max_features: 1.0
+      n_jobs: 1
+      random_state: 42
+      verbose: 0
+
+evaluation:
+  protocol: outer_kfold
+  n_splits: 2
+  n_repeats: 1
+  shuffle: true
+  seed: 42
+
+outputs:
+  root: ../../derived/chemical_vae/step31_9_gpu_smoke/zinc_properties_outputs
+  report_formats: [Markdown]
+
+metadata:
+  notes: "Step 31.9 C11 post-parity Linux GPU smoke for zinc_properties encoder only; property head excluded and RF remains CPU/sklearn."

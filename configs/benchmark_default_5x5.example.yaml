@@ -1,20 +1,47 @@
-# 正式研究模板：替换 dataset_path 和真实稳定 reaction_id 后再运行。
-benchmark:
-  dataset_path: ../dataset/your_versioned_reaction_dataset.csv
+# 正式研究模板：替换 dataset.path 和真实稳定 reaction_id 后再运行。
+schema_version: "2.0"
+project_name: benchmark-default-5x5
+stage: benchmark
+dataset:
+  path: ../dataset/your_versioned_reaction_dataset.csv
   sample_id_col: reaction_id
-  label_col: yield
-  smiles_cols: [reactant_1_smiles, reactant_2_smiles]
-  descriptors: [morgan, rdkit2d]
-  models: [rf, xgb, lightgbm]
-  model_params:
-    rf: {n_estimators: 300, n_jobs: 1, random_state: 42}
-    xgb: {n_estimators: 300, device: cpu, random_state: 42}
-    lightgbm: {n_estimators: 500, n_jobs: 1, random_state: 42}
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+descriptors:
+  - id: morgan
+    descriptor: morgan
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+    params: {}
+  - id: rdkit2d
+    descriptor: rdkit2d
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+    params: {}
+artifacts:
+  output_dir: ../results/benchmark-default-5x5
+models: [rf, xgb, lightgbm]
+model_params:
+  rf:
+    estimator: {n_estimators: 300, n_jobs: 1, random_state: 42}
+  xgb:
+    estimator: {n_estimators: 300, device: cpu, random_state: 42}
+  lightgbm:
+    estimator: {n_estimators: 500, n_jobs: 1, random_state: 42}
+evaluation:
+  protocol: manifest_outer_cv
+  n_repeats: 5
+  n_splits: 5
+  seed: 42
   grouping:
     strategy: reaction_fingerprint_cluster
     reaction_cols: [reactant_1_smiles, reactant_2_smiles]
     similarity_threshold: 0.7
     max_group_fraction: 0.5
-  cv: {n_repeats: 5, n_splits: 5, seed: 42}
-  outputs:
-    root: ../results/benchmark-default-5x5
+outputs:
+  root: ../results/benchmark-default-5x5
+benchmark:
+  task_state: {backend: sqlite, resumable: true}

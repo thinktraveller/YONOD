@@ -1,0 +1,35 @@
+# Sequential timing control: first invocation is cold; an immediately repeated
+# invocation of this exact YAML is the verified cache-hit measurement.
+schema_version: "2.0"
+project_name: step31_7_timing_chemical_vae
+stage: features
+dataset:
+  path: ../../dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+descriptors:
+  - id: chemical-vae-zinc-v5
+    descriptor: chemical_vae
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+    params:
+      model_manifest: ../../WEIGHTS/chemical_vae/zinc-37e96cd3bc8f9680/v5/conversion_manifest.json
+      backend: pytorch
+      device: cpu
+      batch_size: 4
+      input_preprocessing: identity
+      output: z_mean_sample
+artifacts:
+  output_dir: ../../derived/chemical_vae/step31_7_comparison/timing_artifacts/chemical_vae
+outputs:
+  root: ../../derived/chemical_vae/step31_7_comparison/timing_outputs/chemical_vae
+  report_formats: [Markdown]
+metadata:
+  notes: "Step 31.7 sequential CPU VAE feature timing; cold then exact-config cache hit."

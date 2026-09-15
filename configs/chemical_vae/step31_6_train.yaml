@@ -1,0 +1,49 @@
+# Step 31.6: second, independent process.  This stage consumes the immutable
+# feature artifact produced by step31_6_features.yaml and never declares or
+# loads an encoder descriptor.
+schema_version: "2.0"
+project_name: step31_6_chemical_vae_train
+stage: train
+
+dataset:
+  path: ../../dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+
+artifacts:
+  # Published and hash-verified by the preceding headless features process.
+  input_manifest: ../../derived/chemical_vae/step31_6_smoke/features_artifacts/features/chemical-vae-zinc-v5-bc01a1e755f0-25e0e6f2c5d9/manifest.yaml
+  # Reserved task-owned artifact root; train has no feature writer.
+  output_dir: ../../derived/chemical_vae/step31_6_smoke/train_artifacts
+
+models: [rf]
+model_params:
+  rf:
+    estimator:
+      n_estimators: 16
+      max_depth: null
+      min_samples_leaf: 1
+      max_features: 1.0
+      n_jobs: 1
+      random_state: 42
+      verbose: 0
+
+evaluation:
+  protocol: outer_kfold
+  n_splits: 2
+  n_repeats: 1
+  shuffle: true
+  seed: 42
+
+outputs:
+  root: ../../derived/chemical_vae/step31_6_smoke/train_outputs
+  report_formats: [Markdown]
+
+metadata:
+  notes: "Step 31.6 train process: reads only the verified Chemical VAE artifact."

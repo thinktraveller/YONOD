@@ -1,0 +1,28 @@
+# Sequential timing control: first invocation is cold; an immediately repeated
+# invocation of this exact YAML is the verified cache-hit measurement.
+schema_version: "2.0"
+project_name: step31_7_timing_morgan
+stage: features
+dataset:
+  path: ../../dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+descriptors:
+  - id: morgan-ecfp4
+    descriptor: morgan
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+artifacts:
+  output_dir: ../../derived/chemical_vae/step31_7_comparison/timing_artifacts/morgan
+outputs:
+  root: ../../derived/chemical_vae/step31_7_comparison/timing_outputs/morgan
+  report_formats: [Markdown]
+metadata:
+  notes: "Step 31.7 sequential CPU Morgan feature timing; cold then exact-config cache hit."

@@ -1,0 +1,34 @@
+# End-to-end feature-stage cold/warm-cache timing for MFP on the same rows.
+schema_version: "2.0"
+project_name: step31_7_cost_mfp
+stage: features
+
+dataset:
+  path: ../../dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+
+descriptors:
+  - id: mfp-r3-count
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+    params:
+      profile: standard
+      radius: 3
+      fp_size: 1024
+
+artifacts:
+  output_dir: ../../derived/chemical_vae/step31_7_comparison/cost_artifacts/mfp
+outputs:
+  root: ../../derived/chemical_vae/step31_7_comparison/cost_outputs/mfp
+  report_formats: [Markdown]
+metadata:
+  notes: "Step 31.7 end-to-end cold and warm cache timing; MFP count baseline."

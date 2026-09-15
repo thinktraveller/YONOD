@@ -1,0 +1,32 @@
+# Sequential timing control: first invocation is cold; an immediately repeated
+# invocation of this exact YAML is the verified cache-hit measurement.
+schema_version: "2.0"
+project_name: step31_7_timing_mfp
+stage: features
+dataset:
+  path: ../../dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+descriptors:
+  - id: mfp-r3-count
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+    params:
+      profile: standard
+      radius: 3
+      fp_size: 1024
+artifacts:
+  output_dir: ../../derived/chemical_vae/step31_7_comparison/timing_artifacts/mfp
+outputs:
+  root: ../../derived/chemical_vae/step31_7_comparison/timing_outputs/mfp
+  report_formats: [Markdown]
+metadata:
+  notes: "Step 31.7 sequential CPU MFP feature timing; cold then exact-config cache hit."
