@@ -39,18 +39,16 @@ AutogluonModels/
 logs
 
 # ===================== Large model weights =====================
-# Binary model weights in WEIGHTS/ are tracked with Git LFS. Configuration,
-# documentation, and manifests remain ordinary Git files.
+# Binary model weights are hosted at https://huggingface.co/thinktraveller/YONOD-weights.
+# Configuration, documentation, and manifests remain ordinary Git files.
+# Run `hf download thinktraveller/YONOD-weights --local-dir WEIGHTS` to fetch
+# the distributable binaries locally.
 
-
-# Generic large weight file types
+# Generic large weight file types (not tracked in this repository)
 *.safetensors
 *.pt
+*.pth
 *.ckpt
-
-# The generic binary exclusions above do not apply to distributable weights.
-!WEIGHTS/
-!WEIGHTS/**
 
 
 

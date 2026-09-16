@@ -1,6 +1,0 @@
-# Store distributable model binaries in Git LFS. Keep metadata and source
-# artifacts in ordinary Git so they remain easy to inspect and diff.
-WEIGHTS/**/*.safetensors filter=lfs diff=lfs merge=lfs -text
-WEIGHTS/**/*.pt filter=lfs diff=lfs merge=lfs -text
-WEIGHTS/**/*.pth filter=lfs diff=lfs merge=lfs -text
-WEIGHTS/**/*.ckpt filter=lfs diff=lfs merge=lfs -text
