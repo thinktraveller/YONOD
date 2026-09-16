@@ -93,3 +93,7 @@ _verify
 *.swp
 *.tmp
 ~$*
+
+# ===================== Others =====================
+reference-proejct
+recovery_backups

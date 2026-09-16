@@ -35,17 +35,7 @@ Chemical VAE 不是 `example.yaml` 的默认描述符。可选资产是分别经
 
 路径相对 YAML 文件本身解析。每个成功组分输出 196 维原始 `z_mean_sample`；两个列 `concat` 为 392 维。该路径不加载原 HDF5、TensorFlow/Keras、解码器或性质头；训练阶段只读已发布的 feature manifest。
 
-当前可直接审查/复制的完整 YAML 为：
-
-- [features](configs/chemical_vae/step31_6_features.yaml)：独立物化 VAE 特征；
-- [train](configs/chemical_vae/step31_6_train.yaml)：只读前项发布的 manifest 后训练 RF；
-- [all](configs/chemical_vae/step31_6_all.yaml)：独立 VAE × RF smoke；
-- [paired comparison](configs/chemical_vae/step31_7_comparison_all.yaml)：同一严格共同子集、同一 split 与 RF 下的 VAE/Morgan/MFP 对照。
-- [ZINC GPU smoke](configs/chemical_vae/step31_9_zinc_v5_gpu_all.yaml)：已执行的 `cuda:0` ZINC/v5 VAE×RF；
-- [`zinc_properties` GPU smoke](configs/chemical_vae/step31_9_zinc_properties_gpu_all.yaml)：已执行的 encoder-only `cuda:0` VAE×RF；
-- [Windows CPU handoff](configs/chemical_vae/step31_9_zinc_v5_windows_cpu_all.yaml)：仅供真实 Windows 运行，详细步骤见 [platform handoff](project-docs/chemical-vae-platform-handoff.md)。
-
-这些文件的 `artifacts.output_dir` 与 `outputs.root` 已彼此隔离。新任务应新建 YAML 和目录，不能修改这些验收配置或其历史产物。
+步骤 31 的 features、train、all、配对比较、GPU smoke 与 Windows handoff YAML 都是历史验收输入，已归档为 [configs_20260916.tar.gz](recovery_backups/configs_20260916.tar.gz)。其中的 `artifacts.output_dir` 与 `outputs.root` 已彼此隔离；如需审计，应在仓库根解压归档以恢复原路径。新任务应新建 YAML 和输出目录，不能修改或复用这些验收配置及其历史产物。
 
 Chemical VAE 输入保持 identity：不 trim、canonicalize、拆盐、截断或扩字表。长度超过 120、字符不支持、缺失或 RDKit 无效的值会进入 diagnostics sidecar；普通 `concat` 中单个角色失败仅产生零块，严格比较则必须筛掉任一角色失败的行。详细运行资产、依赖与平台限制见 [README](README.md) 与 [comparison report](derived/chemical_vae/step31_7_comparison/comparison_report.json)。
 

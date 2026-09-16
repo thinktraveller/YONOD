@@ -1,6 +1,0 @@
-# Include every file and directory, overriding parent ignore rules.
-!**
-
-# Only local virtual environments and pytest caches are ignored.
-.venv/
-.pytest_cache/

@@ -13,7 +13,7 @@ python -u yonod.py
 # 在第一个提示中输入已保存的 YAML 路径，例如 example.yaml
 ```
 
-仓库根目录的 [example.yaml](example.yaml) 是一个可直接运行的 12 样本 Morgan × Random Forest、2-fold smoke。成功时应看到 `features=ready` 和 `morgan × rf: complete` 或 `reused`；运行 ID 是内容派生的，不应写死。Chemical VAE 的已验证 `zinc`/v5 配置位于 [configs/chemical_vae](configs/chemical_vae/)；它不是 `example.yaml` 的隐式组成部分。
+仓库根目录的 [example.yaml](example.yaml) 是一个可直接运行的 12 样本 Morgan × Random Forest、2-fold smoke。成功时应看到 `features=ready` 和 `morgan × rf: complete` 或 `reused`；运行 ID 是内容派生的，不应写死。Chemical VAE 的历史验收 YAML 已归档在 [configs_20260916.tar.gz](recovery_backups/configs_20260916.tar.gz)，不是 `example.yaml` 的隐式组成部分。
 
 | 目的 | 当前入口 |
 | --- | --- |
@@ -198,15 +198,7 @@ descriptors:
 
 输入语义是逐字节 identity：不 trim、不 canonicalize、不拆盐、不替换分隔符、不截断、不扩展字符表。适配器先检查固定 35 字符表、长度上限 120 和 RDKit 可解析性；缺失、超长、字符不支持或 RDKit 无效都会写入版本化 diagnostics sidecar。`concat` 保持既有语义：至少一个分子列成功时保留反应行，失败列为零块；所有选中列都失败才使该行的 mask 为 false。严格共同子集比较必须另行要求每个选中角色都成功，不能把零块留存集当作严格覆盖率。
 
-可复制下列独立 YAML，而不要改写 `example.yaml`：
-
-- [step31_6_features.yaml](configs/chemical_vae/step31_6_features.yaml)：只物化 Chemical VAE 特征；
-- [step31_6_train.yaml](configs/chemical_vae/step31_6_train.yaml)：只读取已发布 manifest 训练 RF；
-- [step31_6_all.yaml](configs/chemical_vae/step31_6_all.yaml)：最小真实 Chemical VAE × RF smoke；
-- [step31_7_comparison_all.yaml](configs/chemical_vae/step31_7_comparison_all.yaml)：同一严格 12 样本、同一 RF/split 下的 VAE、Morgan、MFP 工程对照。
-- [step31_9_zinc_v5_gpu_all.yaml](configs/chemical_vae/step31_9_zinc_v5_gpu_all.yaml)：已完成的 ZINC/v5 `cuda:0` VAE×RF smoke；
-- [step31_9_zinc_properties_gpu_all.yaml](configs/chemical_vae/step31_9_zinc_properties_gpu_all.yaml)：已完成的、只使用 `zinc_properties` encoder 的 `cuda:0` smoke；
-- [Windows CPU handoff YAML](configs/chemical_vae/step31_9_zinc_v5_windows_cpu_all.yaml)：尚未在 Windows 执行，配合[交接步骤](project-docs/chemical-vae-platform-handoff.md)使用。
+步骤 31 的 Chemical VAE features/train/all、配对比较、计时/成本、GPU smoke 与 Windows 交接 YAML 均为历史工程验收输入，已保存在 [配置归档](recovery_backups/configs_20260916.tar.gz)。需要审计时，从仓库根解压该归档以恢复原始 `configs/` 路径；新任务应创建自己的独立 YAML，而不要修改或复用这些小样本验收输入。
 
 示例和运行证据是工程验收，不是性能结论。Linux CPU 和两张可用 RTX 5090 中的 `cuda:0` 已真实运行；`zinc_properties` encoder 也已在冻结的 CPU float32 `atol=rtol=2e-5` 下经原 HDF5 TensorFlow/Keras 与独立 NumPy 对照后运行 GPU smoke。GPU 相对 CPU artifact 的差异单独记录，绝不回写成 C03 CPU parity。用户已授权将步骤31标记完成并延期 Windows CPU 验证；Windows CPU 仍没有实测，不能视为已支持。完整状态见 [C11 verification](derived/chemical_vae/step31_9_gpu_smoke/verification.json)、[step31 acceptance index](derived/chemical_vae/step31_acceptance/index.json) 与 [comparison report](derived/chemical_vae/step31_7_comparison/comparison_report.json)。
 
@@ -261,14 +253,14 @@ python scripts/manage_features.py derive --config derive.yaml
 
 ## 专用 benchmark 与历史运行
 
-strict benchmark 已迁移为 schema-2 的专用 `stage: benchmark`，其公开启动仍是 `yonod.py`。可复制 [configs/benchmark_smoke.example.yaml](configs/benchmark_smoke.example.yaml)，为每项研究配置独立且相同的 `artifacts.output_dir` / `outputs.root`，然后在 Linux 使用：
+strict benchmark 已迁移为 schema-2 的专用 `stage: benchmark`，其公开启动仍是 `yonod.py`。为每项研究创建独立且相同的 `artifacts.output_dir` / `outputs.root`，然后在 Linux 使用：
 
 ```bash
 mkdir -p logs
 nohup setsid bash -lc '
   source /home/wangzh685/miniconda3/etc/profile.d/conda.sh
   conda activate yonod
-  printf "%s\n" "configs/my_benchmark.yaml" | python -u yonod.py
+  printf "%s\n" "path/to/my_benchmark.yaml" | python -u yonod.py
 ' </dev/null > logs/my_benchmark.log 2>&1 &
 echo $! > logs/my_benchmark.pid
 ```
@@ -329,13 +321,16 @@ WEIGHTS/FISD/
 
 ## 项目结构
 
+目录用途、保留边界和清理记录见 [目录管理说明](project-docs/folder-organization.md)。按用途查找：[项目文档](project-docs/README.md) · [辅助脚本](scripts/README.md) · [配置归档](recovery_backups/configs_20260916.tar.gz) · [数据集](dataset/README.md)。
+
 ```text
 YONOD/
 ├── main.py                     schema-2 底层配置运行时与 smoke 入口；保留历史 CSV 调试接口
 ├── yonod.py                    正式建模任务入口；生成/验证 schema-2 YAML
 ├── example.yaml                可运行的最小 schema-2 smoke
 ├── example.md                  阶段、操作和迁移的简明示例
-├── configs/chemical_vae/       受限 VAE 的 features/train/all/comparison YAML
+├── recovery_backups/configs_20260916.tar.gz
+│                               历史 schema-2 与 Chemical VAE 验收 YAML
 ├── WEIGHTS/chemical_vae/       内容校验的转换后编码器资产（本地，不从 YAML 训练）
 ├── yonod/
 │   ├── config/                 YAML 加载和 schema 契约

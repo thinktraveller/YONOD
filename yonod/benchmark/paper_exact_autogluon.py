@@ -964,7 +964,7 @@ def write_paper_exact_autogluon_launch_materials(
         "autogluon_seed_policy": PAPER_EXACT_AUTOGLOON_SEED_POLICY,
         "population_dirs": {material.population_id: str(material.population_dir) for material in materials},
         "autogluon_config_paths": config_paths,
-        "formal_nohup_launcher": "bash configs/yieldmaster_paper_exact_5x5_{0}/run_autogluon_paper_exact_nohup.sh".format(stamp),
+        "formal_nohup_launcher": "bash result/YSNH文献复现/yieldmaster_paper_exact_5x5_{0}/run_autogluon_paper_exact_nohup.sh".format(stamp),
         "notes": "本 manifest 只描述正式启动材料；真实运行时 git commit、开始/结束时间和耗时由 runner 写入 run_manifest。",
     }
     manifest_path = batch_dir / "autogluon_launch_manifest.json"

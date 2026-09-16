@@ -106,7 +106,16 @@ with both Linux and Windows.
 - Preserve UTF-8 handling for the repository's Chinese filenames and dataset
   paths.
 
+## Project documentation locations
+
+Only these project-related files may be written to `project-docs/`:
+`buildlog`, `project-plan`, `teaching`, and `goal.md`. Write every other project-related
+file to the Git-ignored `docs/` directory instead. Do not place other files in
+`project-docs/`.
+
 ## Verification
+
+Place all test and validation scripts in the `_verify/` directory.
 
 Run changed code from the repository root with the `yonod` environment active.
 For a lightweight smoke check of the main configuration interface:
