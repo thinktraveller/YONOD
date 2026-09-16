@@ -36,9 +36,7 @@ results/
 AutogluonModels/
 
 # Logs
-*.log
-result/
-docs/
+logs
 
 # ===================== Large model weights =====================
 # Binary model weights in WEIGHTS/ are tracked with Git LFS. Configuration,
@@ -97,3 +95,5 @@ _verify
 # ===================== Others =====================
 reference-project
 recovery_backups
+result
+docs

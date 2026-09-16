@@ -113,6 +113,12 @@ Only these project-related files may be written to `project-docs/`:
 file to the Git-ignored `docs/` directory instead. Do not place other files in
 `project-docs/`.
 
+## Output locations
+
+Write all output results under `result/`. When an output location is specified,
+use the designated subdirectory under `result/`; otherwise, write the output
+directly to `result/`.
+
 ## Verification
 
 Place all test and validation scripts in the `_verify/` directory.
