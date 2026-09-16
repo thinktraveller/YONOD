@@ -41,18 +41,18 @@ result/
 docs/
 
 # ===================== Large model weights =====================
-# WEIGHTS/MolMetaLM-base/  is ~500 MB -- download separately, see README.
-# WEIGHTS/FISD/            is ~19 MB  -- no explicit license; not redistributed.
-#                          Copy the 3 .pth files from 化学描述符相关项目/FISD/
-#                          or retrain with the upstream notebooks; see README.
-WEIGHTS/MolMetaLM-base/
-WEIGHTS/FISD/
+# Binary model weights in WEIGHTS/ are tracked with Git LFS. Configuration,
+# documentation, and manifests remain ordinary Git files.
 
 
 # Generic large weight file types
 *.safetensors
 *.pt
 *.ckpt
+
+# The generic binary exclusions above do not apply to distributable weights.
+!WEIGHTS/
+!WEIGHTS/**
 
 
 
