@@ -31,6 +31,7 @@ from yonod.artifacts.contracts import artifact_content_identity
 from yonod.artifacts.reader import ArtifactReadError, FeatureArtifact, load_feature_artifact
 from yonod.config.contracts import resolve_config_path
 from yonod.config.loader import LoadedRunConfig, load_run_config
+from yonod.config.output_layout import combination_name, create_task_layout, task_root
 from yonod.model_factory import (
     ModelConfigurationError,
     ResolvedModelConfig,
@@ -625,6 +626,8 @@ def _existing_complete_run(run_dir: Path, expected_run_id: str) -> TrainingRun |
     source_config_path = run_dir / "source_config.yaml"
     if not run_dir.exists():
         return None
+    if not manifest_path.exists() and {p.name for p in run_dir.iterdir()} == {"failed_attempts"}:
+        return None
     if not all(path.is_file() for path in (manifest_path, predictions_path, metrics_path, effective_config_path, source_config_path)):
         raise TrainingServiceError(f"已有训练目录不完整，拒绝错误恢复：{run_dir}")
     try:
@@ -671,11 +674,12 @@ def _publish_failed_run(
     """Publish immutable failure evidence without disturbing other combinations.
 
     A failed model identity is useful evidence, but it is never a resumable
-    complete run. Each attempt receives its own failed_runs directory, so a
+    complete run. Each attempt receives its own failed_attempts directory, so a
     later retry cannot overwrite this evidence or a successful sibling.
     """
     result_root = _result_root(loaded, config)
-    failure_parent = result_root / "failed_runs"
+    name = combination_name(str(artifact.manifest["feature_id"]), model)
+    failure_parent = result_root / "runs" / name / "failed_attempts"
     failure_parent.mkdir(parents=True, exist_ok=True)
     attempt_id = uuid.uuid4().hex[:12]
     failure_dir = failure_parent / f"{run_id}-{attempt_id}"
@@ -750,12 +754,7 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float, floa
 
 
 def _result_root(loaded: LoadedRunConfig, config: Mapping[str, Any]) -> Path:
-    outputs = dict(config.get("outputs") or {})
-    if outputs.get("root"):
-        return resolve_config_path(loaded.path, str(outputs["root"]))
-    artifacts = config["artifacts"]
-    fallback = artifacts.get("output_dir") or "results"
-    return resolve_config_path(loaded.path, str(fallback)) / "training_results"
+    return task_root(loaded.path, config)
 
 
 def _run_one_artifact(
@@ -782,7 +781,11 @@ def _run_one_artifact(
         raise TrainingServiceError(f"模型参数无效：{exc}") from exc
     run_id = _run_identity(artifact, model=model, model_config=resolved, label_identity=label_identity, split_identity=split_identity)
     result_root = _result_root(loaded, config)
-    run_dir = result_root / "runs" / run_id
+    run_dir = result_root / "runs" / combination_name(str(artifact.manifest["feature_id"]), model)
+    if run_dir.parent.exists():
+        for sibling in run_dir.parent.iterdir():
+            if sibling.name.casefold() == run_dir.name.casefold() and sibling.name != run_dir.name:
+                raise TrainingServiceError(f"组合目录名称存在大小写冲突：{sibling.name}")
     existing = _existing_complete_run(run_dir, run_id)
     if existing is not None:
         return existing
@@ -878,8 +881,16 @@ def _run_one_artifact(
         complete = _existing_complete_run(staging, run_id)
         if complete is None:  # defensive, the files above must satisfy it
             raise TrainingServiceError("训练结果 staging 验证失败")
+        if run_dir.exists():
+            # Only a directory containing failed attempts can reach here;
+            # completed or incomplete runs are checked before training.
+            os.replace(run_dir / "failed_attempts", staging / "failed_attempts")
+            run_dir.rmdir()
         os.replace(staging, run_dir)
     except Exception as exc:
+        if (staging / "failed_attempts").is_dir():
+            run_dir.mkdir(parents=True, exist_ok=True)
+            os.replace(staging / "failed_attempts", run_dir / "failed_attempts")
         if staging.exists():
             shutil.rmtree(staging)
         return _publish_failed_run(
@@ -944,6 +955,15 @@ def run_train(
     paths = [Path(path).resolve() for path in input_manifests]
     if not paths:
         raise TrainingServiceError("没有可训练的 ready feature manifest")
+    names: set[str] = set()
+    for path in paths:
+        artifact = load_feature_artifact(path)
+        for model in config["models"]:
+            name = combination_name(str(artifact.manifest["feature_id"]), str(model)).casefold()
+            if name in names:
+                raise TrainingServiceError("组合目录名称冲突；请为特征指定不同的 id（不区分大小写）")
+            names.add(name)
+    create_task_layout(_result_root(loaded, config))
     results: list[TrainingRun] = []
     for path in paths:
         for model in config["models"]:

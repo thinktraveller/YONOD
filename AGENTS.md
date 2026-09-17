@@ -27,7 +27,7 @@ Every modeling task must follow this order from the repository root:
    starting the task. Do not start a modeling task from ad-hoc CSV arguments,
    JSON, or by modifying a committed fixture such as `example.yaml`. Give each
    task its own YAML and its own `artifacts.output_dir` and `outputs.root` under
-   `result/`.
+   `result/`. Never set final modeling outputs to a path under `derived/`.
    Allocate a 19-CPU budget in that YAML for every model that supports it:
    use `model_params.<model>.estimator.n_jobs: 19` for RF, XGBoost, and
    LightGBM, and `model_params.autogluon.fit.num_cpus: 19` for AutoGluon.
@@ -122,7 +122,7 @@ results produced by project runs belong under `result/`: when a result location
 is specified, use the designated subdirectory under `result/`; otherwise, write
 the result directly to `result/`. Modeling-task runtime logs may be written
 under `logs/`, but all modeling-task result files must be written under
-`result/`.
+`result/`; never place final modeling results under `derived/`.
 
 ## Verification
 

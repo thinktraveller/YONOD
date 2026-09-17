@@ -28,7 +28,7 @@ descriptors:
     columns: [reactant_1_smiles, reactant_2_smiles]
 
 artifacts:
-  output_dir: ./derived/interface_migration/example_artifacts
+  output_dir: ./result/smoke-test/feature
 
 models: [rf]
 model_params:
@@ -51,13 +51,13 @@ evaluation:
   seed: 42
 
 outputs:
-  root: ./derived/interface_migration/example_results
+  root: ./result/smoke-test
   report_formats: [Markdown]
 metadata:
   notes: "小型可运行 smoke。正式研究请使用独立 YAML、特征包和输出根目录。"
 ```
 
-建模应经 `yonod.py` 启动，而不是直接调用 `main.py --config`：
+建模应经 `yonod.py` 启动，而不是直接调用 `main.py --config`。以下为 Linux Bash 命令，在仓库根目录执行：
 
 ```bash
 mkdir -p logs
@@ -69,7 +69,31 @@ nohup setsid bash -lc '
 echo $! > logs/example_morgan_smoke.pid
 ```
 
-它使用仓库内 `dataset/benchmark_smoke_fixture.csv`，产生独立的特征包和训练结果到 `derived/interface_migration/`。正式实验请复制该文件，并改为专属数据集、输出根目录、特征声明和模型参数；不要重用 smoke 输出目录。
+它使用仓库内 `dataset/benchmark_smoke_fixture.csv`，将特征、训练结果和报告统一写入 `result/smoke-test/`：
+
+```text
+result/smoke-test/
+├── feature/
+│   ├── feature_runs/<feature_run_id>.yaml
+│   └── features/<artifact_id>/
+├── pictures/
+│   └── scatter_morgan_rf_repeat-1.png
+├── report/
+│   └── report.md
+└── runs/
+    └── run_morgan-rf/
+        ├── run_manifest.yaml
+        ├── source_config.yaml
+        ├── effective_config.yaml
+        ├── predictions.csv
+        └── fold_metrics.csv
+```
+
+所有相对路径均以 YAML 所在目录为基准。`outputs.root` 决定任务主目录；当前加载器将有效配置中的 `artifacts.output_dir` 统一为该主目录下的 `feature/`，示例显式填写相同路径。默认只生成 Markdown 报告；若要同时生成 HTML，将 `report_formats` 改为 `[html, markdown]`。`project_name` 是任务显示名称，不会覆盖 `outputs.root`。
+
+组合目录使用 `run_<特征ID>-<模型>` 命名；内容生成的 `run_id` 仍保留在 manifest 中用于复用校验。失败记录保存在组合目录的 `failed_attempts/` 下。启动日志与 PID 位于仓库 `logs/`，不占用结果主目录的子文件夹。
+
+正式实验请复制该文件，并改为专属数据集、输出根目录、特征声明和模型参数；不要重用 smoke 输出目录。
 
 ## Chemical VAE YAML
 
@@ -100,16 +124,16 @@ Linux CPU 和 `cuda:0` GPU 均有真实 smoke；ZINC/v5 与 `zinc_properties` en
 
 ## 三个阶段
 
-- `features`：需要 `dataset`、`descriptors` 和 `artifacts.output_dir`；不需要标签或模型，也不会创建训练输出。
+- `features`：需要 `dataset`、`descriptors` 和 `artifacts.output_dir`；建议显式声明 `outputs.root`。不需要标签或模型，会初始化四个子目录，但只生成特征产物，不执行训练。
 - `train`：需要 `dataset`（含标签）、`artifacts.input_manifest` 和 `models`；绝不会回退到描述符计算。
 - `all`：需要 features 和 train 的声明；它先完成/隔离全部特征候选，再对就绪包调用同一训练服务。
 
-外部 feature manifest、标签和辅助列一律按稳定 `sample_id` 对齐。静态特征身份排除标签，所以只修改标签会产生新的建模结果，而非重算描述符。
+外部 feature manifest、标签和辅助列一律按稳定 `sample_id` 对齐。静态特征身份排除标签，所以只修改标签会改变训练身份，而非特征身份。同一组合目录已有不同身份的结果时会拒绝覆盖；应使用新的任务主目录，并可通过 `stage: train` 引用原特征 manifest。
 
 ## 中间版本
 
 ```bash
-python scripts/manage_features.py inspect --manifest artifacts/features/<id>/manifest.yaml
+python scripts/manage_features.py inspect --manifest result/smoke-test/feature/features/<id>/manifest.yaml
 python scripts/manage_features.py derive --config select-or-join.yaml
 ```
 

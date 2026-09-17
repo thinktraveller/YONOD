@@ -6,7 +6,7 @@ YONOD 数据集输入向导 (Dataset Input Wizard)
 核心功能:
 1. 逐列声明列角色(标签、反应物SMILES、产物SMILES、其他组分SMILES、条件数值)
 2. 合法性检验(SMILES合法性、数值合法性)
-3. 生成规范数据集(固定列顺序，写入 docs/)
+3. 生成规范数据集(固定列顺序，写入 feature/docs/)
 4. 生成列映射文件(记录原始列名→角色→新列名的对应关系)
 5. 生成非法输入报告(Markdown格式，写入 report/)
 6. 选择已接入主建模流程的模型并生成配置；完成后可自动调用 main.py 建模
@@ -37,7 +37,9 @@ RDLogger.DisableLog('rdApp.*')
 def _create_project_output_layout(project_folder: str) -> Dict[str, str]:
     """Create the stable output layout for a newly configured project."""
     layout = {
-        'docs': os.path.join(project_folder, 'docs'),
+        'feature': os.path.join(project_folder, 'feature'),
+        'runs': os.path.join(project_folder, 'runs'),
+        'docs': os.path.join(project_folder, 'feature', 'docs'),
         'pictures': os.path.join(project_folder, 'pictures'),
         'report': os.path.join(project_folder, 'report'),
     }
@@ -1416,7 +1418,7 @@ def step3_3_generate_normalized_dataset(
     normalized_df = normalized_df.fillna('')
 
     # 保存
-    normalized_path = os.path.join(project_folder, 'docs', f"{project_name}_normalized_dataset.csv")
+    normalized_path = os.path.join(project_folder, 'feature', 'docs', f"{project_name}_normalized_dataset.csv")
     os.makedirs(os.path.dirname(normalized_path), exist_ok=True)
     normalized_df.to_csv(normalized_path, index=False, encoding='utf-8')
 
@@ -2098,7 +2100,7 @@ def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
     valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
     fixed_df = df.iloc[valid_row_indices]
 
-    fixed_path = os.path.join(project_folder, 'docs', f"{project_name}_fixed_dataset.csv")
+    fixed_path = os.path.join(project_folder, 'feature', 'docs', f"{project_name}_fixed_dataset.csv")
     os.makedirs(os.path.dirname(fixed_path), exist_ok=True)
     fixed_df.to_csv(fixed_path, index=False, encoding='utf-8')
 
@@ -2311,9 +2313,9 @@ def save_config_file(
     if ids.isna().any() or (normalized_ids == "").any() or normalized_ids.duplicated().any():
         raise ValueError("sample_id_col 必须在规范数据集中为唯一且非空的稳定 ID")
 
-    # The config lives under ``docs/`` beside the normalized CSV.  Store all
+    # The config lives under ``feature/docs/`` beside the normalized CSV.  Store all
     # path references relative to that owning YAML so the project is movable.
-    config_path = Path(project_folder) / "docs" / f"{project_name}_run.yaml"
+    config_path = Path(project_folder) / "feature" / "docs" / f"{project_name}_run.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     dataset_reference = os.path.relpath(
         Path(effective_dataset_path).resolve(), config_path.parent.resolve()
@@ -2333,14 +2335,14 @@ def save_config_file(
             'column_roles': column_roles,
         },
         'descriptors': descriptor_configs,
-        'artifacts': {'output_dir': '../feature_artifacts'},
+        'artifacts': {'output_dir': '..'},
         'models': _canonical_wizard_models(selected_models),
         'model_params': {},
         'evaluation': {
             'protocol': 'outer_kfold', 'n_splits': 5, 'n_repeats': 1,
             'shuffle': True, 'seed': 42,
         },
-        'outputs': {'root': '../training_results', 'report_formats': list(report_formats)},
+        'outputs': {'root': '../..', 'report_formats': list(report_formats)},
         'metadata': {
             'origin_dataset_path': dataset_path,
             'wizard_column_mapping': column_mapping,

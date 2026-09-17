@@ -249,6 +249,13 @@ def load_run_config(
         validated_effective = validate_run_config(effective)
     except ConfigContractError as exc:
         raise ConfigLoadError(f"合并后的运行配置无效：{exc}") from exc
+    if validated_effective["stage"] != "benchmark":
+        from .output_layout import task_root
+
+        root = task_root(source_path, validated_effective)
+        validated_effective["outputs"] = dict(validated_effective.get("outputs") or {})
+        validated_effective["outputs"]["root"] = str(root)
+        validated_effective["artifacts"]["output_dir"] = str(root / "feature")
     return LoadedRunConfig(
         path=source_path,
         explicit_yaml=validated_yaml,

@@ -275,6 +275,24 @@ strict benchmark 强制 `evaluation.protocol: manifest_outer_cv`、显式 `evalu
 
 ## 数据与外部资产
 
+### 下载数据集与模型权重
+
+在已激活 `yonod` 环境并安装 Hugging Face CLI（`hf`）后，从 YONOD 仓库根目录执行以下命令（Bash、PowerShell 或 Conda Prompt 均可）。
+
+[YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) 托管项目可分发的数据资产，其中 `USPTO/` 包含清洗和规范化后的 USPTO 数据。下载到本地 `dataset/USPTO/`：
+
+```bash
+hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/**" --local-dir dataset
+```
+
+[YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights) 托管项目可分发的模型资产，目录布局与项目的 `WEIGHTS/` 一致。下载到本地 `WEIGHTS/`：
+
+```bash
+hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
+```
+
+使用数据前请核对其来源与适用条款；使用模型权重前请核对上游模型的许可证与使用条款。
+
 ### 酰胺缩合数据集
 
 仓库内的 `dataset/amide-coupling.csv` 来自 [aichemeco/amide_coupling](https://github.com/aichemeco/amide_coupling/tree/main)（MIT 协议），含 47,015 条酰胺缩合反应，`yield` 归一化至 `[0, 1]`。`dataset/benchmark_smoke_fixture.csv` 是 schema-2 smoke 使用的小型 fixture；README 不再假设存在 `dataset/test-amide-coupling.csv`。

@@ -23,7 +23,7 @@ descriptors:
     columns: [reactant_1_smiles, reactant_2_smiles]
 
 artifacts:
-  output_dir: ./derived/interface_migration/example_artifacts
+  output_dir: ./result/smoke-test/feature
 
 models: [rf]
 model_params:
@@ -46,7 +46,7 @@ evaluation:
   seed: 42
 
 outputs:
-  root: ./derived/interface_migration/example_results
+  root: ./result/smoke-test
   report_formats: [Markdown]
 metadata:
   notes: "小型可运行 smoke。正式研究请使用独立 YAML、特征包和输出根目录。"

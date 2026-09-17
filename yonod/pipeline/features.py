@@ -1,8 +1,8 @@
 """Independent feature-materialisation service for step 30.4.
 
 The service consumes a schema-2 ``stage: features`` YAML config and produces
-only versioned artifact references plus a feature-run status YAML.  It neither
-imports prediction-model adapters nor creates training/report directories.
+only versioned artifact references plus a feature-run status YAML within the
+shared task layout. It never imports prediction-model adapters.
 Static descriptors are delegated to the existing production
 ``build_universal_features`` implementation on demand; tests may inject a
 small feature computer to prove orchestration without chemistry dependencies.
@@ -537,6 +537,8 @@ def run_features(
         raise FeatureServiceError("run_features 只接受 stage: features 配置；stage: all 必须由 run_all 编排")
     specs = _normalise_specs(config)
     artifacts_root = resolve_config_path(loaded.path, config["artifacts"]["output_dir"])
+    from yonod.config.output_layout import create_task_layout, task_root
+    create_task_layout(task_root(loaded.path, config))
     computer = feature_computer or partial(_production_feature_computer, config_path=loaded.path)
     dataset_path = resolve_config_path(loaded.path, config["dataset"]["path"])
     dataset_identity: str | None = None
