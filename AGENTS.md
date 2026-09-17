@@ -26,7 +26,8 @@ Every modeling task must follow this order from the repository root:
 1. Create and save a standalone, valid schema-2 YAML run configuration before
    starting the task. Do not start a modeling task from ad-hoc CSV arguments,
    JSON, or by modifying a committed fixture such as `example.yaml`. Give each
-   task its own YAML and its own `artifacts.output_dir` and `outputs.root`.
+   task its own YAML and its own `artifacts.output_dir` and `outputs.root` under
+   `result/`.
    Allocate a 19-CPU budget in that YAML for every model that supports it:
    use `model_params.<model>.estimator.n_jobs: 19` for RF, XGBoost, and
    LightGBM, and `model_params.autogluon.fit.num_cpus: 19` for AutoGluon.
@@ -116,9 +117,12 @@ Git in the same task.
 
 ## Output locations
 
-Write all output results under `result/`. When an output location is specified,
-use the designated subdirectory under `result/`; otherwise, write the output
-directly to `result/`.
+Write backups and engineering-support files under `recovery_backups/`. Only
+results produced by project runs belong under `result/`: when a result location
+is specified, use the designated subdirectory under `result/`; otherwise, write
+the result directly to `result/`. Modeling-task runtime logs may be written
+under `logs/`, but all modeling-task result files must be written under
+`result/`.
 
 ## Verification
 

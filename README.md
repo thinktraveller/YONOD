@@ -204,7 +204,7 @@ descriptors:
 
 #### Chemical VAE 依赖与数值对照
 
-`requirements.txt` 的 `h5py` 用于资产审计/转换，不是 PyTorch 运行时的必需导入。可选的 [requirements-chemical-vae-parity.txt](requirements-chemical-vae-parity.txt) 将 `tensorflow-cpu==2.15.1` 固定为直接执行历史 Keras HDF5 编码器的**数值对照**环境；只有复现/扩展该对照时才安装它。TensorFlow/Keras 不应被作为普通 Chemical VAE 特征生成、Morgan/MFP 或 train-only manifest 消费的前提。
+`requirements.txt` 的 `h5py` 用于资产审计/转换，不是 PyTorch 运行时的必需导入。TensorFlow/Keras 不应被作为普通 Chemical VAE 特征生成、Morgan/MFP 或 train-only manifest 消费的前提。
 
 ### 模型与参数
 

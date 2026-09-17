@@ -18,9 +18,6 @@ rdkit==2023.9.5
 # Chemical VAE HDF5 asset inspection and encoder-only conversion.  This does
 # not install TensorFlow/Keras or make them a runtime dependency.
 h5py==3.14.0
-# For the optional direct Keras-HDF5 parity reference, install
-# requirements-chemical-vae-parity.txt; ordinary Chemical VAE runtime uses
-# converted PyTorch weights and does not import TensorFlow/Keras.
 drfp>=0.3.4
 transformers==4.40.0
 networkx==3.2.1

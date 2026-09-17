@@ -1,6 +1,63 @@
 # Schema-2 YAML 使用示例
 
-[example.yaml](example.yaml) 是可解析、可执行的小型 Morgan × RF smoke 配置。建模应经 `yonod.py` 启动，而不是直接调用 `main.py --config`：
+下方是 [example.yaml](example.yaml) 的完整内容：一个可解析、可执行的小型 Morgan × RF smoke 配置。独立的 YAML 文件仍保留，供启动命令直接读取；修改示例时请同步更新两处内容。
+
+```yaml
+# 可直接复制的 schema-2 YAML 示例。此文件使用仓库内的小型 fixture，
+# 仅运行 Morgan × RF 的 2-fold smoke；项目规模实验应另存配置和输出目录。
+schema_version: "2.0"
+project_name: yonod_schema2_smoke
+stage: all
+
+dataset:
+  path: ./dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+
+# 每项均是单独的特征候选；不同描述符不会自动拼接。
+descriptors:
+  - id: morgan
+    descriptor: morgan
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+
+artifacts:
+  output_dir: ./derived/interface_migration/example_artifacts
+
+models: [rf]
+model_params:
+  # 示例显式采用项目既有值；删除 estimator 中的字段即使用 sklearn 1.4.0 的库默认。
+  rf:
+    estimator:
+      n_estimators: 10
+      max_depth: null
+      min_samples_leaf: 1
+      max_features: 1.0
+      n_jobs: 1
+      random_state: 42
+      verbose: 0
+
+evaluation:
+  protocol: outer_kfold
+  n_splits: 2
+  n_repeats: 1
+  shuffle: true
+  seed: 42
+
+outputs:
+  root: ./derived/interface_migration/example_results
+  report_formats: [Markdown]
+metadata:
+  notes: "小型可运行 smoke。正式研究请使用独立 YAML、特征包和输出根目录。"
+```
+
+建模应经 `yonod.py` 启动，而不是直接调用 `main.py --config`：
 
 ```bash
 mkdir -p logs
