@@ -111,7 +111,8 @@ with both Linux and Windows.
 Only these project-related files may be written to `project-docs/`:
 `buildlog`, `project-plan`, `teaching`, and `goal.md`. Write every other project-related
 file to the Git-ignored `docs/` directory instead. Do not place other files in
-`project-docs/`.
+`project-docs/`. Every update to a file in `project-docs/` must be committed to
+Git in the same task.
 
 ## Output locations
 

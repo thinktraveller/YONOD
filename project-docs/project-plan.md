@@ -1,9 +1,9 @@
 # YONOD：酰胺缩合反应产率预测专题 构建计划书
 
-> **当前计划更新：2026-09-15 / 新增步骤32：YAML 工作流程下的报告脚本适配、散点图生成与报告嵌入（待实施）。**
-> 本轮依据用户明确要求：在 YAML 完全替代 JSON 作为 YONOD 配置输入后，改造原报告脚本，使当前工作流程继续正常生成散点图并嵌入报告。执行起点为文末 32.1；本轮仅更新计划，不表示报告功能已实现或验收。
+> **当前计划更新：2026-09-17 / 新增步骤33：USPTO 本地数据转换为标准 CSV（待实施）。**
+> 本轮浏览本地 USPTO 三份文件、逐行复核结构并核查当前 CSV/评估接口，明确字段映射、固定切分保留、质量验收与后续接入边界。当前执行起点为文末 33.1；转换器、标准 CSV 和固定切分训练适配均未实现。本轮没有启动建模。步骤32报告适配保留其原有待实施状态。
 > 步骤30已实现的 schema-2 配置、features/train/all、向导和 strict benchmark adapter 直接复用；范围和证据以 30.0 的最新状态及构建日志为准，不重新开放 JSON 配置输入，不将已排除的历史 paper-exact/批处理入口重新列为迁移任务。步骤31已按用户授权标记完成，Windows CPU 实测延期且仍为 `not_verified`。
-> 下方 v0.3 说明及章节 1–29 保留为历史计划；配置冲突以步骤30为准，当前报告适配要求以步骤32为准。JSON 结果、审计元数据与历史只读产物不属于 JSON 配置输入，不能因配置迁移而批量改写或删除。
+> 下方 v0.3 说明及章节 1–29 保留为历史计划；配置冲突以步骤30为准，报告适配要求以步骤32为准，USPTO 转换以步骤33为准。新增结果一律写入 `result/`，独立说明写入 `docs/`，验证脚本写入 `_verify/`，覆盖历史计划中与当前 AGENTS.md 冲突的位置约定。JSON 结果、审计元数据与历史只读产物不属于 JSON 配置输入，不能因配置迁移而批量改写或删除。
 
 
 > 平台名称：**YONOD**（Your One-stop Notebook Of Descriptors）
@@ -10012,6 +10012,117 @@ nohup bash scripts/run_static_descriptor_autogluon_19cpu_nohup.sh --run --resume
 **顺序**：32.1 契约 → 32.2 流程/适配 → 32.3 绘图/嵌入 → 32.4 重建/回归 → 32.5 验证 → 32.6 文档与证据。只有当前 YAML 普通工作流和 strict benchmark 报告链路都有实际证据，散点图生成与两种格式嵌入均通过，且 R01–R10 已验收或明确记录用户批准的延期项，步骤32才可标记完成。
 
 **当前下一步**：实施32.1，核对 schema-2 输出契约和旧报告字段映射，随后接入原报告脚本。本次仅更新计划书，未修改报告运行代码、未生成报告或启动建模。
+
+---
+
+## 三十三、USPTO 本地数据转换为标准 CSV
+
+### 33.0 目标、实查证据与范围
+
+**需求来源（2026-09-17）**：浏览 `dataset/USPTO/`，提出转换为 YONOD 标准 CSV 的方案并更新计划书。本轮完成结构审计与规划；33.1–33.6 的转换实施和验收尚未完成。此处“标准”是项目明确约定的逗号分隔表及配置映射，不声称存在通用 USPTO 官方 CSV 标准。
+
+本轮使用 `yonod` 环境运行 `_verify/audit_uspto_csv.py`，逐行检查三份源文件，证据写入 `result/uspto_standard_csv/planning_audit/structure_audit.json`。源数据和哈希说明见 `dataset/USPTO/README.md`；本轮 SHA-256 均与其中记录一致。
+
+| 原始切分 | 行数 | 空试剂区段 | 反应物组分数范围 | 试剂组分数范围 | Yield 范围 |
+| --- | ---: | ---: | --- | --- | --- |
+| train | 473,963 | 32,691 | 1–9 | 0–16 | 0.00000006–100 |
+| valid | 26,101 | 1,792 | 1–7 | 0–14 | 0.1–100 |
+| test | 26,404 | 1,828 | 1–6 | 0–15 | 0.03–100 |
+| 合计 | 526,468 | 36,311 | 1–9 | 0–16 | 0.00000006–100 |
+
+- 三份 `.csv` 实为制表符分隔；七列为无名索引、`myID`、`Source`、`Target`、`CanonicalizedReaction`、`OriginalReaction`、`Yield`。本轮未发现字段数异常、切分内重复 myID、反应区段数异常或无效/越界产率；每条产物区段均为一个组分。
+- 本轮组分数按区段内的点号统计，属于文本结构审计；**未做全量 RDKit 化学有效性检查**。跨切分 myID 重复与反应文本无完全重复的结论沿用目录 README 的 2026-09-16 审计，转换验收时重新验证。
+- `Source/Target` 是 tokenized 字符串，Source 可含 `A_…` 别名；不以删除空格或猜测别名的方式重建标准 SMILES。以 `CanonicalizedReaction` 作为角色区段来源，`OriginalReaction` 保留为审计字段。
+- 这是已有固定切分的本地派生快照，不能仅凭文件名宣称精确复现某个公开发布包；Yield 的具体抽取来源仍未知。转换保留此限制，不补造专利号、反应条件或产率测量方法。
+- 当前 `yonod/pipeline/features.py` 和 `training.py` 使用默认 `pd.read_csv`；schema-2 `dataset` 仅接受 `path/sample_id_col/column_roles`，没有 `sep` 配置。故应实际输出逗号分隔文件，不能仅改扩展名或添加无效配置键。
+
+**范围**：先完成可追溯、保留切分的格式转换及质量审计；不将全部 USPTO 误称为酰胺缩合数据，不在格式转换时增加反应类型筛选、化学去重或产率裁剪，也不启动全量描述符/模型矩阵。
+
+### 33.1 冻结标准表与字段映射
+
+推荐保留三个独立标准表 `train.csv`、`valid.csv`、`test.csv`，另输出逐行溯源表；不以合并后随机重切分作为默认入口。
+
+| 标准字段 | 来源/规则 | 使用边界 |
+| --- | --- | --- |
+| `sample_id` | `uspto_<split>_<myID>`，如 `uspto_valid_ID00000001` | 全局唯一非空字符串；源快照哈希由 manifest 固定 |
+| `split` | 输入文件角色，固定为 train/valid/test | 审计和后续固定评估协议使用，不作特征 |
+| `reactants_smiles` | CanonicalizedReaction 第一个 `>` 之前 | 保留整个点分多组分区段，不截断为两个反应物 |
+| `reagents_smiles` | 两个 `>` 之间 | 可为空；缺失即未提供，不填虚构分子 |
+| `products_smiles` | 第二个 `>` 之后 | 保留供审计或后续明确的产物感知任务；默认不进入预测特征 |
+| `yield_percent` | Yield 数值 | 保持原有 0–100 单位与精度，不除以 100、不取整或裁剪 |
+| `reaction_smiles` | CanonicalizedReaction 原文 | 区段拼接必须可还原，不含作为分子输入所不支持的整体 reaction 字符串 |
+
+`provenance.csv` 以 `sample_id` 关联，保存 `split/source_file/source_row/source_index/source_myid/source_tokens/target_tokens/original_reaction/yield_raw`。`source_row` 明确定义为含表头的 1-based CSV 逻辑记录序号（首条数据为 2）；`source_index` 保留无名索引原值。源文件哈希保存在 manifest；不把索引、ID、路径、split、原始标签文本或 tokenized 数据纳入特征。
+
+格式要求：UTF-8、逗号分隔、单行表头、标准 CSV 引号转义、`index=False`，不写 `Unnamed: 0`。空试剂写空字段；源读取用显式 `sep="\t"` 和字符串类型，避免默认 NA 识别改变原文。数值标签单独解析并验证；保留 `yield_raw` 支持精确追溯。
+
+**验收**：列顺序、数据类型、空值规则和 sample_id 规则固定；同一源快照重复执行产生同一 ID、行序、字段值与标准 CSV 内容哈希。源记录顺序不因排序或去重而变化。
+
+### 33.2 转换器、输出与发布
+
+拟新增 `scripts/prepare_uspto_csv.py`（尚未实现），提供源目录和输出目录参数，以 `pathlib.Path` 处理 Linux/Windows 与中文路径。默认输出使用 `result/uspto_standard_csv/<快照版本>/`，禁止覆盖 `dataset/USPTO/` 或已有完成版本。
+
+1. 检查恰好匹配 train/valid/test 三份输入，验证七列表头并计算 SHA-256；清单明确源文件名和切分，不依赖目录遍历顺序。
+2. 分块或流式读取，检查字段宽度、ID、Yield 有限性和 0–100 范围；严格按两个 `>` 拆分三个角色区段。空 reactants/products 属于异常，空 reagents 合法。
+3. 写出三份标准表与 provenance，逐行维护计数和可追溯关系。不得静默跳过坏行；错误写入 `rejected_rows.csv`，带源定位和原因。发生结构/标签拒绝时整体状态为 incomplete，人工明确处理策略前不能宣称无损完成。
+4. 写入 `conversion_manifest.yaml`、`quality_report.json`，记录源/输出哈希、版本、编码分隔符、字段规则、Python/转换器版本、行数、拒绝数、切分和单位。JSON 在这里是审计输出，不是运行配置。
+5. 在新版本目录内暂存并校验，最后发布完成 manifest；中断/失败不得留下可误认成功的标记。默认拒绝覆盖，重跑使用新目录或只读核对同内容产物。
+
+**交付目录**：标准表、provenance、清单、质量报告及失败记录均在上述 `result/` 子目录；独立用户说明放 `docs/uspto_standard_csv.md`，测试和验证脚本放 `_verify/`。没有拒绝行时输出带表头的空拒绝表或在 manifest 显式声明零记录。
+
+### 33.3 化学质量、空试剂和重复审计
+
+格式转换与化学准入分开：标准表保留能正确解析的源文本；另以 RDKit 检查反应物/非空试剂/产物区段，记录每角色的失败原因、覆盖率和版本。不能将结构审计通过写成化学检查通过。需要排除无效 SMILES 时发布显式派生子集与排除清单，记录各切分原始数、保留数、失败数，不覆盖无损表。
+
+- 不在默认转换中重新 canonicalize、去盐、中和、互变异构化、去立体信息或更改组分顺序；这些变换会改变数据身份。如需用于结构重复检查，在独立审计键上操作并记录规范化规则。
+- 审计切分内/跨切分反应原文重复、保留立体信息的结构规范化重复和标签冲突；重复仅报告，不自动跨切分搬移或删除。没有专利号和家族信息时明确不能证明专利家族独立性。
+- `reagents_smiles` 有 36,311 条空值：不能因试剂缺失丢弃整条有效反应，不用 `[He]` 等占位分子。后续多角色特征必须验证空字段的读取、零块/mask 与样本对齐，并区分“缺失”与“非法 SMILES”。
+- 首版优先用 `reactants_smiles` 整段做 Morgan 小样本兼容检查。当前 Morgan 用 `MolFromSmiles` 读取区段，点分组分得到一个整体指纹；这与逐分子固定槽位 concat 是不同表示，须显式记录。不能据此推断所有深度描述符都支持多组分、长度和字符集合。
+- 当前通用特征构建器 `_norm` 会把逗号、`*`、`~` 改为点号；转换层不得照搬此规则。兼容验收须统计含通配原子/特殊键的输入，核对特征入口是否改变其化学语义，必要时先修复入口或显式排除并报告。能够生成向量不等于无损读取。
+- 若后续需要逐分子列，单独冻结排序、组分上限、溢出与 padding 规则；本次不固定创建 reactant_1/reactant_2 并丢失其余组分。源 reagents 不能可靠细分为催化剂、溶剂和碱，不根据位置臆造角色。
+
+### 33.4 YONOD 映射与固定切分评估边界
+
+标准表使用 `dataset.sample_id_col: sample_id`，`column_roles.label: yield_percent`，`reactants: [reactants_smiles]`。首个兼容检查显式选择 `descriptors[].columns: [reactants_smiles]`，其余特征角色列表为空；products/reagents 可以保存在 CSV 而不参与首个特征候选。产物信息是否可用由实际预测场景决定，后续若纳入必须单列实验，不能默认为实验前已知信息。
+
+**已确认的能力缺口**：`training.py::_evaluation_config` 接受 `outer_kfold` 和 `manifest_outer_cv` 名称，但当前返回配置不含 split_manifest，`_split_rows` 实际仍调用 KFold。因此，保留 CSV 的 `split` 列、设置 `shuffle: false`，或仅填 `evaluation.split_manifest`，均不能实现本数据集固定 train/valid/test 评估。禁止把三表合并交给普通 all 后宣称遵循原切分；既有 strict benchmark adapter 也不能未经核查直接套用到 USPTO。
+
+转换完成后，固定评估适配作为后续独立工作包：补齐可执行的三分协议、ID/互斥/覆盖检查和结果身份；训练集拟合模型及所有学习型预处理，验证集用于选参，测试集在方案冻结后评估。若最终选择 train+valid 重拟合，须预先声明、记录训练人口变化，测试仍保持隔离。先通过有意构造的泄漏/错 ID 测试，再接真实数据。
+
+本次不提供伪装为可运行的固定切分 YAML。以后创建 schema-2 示例时，路径按实际 loader 相对于配置所在目录解析；配置单独保存并先校验。仅对 train 表做普通 CV 的探索性结果必须标注“train 内部 CV”，不能作为原 test 的结果。
+
+### 33.5 分阶段实施和验收矩阵
+
+顺序：33.1 字段契约 → 33.2 小样本转换 → 33.3 质量策略验证 → 三切分全量串行转换 → 33.4 输入兼容检查 → 文档与交付；全量模型训练不属于转换验收。
+
+| ID | 验收内容 | 通过条件 |
+| --- | --- | --- |
+| U01 | 来源固定 | 三份输入 SHA-256 与已审计快照一致，源文件未修改 |
+| U02 | 行数与切分 | 无损交付分别为 473,963 / 26,101 / 26,404；共 526,468，顺序和 split 不变；任何拒绝均显式标记 incomplete |
+| U03 | ID 与溯源 | sample_id 全局唯一，标准表与 provenance 一对一且可回到原记录 |
+| U04 | CSV 与标签 | 默认 pd.read_csv 可读；无多余索引；有限标签在 0–100，数值往返一致，原始文本可追溯 |
+| U05 | 反应角色 | 三个区段可还原原文，多组分无截断，36,311 条空试剂完整保留 |
+| U06 | 质量与失败 | 缺列、错误分隔、坏标签、重复 ID、坏 reaction 分段、坏 SMILES 和空试剂各有预期处理与定位 |
+| U07 | 化学与重复 | 全量 RDKit 覆盖和跨切分重复审计有分母、版本、键规则；不冒充源化学正确性或专利独立性 |
+| U08 | 可重复与恢复 | 相同输入/规则生成同内容；输出清单可校验；中断不会发布成功，历史结果不被覆盖 |
+| U09 | 输入兼容 | 小样本 CSV 经真实 loader 及所选描述符验证 ID/mask 对齐，不把反应字符串整体当分子 SMILES |
+| U10 | 平台与边界 | Linux 实测、UTF-8/中文路径检查有记录；Windows 未实测标 not_verified；固定评估缺口明确 |
+
+测试拟放 `_verify/test_prepare_uspto_csv.py`。结构审计复查命令（Bash，从仓库根）：
+
+```bash
+source /home/wangzh685/miniconda3/etc/profile.d/conda.sh
+conda activate yonod
+python _verify/audit_uspto_csv.py
+```
+
+Windows Conda Prompt 在仓库根执行 `conda activate yonod` 后运行同一 Python 脚本。该命令仅复查本地结构，不转换标准表、不计算描述符、不训练模型。纯转换/测试在 yonod 环境中串行运行；以后如启动建模，严格遵守 AGENTS.md：独立 schema-2 YAML、专属 `result/` 下 artifacts/output root、所选模型 19 CPU、yonod.py 首提示输入 YAML、headless 日志/PID 和 19 个可用逻辑核，确认启动后提供状态查询命令并结束该次对话。
+
+### 33.6 完成条件与下一步
+
+转换器、三份标准 CSV、provenance、转换清单与质量报告必须真实存在，U01–U10 有实际证据；未完成的化学审计、Windows 实测或描述符适配逐项明确记录，不将计划当作验收。标准 CSV 完成与固定切分建模适配分开标记，前者完成不代表后者已支持。
+
+**当前下一步**：按33.1实现转换器及小样本验证，再串行执行全量转换。本轮只更新计划、保存只读审计脚本和结构报告；未生成标准 CSV、未修改 YONOD 运行代码、未启动建模。
 
 ---
 
