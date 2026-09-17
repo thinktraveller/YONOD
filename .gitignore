@@ -32,6 +32,9 @@ cache/
 results/
 !results/.gitkeep
 
+# Large cleaned USPTO corpus is distributed through Hugging Face.
+dataset/USPTO/
+
 # AutoGluon dumps trained models here if save_path is provided
 AutogluonModels/
 
