@@ -47,6 +47,6 @@ evaluation:
 
 outputs:
   root: ./result/smoke-test
-  report_formats: [Markdown]
+  report_formats: [html, markdown]
 metadata:
   notes: "小型可运行 smoke。正式研究请使用独立 YAML、特征包和输出根目录。"

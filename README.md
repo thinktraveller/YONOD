@@ -69,7 +69,28 @@ ps -p "$task_pid" -o pid,ppid,stat,etime,cmd
 tail -n 100 logs/example_morgan_smoke.log
 ```
 
-该示例把输出写到 `derived/interface_migration/example_artifacts/` 与 `derived/interface_migration/example_results/`。它是测试产物位置，不应复用于正式研究；请复制 YAML 并为正式数据设置独立的 `artifacts.output_dir` 与 `outputs.root`。
+该示例使用仓库内的 `dataset/benchmark_smoke_fixture.csv`，并将特征、训练结果和报告统一写入 `result/smoke-test/`：
+
+```text
+result/smoke-test/
+├── feature/
+│   ├── feature_runs/<feature_run_id>.yaml
+│   └── features/<artifact_id>/
+├── pictures/
+│   └── scatter_morgan_rf_repeat-1.png
+├── report/
+│   ├── report.html
+│   └── report.md
+└── runs/
+    └── run_morgan-rf/
+        ├── run_manifest.yaml
+        ├── source_config.yaml
+        ├── effective_config.yaml
+        ├── predictions.csv
+        └── fold_metrics.csv
+```
+
+相对路径以 YAML 所在目录为基准；`outputs.root` 是任务主目录，加载器会将有效配置中的 `artifacts.output_dir` 统一为该主目录下的 `feature/`。启动日志与 PID 位于仓库 `logs/`，不占用结果目录。该 smoke 输出不得复用于正式研究：新任务应在 `config/` 新建 YAML，并使用专属的 `result/` 子目录。
 
 ### 3. 用向导创建配置
 
@@ -77,7 +98,7 @@ tail -n 100 logs/example_morgan_smoke.log
 python yonod.py
 ```
 
-向导会验证 CSV、声明标签/SMILES/数值列、选择特征和模型，并要求选择非空且唯一的稳定 `sample_id` 列。随后会在项目 `docs/` 目录写出 `*_run.yaml`，并可调用：
+向导会验证 CSV、声明标签/SMILES/数值列、选择特征和模型，并要求选择非空且唯一的稳定 `sample_id` 列。随后应将 `*_run.yaml` 保存到项目 `config/` 目录，并可调用：
 
 ```bash
 python -u yonod.py
@@ -88,62 +109,19 @@ python -u yonod.py
 
 ## Schema-2 YAML
 
-每个运行配置必须带有 `schema_version: "2.0"`、项目名、阶段、数据集和稳定样本 ID。解析器只接受 UTF-8 的 `.yaml`/`.yml` 单文档，拒绝重复键、别名、未知字段和不支持的模型/参数区段。
+唯一可复制、可校验的 YAML 规范是仓库根目录的 [example.yaml](example.yaml)。每个新任务应将它的 schema-2 结构复制到 `config/` 下的新文件，仅替换任务专属的数据集、描述符、模型、评估参数和隔离的 `result/` 路径；不要在 Markdown 文档中维护第二份 YAML。
 
-```yaml
-schema_version: "2.0"
-project_name: my_reaction_task
-stage: all
-
-dataset:
-  path: ./reactions.csv
-  sample_id_col: reaction_id
-  column_roles:
-    label: yield
-    reactants: [reactant_smiles, reagent_smiles]
-    products: []
-    others: []
-    conditions: [temperature_c]
-    categoricals: [solvent]
-
-descriptors:
-  - id: morgan_r2
-    descriptor: morgan
-    mode: concat
-    columns: [reactant_smiles, reagent_smiles]
-
-artifacts:
-  output_dir: ./artifacts
-
-models: [rf]
-model_params:
-  rf:
-    estimator:
-      n_estimators: 300
-      random_state: 42
-      n_jobs: 1
-
-evaluation:
-  protocol: outer_kfold
-  n_splits: 5
-  n_repeats: 1
-  shuffle: true
-  seed: 42
-
-outputs:
-  root: ./results
-  report_formats: [Markdown]
-```
-
-`dataset.column_roles.label` 是 `train` 与 `all` 的必填项；特征阶段可以不声明标签。`sample_id_col` 必须在数据集中存在、非空并且唯一。不要以 DataFrame 行号充当样本 ID。
+每个运行配置必须声明 schema 版本、项目名、阶段、数据集和稳定样本 ID。解析器只接受 UTF-8 的 `.yaml`/`.yml` 单文档，拒绝重复键、别名、未知字段和不支持的模型/参数区段。`dataset.column_roles.label` 是 `train` 与 `all` 的必填项；特征阶段可以不声明标签。`sample_id_col` 必须在数据集中存在、非空并且唯一，不能用 DataFrame 行号代替。
 
 ### 阶段
 
 | `stage` | 必要输入 | 行为 |
 | --- | --- | --- |
-| `features` | `dataset`、`descriptors`、`artifacts.output_dir` | 计算或复用特征包；不构造模型，也不需要标签。 |
+| `features` | `dataset`、`descriptors`、`artifacts.output_dir` | 初始化特征输出并计算或复用特征包；不构造模型，也不需要标签。建议同时显式声明 `outputs.root`。 |
 | `train` | 含标签的 `dataset`、`artifacts.input_manifest`、`models` | 只读取指定特征包并训练；绝不回退到描述符计算。 |
 | `all` | features 与训练所需声明 | 先令全部候选特征达到 ready/failed 终态，再训练所有就绪包；每个 ready feature × model 组合独立发布。 |
+
+外部 feature manifest、标签和辅助列一律按稳定 `sample_id` 对齐。静态特征身份不包含标签，因此只修改标签会改变训练身份而不是特征身份。
 
 某个已经确定身份的 feature × model 在实际训练中失败时，YONOD 会在 `outputs.root/failed_runs/` 原子发布带失败原因、原始 YAML 和生效 YAML 的不可覆盖 manifest，并继续同级组合。失败组合不生成不完整 predictions/metrics；只要任何组合失败，`main.py --config` 返回码为 2，避免调度器把部分成功误报为整体成功。真实 fixture 证据见 [training_failure_isolation_evidence.md](derived/interface_migration/step30_acceptance/training_failure_isolation_evidence.md)。
 
@@ -153,14 +131,14 @@ outputs:
 
 无需原始数据、描述符权重或模型即可重建普通结果报告：`python scripts/rebuild_report.py --run-dir <outputs.root/runs/run-id> --output-root <新的报告目录>`。该命令会校验 manifest、配置快照哈希、OOF 身份和有限数值，不会训练或改写源结果；strict benchmark 仍使用 `scripts/rebuild_benchmark_report.py`。
 
-特征服务把静态矩阵、样本 ID、有效性掩码、身份和哈希发布到独立包。训练服务把每个 `feature × model` 的结果发布到 `outputs.root/runs/<content-derived-run-id>/`，其中包括：
+特征服务把静态矩阵、样本 ID、有效性掩码、身份和哈希发布到独立包。训练服务把每个 `feature × model` 的结果发布到 `outputs.root/runs/run_<feature-id>-<model>/`；内容派生的 `run_id` 保留在 manifest 中用于复用校验，其中包括：
 
 - `predictions.csv` 与 `fold_metrics.csv`；
 - `run_manifest.yaml`；
 - 原始 `source_config.yaml` 和规范化 `effective_config.yaml`；
 - 对按折变换特征，保存折内变换状态和审计信息。
 
-同一身份的完整包会被验证后复用；任何已有不完整结果都不会被静默当作完成。
+同一身份的完整包会被验证后复用；任何已有不完整结果都不会被静默当作完成。失败记录位于组合目录的 `failed_attempts/` 下；同一组合目录已有不同身份结果时，运行会拒绝覆盖，应使用新的任务主目录。
 
 ### 特征
 
@@ -176,25 +154,9 @@ outputs:
 
 ### Chemical VAE（冻结、独立验收的 encoder）
 
-Chemical VAE 是已接入、但刻意受限的可选描述符：它只接受各自经数值对照验证的 ZINC/v5 或 `zinc_properties` encoder/v5 conversion manifest，并从相邻的已哈希 PyTorch state 取编码器输出。`zinc_properties` 只开放 encoder 的原始 `z_mean_sample`，不加载其性质头；两种资产不能互相替代。它不加载解码器、性质头、训练 CSV、原 HDF5 或 TensorFlow/Keras；普通运行时只需要 PyTorch。
+Chemical VAE 是已接入、但刻意受限的可选描述符，并非 `example.yaml` 的默认描述符。它只接受各自经数值对照验证的 ZINC/v5 或 `zinc_properties` encoder/v5 conversion manifest，并从相邻的已哈希 PyTorch state 取编码器输出。声明时必须使用独立的 `chemical_vae` 描述符项，完整指定模型 manifest、`pytorch` 后端、设备、batch size、`identity` 输入预处理及 `z_mean_sample` 输出；`model_manifest` 以 YAML 所在目录为基准解析。`zinc_properties` 只开放 encoder 的原始 `z_mean_sample`，不加载其性质头；两种资产不能互相替代。它不加载解码器、性质头、训练 CSV、原 HDF5 或 TensorFlow/Keras；普通运行时只需要 PyTorch。
 
-```yaml
-descriptors:
-  - id: chemical-vae-zinc-v5
-    descriptor: chemical_vae
-    lifecycle: static_descriptor
-    mode: concat
-    columns: [reactant_1_smiles, reactant_2_smiles]
-    params:
-      model_manifest: ../../WEIGHTS/chemical_vae/zinc-37e96cd3bc8f9680/v5/conversion_manifest.json
-      backend: pytorch
-      device: cpu
-      batch_size: 4
-      input_preprocessing: identity
-      output: z_mean_sample
-```
-
-`model_manifest` 仍以 YAML 所在目录为基准解析。当前资产的每个分子列输出 196 维原始 `z_mean_sample`；上例按列拼接为 392 维。`backend` 只能是 `pytorch`，`input_preprocessing` 只能是 `identity`，`output` 只能是 `z_mean_sample`；未知参数和未验证资产会失败而不是静默回退。
+当前资产的每个分子列输出 196 维原始 `z_mean_sample`，两个列 `concat` 为 392 维。未知参数和未验证资产会失败而不是静默回退；历史完整 Chemical VAE YAML 位于 [配置归档](recovery_backups/configs_20260916.tar.gz)，不在 README 中复制。
 
 输入语义是逐字节 identity：不 trim、不 canonicalize、不拆盐、不替换分隔符、不截断、不扩展字符表。适配器先检查固定 35 字符表、长度上限 120 和 RDKit 可解析性；缺失、超长、字符不支持或 RDKit 无效都会写入版本化 diagnostics sidecar。`concat` 保持既有语义：至少一个分子列成功时保留反应行，失败列为零块；所有选中列都失败才使该行的 mask 为 false。严格共同子集比较必须另行要求每个选中角色都成功，不能把零块留存集当作严格覆盖率。
 
@@ -218,14 +180,7 @@ descriptors:
 | `svm` | `estimator`、`fit`、`preprocessing`、`runtime` |
 | `autogluon` | `predictor`、`fit`、`runtime` |
 
-XGBoost 和 LightGBM 如需 early stopping，应只声明由外层训练折产生的内部验证策略，不能把外部 `eval_set`、回调或数组传进 `fit`：
-
-```yaml
-model_params:
-  xgb:
-    runtime:
-      early_stopping: {rounds: 20, validation_fraction: 0.2, seed: 42}
-```
+XGBoost 和 LightGBM 如需 early stopping，应在各自 `model_params.<model>.runtime.early_stopping` 中只声明由外层训练折产生的内部验证策略（轮数、验证比例和随机种子），不能把外部 `eval_set`、回调或数组传进 `fit`。
 
 完整可运行字段示例见 [example.yaml](example.yaml)；参数路由与契约见 [project-docs/step30-contracts.md](project-docs/step30-contracts.md)。
 
@@ -245,7 +200,7 @@ python scripts/manage_features.py derive --config derive.yaml
 
 `derive_features` 只支持显式样本选择、特征选择及按唯一 sample ID 连接数值 CSV。它永远发布新包并记录父版本、操作、输入/输出映射和哈希；标签、重复/缺失 ID、列冲突和不安全的按折变换操作会失败。
 
-旧 JSON 运行配置不属于当前可执行入口。仓库保留的迁移器只在能够显式恢复 schema-2 字段时生成新的 YAML 供人工复核；JSON 本身及依赖 JSON 的启动器不能作为新建或恢复建模任务的入口。
+旧 JSON 运行配置不属于当前可执行入口。仓库保留的迁移器只在能够显式恢复 schema-2 字段时生成新的 YAML 供人工复核，并在同级生成 `.migration.json` 报告；JSON 本身及依赖 JSON 的启动器不能作为新建或恢复建模任务的入口。
 
 ## 历史 CSV CLI
 
@@ -345,8 +300,7 @@ WEIGHTS/FISD/
 YONOD/
 ├── main.py                     schema-2 底层配置运行时与 smoke 入口；保留历史 CSV 调试接口
 ├── yonod.py                    正式建模任务入口；生成/验证 schema-2 YAML
-├── example.yaml                可运行的最小 schema-2 smoke
-├── example.md                  阶段、操作和迁移的简明示例
+├── example.yaml                唯一可复制的 schema-2 YAML 规范与最小 smoke
 ├── recovery_backups/configs_20260916.tar.gz
 │                               历史 schema-2 与 Chemical VAE 验收 YAML
 ├── WEIGHTS/chemical_vae/       内容校验的转换后编码器资产（本地，不从 YAML 训练）

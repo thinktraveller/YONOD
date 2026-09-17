@@ -23,11 +23,22 @@ in `README.md` and `requirements.txt`.
 
 Every modeling task must follow this order from the repository root:
 
-1. Create and save a standalone, valid schema-2 YAML run configuration before
-   starting the task. Do not start a modeling task from ad-hoc CSV arguments,
-   JSON, or by modifying a committed fixture such as `example.yaml`. Give each
-   task its own YAML and its own `artifacts.output_dir` and `outputs.root` under
-   `result/`. Never set final modeling outputs to a path under `derived/`.
+1. Create and save a standalone, valid schema-2 YAML run configuration under
+   `config/` before starting the task (create the directory if needed). Do not
+   start a modeling task from ad-hoc CSV arguments, JSON, or by modifying a
+   committed fixture such as `example.yaml`. Give each task a unique task name
+   and set its output paths beneath the single isolated directory
+   `result/<task_name>/`: `artifacts.output_dir` must be a subdirectory of it
+   (for example, `./result/<task_name>/feature`) and `outputs.root` must be
+   `./result/<task_name>`. Never share an output directory between tasks or set
+   final modeling outputs to a path under `derived/`. By default, every
+   modeling YAML must generate both HTML and Markdown reports by setting
+   `outputs.report_formats: [html, markdown]`.
+   Regardless of task, every modeling YAML must follow the schema-2 structure,
+   field semantics, and path conventions in `example.yaml`; change only
+   task-specific values such as the dataset, selected models, and isolated
+   result paths. `example.yaml` is the sole authoritative YAML specification;
+   README may explain it but must not duplicate a YAML configuration block.
    Allocate a 19-CPU budget in that YAML for every model that supports it:
    use `model_params.<model>.estimator.n_jobs: 19` for RF, XGBoost, and
    LightGBM, and `model_params.autogluon.fit.num_cpus: 19` for AutoGluon.
@@ -71,18 +82,19 @@ python -u yonod.py
 ```
 
 On Linux, modeling tasks must be launched headlessly, with unbuffered verbose
-output captured in a task-specific log. Replace the YAML path and task name
-below; `python -u` preserves timely progress output, while YONOD also writes
-its detailed runtime log under the configured output directory's `docs/`.
-The `taskset` CPU list must contain exactly 19 available logical CPU IDs; the
-example uses IDs `0` through `18`.
+output captured in a task-specific log under `logs/`. All operational task
+logs and PID files must be placed in `logs/`; do not store them in
+`result/<task_name>/` or elsewhere. Replace the YAML path and task name below;
+`python -u` preserves timely progress output. The `taskset` CPU list must
+contain exactly 19 available logical CPU IDs; the example uses IDs `0` through
+`18`.
 
 ```bash
 mkdir -p logs
 nohup setsid bash -lc '
   source /home/wangzh685/miniconda3/etc/profile.d/conda.sh
   conda activate yonod
-  printf "%s\\n" "configs/my_task.yaml" | taskset --cpu-list 0-18 python -u yonod.py
+  printf "%s\\n" "config/my_task.yaml" | taskset --cpu-list 0-18 python -u yonod.py
 ' </dev/null > logs/my_task.log 2>&1 &
 echo $! > logs/my_task.pid
 ```
@@ -117,12 +129,13 @@ Git in the same task.
 
 ## Output locations
 
-Write backups and engineering-support files under `recovery_backups/`. Only
-results produced by project runs belong under `result/`: when a result location
-is specified, use the designated subdirectory under `result/`; otherwise, write
-the result directly to `result/`. Modeling-task runtime logs may be written
-under `logs/`, but all modeling-task result files must be written under
-`result/`; never place final modeling results under `derived/`.
+Write backups and engineering-support files under `recovery_backups/`. For each
+project run, all result files must be contained in that task's designated
+`result/<task_name>/` directory; do not write loose run results directly under
+`result/`, share result directories between tasks, or place final modeling
+results under `derived/`. All modeling-task operational logs and PID files
+must be placed in `logs/` (for example, `logs/<task_name>.log` and
+`logs/<task_name>.pid`); do not write task logs under `result/`.
 
 ## Verification
 

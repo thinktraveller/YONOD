@@ -46,6 +46,11 @@ logs
 # Configuration, documentation, and manifests remain ordinary Git files.
 # Run `hf download thinktraveller/YONOD-weights --local-dir WEIGHTS` to fetch
 # the distributable binaries locally.
+# Keep locally downloaded model binaries out of commits while retaining the
+# tracked configuration, tokenizer, and conversion-manifest files beside them.
+/WEIGHTS/FISD/
+/WEIGHTS/MolMetaLM-base/model.safetensors
+/WEIGHTS/chemical_vae/**/encoder_state_dict.pt
 
 # Generic large weight file types (not tracked in this repository)
 *.safetensors
@@ -98,3 +103,4 @@ reference-project
 recovery_backups
 result
 docs
+config
