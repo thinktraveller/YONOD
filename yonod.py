@@ -2491,7 +2491,7 @@ def main():
                 from yonod.config.loader import load_run_config
                 stage = str(load_run_config(Path(basic_info['dataset_path'])).effective['stage'])
                 if stage == 'benchmark':
-                    from scripts.run_benchmark import run_benchmark
+                    from _verify.run_benchmark import run_benchmark
 
                     print("\n[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...")
                     result_code = run_benchmark(Path(basic_info['dataset_path']))

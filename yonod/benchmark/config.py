@@ -173,6 +173,7 @@ class BenchmarkConfig:
     cv: Dict[str, Any]
     artifact_output_dir: Path
     outputs_root: Path
+    split_manifest_path: Path | None
     model_configs: Dict[str, Dict[str, Any]]
     legacy_model_kwargs: Dict[str, Dict[str, Any]]
     task_state: Dict[str, Any]
@@ -207,7 +208,7 @@ class BenchmarkConfig:
 
         This is not a runnable configuration compatibility entry point.  The
         paper-exact modules call it while reading their already-versioned JSON
-        materials; public ``scripts/run_benchmark.py`` and ``yonod.py`` use
+        materials; public ``_verify/run_benchmark.py`` and ``yonod.py`` use
         :meth:`from_file` exclusively.
         """
         source_path = Path(path).resolve()
@@ -297,6 +298,7 @@ class BenchmarkConfig:
             cv=cv,
             artifact_output_dir=outputs_root,
             outputs_root=outputs_root,
+            split_manifest_path=None,
             model_configs={},
             legacy_model_kwargs={
                 str(name): dict(params)
@@ -313,17 +315,38 @@ class BenchmarkConfig:
         dataset = raw["dataset"]
         roles = dataset["column_roles"]
         label_col = str(roles["label"])
-        smiles_cols = _require_string_list(roles.get("reactants"), "dataset.column_roles.reactants")
+        molecular_columns: list[str] = []
+        for role in ("reactants", "products", "others"):
+            molecular_columns.extend(str(column) for column in roles.get(role, []) or [])
+        smiles_cols = _require_string_list(
+            molecular_columns,
+            "dataset.column_roles.reactants/products/others",
+        )
         dataset_path = resolve_config_path(source_path, str(dataset["path"]))
         artifact_output_dir = resolve_config_path(source_path, str(raw["artifacts"]["output_dir"]))
         outputs = raw.get("outputs")
         if not isinstance(outputs, Mapping) or not isinstance(outputs.get("root"), str) or not outputs["root"].strip():
             raise BenchmarkConfigError("stage: benchmark 必须声明非空 outputs.root")
         outputs_root = resolve_config_path(source_path, str(outputs["root"]))
-        if artifact_output_dir != outputs_root:
+        try:
+            artifact_output_dir.relative_to(outputs_root)
+        except ValueError as exc:
             raise BenchmarkConfigError(
-                "严格 benchmark 要求 artifacts.output_dir 与 outputs.root 解析为同一任务根目录；"
-                "这样 descriptors、split manifest、SQLite task state 与报告拥有同一不可覆盖的 run identity"
+                "严格 benchmark 的 artifacts.output_dir 必须位于 outputs.root 任务目录内；"
+                "不能把特征写到其他任务或 config/ 下"
+            ) from exc
+        if artifact_output_dir == outputs_root:
+            raise BenchmarkConfigError(
+                "严格 benchmark 的 artifacts.output_dir 必须是 outputs.root 的子目录（标准为 ./result/<task>/feature）"
+            )
+        # The current strict layout stores static descriptor packages in the
+        # same documented ``feature`` child as the schema-2 feature service.
+        # Reject another child rather than silently ignoring a valid-looking
+        # user path.
+        if artifact_output_dir != outputs_root / "feature":
+            raise BenchmarkConfigError(
+                "严格 benchmark 当前要求 artifacts.output_dir 解析为 outputs.root/feature；"
+                "该目录既是可复用特征包位置，也是任务身份的一部分"
             )
 
         evaluation = raw.get("evaluation")
@@ -333,14 +356,34 @@ class BenchmarkConfig:
             raise BenchmarkConfigError(
                 "stage: benchmark 只支持 evaluation.protocol: manifest_outer_cv；不能降级为 outer_kfold"
             )
+        split_manifest_path = None
         if evaluation.get("split_manifest") is not None:
-            raise BenchmarkConfigError(
-                "当前严格 adapter 只生成并持久化自己的 manifest 外部折；evaluation.split_manifest 尚未具备逐行等价导入校验，故拒绝运行"
-            )
+            split_manifest_path = resolve_config_path(source_path, str(evaluation["split_manifest"]))
+            if not split_manifest_path.is_file():
+                raise BenchmarkConfigError(
+                    f"evaluation.split_manifest 不存在：{split_manifest_path}"
+                )
         grouping_value = evaluation.get("grouping")
         if not isinstance(grouping_value, Mapping) or not grouping_value.get("strategy"):
             raise BenchmarkConfigError("evaluation.grouping.strategy 不能为空；严格 benchmark 不会回退为普通 outer_kfold")
         grouping = copy.deepcopy(dict(grouping_value))
+        strategy = str(grouping.get("strategy", "")).strip()
+        supported_grouping = {
+            "repeated_kfold", "component_holdout", "substrate_scaffold",
+            "reaction_fingerprint_cluster", "precomputed_column",
+        }
+        if strategy not in supported_grouping:
+            raise BenchmarkConfigError(
+                "evaluation.grouping.strategy 不受支持：{0}；可用值：{1}".format(
+                    strategy, ", ".join(sorted(supported_grouping))
+                )
+            )
+        if strategy == "precomputed_column":
+            group_column = grouping.get("group_column")
+            if not isinstance(group_column, str) or not group_column.strip():
+                raise BenchmarkConfigError(
+                    "evaluation.grouping.strategy=precomputed_column 需要非空 group_column"
+                )
         cv: Dict[str, Any] = {}
         for field in ("n_repeats", "n_splits", "seed"):
             if field not in evaluation:
@@ -382,6 +425,7 @@ class BenchmarkConfig:
             cv=cv,
             artifact_output_dir=artifact_output_dir,
             outputs_root=outputs_root,
+            split_manifest_path=split_manifest_path,
             model_configs=model_configs,
             legacy_model_kwargs=legacy_model_kwargs,
             task_state=task_state,
@@ -412,7 +456,7 @@ class BenchmarkConfig:
             unknown = [column for column in columns if column not in smiles_cols]
             if unknown:
                 raise BenchmarkConfigError(
-                    "descriptors[{0}].columns 必须属于 dataset.column_roles.reactants：{1}".format(
+                    "descriptors[{0}].columns 必须属于 dataset.column_roles 的 reactants/products/others：{1}".format(
                         index, ", ".join(unknown)
                     )
                 )
@@ -533,6 +577,10 @@ class BenchmarkConfig:
             "artifact_output_dir": str(self.artifact_output_dir),
             "outputs_root": str(self.outputs_root),
             "task_state": self.task_state,
+            "external_split_manifest_sha256": (
+                _sha256_file(self.split_manifest_path)
+                if self.split_manifest_path is not None else None
+            ),
         }
         for optional_field in ("population_id", "dataset_id", "paper_exact", "evaluation_protocol"):
             if optional_field in self.raw:
@@ -577,12 +625,18 @@ def create_benchmark_contract(config: BenchmarkConfig) -> BenchmarkContract:
         "platform": platform.platform(),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "output_layout": {
-            "descriptors": "descriptors",
+            "descriptors": "feature",
             "docs": "docs",
             "pictures": "pictures",
             "report": "report",
         },
     }
+    if config.split_manifest_path is not None:
+        manifest["external_split_manifest"] = {
+            "source_path": str(config.split_manifest_path),
+            "sha256": _sha256_file(config.split_manifest_path),
+            "import_policy": "validated_membership_then_task_local_run_id",
+        }
     for optional_field in ("population_id", "dataset_id", "paper_exact", "evaluation_protocol"):
         if optional_field in config.raw:
             manifest[optional_field] = config.raw[optional_field]
@@ -591,7 +645,12 @@ def create_benchmark_contract(config: BenchmarkConfig) -> BenchmarkContract:
         dataset_sha256=dataset_sha256,
         config_hash=config_hash,
         run_id=run_id,
-        run_dir=config.outputs_root / run_id,
+        # ``outputs.root`` is already the unique task directory required by
+        # schema-2.  Adding a content-derived child made a legal
+        # ``artifacts.output_dir: .../feature`` impossible to honour and
+        # scattered one task across two roots.  The immutable run/config hash
+        # in the manifest still rejects incompatible reuse of this directory.
+        run_dir=config.outputs_root,
         manifest=manifest,
     )
 

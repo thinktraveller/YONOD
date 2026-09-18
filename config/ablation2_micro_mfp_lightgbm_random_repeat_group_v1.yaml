@@ -1,0 +1,127 @@
+schema_version: "2.0"
+project_name: ablation2_micro_mfp_lightgbm_random_repeat_group_v1
+stage: benchmark
+
+dataset:
+  path: ./result/ablation2_amide_micro_v1/data/standardized_population.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants: [amine_smiles, acid_smiles]
+    products: [product_smiles]
+    others: [activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    conditions: []
+    categoricals: []
+
+descriptors:
+  - id: mfp_full
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [amine_smiles, acid_smiles, product_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+  - id: mfp_minus_a
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [acid_smiles, product_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+  - id: mfp_minus_b
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [amine_smiles, product_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+  - id: mfp_minus_p
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [amine_smiles, acid_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+  - id: mfp_minus_a_p
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [acid_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+  - id: mfp_minus_b_p
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [amine_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+  - id: mfp_product_conditions
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [product_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+  - id: mfp_conditions_only
+    descriptor: mfp
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    params:
+      radius: 3
+      fp_size: 1024
+      profile: standard
+
+artifacts:
+  output_dir: ./result/ablation2_micro_mfp_lightgbm_random_repeat_group_v1/feature
+
+models: [lightgbm]
+model_params:
+  lightgbm:
+    estimator:
+      n_estimators: 20
+      learning_rate: 0.05
+      num_leaves: 7
+      min_child_samples: 1
+      random_state: 20260918
+      n_jobs: 19
+      verbosity: -1
+
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 2
+  n_repeats: 1
+  seed: 20260918
+  grouping:
+    strategy: precomputed_column
+    group_column: repeat_group_id
+  split_manifest: ./result/ablation2_amide_micro_splits_v1/manifests/random_repeat_group_split_manifest.parquet
+
+outputs:
+  root: ./result/ablation2_micro_mfp_lightgbm_random_repeat_group_v1
+  report_formats: [html, markdown]
+
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: ablation2_micro_synthetic_v1
+  dataset_id: ablation2_micro_synthetic
+
+metadata:
+  notes: "Synthetic contract-only micro acceptance; not formal research evidence."

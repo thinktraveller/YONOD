@@ -118,9 +118,20 @@ def _validate_dataset(raw: Mapping[str, Any], *, stage: str) -> None:
     elif label is not MISSING and label is not None:
         _require_string(label, "dataset.column_roles.label")
 
+    molecular_roles = ("reactants", "products", "others")
+    assigned_molecular_columns: dict[str, str] = {}
     for name in ("reactants", "products", "others", "conditions", "categoricals"):
         if name in roles:
-            _string_list(roles[name], f"dataset.column_roles.{name}")
+            columns = _string_list(roles[name], f"dataset.column_roles.{name}")
+            if name in molecular_roles:
+                for column in columns:
+                    previous = assigned_molecular_columns.get(column)
+                    if previous is not None:
+                        raise ConfigContractError(
+                            f"dataset.column_roles.{name} 与 dataset.column_roles.{previous} "
+                            f"重复声明分子列：{column!r}"
+                        )
+                    assigned_molecular_columns[column] = name
 
 
 def _validate_descriptors(value: Any, *, required: bool) -> None:
@@ -315,7 +326,36 @@ def validate_operation_config(raw: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def resolve_config_path(config_path: Path | str, reference: str) -> Path:
-    """Resolve a runtime-config reference relative to its owning YAML file."""
+    """Resolve a YAML path reference without making ``config/`` task paths local.
+
+    Project run configurations belong below the repository's conventional
+    ``config/`` directory.  Their relative references are therefore
+    repository-relative, so ``./dataset/...`` and ``./result/...`` mean the
+    same thing in ``example.yaml`` and in ``config/my_task.yaml``.  This
+    avoids the surprising ``config/result`` and ``config/dataset`` trees that
+    otherwise arise when a valid standalone task is launched.
+
+    Configurations outside that conventional directory keep the historical
+    source-relative behaviour.  This preserves portable temporary fixtures
+    and third-party examples while giving committed research tasks one
+    unambiguous convention.  Absolute paths remain absolute.
+    """
     owner = Path(config_path).resolve()
     target = Path(_require_string(reference, "配置路径引用"))
-    return target.resolve() if target.is_absolute() else (owner.parent / target).resolve()
+    if target.is_absolute():
+        return target.resolve()
+
+    project_root: Path | None = None
+    for candidate in (owner.parent, *owner.parents):
+        if (candidate / ".git").exists():
+            project_root = candidate
+            break
+    if project_root is not None:
+        config_root = project_root / "config"
+        try:
+            owner.parent.relative_to(config_root)
+        except ValueError:
+            pass
+        else:
+            return (project_root / target).resolve()
+    return (owner.parent / target).resolve()

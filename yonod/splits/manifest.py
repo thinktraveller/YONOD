@@ -248,3 +248,73 @@ def write_split_manifest(contract: BenchmarkContract, manifest: pd.DataFrame) ->
         raise SplitManifestError("split manifest 临时文件校验失败")
     temporary.replace(path)
     return path
+
+
+def load_external_split_manifest(
+    path: Path | str,
+    *,
+    sample_ids: Iterable[str],
+    dataset_sha256: str,
+    n_splits: int,
+    n_repeats: int,
+    run_id: str,
+) -> pd.DataFrame:
+    """Import one already-audited split plan for a new task identity.
+
+    Paired ablations must share *actual* train/test members, rather than only
+    reuse a seed and hope that independent split generation remains identical.
+    The source plan is treated as immutable: this function checks its complete
+    membership and leakage properties, then changes only its task-local
+    ``run_id`` in the copy written under the new result directory.  The source
+    run ID remains in ``source_run_id`` for provenance.
+    """
+    source = Path(path).resolve()
+    if not source.is_file():
+        raise SplitManifestError(f"外部 split manifest 不存在：{source}")
+    try:
+        if source.suffix.lower() == ".parquet":
+            manifest = pd.read_parquet(source)
+        elif source.suffix.lower() == ".csv":
+            manifest = pd.read_csv(source)
+        else:
+            raise SplitManifestError("外部 split manifest 仅支持 .parquet 或 .csv")
+    except SplitManifestError:
+        raise
+    except Exception as exc:
+        raise SplitManifestError(f"无法读取外部 split manifest：{exc}") from exc
+
+    expected_id_list = [str(value) for value in sample_ids]
+    expected_ids = set(expected_id_list)
+    if not expected_ids or len(expected_ids) != len(expected_id_list):
+        # The caller supplies a materialized sequence in production; retaining
+        # this explicit check prevents a generator or duplicate IDs from
+        # weakening the comparison identity in future callers.
+        raise SplitManifestError("外部 split 导入需要唯一、非空的 sample_ids")
+    if "dataset_sha256" not in manifest.columns:
+        raise SplitManifestError("外部 split manifest 缺少 dataset_sha256")
+    observed_hashes = set(manifest["dataset_sha256"].dropna().astype(str))
+    if observed_hashes != {str(dataset_sha256)}:
+        raise SplitManifestError("外部 split manifest 的 dataset_sha256 与当前数据不一致")
+    if "run_id" not in manifest.columns or manifest["run_id"].isna().any():
+        raise SplitManifestError("外部 split manifest 缺少有效 run_id")
+    source_run_ids = manifest["run_id"].astype(str).unique().tolist()
+    if len(source_run_ids) != 1:
+        raise SplitManifestError("外部 split manifest 必须只包含一个 source run_id")
+    if "split_id" not in manifest.columns or manifest["split_id"].dropna().astype(str).nunique() != 1:
+        raise SplitManifestError("外部 split manifest 必须只包含一个有效 split_id")
+
+    validate_split_manifest(manifest, n_splits=n_splits, n_repeats=n_repeats)
+    for (repeat, fold), part in manifest.groupby(["repeat", "fold"], sort=True):
+        members = set(part["sample_id"].astype(str))
+        if members != expected_ids:
+            missing = sorted(expected_ids.difference(members))[:3]
+            unexpected = sorted(members.difference(expected_ids))[:3]
+            raise SplitManifestError(
+                "外部 split 的 sample_id population 与当前任务不一致 "
+                f"(repeat={repeat}, fold={fold}, missing={missing}, unexpected={unexpected})"
+            )
+
+    imported = manifest.copy()
+    imported["source_run_id"] = source_run_ids[0]
+    imported["run_id"] = str(run_id)
+    return imported.sort_values(["repeat", "fold", "role", "sample_id"], kind="mergesort").reset_index(drop=True)
