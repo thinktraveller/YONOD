@@ -2,6 +2,22 @@
 
 ---
 
+## [2026-09-20] Ablation2：64 项正式矩阵统计、重复划分审计与扩展决策
+
+### 执行与验证
+
+- 完成两条模型线（Morgan ECFP4 × RF、MFP × LightGBM）、四种协议、八组输入的 64 项正式任务；每项 SQLite task-state 为 `succeeded=15`，共核验 960 个 prediction parquet。所有任务均有 HTML/Markdown 报告，且预测的 run/config identity、47,015 行 OOF 覆盖、外部划分哈希和每折成员数与冻结 manifest 一致。
+- 独立统计任务 `result/ablation2_statistics_v1/` 从逐样本 OOF prediction 重算 MAE、RMSE、R²、Kendall τ、配对边际效应和产品替代效应。输出 4,000 次组簇 bootstrap 区间、组级 Wilcoxon/Holm 边际对照、图表、HTML/Markdown 报告及可复算 paired-error 表。
+- 审计到未见胺的第 1/3 次、未见酸的 1/2/3 次外层样本到折映射完全相同。统计输出新增 `repeat_partition_signatures.csv`，仅用不同的外层划分（随机/未见胺/未见酸/底物对为 3/2/1/3）作重复层重采样和检验；未见酸的跨重复 t 区间明确省略。
+- 主要结果：两条模型线中，移除产物 P 后 A/胺的边际 MAE 代价在四协议均恢复；B/酸的替代效应较小、对协议更敏感。结果仅支持该数据中的条件预测信息比较，不支持化学因果或跨来源普适性。
+
+### 扩展闸门
+
+- 本地 `dataset/ORD/chemrxiv_amide_yield_structure_v1_normalized_dataset.csv`（957 行）被选为受限外部候选：规范化 A/B/P 结构与当前 development population 无交集，但上游来源/行级映射仍待审计，且该表仅有一种酸。后续只能检验受限的外部胺/条件泛化，不能声称未见酸泛化。
+- USPTO 不作为独立外部验证：当前 47,015 行 development 数据的来源说明包含 USPTO，且其反应角色尚未完成反应中心级抽取与去重。
+
+---
+
 ## [2026-09-14] 步骤 30.7：真实模型失败隔离
 
 - 训练服务现在将已经确定 identity 的 feature × model 运行时失败原子发布为独立 failed run，包含失败原因及原始/生效 YAML；failed run 不含不完整 predictions 或 metrics，重复尝试使用 UUID attempt 根，不覆盖证据或成功 sibling。
