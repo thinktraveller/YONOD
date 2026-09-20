@@ -13,8 +13,9 @@
 
 ### 扩展闸门
 
-- 本地 `dataset/ORD/chemrxiv_amide_yield_structure_v1_normalized_dataset.csv`（957 行）被选为受限外部候选：规范化 A/B/P 结构与当前 development population 无交集，但上游来源/行级映射仍待审计，且该表仅有一种酸。后续只能检验受限的外部胺/条件泛化，不能声称未见酸泛化。
+- 本地 `dataset/ORD/chemrxiv_amide_yield_structure_v1_normalized_dataset.csv`（957 行）通过独立数据审计：其哈希与 `thinktraveller/ord-datasets` 固定发布完全一致，所有行映射至 ORD `ord_dataset-7acd6ad2bf4d4cff841cad008ab726d5`，且规范化 A/B/P 结构与 development population 无交集。它仍只含一种酸，因此后续只能检验受限的外部胺/条件泛化，不能声称未见酸泛化。
 - USPTO 不作为独立外部验证：当前 47,015 行 development 数据的来源说明包含 USPTO，且其反应角色尚未完成反应中心级抽取与去重。
+- 受限扩展预注册已在任何新模型分数前冻结；现有 schema-2 strict benchmark 要求至少两个 CV 折，故下一步是专门的冻结训练—外部测试适配器与合约微型验收，禁止把同一外部测试集伪造为双折 CV。
 
 ---
 
