@@ -10,11 +10,12 @@
 - 在模型或描述符加载前，适配器固定并验证外部数据 SHA-256、外部审计清单 SHA-256、审计中 A/B/P canonical overlap 为零、训练/外部唯一 sample ID 的零交集、外部 source ID 与受审计 ORD package 的一致性，以及训练特征到外部列的一对一映射。外部标签只在预测已产生后才载入，metadata 显式记录其未参与 fit、缩放、模型选择或早停。
 - 通过 `yonod.py` 实际运行独立的 10 行 development → 6 行 external Morgan × RF 微型任务（YAML 声明 `n_jobs: 19`）。输出含双种群清单、prediction parquet、指标 CSV、fold metadata 和 HTML/Markdown 报告；验收记录外部 3 个 amine group、sample-ID 零交集和 label-isolation 字段。首次因可选 `tabulate` 缺失而中断的产物完整保留在 `recovery_backups/ablation2_frozen_external_micro_acceptance_v1_tabulate_interrupted_20260921/`，随后改为内建 Markdown 表格并在同一未改 YAML 下成功重跑。
 - 合同测试覆盖并拒绝：夹带 CV/split 字段、外部数据哈希不符、审计清单哈希不符、允许 canonical overlap 的审计、训练/外部 sample-ID 泄漏、非一对一列映射和被未识别文件污染的输出根；8 项新测试及 1 项既有 strict-launcher 回归均通过。
+- 随后生成并静态加载 12 份 957 行 ChemRxiv ORD 正式 YAML：预注册的 Full、minus A、minus P、minus A+P、P+C、C-only 分别在 Morgan × RF 与 MFP × LightGBM 下各一项。12/12 固定标准化 external data/audit-manifest SHA-256、外部 10 个 amine group、19 CPU、HTML/Markdown 和互异且尚不存在的 `result/<task>/` 根；审计阶段未导入描述符、未读取外部标签、未拟合或评分任何正式模型。为保持一对一跨来源槽位，全部任务将 development 的 C 固定为 activation/base/solvent，并明确排除没有独立外部对应项的 additive。
 
 ### 边界与下一步
 
 - 此微型任务仅验证执行契约；其 6 行外部指标不构成科学结果。957 行 ChemRxiv ORD 正式外部矩阵、相应 cluster-bootstrap/Wilcoxon 统计，以及同源 grouped unseen-A 验证均未开始。
-- 下一步先为预注册的六个输入组合、两条固定模型线创建并静态审计隔离的 schema-2 正式 YAML；之后依 AGENTS.md 每次只串行启动一个正式外部任务。
+- 下一步依 AGENTS.md 按冻结顺序每次只串行启动一个正式外部任务；12 份 YAML 的静态审计结论保存在 `docs/ablation2/chemrxiv_frozen_matrix_audit_v1.md`。
 
 ---
 
