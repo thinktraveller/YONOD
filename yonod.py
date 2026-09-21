@@ -2445,8 +2445,13 @@ def validate_config_file(config_path: str) -> bool:
         # adapter before printing a successful public-entrypoint verdict, so
         # an ordinary outer_kfold YAML never looks launchable here.
         if loaded.effective['stage'] == 'benchmark':
-            from yonod.benchmark.config import BenchmarkConfig
-            BenchmarkConfig.from_file(loaded.path)
+            protocol = str(loaded.effective.get('evaluation', {}).get('protocol', ''))
+            if protocol == 'frozen_train_external_test':
+                from yonod.benchmark.frozen_external import FrozenExternalTestConfig
+                FrozenExternalTestConfig.from_file(loaded.path)
+            else:
+                from yonod.benchmark.config import BenchmarkConfig
+                BenchmarkConfig.from_file(loaded.path)
         dataset_path = resolve_config_path(loaded.path, loaded.effective['dataset']['path'])
         if not dataset_path.is_file():
             print(f"[X] YAML 所引用的数据集不存在: {dataset_path}")
@@ -2491,10 +2496,18 @@ def main():
                 from yonod.config.loader import load_run_config
                 stage = str(load_run_config(Path(basic_info['dataset_path'])).effective['stage'])
                 if stage == 'benchmark':
-                    from _verify.run_benchmark import run_benchmark
+                    effective = load_run_config(Path(basic_info['dataset_path'])).effective
+                    protocol = str(effective.get('evaluation', {}).get('protocol', ''))
+                    if protocol == 'frozen_train_external_test':
+                        from yonod.benchmark.frozen_external import run_frozen_external_test
 
-                    print("\n[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...")
-                    result_code = run_benchmark(Path(basic_info['dataset_path']))
+                        print("\n[启动] 正在通过 yonod.py 运行 frozen_train_external_test...")
+                        result_code = run_frozen_external_test(Path(basic_info['dataset_path']))
+                    else:
+                        from _verify.run_benchmark import run_benchmark
+
+                        print("\n[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...")
+                        result_code = run_benchmark(Path(basic_info['dataset_path']))
                     if result_code == 0:
                         print("\n[完成] 严格 benchmark 已成功完成!")
                     else:
