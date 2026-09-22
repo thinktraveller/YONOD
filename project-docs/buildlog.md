@@ -2,6 +2,22 @@
 
 ---
 
+## [2026-09-22] Ablation2：12 项 ChemRxiv 冻结外测完成与逐项完整性核验
+
+### 执行与验证
+
+- 预注册的 12 项 957 行 ChemRxiv ORD 冻结外测已全部完成：Full、minus A、minus P、minus A+P、P+C、C-only 各在 Morgan ECFP4 × RF 与 MFP × LightGBM 下运行一次。每项均使用同一冻结的 47,015 行 development population 单次拟合，再对独立的 957 行 external population 预测；这不是外层 CV，也没有将外部集伪造为折。
+- 2026-09-22 用 `_verify/verify_ablation2_frozen_external_result.py` 对 12 份正式 YAML 逐项复核，12/12 通过。核验包括双 population 的 SHA-256/sample-ID 哈希、development/external sample-ID 零交集、外部 10 个 amine group、无 CV split manifest、`single_fit=true`/`cv_folds=0`/不具 strict-CV 排名资格、外部标签在预测后载入、prediction 身份与有限值、由预测独立重算指标，以及 HTML/Markdown 报告完整性。
+- 该核验确认任务按冻结契约执行、产物彼此可追溯且未见直接样本泄漏；它不比较 12 项任务之间的效应，也不产生显著性、区间或跨来源科学结论。
+
+### 证据边界与下一步
+
+- 外部集仍只有 957 行与 10 个 external amine group，且候选来源只有一种酸。因此行不是独立重采样单位，且不得将此来源表述为未见酸泛化验证。
+- 预注册的跨任务统计综合尚未执行：须以已保存的外部 predictions 为唯一输入，按 amine group 进行配对 cluster bootstrap、组级 Wilcoxon/Holm，并保留两条模型线的限定解释。该独立分析完成前，外测的逐任务指标只能作描述性记录，不能单独佐证或否定研究假设。
+- 同一来源的 grouped unseen-A 验证尚未开始；是否开展须在完成上述外测综合并按预注册边界解释后另行决定。不得重跑、覆盖或合并现有 12 个冻结外测任务。
+
+---
+
 ## [2026-09-21] Ablation2：冻结 development→external 测试适配器与微型验收
 
 ### 执行与验证
