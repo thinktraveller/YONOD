@@ -100,9 +100,12 @@ _verify
 
 # ===================== Others =====================
 reference-project
+/reference-projects/
 recovery_backups
 backup
 result
 docs
 config
 
+# Project documentation is a separate, nested Git repository.
+/project-docs/
