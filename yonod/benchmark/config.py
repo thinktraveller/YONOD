@@ -25,6 +25,7 @@ import yaml
 from ..config.contracts import ConfigContractError, resolve_config_path
 from ..config.loader import ConfigLoadError, load_run_config
 from ..model_factory import ModelConfigurationError, resolve_model_config
+from ..features.numeric_conditions import NumericConditionsError, normalise_numeric_contract, parse_numeric_frame
 from .layout import resolve_benchmark_output_layout
 
 
@@ -320,10 +321,9 @@ class BenchmarkConfig:
         if not isinstance(outputs, Mapping) or not isinstance(outputs.get("root"), str) or not outputs["root"].strip():
             raise BenchmarkConfigError("stage: benchmark 必须声明非空 outputs.root")
         outputs_root = resolve_config_path(source_path, str(outputs["root"]))
-        if artifact_output_dir != outputs_root:
+        if artifact_output_dir == outputs_root or outputs_root not in artifact_output_dir.parents:
             raise BenchmarkConfigError(
-                "严格 benchmark 要求 artifacts.output_dir 与 outputs.root 解析为同一任务根目录；"
-                "这样 descriptors、split manifest、SQLite task state 与报告拥有同一不可覆盖的 run identity"
+                "严格 benchmark 要求 artifacts.output_dir 是 outputs.root 内的独立子目录"
             )
 
         evaluation = raw.get("evaluation")
@@ -355,6 +355,11 @@ class BenchmarkConfig:
         feature_sets = cls._schema2_feature_sets(raw["descriptors"], smiles_cols)
         active_feature_names = tuple(str(item["name"]) for item in feature_sets)
         model_configs, legacy_model_kwargs = cls._schema2_model_configs(raw.get("model_params", {}), raw["models"])
+        numeric_contract = normalise_numeric_contract(dataset)
+        if numeric_contract["columns"] and "autogluon" in raw["models"]:
+            raise BenchmarkConfigError(
+                "strict AutoGluon 的内部验证/集成子折尚不能保证数值处理只拟合子折训练行"
+            )
         benchmark = raw["benchmark"]
         task_state = copy.deepcopy(dict(benchmark["task_state"]))
         internal_raw: Dict[str, Any] = {
@@ -365,6 +370,7 @@ class BenchmarkConfig:
             "evaluation_protocol": "manifest_outer_cv",
             "task_state": task_state,
             "project_name": raw["project_name"],
+            "numeric_contract": numeric_contract,
         }
         for field in ("population_id", "dataset_id"):
             if field in benchmark:
@@ -496,7 +502,9 @@ class BenchmarkConfig:
         if not self.dataset_path.is_file():
             raise FileNotFoundError(f"数据集不存在：{self.dataset_path}")
         frame = pd.read_csv(self.dataset_path)
-        required = [self.sample_id_col, self.label_col, *self.smiles_cols]
+        numeric_contract = self.raw.get("numeric_contract", {"columns": []})
+        required = [self.sample_id_col, self.label_col, *self.smiles_cols,
+                    *[entry["source"] for entry in numeric_contract["columns"]]]
         missing = [column for column in required if column not in frame.columns]
         if missing:
             raise BenchmarkConfigError(f"数据集缺少列：{', '.join(missing)}")
@@ -512,6 +520,19 @@ class BenchmarkConfig:
         if labels.isna().any():
             bad_count = int(labels.isna().sum())
             raise BenchmarkConfigError(f"标签列 {self.label_col!r} 含 {bad_count} 个不可解析或空值")
+        if numeric_contract["columns"]:
+            source_columns = [entry["source"] for entry in numeric_contract["columns"]]
+            raw_numeric = pd.read_csv(
+                self.dataset_path, usecols=[self.sample_id_col, *source_columns], keep_default_na=False
+            )
+            if len(raw_numeric) != len(frame) or raw_numeric[self.sample_id_col].astype(str).tolist() != sample_ids.astype(str).tolist():
+                raise BenchmarkConfigError("数值原始列与 strict sample_id/行序不一致")
+            try:
+                parse_numeric_frame(raw_numeric, sample_ids.astype(str).tolist(), numeric_contract, phase="strict_preflight")
+            except NumericConditionsError as exc:
+                raise BenchmarkConfigError(str(exc)) from exc
+            for column in source_columns:
+                frame[column] = raw_numeric[column].tolist()
         return frame
 
     def normalized_for_hash(self, dataset_sha256: str) -> Dict[str, Any]:
@@ -533,6 +554,7 @@ class BenchmarkConfig:
             "artifact_output_dir": str(self.artifact_output_dir),
             "outputs_root": str(self.outputs_root),
             "task_state": self.task_state,
+            "numeric_contract": self.raw.get("numeric_contract"),
         }
         for optional_field in ("population_id", "dataset_id", "paper_exact", "evaluation_protocol"):
             if optional_field in self.raw:

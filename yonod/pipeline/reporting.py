@@ -7,6 +7,7 @@ model ``fit`` method, so it is also the implementation behind offline rebuild.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
 import re
@@ -114,6 +115,43 @@ def _metrics(predictions: pd.DataFrame, folds: pd.DataFrame, manifest: Mapping[s
     }])
 
 
+def _numeric_report_rows(run_dir: Path, folds: pd.DataFrame, manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Read verified per-fold numeric state; never recompute it from source CSV."""
+    contract = manifest.get("numeric_contract")
+    if not contract:
+        return []
+    entries = contract.get("columns", [])
+    if not entries or "transform_audit" not in folds:
+        raise ReportServiceError("数值运行缺少处理契约或折级审计")
+    rows: list[dict[str, Any]] = []
+    for _, fold_row in folds.iterrows():
+        repeat, fold = int(fold_row["repeat"]), int(fold_row["fold"])
+        audit = json.loads(fold_row["transform_audit"]).get("numeric", {})
+        state_path = run_dir / "fold_transforms" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}" / "numeric_conditions.yaml"
+        if not state_path.is_file() or audit.get("state_sha256") != _sha256(state_path):
+            raise ReportServiceError(f"repeat={repeat}/fold={fold} 数值状态缺失或哈希不匹配")
+        state = _load_yaml(state_path)
+        if state.get("contract") != contract or len(state.get("columns", [])) != len(entries):
+            raise ReportServiceError(f"repeat={repeat}/fold={fold} 数值状态与契约不一致")
+        if audit.get("fit_sample_ids_sha256") != state.get("fit_sample_ids_sha256"):
+            raise ReportServiceError(f"repeat={repeat}/fold={fold} 数值拟合行身份不一致")
+        for entry, fitted in zip(entries, state["columns"]):
+            if fitted.get("source") != entry.get("source") or fitted.get("name") != entry.get("name"):
+                raise ReportServiceError(f"repeat={repeat}/fold={fold} 数值列顺序不一致")
+            rows.append({
+                "run": f"{manifest['feature_id']} × {manifest['model']}",
+                "repeat": repeat, "fold": fold,
+                "source": entry["source"], "name": entry["name"],
+                "unit": (entry.get("unit") or {}).get("target", "dimensionless"),
+                "missing": entry["missing"]["strategy"], "scaling": entry["scaling"],
+                "train_missing_rows": fitted["train_missing_rows"],
+                "constant_train": fitted["constant_train"],
+                "numeric_dimension": int(audit["dimension"]),
+                "input_dimension": int(fold_row["feature_dim"]),
+            })
+    return rows
+
+
 def _plot_repeat(points: pd.DataFrame, manifest: Mapping[str, Any], target: Path) -> None:
     import matplotlib
     matplotlib.use("Agg", force=True)
@@ -175,7 +213,7 @@ def rebuild_schema2_report(run_dir: Path | str, *, output_root: Path | str | Non
             if picture.stat().st_size < 128: raise ReportServiceError(f"散点图为空：{picture.name}")
             pictures.append(picture)
         metadata = source.get("metadata") if isinstance(source.get("metadata"), Mapping) else {}
-        info = {"task_name": source.get("project_name", manifest["run_id"]), "project_folder": str(root), "csv_path": "<stored training result>", "n_samples": manifest.get("n_samples"), "label_col": manifest.get("label_column"), "n_combinations": 1, "run_id": manifest["run_id"], "artifact_id": manifest["artifact_id"], "split_identity": manifest["split_identity"], "model_request": manifest.get("model_request"), "dataset_citation": metadata.get("doi"), "dataset_url": metadata.get("source_url", metadata.get("repo_url")), "dataset_notes": metadata.get("notes", metadata.get("source_notes"))}
+        info = {"task_name": source.get("project_name", manifest["run_id"]), "project_folder": str(root), "csv_path": "<stored training result>", "n_samples": manifest.get("n_samples"), "label_col": manifest.get("label_column"), "n_combinations": 1, "run_id": manifest["run_id"], "artifact_id": manifest["artifact_id"], "split_identity": manifest["split_identity"], "model_request": manifest.get("model_request"), "dataset_citation": metadata.get("doi"), "dataset_url": metadata.get("source_url", metadata.get("repo_url")), "dataset_notes": metadata.get("notes", metadata.get("source_notes")), "numeric_audit_rows": _numeric_report_rows(run_dir, folds, manifest)}
         metrics = _metrics(predictions, folds, manifest)
         html_path = generate_report(metrics, info, staging, scatter_paths=pictures) if "html" in selected else None
         markdown_path = generate_markdown_report(metrics, info, staging, scatter_paths=pictures) if "markdown" in selected else None
@@ -272,6 +310,7 @@ def rebuild_schema2_summary_report(
             "dataset_citation": metadata.get("doi"),
             "dataset_url": metadata.get("source_url", metadata.get("repo_url")),
             "dataset_notes": metadata.get("notes", metadata.get("source_notes")),
+            "numeric_audit_rows": [row for (manifest, _, folds), run_dir in zip(records, directories) for row in _numeric_report_rows(run_dir, folds, manifest)],
         }
         metrics = pd.concat(metric_frames, ignore_index=True)
         html_path = generate_report(metrics, info, staging, scatter_paths=pictures) if "html" in selected else None

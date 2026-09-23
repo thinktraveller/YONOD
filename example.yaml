@@ -14,6 +14,16 @@ dataset:
     others: []
     conditions: []
     categoricals: []
+  # conditions 按这里的源列顺序进入模型；空列表时无需 numeric_conditions。
+  # 非空时可用 columns.<源列名> 覆盖 name、missing_values、missing、scaling、unit。
+  # missing: {strategy: error|mean|median|constant, constant: <有限数值>}
+  # scaling: none|standard|minmax。unit 显式声明 source、target、scale、offset，
+  # 目标值 = 原始值 * scale + offset；省略 unit 即无量纲。
+  numeric_conditions:
+    defaults:
+      missing: {strategy: error}
+      scaling: none
+    columns: {}
 
 # 每项均是单独的特征候选；不同描述符不会自动拼接。
 descriptors:

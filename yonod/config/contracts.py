@@ -37,7 +37,7 @@ _TOP_LEVEL_KEYS = frozenset({
     "schema_version", "project_name", "stage", "dataset", "descriptors",
     "artifacts", "models", "model_params", "evaluation", "outputs", "benchmark", "metadata",
 })
-_DATASET_KEYS = frozenset({"path", "sample_id_col", "column_roles"})
+_DATASET_KEYS = frozenset({"path", "sample_id_col", "column_roles", "numeric_conditions"})
 _COLUMN_ROLE_KEYS = frozenset({
     "label", "reactants", "products", "others", "conditions", "categoricals",
 })
@@ -121,6 +121,22 @@ def _validate_dataset(raw: Mapping[str, Any], *, stage: str) -> None:
     for name in ("reactants", "products", "others", "conditions", "categoricals"):
         if name in roles:
             _string_list(roles[name], f"dataset.column_roles.{name}")
+    conditions = _string_list(roles.get("conditions"), "dataset.column_roles.conditions")
+    protected = {str(raw["sample_id_col"]), *[str(value) for value in roles.get("reactants", []) or []],
+                 *[str(value) for value in roles.get("products", []) or []],
+                 *[str(value) for value in roles.get("others", []) or []],
+                 *[str(value) for value in roles.get("categoricals", []) or []]}
+    if isinstance(label, str):
+        protected.add(label)
+    overlaps = sorted(set(conditions) & protected)
+    if overlaps:
+        raise ConfigContractError("dataset.column_roles.conditions 与 ID、标签或其他输入角色重叠：" + ", ".join(overlaps))
+    if "numeric_conditions" in raw or conditions:
+        try:
+            from yonod.features.numeric_conditions import NumericConditionsError, normalise_numeric_contract
+            normalise_numeric_contract(raw)
+        except NumericConditionsError as exc:
+            raise ConfigContractError(str(exc)) from exc
 
 
 def _validate_descriptors(value: Any, *, required: bool) -> None:

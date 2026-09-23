@@ -30,6 +30,9 @@ from yonod.config.contracts import resolve_config_path
 from yonod.config.loader import LoadedRunConfig, load_run_config
 from yonod.descriptors.registry import FeatureRegistryError, FeatureSpec, normalise_feature_specs
 from yonod.provenance import feature_dataset_identity
+from yonod.features.numeric_conditions import (
+    normalise_numeric_contract, numeric_input_identity, publish_numeric_block,
+)
 
 
 FEATURE_SERVICE_SCHEMA_VERSION = "1.0"
@@ -63,6 +66,8 @@ class FeatureRunResult:
     status_manifest_path: Path
     dataset_identity: str | None
     features: tuple[FeatureStatus, ...]
+    numeric_block_path: Path | None = None
+    numeric_identity: str | None = None
 
 
 FeatureComputer = Callable[
@@ -343,6 +348,8 @@ def _status_payload(
     dataset_identity: str | None,
     features: Sequence[FeatureStatus],
     status_path: Path,
+    numeric_block_path: Path | None = None,
+    numeric_identity: str | None = None,
 ) -> Dict[str, Any]:
     records = []
     for item in features:
@@ -368,15 +375,21 @@ def _status_payload(
         "source_config_filename": source_config.name,
         "dataset_identity": dataset_identity,
         "features": records,
+        "numeric_block": (
+            {"path": _relative_to_status(numeric_block_path, status_path), "identity": numeric_identity}
+            if numeric_block_path is not None else None
+        ),
     }
 
 
-def _run_id(dataset_identity: str | None, specs: Sequence[FeatureSpec]) -> str:
+def _run_id(dataset_identity: str | None, specs: Sequence[FeatureSpec], numeric_identity: str | None = None) -> str:
     payload = {
         "dataset_identity": dataset_identity,
         "feature_specs": [spec.to_dict() for spec in specs],
         "schema": FEATURE_SERVICE_SCHEMA_VERSION,
     }
+    if numeric_identity is not None:
+        payload["numeric_identity"] = numeric_identity
     return "features-" + hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:16]
 
 
@@ -542,6 +555,8 @@ def run_features(
     computer = feature_computer or partial(_production_feature_computer, config_path=loaded.path)
     dataset_path = resolve_config_path(loaded.path, config["dataset"]["path"])
     dataset_identity: str | None = None
+    numeric_identity: str | None = None
+    numeric_block_path: Path | None = None
 
     try:
         frame, sample_ids, roles = _validate_feature_frame(config, dataset_path)
@@ -550,6 +565,19 @@ def run_features(
             sample_id_col=config["dataset"]["sample_id_col"],
             column_roles=roles,
         )
+        numeric_contract = normalise_numeric_contract(config["dataset"])
+        if numeric_contract["columns"]:
+            source_columns = [entry["source"] for entry in numeric_contract["columns"]]
+            id_col = str(config["dataset"]["sample_id_col"])
+            raw_numeric = pd.read_csv(
+                dataset_path, usecols=[id_col, *source_columns], keep_default_na=False
+            )
+            if len(raw_numeric) != len(frame) or raw_numeric[id_col].astype(str).tolist() != sample_ids.tolist():
+                raise FeatureServiceError("数值原始列与 features sample_id/行序不一致")
+            numeric_identity = numeric_input_identity(raw_numeric, sample_ids, numeric_contract)
+            numeric_block_path = publish_numeric_block(
+                artifacts_root, raw_numeric, sample_ids, numeric_contract
+            )
     except Exception as exc:
         run_id = _run_id(None, specs)
         status_path = artifacts_root / "feature_runs" / f"{run_id}.yaml"
@@ -564,7 +592,7 @@ def run_features(
         ))
         return FeatureRunResult(run_id, "failed", status_path, None, failures)
 
-    run_id = _run_id(dataset_identity, specs)
+    run_id = _run_id(dataset_identity, specs, numeric_identity)
     status_path = artifacts_root / "feature_runs" / f"{run_id}.yaml"
     results = tuple(
         _execute_one_feature(
@@ -580,5 +608,9 @@ def run_features(
     _atomic_yaml(status_path, _status_payload(
         run_id=run_id, status=terminal, source_config=loaded.path, dataset_identity=dataset_identity,
         features=results, status_path=status_path,
+        numeric_block_path=numeric_block_path, numeric_identity=numeric_identity,
     ))
-    return FeatureRunResult(run_id, terminal, status_path, dataset_identity, results)
+    return FeatureRunResult(
+        run_id, terminal, status_path, dataset_identity, results,
+        numeric_block_path=numeric_block_path, numeric_identity=numeric_identity,
+    )

@@ -42,6 +42,10 @@ from yonod.model_factory import (
     software_versions,
 )
 from yonod.provenance import feature_dataset_identity
+from yonod.features.numeric_conditions import (
+    NumericConditionsError, NumericConditionsTransformer, normalise_numeric_contract,
+    numeric_input_identity, load_numeric_block,
+)
 
 
 TRAINING_SCHEMA_VERSION = "1.0"
@@ -152,6 +156,15 @@ def _load_label_frame(loaded: LoadedRunConfig) -> tuple[pd.DataFrame, str, str, 
     ids = _as_string_ids(frame[id_col], f"dataset.{id_col}")
     frame = frame.copy()
     frame["__yonod_sample_id__"] = ids
+    conditions = list(dataset["column_roles"].get("conditions", []) or [])
+    if conditions:
+        # pandas' default NA token inference would silently collapse strings
+        # such as "NA". Only YAML-declared missing tokens may be filled.
+        raw_numeric = pd.read_csv(path, usecols=[id_col, *conditions], keep_default_na=False)
+        if len(raw_numeric) != len(frame) or raw_numeric[id_col].astype(str).tolist() != ids.tolist():
+            raise TrainingServiceError("数值原始列的 sample_id/行序与训练数据不一致")
+        for column in conditions:
+            frame[column] = raw_numeric[column].tolist()
     labels = pd.to_numeric(frame[label_col], errors="coerce")
     if labels.isna().any() or not np.isfinite(labels.to_numpy(dtype=float)).all():
         raise TrainingServiceError(f"标签列 {label_col!r} 包含不可解析、NaN 或 inf 值")
@@ -263,30 +276,34 @@ def _append_fold_numeric(
     valid_index: np.ndarray,
     X_train: np.ndarray,
     X_valid: np.ndarray,
+    sample_ids: np.ndarray,
+    fold_dir: Path,
 ) -> tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
-    columns = list(config["dataset"]["column_roles"].get("conditions", []) or [])
-    if not columns:
+    contract = normalise_numeric_contract(config["dataset"])
+    if not contract["columns"]:
         return X_train, X_valid, {"columns": [], "fit_scope": "not_used"}
-    missing = [column for column in columns if column not in aligned.columns]
-    if missing:
-        raise TrainingServiceError(f"数值辅助列不存在：{', '.join(missing)}")
-    numeric = aligned.loc[:, columns].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
-    if not np.isfinite(numeric).all():
-        raise TrainingServiceError("数值辅助列包含不可解析、NaN 或 inf 值；请先在数据准备阶段修复")
-    train_values = numeric[train_index]
-    mean = train_values.mean(axis=0)
-    scale = train_values.std(axis=0)
-    # A constant training-fold column is deterministic and can safely become
-    # zero; validation rows use the same training mean, never their own stats.
-    scale[scale == 0] = 1.0
+    try:
+        transformer = NumericConditionsTransformer(contract)
+        train_values = transformer.fit_transform(
+            aligned.iloc[train_index], sample_ids[train_index], phase="outer_train"
+        )
+        valid_values = transformer.transform(
+            aligned.iloc[valid_index], sample_ids[valid_index], phase="outer_valid"
+        )
+    except NumericConditionsError as exc:
+        raise TrainingServiceError(str(exc)) from exc
+    fold_dir.mkdir(parents=True, exist_ok=True)
+    _atomic_yaml(fold_dir / "numeric_conditions.yaml", transformer.state_dict())
     return (
-        np.hstack([X_train, (train_values - mean) / scale]),
-        np.hstack([X_valid, (numeric[valid_index] - mean) / scale]),
+        np.hstack([X_train, train_values]),
+        np.hstack([X_valid, valid_values]),
         {
-            "columns": columns,
+            "columns": [entry["name"] for entry in contract["columns"]],
             "fit_scope": "training_fold_only",
-            "mean": mean.astype(float).tolist(),
-            "scale": scale.astype(float).tolist(),
+            "state_sha256": _sha256_file(fold_dir / "numeric_conditions.yaml"),
+            "fit_sample_ids_sha256": transformer.state_dict()["fit_sample_ids_sha256"],
+            "state_path": "numeric_conditions.yaml",
+            "dimension": len(contract["columns"]),
         },
     )
 
@@ -306,7 +323,9 @@ def _fold_matrix(
         valid = np.asarray(artifact.matrix[valid_index], dtype=float)
         if not np.isfinite(train).all() or not np.isfinite(valid).all():
             raise TrainingServiceError("静态特征包含 NaN 或 inf")
-        train, valid, numeric_audit = _append_fold_numeric(config, aligned, train_index, valid_index, train, valid)
+        train, valid, numeric_audit = _append_fold_numeric(
+            config, aligned, train_index, valid_index, train, valid, sample_ids, fold_dir
+        )
         return train, valid, {"lifecycle": "static_descriptor", "numeric": numeric_audit}
 
     transform = artifact.manifest.get("metadata", {}).get("fold_transform", {})
@@ -340,7 +359,9 @@ def _fold_matrix(
         transform_audit = transformer.metadata()
     except Exception as exc:
         raise TrainingServiceError(f"训练折 OHE 失败：{exc}") from exc
-    train, valid, numeric_audit = _append_fold_numeric(config, aligned, train_index, valid_index, train, valid)
+    train, valid, numeric_audit = _append_fold_numeric(
+        config, aligned, train_index, valid_index, train, valid, sample_ids, fold_dir
+    )
     return train, valid, {
         "lifecycle": "fold_transform",
         "ohe": transform_audit,
@@ -474,8 +495,10 @@ def _default_fold_runner(
             prediction, train_time, predict_time, early_stopping_audit = _fit_with_inner_early_stopping(
                 resolved, estimator, X_train, y_train, X_valid, fit_params, train_index, fold_number=fold_number
             )
+            model_file = _persist_fold_estimator(estimator, fold_dir)
             return prediction, {
                 **audit,
+                **model_file,
                 "effective_fit_parameters": {
                     key: ("<training_fold_array>" if isinstance(value, np.ndarray) else value)
                     for key, value in fit_params.items()
@@ -530,8 +553,10 @@ def _default_fold_runner(
                         _canonical_json(train_index[selection].astype(int).tolist())
                     ),
                 }
+                model_file = _persist_fold_estimator(estimator, fold_dir)
                 return prediction, {
                     **audit,
+                    **model_file,
                     "effective_fit_parameters": {
                         key: ("<training_fold_array>" if isinstance(value, np.ndarray) else value)
                         for key, value in fit_params.items()
@@ -547,8 +572,10 @@ def _default_fold_runner(
         started = time.perf_counter()
         prediction = np.asarray(estimator.predict(X_valid), dtype=float)
         predict_time = time.perf_counter() - started
+        model_file = _persist_fold_estimator(estimator, fold_dir)
         return prediction, {
             **audit,
+            **model_file,
             "effective_fit_parameters": {key: ("<training_fold_array>" if isinstance(value, np.ndarray) else value) for key, value in fit_params.items()},
             **({"svm_subsample": svm_subsample_audit} if svm_subsample_audit is not None else {}),
             "train_time_s": float(train_time),
@@ -589,6 +616,16 @@ def _default_fold_runner(
     }
 
 
+def _persist_fold_estimator(estimator: Any, fold_dir: Path) -> Dict[str, Any]:
+    """Bind the fitted estimator to this fold's independently fitted inputs."""
+    import joblib
+
+    fold_dir.mkdir(parents=True, exist_ok=True)
+    path = fold_dir / "model.joblib"
+    joblib.dump(estimator, path, compress=3)
+    return {"model_file": "model.joblib", "model_sha256": _sha256_file(path)}
+
+
 def _run_identity(
     artifact: FeatureArtifact,
     *,
@@ -596,6 +633,7 @@ def _run_identity(
     model_config: ResolvedModelConfig,
     label_identity: str,
     split_identity: str,
+    numeric_identity: str | None = None,
 ) -> str:
     payload = {
         "training_schema_version": TRAINING_SCHEMA_VERSION,
@@ -606,6 +644,8 @@ def _run_identity(
         "label_identity": label_identity,
         "split_identity": split_identity,
     }
+    if numeric_identity is not None:
+        payload["numeric_identity"] = numeric_identity
     return "train-" + _sha256_text(_canonical_json(payload))[:20]
 
 
@@ -641,6 +681,20 @@ def _existing_complete_run(run_dir: Path, expected_run_id: str) -> TrainingRun |
     required_prediction = {"sample_id", "y_true", "y_pred", "repeat", "fold"}
     if predictions.empty or not required_prediction.issubset(predictions.columns) or metrics.empty:
         raise TrainingServiceError("已有训练结果缺少完整预测或 fold 指标，拒绝恢复")
+    for name in payload.get("model_bundles") or []:
+        bundle_path = run_dir / str(name)
+        if not bundle_path.is_file():
+            raise TrainingServiceError(f"已有模型包缺失，拒绝复用：{bundle_path}")
+        bundle = yaml.safe_load(bundle_path.read_text(encoding="utf-8"))
+        if not isinstance(bundle, Mapping) or bundle.get("run_id") != expected_run_id:
+            raise TrainingServiceError(f"已有模型包身份不一致，拒绝复用：{bundle_path}")
+        model_path = run_dir / str(bundle.get("model_path", ""))
+        if not model_path.is_file() or _sha256_file(model_path) != bundle.get("model_sha256"):
+            raise TrainingServiceError(f"已有模型文件缺失或篡改，拒绝复用：{model_path}")
+        if bundle.get("numeric_state_path"):
+            state_path = run_dir / str(bundle["numeric_state_path"])
+            if not state_path.is_file() or _sha256_file(state_path) != bundle.get("numeric_state_sha256"):
+                raise TrainingServiceError(f"已有数值拟合状态缺失或篡改，拒绝复用：{state_path}")
     return TrainingRun(
         run_id=expected_run_id,
         artifact_id=str(payload.get("artifact_id")),
@@ -775,11 +829,41 @@ def _run_one_artifact(
     rows = _split_rows(sample_ids, evaluation)
     split_identity = _split_identity(sample_ids, rows, evaluation)
     label_identity = _label_identity(sample_ids, labels, dataset_identity, label_col)
+    numeric_contract = normalise_numeric_contract(config["dataset"])
+    numeric_identity = None
+    if numeric_contract["columns"]:
+        all_ids = frame["__yonod_sample_id__"].astype(str).tolist()
+        expected_numeric_identity = numeric_input_identity(frame, all_ids, numeric_contract)
+        block_path = (
+            artifact.manifest_path.parent.parent.parent / "numeric_blocks" /
+            (expected_numeric_identity.removeprefix("sha256:") + ".json")
+        )
+        try:
+            block_frame, block = load_numeric_block(
+                block_path, expected_ids=artifact.sample_ids, expected_contract=numeric_contract,
+                expected_identity=expected_numeric_identity,
+            )
+        except NumericConditionsError as exc:
+            raise TrainingServiceError(
+                "训练需先经 features 阶段发布可核验的原始数值块：" + str(exc)
+            ) from exc
+        for entry in numeric_contract["columns"]:
+            aligned[entry["source"]] = block_frame.loc[artifact.valid_mask, entry["source"]].tolist()
+        numeric_identity = block["identity"]
     try:
         resolved = resolve_model_config(model, dict(config.get("model_params") or {}).get(model, {}))
     except ModelConfigurationError as exc:
         raise TrainingServiceError(f"模型参数无效：{exc}") from exc
-    run_id = _run_identity(artifact, model=model, model_config=resolved, label_identity=label_identity, split_identity=split_identity)
+    if numeric_identity is not None and (
+        model == "autogluon" or resolved.runtime.get("early_stopping")
+    ):
+        raise TrainingServiceError(
+            "该模型存在内部验证划分；尚不能保证数值条件仅在内部训练子集拟合，拒绝运行"
+        )
+    run_id = _run_identity(
+        artifact, model=model, model_config=resolved, label_identity=label_identity,
+        split_identity=split_identity, numeric_identity=numeric_identity,
+    )
     result_root = _result_root(loaded, config)
     run_dir = result_root / "runs" / combination_name(str(artifact.manifest["feature_id"]), model)
     if run_dir.parent.exists():
@@ -794,6 +878,7 @@ def _run_one_artifact(
     runner = fold_runner or _default_fold_runner
     fold_records: list[Dict[str, Any]] = []
     prediction_records: list[Dict[str, Any]] = []
+    model_bundles: list[str] = []
     try:
         for repeat, fold, train_index, valid_index in rows:
             fold_context = {
@@ -815,6 +900,44 @@ def _run_one_artifact(
                 train_index, staging / "models" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}",
                 label_col, fold,
             )
+            if "model_file" in model_audit:
+                model_path = staging / "models" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}" / str(model_audit["model_file"])
+                if not model_path.is_file() or _sha256_file(model_path) != model_audit.get("model_sha256"):
+                    raise TrainingServiceError("折级模型文件与模型审计哈希不匹配")
+                bundle_path = staging / "model_bundles" / f"repeat-{repeat:02d}-fold-{fold:02d}.yaml"
+                bundle = {
+                    "schema_version": "yonod_model_bundle/v1",
+                    "run_id": run_id,
+                    "model": model,
+                    "repeat": repeat,
+                    "fold": fold,
+                    "model_path": model_path.relative_to(staging).as_posix(),
+                    "model_sha256": model_audit["model_sha256"],
+                    "feature_artifact_id": artifact.manifest["artifact_id"],
+                    "feature_content_identity": artifact_content_identity(artifact.manifest),
+                    "feature_lifecycle": artifact.manifest["lifecycle"],
+                    "feature_spec": artifact.manifest.get("metadata", {}).get("feature_spec"),
+                    "descriptor_columns": list(artifact.manifest["matrix"]["columns"].get("names", [])),
+                    "descriptor_source_columns": list(artifact.manifest.get("metadata", {}).get("resolved_columns", [])),
+                    "descriptor_roles": artifact.manifest.get("metadata", {}).get("resolved_roles"),
+                    "descriptor_dim": int(X_train.shape[1] - transform_audit["numeric"].get("dimension", 0)),
+                    "feature_dim": int(X_train.shape[1]),
+                    "numeric_contract": numeric_contract if numeric_identity is not None else None,
+                    "numeric_state_path": (
+                        (staging / "fold_transforms" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}" / "numeric_conditions.yaml").relative_to(staging).as_posix()
+                        if numeric_identity is not None else None
+                    ),
+                    "numeric_state_sha256": transform_audit["numeric"].get("state_sha256"),
+                    "ohe_state_path": (
+                        (staging / "fold_transforms" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}" / "transform").relative_to(staging).as_posix()
+                        if artifact.manifest["lifecycle"] == "fold_transform" else None
+                    ),
+                    "train_sample_ids_sha256": fold_context["train_sample_ids_sha256"],
+                    "split_identity": split_identity,
+                    "software_versions": software_versions(model),
+                }
+                _atomic_yaml(bundle_path, bundle)
+                model_bundles.append(bundle_path.relative_to(staging).as_posix())
             elapsed = time.perf_counter() - started
             prediction = np.asarray(prediction, dtype=float).reshape(-1)
             if len(prediction) != len(valid_index) or not np.isfinite(prediction).all():
@@ -859,9 +982,12 @@ def _run_one_artifact(
             "label_identity": label_identity,
             "label_column": label_col,
             "split_identity": split_identity,
+            "numeric_identity": numeric_identity,
+            "numeric_contract": numeric_contract if numeric_identity is not None else None,
             "evaluation": evaluation,
             "n_samples": int(len(sample_ids)),
             "n_folds": int(len(rows)),
+            "model_bundles": model_bundles,
             "source_config_filename": loaded.path.name,
             "source_config_sha256": _sha256_file(staging / "source_config.yaml"),
             "effective_config_sha256": _sha256_file(staging / "effective_config.yaml"),
@@ -869,7 +995,8 @@ def _run_one_artifact(
             "outputs": {
                 "predictions": "predictions.csv",
                 "fold_metrics": "fold_metrics.csv",
-                "fold_transform_states": "fold_transforms" if artifact.manifest["lifecycle"] == "fold_transform" else None,
+                "fold_transform_states": "fold_transforms" if artifact.manifest["lifecycle"] == "fold_transform" or numeric_identity is not None else None,
+                "model_bundles": "model_bundles" if model_bundles else None,
                 "source_config": "source_config.yaml",
                 "effective_config": "effective_config.yaml",
             },

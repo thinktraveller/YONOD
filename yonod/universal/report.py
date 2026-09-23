@@ -643,6 +643,23 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
 </section>"""
 
 
+def _section_numeric_audit(task_info: Dict[str, Any]) -> str:
+    rows = task_info.get("numeric_audit_rows") or []
+    if not rows:
+        return ""
+    body = "".join(
+        "<tr>" + "".join(f"<td>{_esc(row.get(key, '—'))}</td>" for key in
+        ("run", "repeat", "fold", "source", "name", "unit", "missing", "scaling", "train_missing_rows", "constant_train", "numeric_dimension", "input_dimension")) + "</tr>"
+        for row in rows
+    )
+    return (
+        "<section><h2>数值输入与折内处理</h2><p>每行来自已保存且校验的折级处理状态。</p>"
+        "<table><tr><th>组合</th><th>repeat</th><th>fold</th><th>源列</th><th>输出名</th>"
+        "<th>单位</th><th>缺失策略</th><th>缩放</th><th>训练缺失行</th><th>训练常量</th><th>数值维度</th><th>送模总维度</th></tr>"
+        + body + "</table></section>"
+    )
+
+
 def _section_grid(df: pd.DataFrame) -> str:
     """4×N 描述符 × 模型矩阵，单元格显示 R²/RMSE/MAE 及协议。"""
     if df.empty:
@@ -1089,6 +1106,7 @@ def generate_report(
 
     body = (
         _section_intro(task_info, now)
+        + _section_numeric_audit(task_info)
         + _section_grid(metrics_df)
         + _section_glossary()
         + _section_protocol_guard(metrics_df)
@@ -1197,6 +1215,19 @@ def generate_markdown_report(
         "---",
         "",
     ]
+
+    numeric_rows = task_info.get("numeric_audit_rows") or []
+    if numeric_rows:
+        lines += [
+            "## 数值输入与折内处理", "",
+            "以下记录来自已保存且校验的折级状态。", "",
+            "| 组合 | repeat | fold | 源列 | 输出名 | 单位 | 缺失策略 | 缩放 | 训练缺失行 | 训练常量 | 数值维度 | 送模总维度 |",
+            "|---|---:|---:|---|---|---|---|---|---:|---|---:|---:|",
+        ]
+        for row in numeric_rows:
+            fields = [row.get(key, "—") for key in ("run", "repeat", "fold", "source", "name", "unit", "missing", "scaling", "train_missing_rows", "constant_train", "numeric_dimension", "input_dimension")]
+            lines.append("| " + " | ".join(str(value).replace("|", "\\|") for value in fields) + " |")
+        lines.append("")
 
     # ── 任务信息 ─────────────────────────────────────────────────────────────
     lines += [

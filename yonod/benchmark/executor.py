@@ -17,6 +17,9 @@ from typing import Any, Dict, Mapping, Optional, Sequence
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from yonod.features.numeric_conditions import (
+    NumericConditionsError, NumericConditionsTransformer, numeric_input_identity,
+)
 
 from .config import BenchmarkContract
 from .layout import resolve_benchmark_output_layout
@@ -407,6 +410,8 @@ def execute_fold(
     component_frame: Optional[pd.DataFrame] = None,
     fold_transformer: Optional[Any] = None,
     schema2_model_config: Optional[Mapping[str, Any]] = None,
+    numeric_frame: Optional[pd.DataFrame] = None,
+    numeric_contract: Optional[Mapping[str, Any]] = None,
 ) -> FoldExecutionResult:
     """Fit exactly one manifest-defined fold and write its prediction shard.
 
@@ -428,6 +433,11 @@ def execute_fold(
         raise FoldExecutionError("sample_ids 必须唯一，才能连接 split manifest")
     if X_numeric is not None and len(X_numeric) != len(ids):
         raise FoldExecutionError("X_numeric 与 sample_ids 的行数必须一致")
+    if numeric_frame is not None:
+        if X_numeric is not None or numeric_contract is None:
+            raise FoldExecutionError("声明式 numeric_frame 需要独立契约，不能同时提供旧 X_numeric")
+        if len(numeric_frame) != len(ids):
+            raise FoldExecutionError("numeric_frame 与 sample_ids 的行数必须一致")
     if fold_transformer is not None and (component_frame is None or len(component_frame) != len(ids)):
         raise FoldExecutionError("fold_transformer 需要与 sample_ids 等长的 component_frame")
     if X_smiles is not None:
@@ -488,6 +498,26 @@ def execute_fold(
         assert X_smiles is not None
         X_train, X_valid = _prepare_fold_features(X_smiles, X_numeric, train_idx, valid_idx)
         schema_source = X_smiles
+    if numeric_frame is not None:
+        try:
+            transformer = NumericConditionsTransformer(numeric_contract)
+            numeric_train = transformer.fit_transform(
+                numeric_frame.iloc[train_idx], ids[train_idx], phase=f"repeat={repeat}/fold={fold}/train"
+            )
+            numeric_valid = transformer.transform(
+                numeric_frame.iloc[valid_idx], ids[valid_idx], phase=f"repeat={repeat}/fold={fold}/valid"
+            )
+            numeric_state = transformer.state_dict()
+            feature_metadata["numeric_conditions"] = {
+                "input_identity": numeric_input_identity(numeric_frame, ids, numeric_contract),
+                "state": numeric_state,
+                "dimension": int(numeric_train.shape[1]),
+                "block_order": "after_molecular_or_categorical_features",
+            }
+            X_train = np.hstack([X_train, numeric_train])
+            X_valid = np.hstack([X_valid, numeric_valid])
+        except NumericConditionsError as exc:
+            raise FoldExecutionError(str(exc)) from exc
     started_at_utc = datetime.now(timezone.utc).isoformat()
     prediction, train_time_s, predict_time_s, estimator_params_snapshot, model_metadata = _fit_predict_model(
         model=model,
