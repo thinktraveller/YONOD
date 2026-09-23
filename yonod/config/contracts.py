@@ -331,7 +331,21 @@ def validate_operation_config(raw: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def resolve_config_path(config_path: Path | str, reference: str) -> Path:
-    """Resolve a runtime-config reference relative to its owning YAML file."""
+    """Resolve schema-2 project paths without changing legacy relative paths.
+
+    Standalone task YAMLs live under the repository ``config/`` directory but
+    use the same ``./dataset`` and ``./result`` convention as root-level
+    ``example.yaml``. Those two explicit project roots are repository-relative;
+    ``../`` and all other relative references remain YAML-relative.
+    """
     owner = Path(config_path).resolve()
     target = Path(_require_string(reference, "配置路径引用"))
-    return target.resolve() if target.is_absolute() else (owner.parent / target).resolve()
+    if target.is_absolute():
+        return target.resolve()
+    repository = Path(__file__).resolve().parents[2]
+    config_root = repository / "config"
+    if (owner.parent == config_root or config_root in owner.parents) and (
+        reference.startswith("./dataset/") or reference.startswith("./result/")
+    ):
+        return (repository / target).resolve()
+    return (owner.parent / target).resolve()

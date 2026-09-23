@@ -1,0 +1,13 @@
+sample_id,yield,reactant_smiles,reactor_setting
+numeric-01,0.10,C,1
+numeric-02,0.16,CC,2
+numeric-03,0.22,CCC,NA
+numeric-04,0.28,CCCC,4
+numeric-05,0.34,CCO,5
+numeric-06,0.40,CCN,6
+numeric-07,0.46,CCCl,7
+numeric-08,0.52,CCBr,8
+numeric-09,0.58,CCF,9
+numeric-10,0.64,CC=O,10
+numeric-11,0.70,CC#N,11
+numeric-12,0.76,C1CC1,100

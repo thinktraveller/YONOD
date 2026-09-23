@@ -1,0 +1,60 @@
+schema_version: '2.0'
+project_name: numeric_generic_strict_smoke_v1
+stage: benchmark
+
+dataset:
+  path: ./dataset/numeric_strict_smoke_fixture.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants: [reactant_smiles]
+    products: []
+    others: []
+    conditions: [reactor_setting]
+    categoricals: []
+  numeric_conditions:
+    defaults:
+      missing: {strategy: median}
+      scaling: standard
+    columns:
+      reactor_setting:
+        name: reactor_setting
+        missing_values: [NA]
+
+descriptors:
+  - id: morgan
+    descriptor: morgan
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [reactant_smiles]
+
+artifacts:
+  output_dir: ./result/numeric_generic_strict_smoke_v1/feature
+
+models: [rf]
+model_params:
+  rf:
+    estimator:
+      n_estimators: 10
+      random_state: 42
+      n_jobs: 19
+
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 2
+  n_repeats: 1
+  seed: 42
+  grouping:
+    strategy: component_holdout
+    component_cols: [reactant_smiles]
+    protocol_label: generic_numeric_strict_smoke
+    max_group_fraction: 0.8
+
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+
+outputs:
+  root: ./result/numeric_generic_strict_smoke_v1
+  report_formats: [html, markdown]
