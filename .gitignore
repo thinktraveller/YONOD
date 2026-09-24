@@ -100,6 +100,9 @@ _verify
 
 # ===================== Others =====================
 reference-project
+/reference-projects/
+/project-docs/
+/backup/
 recovery_backups
 result
 docs
