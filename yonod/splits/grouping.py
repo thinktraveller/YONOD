@@ -69,6 +69,22 @@ def _component_groups(frame: pd.DataFrame, columns: Sequence[str]) -> pd.Series:
     return pd.Series(groups, index=frame.index, dtype="string")
 
 
+def _precomputed_groups(frame: pd.DataFrame, column: str) -> pd.Series:
+    """Use an audited, data-preparation group key without reinterpreting it.
+
+    Canonical structure keys and complete-input repeat keys are generated in
+    the data-preparation stage.  Re-parsing those opaque keys as SMILES would
+    both fail and make the split semantics depend on a second, hidden
+    canonicalisation pass.  The value is therefore retained verbatim after
+    explicit null/blank validation.
+    """
+    _require_columns(frame, [column], "grouping.group_column")
+    values = frame[column]
+    if values.isna().any() or values.astype(str).str.strip().eq("").any():
+        raise GroupingError(f"grouping.group_column {column!r} 含空分组键")
+    return ("precomputed:" + values.astype(str)).astype("string")
+
+
 def _scaffold_groups(frame: pd.DataFrame, substrate_col: str) -> pd.Series:
     _require_columns(frame, [substrate_col], "grouping.substrate_col")
     groups: List[str] = []
@@ -162,10 +178,15 @@ def build_group_ids(
     elif strategy == "reaction_fingerprint_cluster":
         columns = tuple(grouping.get("reaction_cols", default_smiles_cols))
         result = _reaction_cluster_groups(frame, sample_id_col, columns, grouping)
+    elif strategy == "precomputed_column":
+        column = str(grouping.get("group_column", "")).strip()
+        if not column:
+            raise GroupingError("grouping.group_column 不能为空")
+        result = _precomputed_groups(frame, column)
     else:
         raise GroupingError(
             "未知 grouping.strategy {0!r}；可用值：reaction_fingerprint_cluster、"
-            "substrate_scaffold、component_holdout".format(strategy)
+            "substrate_scaffold、component_holdout、precomputed_column".format(strategy)
         )
     if result.isna().any():
         raise GroupingError("group_id 生成失败：存在空 group_id")

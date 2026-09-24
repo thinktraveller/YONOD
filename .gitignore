@@ -101,6 +101,7 @@ _verify
 # ===================== Others =====================
 reference-project
 /reference-projects/
+# Independent documentation repository and local recovery archives.
 /project-docs/
 /backup/
 recovery_backups

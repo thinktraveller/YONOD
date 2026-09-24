@@ -50,8 +50,13 @@ class BenchmarkOutputLayout:
 
     @property
     def descriptors(self) -> Path:
-        """Persistent descriptor artifacts consumed by every model task."""
-        return self.run_dir / "descriptors"
+        """Persistent descriptor artifacts consumed by every model task.
+
+        Schema-2 tasks reserve ``feature/`` below their isolated result root
+        for this stage.  Keeping strict benchmark artifacts there makes the
+        configured ``artifacts.output_dir`` real rather than advisory.
+        """
+        return self.run_dir / "feature"
 
     @property
     def pictures(self) -> Path:

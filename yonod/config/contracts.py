@@ -48,10 +48,14 @@ _ARTIFACT_KEYS = frozenset({"output_dir", "input_manifest"})
 _OUTPUT_KEYS = frozenset({"root", "report_formats"})
 _EVALUATION_KEYS = frozenset({
     "protocol", "n_splits", "n_repeats", "shuffle", "seed", "grouping",
-    "split_manifest", "population_manifest", "metrics",
+    "split_manifest", "population_manifest", "metrics", "external_test",
 })
 _BENCHMARK_KEYS = frozenset({"task_state", "reproduction_protocol", "population_id", "dataset_id"})
 _BENCHMARK_TASK_STATE_KEYS = frozenset({"backend", "resumable"})
+_EXTERNAL_TEST_KEYS = frozenset({
+    "path", "sample_id_col", "label_col", "source_id_col", "column_map",
+    "group_col", "expected_sha256", "audit_manifest", "audit_manifest_sha256",
+})
 _OPERATION_TOP_LEVEL_KEYS = frozenset({
     "schema_version", "operation", "input_manifest", "output_dir", "operations", "protected_columns", "metadata",
 })
@@ -118,14 +122,26 @@ def _validate_dataset(raw: Mapping[str, Any], *, stage: str) -> None:
     elif label is not MISSING and label is not None:
         _require_string(label, "dataset.column_roles.label")
 
+    molecular_roles = ("reactants", "products", "others")
+    assigned_molecular_columns: dict[str, str] = {}
+    parsed_roles: dict[str, list[str]] = {}
     for name in ("reactants", "products", "others", "conditions", "categoricals"):
         if name in roles:
-            _string_list(roles[name], f"dataset.column_roles.{name}")
-    conditions = _string_list(roles.get("conditions"), "dataset.column_roles.conditions")
-    protected = {str(raw["sample_id_col"]), *[str(value) for value in roles.get("reactants", []) or []],
-                 *[str(value) for value in roles.get("products", []) or []],
-                 *[str(value) for value in roles.get("others", []) or []],
-                 *[str(value) for value in roles.get("categoricals", []) or []]}
+            columns = _string_list(roles[name], f"dataset.column_roles.{name}")
+            parsed_roles[name] = columns
+            if name in molecular_roles:
+                for column in columns:
+                    previous = assigned_molecular_columns.get(column)
+                    if previous is not None:
+                        raise ConfigContractError(
+                            f"dataset.column_roles.{name} 与 dataset.column_roles.{previous} "
+                            f"重复声明分子列：{column!r}"
+                        )
+                    assigned_molecular_columns[column] = name
+    conditions = parsed_roles.get("conditions", [])
+    protected = {str(raw["sample_id_col"])}
+    for name in (*molecular_roles, "categoricals"):
+        protected.update(parsed_roles.get(name, []))
     if isinstance(label, str):
         protected.add(label)
     overlaps = sorted(set(conditions) & protected)
@@ -231,6 +247,59 @@ def _validate_evaluation(value: Any) -> None:
     for name in ("split_manifest", "population_manifest"):
         if name in mapping and mapping[name] is not None:
             _require_string(mapping[name], f"evaluation.{name}")
+    if "external_test" in mapping:
+        external = _as_mapping(mapping["external_test"], "evaluation.external_test")
+        _reject_unknown(external, _EXTERNAL_TEST_KEYS, "evaluation.external_test")
+        for name in ("path", "sample_id_col", "label_col", "source_id_col", "group_col", "audit_manifest"):
+            if name in external:
+                _require_string(external[name], f"evaluation.external_test.{name}")
+        if "column_map" in external:
+            column_map = _as_mapping(external["column_map"], "evaluation.external_test.column_map")
+            if not column_map:
+                raise ConfigContractError("evaluation.external_test.column_map 不能为空")
+            for target, source in column_map.items():
+                _require_string(target, "evaluation.external_test.column_map 目标列")
+                _require_string(source, f"evaluation.external_test.column_map.{target}")
+        for name in ("expected_sha256", "audit_manifest_sha256"):
+            if name in external:
+                value = _require_string(external[name], f"evaluation.external_test.{name}")
+                if len(value) != 64 or any(character not in "0123456789abcdef" for character in value.lower()):
+                    raise ConfigContractError(
+                        f"evaluation.external_test.{name} 必须是 64 位 SHA-256 十六进制摘要"
+                    )
+
+
+def _validate_frozen_external_evaluation(value: Any) -> None:
+    """Validate the non-CV portion of the frozen external-test protocol.
+
+    This intentionally lives in the generic schema layer, before the
+    benchmark adapter imports descriptors or models.  A one-time external
+    test must not inherit CV fields and accidentally be interpreted as an
+    underspecified outer-fold benchmark.
+    """
+    mapping = _as_mapping(value, "evaluation")
+    if mapping.get("protocol") != "frozen_train_external_test":
+        return
+    forbidden = {
+        "n_splits", "n_repeats", "shuffle", "grouping", "split_manifest",
+        "population_manifest",
+    }.intersection(mapping)
+    if forbidden:
+        raise ConfigContractError(
+            "frozen_train_external_test 不得声明 CV/split 字段：" + ", ".join(sorted(forbidden))
+        )
+    if "seed" not in mapping:
+        raise ConfigContractError("frozen_train_external_test 必须声明 evaluation.seed 以固化运行身份")
+    external = _as_mapping(mapping.get("external_test"), "evaluation.external_test")
+    required = {
+        "path", "sample_id_col", "label_col", "source_id_col", "group_col", "column_map",
+        "expected_sha256", "audit_manifest", "audit_manifest_sha256",
+    }
+    missing = sorted(required.difference(external))
+    if missing:
+        raise ConfigContractError(
+            "frozen_train_external_test 缺少 evaluation.external_test 字段：" + ", ".join(missing)
+        )
 
 
 def _validate_outputs(value: Any) -> None:
@@ -299,6 +368,8 @@ def validate_run_config(raw: Mapping[str, Any]) -> Dict[str, Any]:
     models = _validate_models(mapping, required=stage in {"train", "all", "benchmark"})
     _validate_model_params(mapping, models)
     _validate_evaluation(mapping.get("evaluation"))
+    if stage == "benchmark":
+        _validate_frozen_external_evaluation(mapping.get("evaluation"))
     _validate_outputs(mapping.get("outputs"))
     _validate_benchmark(mapping.get("benchmark"), stage=stage)
     if "metadata" in mapping and not isinstance(mapping["metadata"], Mapping):
@@ -331,12 +402,10 @@ def validate_operation_config(raw: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def resolve_config_path(config_path: Path | str, reference: str) -> Path:
-    """Resolve schema-2 project paths without changing legacy relative paths.
+    """Resolve ``./`` project paths from task YAMLs under ``config/``.
 
-    Standalone task YAMLs live under the repository ``config/`` directory but
-    use the same ``./dataset`` and ``./result`` convention as root-level
-    ``example.yaml``. Those two explicit project roots are repository-relative;
-    ``../`` and all other relative references remain YAML-relative.
+    Explicit ``../`` references and paths in external fixtures retain their
+    historical YAML-relative meaning. Absolute paths remain absolute.
     """
     owner = Path(config_path).resolve()
     target = Path(_require_string(reference, "配置路径引用"))
@@ -344,8 +413,6 @@ def resolve_config_path(config_path: Path | str, reference: str) -> Path:
         return target.resolve()
     repository = Path(__file__).resolve().parents[2]
     config_root = repository / "config"
-    if (owner.parent == config_root or config_root in owner.parents) and (
-        reference.startswith("./dataset/") or reference.startswith("./result/")
-    ):
+    if config_root in owner.parents and reference.startswith("./"):
         return (repository / target).resolve()
     return (owner.parent / target).resolve()
