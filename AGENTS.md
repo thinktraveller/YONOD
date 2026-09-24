@@ -121,15 +121,22 @@ with both Linux and Windows.
 
 ## Project documentation locations
 
-Only these project-related files may be written to `project-docs/`:
-`buildlog`, `project-plan`, `teaching`, and `goal.md`. Write every other project-related
-file to the Git-ignored `docs/` directory instead. Do not place other files in
-`project-docs/`. Every update to a file in `project-docs/` must be committed to
-Git in the same task.
+The main repository remains on `main`. `project-docs/` is an independent Git
+repository and is ignored by the main repository. Keep its root for
+`README.md`, `goal.md`, `project-plan.md`, `buildlog.md`, and `teach.md`; put
+other maintained project documentation under `project-docs/docs/`. The main
+repository's ignored `docs/` directory contains legacy local materials and
+generated evidence; do not add new maintained project documentation there.
+
+Commit changes to `project-docs/` in its own Git repository in the same task.
+When a task changes both repositories, make a separate commit in each. Do not
+stage `project-docs/` in the main repository or add it as a submodule.
 
 ## Output locations
 
-Write backups and engineering-support files under `recovery_backups/`. For each
+Write new backups and engineering-support files under `recovery_backups/`.
+The existing `backup/` directory is also excluded from the main Git repository.
+For each
 project run, all result files must be contained in that task's designated
 `result/<task_name>/` directory; do not write loose run results directly under
 `result/`, share result directories between tasks, or place final modeling

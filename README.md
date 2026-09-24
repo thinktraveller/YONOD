@@ -182,7 +182,7 @@ Chemical VAE 是已接入、但刻意受限的可选描述符，并非 `example.
 
 XGBoost 和 LightGBM 如需 early stopping，应在各自 `model_params.<model>.runtime.early_stopping` 中只声明由外层训练折产生的内部验证策略（轮数、验证比例和随机种子），不能把外部 `eval_set`、回调或数组传进 `fit`。
 
-完整可运行字段示例见 [example.yaml](example.yaml)；参数路由与契约见 [project-docs/step30-contracts.md](project-docs/step30-contracts.md)。
+完整可运行字段示例见 [example.yaml](example.yaml)；参数路由与契约见 [Schema-2 契约](project-docs/docs/step30-contracts.md)。
 
 ## 特征版本操作
 
@@ -226,7 +226,7 @@ strict benchmark 强制 `evaluation.protocol: manifest_outer_cv`、显式 `evalu
 
 下列项目明确**不纳入迁移或完成标准**：所有 JSON 运行配置及依赖 JSON 的启动器（包括 paper-exact 和历史 YieldMaster shell 入口），以及 `different_order/amide-coupling/run_different_order_tasks.py`。它们保留为历史/归档材料，不是受支持的建模入口；不得为恢复这些路径而新增 JSON 兼容分支或补建 `different_order` runner。
 
-迁移边界和验证证据见 [project-docs/step30-contracts.md](project-docs/step30-contracts.md) 与 [步骤 30 验收报告](derived/interface_migration/step30_acceptance/acceptance_report.md)。已有的 JSON 指标、预测、run/fold manifest、官方资料和 `reference-proejct/` 内容是历史/审计材料，应保留原格式。
+迁移边界和验证证据见 [Schema-2 契约](project-docs/docs/step30-contracts.md) 与 [步骤 30 验收报告](derived/interface_migration/step30_acceptance/acceptance_report.md)。已有的 JSON 指标、预测、run/fold manifest、官方资料和 `reference-proejct/` 内容是历史/审计材料，应保留原格式。
 
 ## 数据与外部资产
 
@@ -294,7 +294,7 @@ WEIGHTS/FISD/
 
 ## 项目结构
 
-目录用途、保留边界和清理记录见 [目录管理说明](project-docs/folder-organization.md)。按用途查找：[项目文档](project-docs/README.md) · [辅助脚本](scripts/README.md) · [配置归档](recovery_backups/configs_20260916.tar.gz) · [数据集](dataset/README.md)。
+目录用途、保留边界和清理记录见 [目录管理说明](project-docs/docs/folder-organization.md)。按用途查找：[项目文档](project-docs/README.md) · [辅助脚本](scripts/README.md) · [配置归档](recovery_backups/configs_20260916.tar.gz) · [数据集](dataset/README.md)。
 
 ```text
 YONOD/
@@ -312,7 +312,7 @@ YONOD/
 │   ├── descriptors/            特征注册与描述符实现
 │   └── benchmark/              独立 benchmark / paper-exact 协议（迁移中）
 ├── scripts/                    特征操作、迁移及专用运行脚本
-├── project-docs/               设计、契约和构建记录
+├── project-docs/               独立 Git 仓库：目标、计划、日志、学习笔记及 docs/
 ├── dataset/                    数据集与 smoke fixture
 └── derived/                    本地验收与生成产物
 ```
