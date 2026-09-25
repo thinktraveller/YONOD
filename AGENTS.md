@@ -123,7 +123,7 @@ with both Linux and Windows.
 
 The main repository remains on `main`. `project-docs/` is an independent Git
 repository and is ignored by the main repository. Keep its root for
-`README.md`, `goal.md`, `project-plan.md`, `buildlog.md`, and `teach.md`; put
+`goal.md`, `project-plan.md`, `buildlog.md`, and `teach.md`; put
 other maintained project documentation under `project-docs/docs/`. The main
 repository's ignored `docs/` directory contains legacy local materials and
 generated evidence; do not add new maintained project documentation there.

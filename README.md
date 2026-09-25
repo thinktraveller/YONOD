@@ -294,7 +294,7 @@ WEIGHTS/FISD/
 
 ## 项目结构
 
-目录用途、保留边界和清理记录见 [目录管理说明](project-docs/docs/folder-organization.md)。按用途查找：[项目文档](project-docs/README.md) · [辅助脚本](scripts/README.md) · [配置归档](recovery_backups/configs_20260916.tar.gz) · [数据集](dataset/README.md)。
+目录用途、保留边界和清理记录见 [目录管理说明](project-docs/docs/folder-organization.md)。按用途查找：[项目文档](project-docs/docs/README.md) · [辅助脚本](scripts/README.md) · [配置归档](recovery_backups/configs_20260916.tar.gz) · [数据集](dataset/README.md)。
 
 ```text
 YONOD/
