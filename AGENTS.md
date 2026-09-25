@@ -195,12 +195,14 @@ unchanged task status; the user can run the commands when they want an update.
 
 The main project repository stays on `main`. `project-docs/` is a separate Git
 repository that includes its `docs/` subdirectory. The main repository ignores
-`project-docs/`, `_verify/`, `reference-projects/`, and `backup/`.
+`project-docs/`, `_verify/`, `config/`, `reference-projects/`, and `backup/`.
 
 ### Required directory locations
 
 - Put all test, validation, and acceptance scripts under `_verify/`. Do not
   commit that directory to either Git repository.
+- Put task YAML files under `config/`. Keep the directory local and excluded
+  from the main Git repository.
 - Put the agent documents `goal.md`, `project-plan.md`, `buildlog.md`, and
   `teach.md` at the root of `project-docs/`. Their responsible agents maintain
   their contents; do not create empty placeholders for them.
@@ -221,15 +223,16 @@ repository that includes its `docs/` subdirectory. The main repository ignores
 
 At the end of each task, commit the task's changes separately in both Git
 repositories: one main project commit and one `project-docs/` commit. The main
-commit must exclude `project-docs/`, `_verify/`, `reference-projects/`, and
-`backup/`; the documentation commit contains the task's maintained documents.
+commit must exclude `project-docs/`, `_verify/`, `config/`,
+`reference-projects/`, and `backup/`; the documentation commit contains the
+task's maintained documents.
 If a repository has no changes to commit, report that fact instead of making
 an empty commit. Do not declare a task with pending changes complete.
 
 Inspect each staging area before committing, and explicitly list only the
 files changed by the task. Never use `git add .` or `git add -A` in either
 repository. Never commit `.env`, credentials, or files from `_verify/`,
-`reference-projects/`, or `backup/`.
+`config/`, `reference-projects/`, or `backup/`.
 
 ```bash
 # Main repository (Bash; replace paths and message for the task)

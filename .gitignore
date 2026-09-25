@@ -106,4 +106,4 @@ _verify
 /scripts/
 result
 docs
-config
+/config/
