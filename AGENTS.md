@@ -124,9 +124,9 @@ with both Linux and Windows.
 The main repository remains on `main`. `project-docs/` is an independent Git
 repository and is ignored by the main repository. Keep its root for
 `goal.md`, `project-plan.md`, `buildlog.md`, and `teach.md`; put
-other maintained project documentation under `project-docs/docs/`. The main
-repository's ignored `docs/` directory contains legacy local materials and
-generated evidence; do not add new maintained project documentation there.
+other maintained project documentation under `project-docs/docs/`. Historical
+documents and evidence from the former root `docs/` directory were migrated
+there; do not recreate a root `docs/` directory for project documentation.
 
 Commit changes to `project-docs/` in its own Git repository in the same task.
 When a task changes both repositories, make a separate commit in each. Do not
@@ -203,8 +203,8 @@ repository that includes its `docs/` subdirectory. The main repository ignores
   `teach.md` at the root of `project-docs/`. Their responsible agents maintain
   their contents; do not create empty placeholders for them.
 - Put all other maintained project documents, including analyses and acceptance
-  reports, under `project-docs/docs/`. The root `docs/` directory contains
-  legacy local material and generated evidence, not new maintained documents.
+  reports, under `project-docs/docs/`. The former root `docs/` contents are
+  stored there; do not recreate a root `docs/` directory for project documents.
 - Put external project source, examples, assets, and other reference material
   under `reference-projects/`. Do not commit it to either Git repository.
 - Keep application source and configuration in the main project tree, outside
