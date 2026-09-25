@@ -889,9 +889,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.json is not None:
         print(
-            "[error] JSON 已不再是可执行运行配置。请运行："
-            "python scripts/migrate_config_to_yaml.py --input <旧JSON> --output <新YAML>，"
-            "然后使用 python main.py --config <新YAML>。",
+            "[error] JSON 已不再是可执行运行配置。请参照 example.yaml "
+            "创建 schema-2 YAML，然后使用 python main.py --config <新YAML>。",
             file=sys.stderr,
         )
         return 1
@@ -1506,8 +1505,7 @@ def _print_usage() -> None:
     print("  场景B: 使用 schema-2 YAML 配置建模（向导生成的配置）")
     print("    python main.py --config path/to/project_run.yaml")
     print()
-    print("    旧 JSON 请先一次性迁移")
-    print("    python scripts/migrate_config_to_yaml.py --input old.json --output run.yaml --sample-id-col sample_id")
+    print("    旧 JSON 不能直接运行；请参照 example.yaml 创建 schema-2 YAML")
     print()
     print("  场景C: 传统CLI模式（直接指定参数）")
     print("    python main.py --csv data.csv --label-col yield \\")

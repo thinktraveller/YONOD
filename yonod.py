@@ -99,7 +99,7 @@ def step1_collect_basic_info() -> Dict:
                 'project_folder': None
             }
         elif file_path.lower().endswith('.json'):
-            print("[X] JSON 已不再是可执行运行配置；请先运行 scripts/migrate_config_to_yaml.py 迁移。")
+            print("[X] JSON 已不再是可执行运行配置；请参照 example.yaml 创建 schema-2 YAML。")
         else:
             print("[X] 文件格式不支持,请输入 CSV 或 schema-2 YAML 文件")
 

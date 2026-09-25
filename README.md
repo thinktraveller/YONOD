@@ -13,13 +13,13 @@ python -u yonod.py
 # 在第一个提示中输入已保存的 YAML 路径，例如 example.yaml
 ```
 
-仓库根目录的 [example.yaml](example.yaml) 是一个可直接运行的 12 样本 Morgan × Random Forest、2-fold smoke。成功时应看到 `features=ready` 和 `morgan × rf: complete` 或 `reused`；运行 ID 是内容派生的，不应写死。Chemical VAE 的历史验收 YAML 已归档在 [configs_20260916.tar.gz](recovery_backups/configs_20260916.tar.gz)，不是 `example.yaml` 的隐式组成部分。
+仓库根目录的 [example.yaml](example.yaml) 是一个可直接运行的 12 样本 Morgan × Random Forest、2-fold smoke。成功时应看到 `features=ready` 和 `morgan × rf: complete` 或 `reused`；运行 ID 是内容派生的，不应写死。Chemical VAE 的历史验收 YAML 已归档在 [configs_20260916.tar.gz](backup/configs_20260916.tar.gz)，不是 `example.yaml` 的隐式组成部分。
 
 | 目的 | 当前入口 |
 | --- | --- |
 | 启动已保存的可复现配置 | `python -u yonod.py`，在首个提示中输入 YAML 路径 |
 | 交互创建并执行配置 | `python yonod.py` |
-| 只读查看或派生特征版本 | `python scripts/manage_features.py inspect ...` / `derive ...` |
+| 只读查看或派生特征版本 | `yonod.artifacts.operations` 的 `inspect_feature_artifact` / `derive_features` API |
 
 `yonod.py` 是交互向导，**不解析** `--csv`、`--models` 等命令行参数。向导可接收 CSV，收集列角色并写出 `*_run.yaml`；也可在首个提示中输入现有 schema-2 YAML 后验证并启动。所有建模任务均须使用已保存的 YAML 并经 `yonod.py` 启动。
 
@@ -129,7 +129,7 @@ python -u yonod.py
 
 对 schema-2 的 `train` / `all`，`outputs.report_formats` 省略时生成 HTML 和 Markdown；支持 `html`、`markdown`（或 `md`），空列表关闭自动报告。每个完成 run 从自身的 `run_manifest.yaml`、预测、fold 指标及 YAML 快照生成 `pictures/` 与 `report/`；散点图使用每个 repeat 的 OOF 预测，HTML 内嵌 PNG，Markdown 使用 `../pictures/` 相对链接。`features` 阶段不会生成报告。
 
-无需原始数据、描述符权重或模型即可重建普通结果报告：`python scripts/rebuild_report.py --run-dir <outputs.root/runs/run-id> --output-root <新的报告目录>`。该命令会校验 manifest、配置快照哈希、OOF 身份和有限数值，不会训练或改写源结果；strict benchmark 仍使用 `scripts/rebuild_benchmark_report.py`。
+无需原始数据、描述符权重或模型即可通过 `yonod.pipeline.reporting.rebuild_schema2_report` 重建普通结果报告。该函数会校验 manifest、配置快照哈希、OOF 身份和有限数值，不会训练或改写源结果。旧的专用脚本保存在本地 `backup/scripts/`，不再作为当前项目入口。
 
 特征服务把静态矩阵、样本 ID、有效性掩码、身份和哈希发布到独立包。训练服务把每个 `feature × model` 的结果发布到 `outputs.root/runs/run_<feature-id>-<model>/`；内容派生的 `run_id` 保留在 manifest 中用于复用校验，其中包括：
 
@@ -156,11 +156,11 @@ python -u yonod.py
 
 Chemical VAE 是已接入、但刻意受限的可选描述符，并非 `example.yaml` 的默认描述符。它只接受各自经数值对照验证的 ZINC/v5 或 `zinc_properties` encoder/v5 conversion manifest，并从相邻的已哈希 PyTorch state 取编码器输出。声明时必须使用独立的 `chemical_vae` 描述符项，完整指定模型 manifest、`pytorch` 后端、设备、batch size、`identity` 输入预处理及 `z_mean_sample` 输出；`model_manifest` 以 YAML 所在目录为基准解析。`zinc_properties` 只开放 encoder 的原始 `z_mean_sample`，不加载其性质头；两种资产不能互相替代。它不加载解码器、性质头、训练 CSV、原 HDF5 或 TensorFlow/Keras；普通运行时只需要 PyTorch。
 
-当前资产的每个分子列输出 196 维原始 `z_mean_sample`，两个列 `concat` 为 392 维。未知参数和未验证资产会失败而不是静默回退；历史完整 Chemical VAE YAML 位于 [配置归档](recovery_backups/configs_20260916.tar.gz)，不在 README 中复制。
+当前资产的每个分子列输出 196 维原始 `z_mean_sample`，两个列 `concat` 为 392 维。未知参数和未验证资产会失败而不是静默回退；历史完整 Chemical VAE YAML 位于 [配置归档](backup/configs_20260916.tar.gz)，不在 README 中复制。
 
 输入语义是逐字节 identity：不 trim、不 canonicalize、不拆盐、不替换分隔符、不截断、不扩展字符表。适配器先检查固定 35 字符表、长度上限 120 和 RDKit 可解析性；缺失、超长、字符不支持或 RDKit 无效都会写入版本化 diagnostics sidecar。`concat` 保持既有语义：至少一个分子列成功时保留反应行，失败列为零块；所有选中列都失败才使该行的 mask 为 false。严格共同子集比较必须另行要求每个选中角色都成功，不能把零块留存集当作严格覆盖率。
 
-步骤 31 的 Chemical VAE features/train/all、配对比较、计时/成本、GPU smoke 与 Windows 交接 YAML 均为历史工程验收输入，已保存在 [配置归档](recovery_backups/configs_20260916.tar.gz)。需要审计时，从仓库根解压该归档以恢复原始 `configs/` 路径；新任务应创建自己的独立 YAML，而不要修改或复用这些小样本验收输入。
+步骤 31 的 Chemical VAE features/train/all、配对比较、计时/成本、GPU smoke 与 Windows 交接 YAML 均为历史工程验收输入，已保存在 [配置归档](backup/configs_20260916.tar.gz)。需要审计时，从仓库根解压该归档以恢复原始 `configs/` 路径；新任务应创建自己的独立 YAML，而不要修改或复用这些小样本验收输入。
 
 示例和运行证据是工程验收，不是性能结论。Linux CPU 和两张可用 RTX 5090 中的 `cuda:0` 已真实运行；`zinc_properties` encoder 也已在冻结的 CPU float32 `atol=rtol=2e-5` 下经原 HDF5 TensorFlow/Keras 与独立 NumPy 对照后运行 GPU smoke。GPU 相对 CPU artifact 的差异单独记录，绝不回写成 C03 CPU parity。用户已授权将步骤31标记完成并延期 Windows CPU 验证；Windows CPU 仍没有实测，不能视为已支持。完整状态见 [C11 verification](derived/chemical_vae/step31_9_gpu_smoke/verification.json)、[step31 acceptance index](derived/chemical_vae/step31_acceptance/index.json) 与 [comparison report](derived/chemical_vae/step31_7_comparison/comparison_report.json)。
 
@@ -186,21 +186,11 @@ XGBoost 和 LightGBM 如需 early stopping，应在各自 `model_params.<model>.
 
 ## 特征版本操作
 
-查看已发布的特征包：
-
-```bash
-python scripts/manage_features.py inspect --manifest artifacts/features/<artifact-id>/manifest.yaml
-```
-
-从操作 YAML 派生新版本：
-
-```bash
-python scripts/manage_features.py derive --config derive.yaml
-```
+查看已发布的特征包，可调用 `yonod.artifacts.operations.inspect_feature_artifact(manifest_path)`；从操作 YAML 派生新版本，可调用 `yonod.artifacts.operations.derive_features(config_path)`。旧的命令行脚本已归档到本地 `backup/scripts/`。
 
 `derive_features` 只支持显式样本选择、特征选择及按唯一 sample ID 连接数值 CSV。它永远发布新包并记录父版本、操作、输入/输出映射和哈希；标签、重复/缺失 ID、列冲突和不安全的按折变换操作会失败。
 
-旧 JSON 运行配置不属于当前可执行入口。仓库保留的迁移器只在能够显式恢复 schema-2 字段时生成新的 YAML 供人工复核，并在同级生成 `.migration.json` 报告；JSON 本身及依赖 JSON 的启动器不能作为新建或恢复建模任务的入口。
+旧 JSON 运行配置不属于当前可执行入口。历史迁移器保存在本地 `backup/scripts/`，仅供审计；新建或恢复建模任务应参照 [example.yaml](example.yaml) 创建独立的 schema-2 YAML。
 
 ## 历史 CSV CLI
 
@@ -294,15 +284,15 @@ WEIGHTS/FISD/
 
 ## 项目结构
 
-目录用途、保留边界和清理记录见 [目录管理说明](project-docs/docs/folder-organization.md)。按用途查找：[项目文档](project-docs/docs/README.md) · [辅助脚本](scripts/README.md) · [配置归档](recovery_backups/configs_20260916.tar.gz) · [数据集](dataset/README.md)。
+目录用途、保留边界和清理记录见 [目录管理说明](project-docs/docs/folder-organization.md)。按用途查找：[项目文档](project-docs/docs/README.md) · [配置归档](backup/configs_20260916.tar.gz) · [数据集](dataset/README.md)。
 
 ```text
 YONOD/
 ├── main.py                     schema-2 底层配置运行时与 smoke 入口；保留历史 CSV 调试接口
 ├── yonod.py                    正式建模任务入口；生成/验证 schema-2 YAML
 ├── example.yaml                唯一可复制的 schema-2 YAML 规范与最小 smoke
-├── recovery_backups/configs_20260916.tar.gz
-│                               历史 schema-2 与 Chemical VAE 验收 YAML
+├── backup/                     不再活跃的结果、脚本和恢复材料（Git 忽略）
+│   └── configs_20260916.tar.gz 历史 schema-2 与 Chemical VAE 验收 YAML
 ├── WEIGHTS/chemical_vae/       内容校验的转换后编码器资产（本地，不从 YAML 训练）
 ├── yonod/
 │   ├── config/                 YAML 加载和 schema 契约
@@ -311,8 +301,8 @@ YONOD/
 │   ├── model_factory.py        五模型参数路由与生效参数审计
 │   ├── descriptors/            特征注册与描述符实现
 │   └── benchmark/              独立 benchmark / paper-exact 协议（迁移中）
-├── scripts/                    特征操作、迁移及专用运行脚本
 ├── project-docs/               独立 Git 仓库：目标、计划、日志、学习笔记及 docs/
+├── reference-projects/         本地参考项目（Git 忽略）
 ├── dataset/                    数据集与 smoke fixture
 └── derived/                    本地验收与生成产物
 ```

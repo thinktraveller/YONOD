@@ -134,8 +134,10 @@ stage `project-docs/` in the main repository or add it as a submodule.
 
 ## Output locations
 
-Write new backups and engineering-support files under `recovery_backups/`.
-The existing `backup/` directory is also excluded from the main Git repository.
+Write new backups and engineering-support files under `backup/`. Once results
+are no longer needed for active work, move them into `backup/`, keeping each
+task's files together so the original run remains identifiable. `backup/` is
+excluded from the main Git repository.
 For each
 project run, all result files must be contained in that task's designated
 `result/<task_name>/` directory; do not write loose run results directly under
@@ -209,8 +211,11 @@ repository that includes its `docs/` subdirectory. The main repository ignores
   under `reference-projects/`. Do not commit it to either Git repository.
 - Keep application source and configuration in the main project tree, outside
   `project-docs/`, `_verify/`, and `reference-projects/`.
-- Put new backups and engineering support files under `recovery_backups/`.
-  Keep the existing `backup/` directory completely excluded from Git.
+- Put new backups and engineering support files under `backup/`. Move results
+  there once they are no longer needed for active work, keeping each task's
+  files together. Keep `backup/` completely excluded from Git.
+- Do not recreate the former root `scripts/` directory; its contents were
+  archived under `backup/`. Put validation scripts in `_verify/`.
 
 ### Required commits
 
