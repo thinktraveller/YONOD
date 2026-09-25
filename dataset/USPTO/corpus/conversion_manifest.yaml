@@ -1,0 +1,93 @@
+status: complete
+converter_version: 1.0.0
+converter_sha256: 75785b88030025b6339814a1abca610c8004eada7809f1bf8f8fa32db6bcae71
+python_version: 3.9.23
+rdkit_version: 2022.09.5
+input_files:
+  train:
+    file: US_patents_1976-Sep2016_1product_reactions_yield_ok_cropped_data_train.csv
+    sha256: e93dbe419385402444ad8ac992c095c139a25c68d1a004312a8acc49048a77f7
+  valid:
+    file: US_patents_1976-Sep2016_1product_reactions_yield_ok_cropped_data_valid.csv
+    sha256: 996adf61ee4c8671788a35f3bc29b11ae62a70c06f6cbec2c14d1aaf38e53379
+  test:
+    file: US_patents_1976-Sep2016_1product_reactions_yield_ok_cropped_data_test.csv
+    sha256: 4f7293a54386198578c720a54e65a984ccb22bffc4e73b66277757d390d807ed
+encoding: utf-8
+input_delimiter: tab
+output_delimiter: ','
+columns:
+- sample_id
+- split
+- reactants_smiles
+- reagents_smiles
+- products_smiles
+- yield_percent
+- reaction_smiles
+yield_unit: percent (0–100)
+source_row_rule: 1-based logical CSV record, including header; first data row is 2
+sample_id_rule: uspto_<split>_<myID>
+chemistry:
+  policy: report only; preserve invalid SMILES in standard tables
+  normalization: RDKit sanitized isomeric canonical SMILES, atom maps cleared, sorted
+    dot components within each role; role order retained; no salt removal or neutralization
+limitations:
+- Yield extraction provenance unknown
+- Patent-family independence cannot be established
+- Fixed train/valid/test modeling is not implemented by this converter
+- Windows execution not verified
+counts:
+  input_rows: 526468
+  accepted_rows: 526468
+  rejected_rows: 0
+  empty_reagents: 36311
+  special_character_rows: 0
+  invalid_chemistry_rows: 0
+splits:
+  train:
+    input_rows: 473963
+    accepted_rows: 473963
+    rejected_rows: 0
+    empty_reagents: 32691
+    special_character_rows: 0
+    invalid_chemistry_rows: 0
+  valid:
+    input_rows: 26101
+    accepted_rows: 26101
+    rejected_rows: 0
+    empty_reagents: 1792
+    special_character_rows: 0
+    invalid_chemistry_rows: 0
+  test:
+    input_rows: 26404
+    accepted_rows: 26404
+    rejected_rows: 0
+    empty_reagents: 1828
+    special_character_rows: 0
+    invalid_chemistry_rows: 0
+output_files:
+  chemistry_issues.csv:
+    sha256: 1178c316eefa3626847e94b993513875e3241e65338701d145149b0937717ce4
+    bytes: 35
+  duplicates.csv:
+    sha256: 42f301d3c81f38e66c6fac11542b8d5c4bfb98bccc3e803d4918fcae951a2993
+    bytes: 78
+  provenance.csv:
+    sha256: 0db7e3b251795f97396f6e95427824c3c1597542a8d0538426f3eea29c3995f3
+    bytes: 405471924
+  quality_report.json:
+    sha256: ccc96f355786eb8977cde4ecaa8b9e264252e1657122387356cc28f36a09d5eb
+    bytes: 2210
+  rejected_rows.csv:
+    sha256: 2c8e22a2f955d917f4b62420724b13a9363bd69a7cbbf1f6563001f66c18315b
+    bytes: 47
+  test.csv:
+    sha256: b17c71724d6acda2f6e4c6867ce23d0585b3d0b61480d4e8b1f956faab1d945a
+    bytes: 7664804
+  train.csv:
+    sha256: b6ea60f9d09cf47fafe1518f9b57f3638c081ec17b03c2c41d29ea1249a1f47f
+    bytes: 138755334
+  valid.csv:
+    sha256: 9c8ed5e04057d8df66d18f4ae28e6daf68076909f722d8f4601d461521438823
+    bytes: 7626225
+finished_at: '2026-09-17T01:23:54.624625+00:00'

@@ -1,0 +1,155 @@
+{
+  "completed_at_utc": "2026-09-23T05:00:57.584444+00:00",
+  "config_hash": "e0b61ae7ed62047c2fddf3894cfecc85e21b5131e3eb363acfcd05db1dd8a23b",
+  "dataset_id": "ord_shields",
+  "descriptor": "morgan_rf_full",
+  "effective_model_kwargs": {},
+  "estimator_params_snapshot": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "construction": "schema2_model_factory",
+    "criterion": "squared_error",
+    "effective_estimator_params": {
+      "bootstrap": true,
+      "ccp_alpha": 0.0,
+      "criterion": "squared_error",
+      "max_depth": null,
+      "max_features": 1.0,
+      "max_leaf_nodes": null,
+      "max_samples": null,
+      "min_impurity_decrease": 0.0,
+      "min_samples_leaf": 1,
+      "min_samples_split": 2,
+      "min_weight_fraction_leaf": 0.0,
+      "monotonic_cst": null,
+      "n_estimators": 300,
+      "n_jobs": 19,
+      "oob_score": false,
+      "random_state": 20260918,
+      "verbose": 0,
+      "warm_start": false
+    },
+    "max_depth": null,
+    "max_features": 1.0,
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 1,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 300,
+    "n_jobs": 19,
+    "oob_score": false,
+    "preprocessing": {},
+    "random_state": 20260918,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "evaluation_protocol": "manifest_outer_cv",
+  "feature_dim": 7170,
+  "feature_schema_hash": "a2e2d9a3c207385cb745513a717379775317c6c7bdfb6860daf78cab52986edc",
+  "feature_transformer": {
+    "numeric_conditions": {
+      "block_order": "after_molecular_or_categorical_features",
+      "dimension": 2,
+      "input_identity": "sha256:c1894f56584f5b499b33271ff76e2c77f8fda2229a0b820e8b80f9f4b325bf30",
+      "state": {
+        "columns": [
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 105.2542372881356,
+            "name": "c_temperature_c",
+            "scale": 12.192792008422169,
+            "source": "c_temperature_c",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": true,
+            "fill_value": null,
+            "location": 86400.0,
+            "name": "c_reaction_time_s",
+            "scale": 1.0,
+            "source": "c_reaction_time_s",
+            "train_missing_rows": 0
+          }
+        ],
+        "contract": {
+          "columns": [
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_temperature_c",
+              "scaling": "standard",
+              "source": "c_temperature_c",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "degC",
+                "target": "degC"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_reaction_time_s",
+              "scaling": "standard",
+              "source": "c_reaction_time_s",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "s",
+                "target": "s"
+              }
+            }
+          ],
+          "schema_version": "numeric_conditions/v1"
+        },
+        "fit_rows": 1593,
+        "fit_sample_ids_sha256": "sha256:c4f0b7520e2edc8882c462b83e3e8893a694847addd106a602c4f877919d358e",
+        "schema_version": "numeric_conditions/v1"
+      }
+    }
+  },
+  "fold": 2,
+  "manifest_seed": 20260918,
+  "model": "rf",
+  "model_kwargs": {},
+  "model_random_seed": 20260918,
+  "n_train": 1593,
+  "n_valid": 391,
+  "outer_seed": 20260918,
+  "population_id": "pnecessity-numeric-ord_shields-55e8ac090e249f36",
+  "predict_time_s": 0.02590483400854282,
+  "prediction_path": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_numeric_conditions_ord_shields_morgan_rf_full_v1/ord-shields-e0b61ae7ed62/docs/predictions/morgan_rf_full__rf__r01__f02.parquet",
+  "protocol_family": "manifest_outer_cv",
+  "repeat": 1,
+  "requested_model_kwargs": {},
+  "run_id": "ord-shields-e0b61ae7ed62",
+  "software_versions": {
+    "autogluon.common": "1.1.1",
+    "autogluon.core": "1.1.1",
+    "autogluon.tabular": "1.1.1",
+    "catboost": "1.2.10",
+    "lightgbm": "4.3.0",
+    "numpy": "1.26.4",
+    "pandas": "2.0.3",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "pyarrow": "16.1.0",
+    "python": "3.9.23 | packaged by conda-forge | (main, Jun  4 2025, 17:57:12) \n[GCC 13.3.0]",
+    "scikit-learn": "1.4.0",
+    "xgboost": "2.0.3"
+  },
+  "split_hash": "95e3cc4a862b069b892176bf02f3afe96865ff394fe513eadd094aade958789e",
+  "split_id": "split-95e3cc4a862b",
+  "started_at_utc": "2026-09-23T05:00:56.683573+00:00",
+  "train_sample_ids_hash": "c4f0b7520e2edc8882c462b83e3e8893a694847addd106a602c4f877919d358e",
+  "train_time_s": 0.8650508240098134,
+  "valid_sample_ids_hash": "10b5b63dd4c2f918c938ecc57433342d49ccb3f794ad6fad94746357c6be5932",
+  "valid_source_row_index_hash": "4164fd6ac0a7c33b09aecf5a5d0d6c61d6be0131efc5fc35382f80b6aebab045"
+}

@@ -1,0 +1,95 @@
+schema_version: '2.0'
+project_name: pnecessity_utility_ord_chemrxiv_ch_arylation_mfp_lightgbm_minus_p_v1
+stage: benchmark
+dataset:
+  path: ./result/pnecessity_utility_prepare_v1/data/ord_chemrxiv_ch_arylation.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants:
+    - a_smiles
+    - b_smiles
+    products: []
+    others:
+    - c_reagent_1_smiles
+    - c_reagent_2_smiles
+    - c_catalyst_1_smiles
+    - c_catalyst_2_smiles
+    - c_solvent_1_smiles
+    - c_solvent_2_smiles
+    - c_solvent_3_smiles
+    conditions:
+    - c_temperature_c
+    - c_reaction_time_s
+    - c_reflux_value
+    - c_conditions_are_dynamic_value
+    categoricals: []
+descriptors:
+- id: mfp_lightgbm_minus_p
+  descriptor: mfp
+  lifecycle: static_descriptor
+  mode: concat
+  columns:
+  - a_smiles
+  - b_smiles
+  - c_reagent_1_smiles
+  - c_reagent_2_smiles
+  - c_catalyst_1_smiles
+  - c_catalyst_2_smiles
+  - c_solvent_1_smiles
+  - c_solvent_2_smiles
+  - c_solvent_3_smiles
+  params:
+    radius: 3
+    fp_size: 1024
+    profile: standard
+artifacts:
+  output_dir: ./result/pnecessity_utility_ord_chemrxiv_ch_arylation_mfp_lightgbm_minus_p_v1/feature
+models:
+- lightgbm
+model_params:
+  lightgbm:
+    estimator:
+      n_estimators: 500
+      learning_rate: 0.05
+      num_leaves: 31
+      min_child_samples: 1
+      random_state: 20260918
+      n_jobs: 19
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: precomputed_column
+    group_column: non_p_input_group_id
+    protocol_label: pnecessity_within_source_non_p_input
+    max_group_fraction: 0.8
+  split_manifest: ./result/pnecessity_utility_prepare_v1/manifests/ord_chemrxiv_ch_arylation_non_p_input_split_manifest.parquet
+outputs:
+  root: ./result/pnecessity_utility_ord_chemrxiv_ch_arylation_mfp_lightgbm_minus_p_v1
+  report_formats:
+  - html
+  - markdown
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: pnecessity-ord_chemrxiv_ch_arylation-22b7c42737a6e7b5
+  dataset_id: ord_chemrxiv_ch_arylation
+metadata:
+  comparison: within_source_paired_utility
+  input_arm: minus_p
+  source_manifest: ./result/pnecessity_utility_prepare_v1/source_manifest.json
+  prepared_data_sha256: 22b7c42737a6e7b5a1336d018bf0c5812a86d3fa480817ba9f55a578e11a360f
+  raw_data_sha256: 3d11901429869a5875d98ec4feec8239efbfa121c59d750a9bf8c04612906f7d
+  fixed_or_unrecorded_numeric_c:
+  - temperature_c
+  - reaction_time_s
+  - reflux_value
+  - conditions_are_dynamic_value
+  c_field_policy: all recorded non-product molecular C fields are descriptor components;
+    fixed numeric C fields are retained in the paired table and declared as conditions
+  limitation: within-source result only; do not pool rows, folds, repeats, or effect
+    estimates across sources

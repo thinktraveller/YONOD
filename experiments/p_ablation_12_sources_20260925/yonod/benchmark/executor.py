@@ -1,0 +1,632 @@
+"""由外部 split manifest 驱动的单折 benchmark 执行器。"""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import importlib.metadata
+import json
+import platform
+import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Mapping, Optional, Sequence
+
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from yonod.features.numeric_conditions import (
+    NumericConditionsError, NumericConditionsTransformer, numeric_input_identity,
+)
+
+from .config import BenchmarkContract
+from .layout import resolve_benchmark_output_layout
+
+
+class FoldExecutionError(RuntimeError):
+    """Raised when a requested external fold cannot be executed safely."""
+
+
+@dataclass(frozen=True)
+class FoldExecutionResult:
+    prediction_path: Path
+    metadata_path: Path
+    n_train: int
+    n_valid: int
+    train_time_s: float
+    predict_time_s: float
+
+
+def _software_versions() -> Dict[str, str]:
+    """Return a small, serialisable environment fingerprint for one fold."""
+    versions = {
+        "python": sys.version,
+        "platform": platform.platform(),
+    }
+    for distribution in (
+        "numpy", "pandas", "scikit-learn", "pyarrow", "xgboost", "lightgbm",
+        "autogluon.common", "autogluon.core", "autogluon.tabular", "catboost",
+    ):
+        try:
+            versions[distribution] = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    return versions
+
+
+def _feature_schema_hash(
+    X_smiles: Optional[np.ndarray],
+    X_numeric: Optional[np.ndarray],
+    feature_metadata: Optional[Mapping[str, Any]] = None,
+) -> str:
+    schema = {
+        "smiles_shape": list(X_smiles.shape),
+        "smiles_dtype": str(X_smiles.dtype),
+        "numeric_shape": list(X_numeric.shape) if X_numeric is not None else None,
+        "numeric_dtype": str(X_numeric.dtype) if X_numeric is not None else None,
+        "feature_metadata": dict(feature_metadata or {}),
+    }
+    return hashlib.sha256(json.dumps(schema, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _build_estimator(model_name: str, model_kwargs: Mapping[str, Any], n_features: int, n_train: int):
+    """Return a single-fit estimator; legacy cross_validate remains untouched."""
+    if model_name == "rf":
+        from ..models.rf_model import RFYieldModel
+        return RFYieldModel(**dict(model_kwargs))._build()
+    if model_name == "xgb":
+        from ..models.xgb_model import XGBYieldModel
+        return XGBYieldModel(**dict(model_kwargs))._build()
+    if model_name == "svm":
+        from ..models.svm_model import SVMYieldModel
+        adapter = SVMYieldModel(**dict(model_kwargs))
+        return adapter._build(n_features=n_features, n_train=n_train)
+    if model_name == "lightgbm":
+        from ..models.lightgbm_model import LightGBMYieldModel
+        return LightGBMYieldModel(**dict(model_kwargs))._build()
+    raise FoldExecutionError(
+        "模型 {0!r} 尚未具备严格外部 fold 适配器；AutoGluon 在其内部 holdout "
+        "行为被验证前不得进入公平比较矩阵。".format(model_name)
+    )
+
+
+def _prepare_fold_features(
+    X_smiles: np.ndarray,
+    X_numeric: Optional[np.ndarray],
+    train_idx: np.ndarray,
+    valid_idx: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build fold matrices, fitting numeric preprocessing on training rows only."""
+    X_train, X_valid = X_smiles[train_idx], X_smiles[valid_idx]
+    if X_numeric is None:
+        return X_train, X_valid
+    scaler = StandardScaler()
+    numeric = np.asarray(X_numeric, dtype=float)
+    return (
+        np.hstack([X_train, scaler.fit_transform(numeric[train_idx])]),
+        np.hstack([X_valid, scaler.transform(numeric[valid_idx])]),
+    )
+
+
+def _append_fold_numeric_features(
+    X_train: np.ndarray,
+    X_valid: np.ndarray,
+    X_numeric: Optional[np.ndarray],
+    train_idx: np.ndarray,
+    valid_idx: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Append numeric covariates with the same fold-local scaler contract."""
+    if X_numeric is None:
+        return X_train, X_valid
+    scaler = StandardScaler()
+    numeric = np.asarray(X_numeric, dtype=float)
+    return (
+        np.hstack([X_train, scaler.fit_transform(numeric[train_idx])]),
+        np.hstack([X_valid, scaler.transform(numeric[valid_idx])]),
+    )
+
+
+def _atomic_write_parquet(frame: pd.DataFrame, path: Path) -> Path:
+    if path.exists():
+        existing = pd.read_parquet(path)
+        if existing.equals(frame):
+            return path
+        raise FoldExecutionError("预测分片已存在且内容不同，拒绝覆盖：{0}".format(path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".parquet.tmp")
+    frame.to_parquet(temporary, index=False)
+    verified = pd.read_parquet(temporary)
+    if len(verified) != len(frame) or list(verified.columns) != list(frame.columns):
+        temporary.unlink(missing_ok=True)
+        raise FoldExecutionError("预测分片临时文件校验失败")
+    temporary.replace(path)
+    return path
+
+
+def _atomic_write_json(payload: Dict[str, Any], path: Path) -> Path:
+    if path.exists():
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        if previous == payload:
+            return path
+        raise FoldExecutionError("折级元数据已存在且内容不同，拒绝覆盖：{0}".format(path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(path)
+    return path
+
+
+def _json_safe_estimator_params(estimator: Any) -> Dict[str, Any]:
+    """Capture fitted-estimator construction parameters in stable JSON form."""
+    try:
+        params = estimator.get_params(deep=True)
+    except AttributeError as exc:  # pragma: no cover - all supported adapters expose sklearn estimators
+        raise FoldExecutionError("估计器不支持 get_params() 审计") from exc
+    return json.loads(json.dumps(params, ensure_ascii=False, sort_keys=True, default=str))
+
+
+DEFAULT_EVALUATION_PROTOCOL = "manifest_outer_cv"
+PAPER_EXACT_EVALUATION_PROTOCOL = "paper_exact_5x5"
+
+
+def _protocol_block(contract: BenchmarkContract) -> Mapping[str, Any]:
+    block = contract.config.raw.get("reproduction_protocol", {})
+    return block if isinstance(block, Mapping) else {}
+
+
+def _contract_evaluation_protocol(contract: BenchmarkContract) -> str:
+    raw_protocol = contract.config.raw.get("evaluation_protocol")
+    if raw_protocol:
+        return str(raw_protocol)
+    block = _protocol_block(contract)
+    if block.get("evaluation_protocol"):
+        return str(block["evaluation_protocol"])
+    name = str(block.get("name", ""))
+    if "paper_exact" in name:
+        return PAPER_EXACT_EVALUATION_PROTOCOL
+    return DEFAULT_EVALUATION_PROTOCOL
+
+
+def _fold_manifest_seed(part: pd.DataFrame) -> int:
+    seeds = pd.to_numeric(part["seed"], errors="coerce").dropna().astype(int).unique().tolist()
+    if len(seeds) != 1:
+        raise FoldExecutionError("manifest 当前折必须恰有一个 seed")
+    return int(seeds[0])
+
+
+def _optional_fold_value(part: pd.DataFrame, column: str, default: Any = None) -> Any:
+    if column not in part.columns:
+        return default
+    values = part[column].dropna().astype(str).unique().tolist()
+    if len(values) == 1:
+        return values[0]
+    if not values:
+        return default
+    raise FoldExecutionError("manifest 当前折的 {0} 不唯一".format(column))
+
+
+def _hash_values(values: Sequence[Any]) -> str:
+    payload = [str(value) for value in values]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _dataset_id_for_contract(contract: BenchmarkContract, population_id: Optional[str]) -> str:
+    if contract.config.raw.get("dataset_id"):
+        return str(contract.config.raw["dataset_id"])
+    block = _protocol_block(contract)
+    if block.get("dataset_id"):
+        return str(block["dataset_id"])
+    if population_id:
+        return str(population_id).split("_")[0].upper()
+    return Path(contract.config.dataset_path).stem
+
+
+def _fit_predict_model(
+    *,
+    model: str,
+    effective_model_kwargs: Mapping[str, Any],
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_valid: np.ndarray,
+    fold: int,
+    protocol_seed: Optional[int],
+    config_seed: Any,
+    layout: Any,
+    suffix: str,
+    evaluation_protocol: str = DEFAULT_EVALUATION_PROTOCOL,
+    schema2_model_config: Optional[Mapping[str, Any]] = None,
+) -> tuple[np.ndarray, float, float, Dict[str, Any], Dict[str, Any]]:
+    """Fit one external fold and return predictions plus audit metadata."""
+    if model == "autogluon":
+        from ..models.autogluon_model import AutoGluonYieldModel
+
+        adapter_kwargs = dict(effective_model_kwargs)
+        keep_artifacts = bool(adapter_kwargs.pop("keep_autogluon_artifacts", False))
+        cleanup = bool(adapter_kwargs.pop("cleanup", not keep_artifacts))
+        model_root = adapter_kwargs.pop("model_root", None)
+        save_path = adapter_kwargs.pop("save_path", None)
+        if save_path is not None and model_root is None:
+            model_root = save_path
+        artifact_root = Path(model_root) if model_root is not None else layout.run_dir / "models"
+        artifact_path = artifact_root / suffix
+        adapter = AutoGluonYieldModel(**adapter_kwargs, cleanup=cleanup)
+        outer_seed = protocol_seed if protocol_seed is not None else int(config_seed)
+        prediction, metadata = adapter.fit_predict_fold(
+            X_train,
+            y_train,
+            X_valid,
+            fold_index=fold,
+            context={
+                "evaluation_protocol": evaluation_protocol,
+                "protocol_family": DEFAULT_EVALUATION_PROTOCOL,
+                "outer_seed": outer_seed,
+                "model_artifact_path": str(artifact_path),
+                "cleanup": cleanup,
+            },
+        )
+        if not np.isfinite(prediction).all():
+            raise FoldExecutionError("AutoGluon 预测包含 NaN 或 inf")
+        snapshot = {
+            "adapter": "AutoGluonYieldModel",
+            "time_limit": adapter.time_limit,
+            "presets": adapter.presets,
+            "num_cpus": adapter.num_cpus,
+            "random_state": adapter.random_state,
+            "cleanup": cleanup,
+            "keep_autogluon_artifacts": keep_artifacts,
+        }
+        return (
+            np.asarray(prediction, dtype=float),
+            float(metadata.get("train_time_s", 0.0)),
+            float(metadata.get("predict_time_s", 0.0)),
+            snapshot,
+            metadata,
+        )
+
+    if schema2_model_config is not None:
+        # The public schema-2 route does not inherit defaults from the legacy
+        # benchmark adapters.  It constructs the exact estimator declared in
+        # the shared model factory, while retaining this executor's immutable
+        # manifest train/valid boundary.
+        from ..model_factory import ModelConfigurationError, construct_estimator, resolve_model_config
+
+        try:
+            model_config = copy.deepcopy(dict(schema2_model_config))
+            if model == "rf" and protocol_seed is not None:
+                estimator_config = model_config.setdefault("estimator", {})
+                if "random_state" in estimator_config and estimator_config["random_state"] != protocol_seed:
+                    raise ModelConfigurationError(
+                        "论文 RF 协议的 estimator.random_state 必须与 manifest seed 一致"
+                    )
+                estimator_config["random_state"] = protocol_seed
+            resolved = resolve_model_config(model, model_config)
+            if resolved.fit:
+                raise ModelConfigurationError(
+                    "strict benchmark executor 不接受 model_params.<model>.fit；"
+                    "此路径尚未实现逐折数据列物化"
+                )
+            if "early_stopping" in resolved.runtime:
+                raise ModelConfigurationError(
+                    "strict benchmark executor 尚未实现 runtime.early_stopping 的内层验证拆分"
+                )
+            estimator, factory_audit = construct_estimator(
+                resolved, n_features=X_train.shape[1], n_train=len(y_train)
+            )
+        except ModelConfigurationError as exc:
+            raise FoldExecutionError("schema-2 模型配置无法构造：{0}".format(exc)) from exc
+        estimator_params_snapshot = {
+            # Preserve the public flat snapshot consumed by fold metadata and
+            # historical reports, together with the full schema-2 factory audit.
+            **factory_audit["effective_estimator_params"],
+            "construction": "schema2_model_factory",
+            **factory_audit,
+        }
+    else:
+        estimator = _build_estimator(model, effective_model_kwargs, X_train.shape[1], len(y_train))
+        estimator_params_snapshot = _json_safe_estimator_params(estimator)
+    start = time.perf_counter()
+    estimator.fit(X_train, y_train)
+    train_time_s = time.perf_counter() - start
+    start = time.perf_counter()
+    prediction = np.asarray(estimator.predict(X_valid), dtype=float)
+    predict_time_s = time.perf_counter() - start
+    return prediction, train_time_s, predict_time_s, estimator_params_snapshot, {}
+
+
+def _effective_model_kwargs(
+    contract: BenchmarkContract,
+    part: pd.DataFrame,
+    model: str,
+    requested: Optional[Mapping[str, Any]],
+) -> tuple[Dict[str, Any], Optional[int]]:
+    """Inject manifest seeds for paper protocols without changing legacy runs."""
+    requested_kwargs = dict(requested or {})
+    effective_kwargs = dict(requested_kwargs)
+    protocol_name = str(_protocol_block(contract).get("name", ""))
+    evaluation_protocol = _contract_evaluation_protocol(contract)
+    uses_paper_seed = (
+        evaluation_protocol == PAPER_EXACT_EVALUATION_PROTOCOL
+        or (model == "rf" and protocol_name == "vjethbkm_rf_5x5")
+    )
+    if not uses_paper_seed:
+        return effective_kwargs, None
+
+    seed = _fold_manifest_seed(part)
+    if model == "rf":
+        if "random_state" in requested_kwargs and int(requested_kwargs["random_state"]) != seed:
+            raise FoldExecutionError(
+                "论文 RF 协议禁止 model_params.rf.random_state 与 manifest seed 冲突；"
+                "请删除该参数，当前折应使用 {0}".format(seed)
+            )
+        effective_kwargs["random_state"] = seed
+    return effective_kwargs, seed
+
+
+def _result_from_existing(prediction_path: Path, metadata_path: Path) -> FoldExecutionResult:
+    """Return an already completed fold without retraining it."""
+    if not prediction_path.exists() and not metadata_path.exists():
+        raise FileNotFoundError
+    if not prediction_path.exists() or not metadata_path.exists():
+        raise FoldExecutionError(
+            "发现不完整的折级输出（预测分片与元数据必须同时存在），拒绝静默重跑：{0}".format(
+                prediction_path.parent
+            )
+        )
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        prediction = pd.read_parquet(prediction_path)
+    except Exception as exc:  # pragma: no cover - exact parquet errors depend on backend
+        raise FoldExecutionError("无法读取已有折级输出：{0}".format(exc)) from exc
+    required = {"sample_id", "y_true", "y_pred"}
+    if prediction.empty or not required.issubset(prediction.columns):
+        raise FoldExecutionError("已有预测分片不完整，拒绝将其视为成功：{0}".format(prediction_path))
+    try:
+        return FoldExecutionResult(
+            prediction_path=prediction_path,
+            metadata_path=metadata_path,
+            n_train=int(metadata["n_train"]),
+            n_valid=int(metadata["n_valid"]),
+            train_time_s=float(metadata["train_time_s"]),
+            predict_time_s=float(metadata["predict_time_s"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise FoldExecutionError("已有折级元数据字段不完整：{0}".format(metadata_path)) from exc
+
+
+def execute_fold(
+    contract: BenchmarkContract,
+    split_manifest: pd.DataFrame,
+    sample_ids: Sequence[str],
+    X_smiles: np.ndarray,
+    y: Sequence[float],
+    descriptor: str,
+    model: str,
+    repeat: int,
+    fold: int,
+    X_numeric: Optional[np.ndarray] = None,
+    model_kwargs: Optional[Mapping[str, Any]] = None,
+    component_frame: Optional[pd.DataFrame] = None,
+    fold_transformer: Optional[Any] = None,
+    schema2_model_config: Optional[Mapping[str, Any]] = None,
+    numeric_frame: Optional[pd.DataFrame] = None,
+    numeric_contract: Optional[Mapping[str, Any]] = None,
+) -> FoldExecutionResult:
+    """Fit exactly one manifest-defined fold and write its prediction shard.
+
+    Numeric columns are standardized inside the declared train fold; molecular
+    features are passed through untouched because their construction is
+    descriptor-specific and already complete before this boundary.
+    """
+    ids = np.asarray([str(value) for value in sample_ids], dtype=str)
+    y_array = np.asarray(y, dtype=float)
+    if len(ids) != len(y_array):
+        raise FoldExecutionError("sample_ids 与 y 的行数必须一致")
+    if X_smiles is not None:
+        X_smiles = np.asarray(X_smiles)
+        if len(ids) != len(X_smiles):
+            raise FoldExecutionError("sample_ids、X_smiles 与 y 的行数必须一致")
+    elif fold_transformer is None:
+        raise FoldExecutionError("必须提供预计算 X_smiles 或 fold_transformer")
+    if len(np.unique(ids)) != len(ids):
+        raise FoldExecutionError("sample_ids 必须唯一，才能连接 split manifest")
+    if X_numeric is not None and len(X_numeric) != len(ids):
+        raise FoldExecutionError("X_numeric 与 sample_ids 的行数必须一致")
+    if numeric_frame is not None:
+        if X_numeric is not None or numeric_contract is None:
+            raise FoldExecutionError("声明式 numeric_frame 需要独立契约，不能同时提供旧 X_numeric")
+        if len(numeric_frame) != len(ids):
+            raise FoldExecutionError("numeric_frame 与 sample_ids 的行数必须一致")
+    if fold_transformer is not None and (component_frame is None or len(component_frame) != len(ids)):
+        raise FoldExecutionError("fold_transformer 需要与 sample_ids 等长的 component_frame")
+    if X_smiles is not None:
+        if X_smiles.ndim != 2 or X_smiles.shape[1] == 0:
+            raise FoldExecutionError("X_smiles 必须是至少包含一列特征的二维数组")
+        if not np.isfinite(X_smiles).all():
+            raise FoldExecutionError("特征包含 NaN 或 inf")
+    if not np.isfinite(y_array).all():
+        raise FoldExecutionError("标签包含 NaN 或 inf")
+    if X_numeric is not None:
+        numeric_array = np.asarray(X_numeric, dtype=float)
+        if numeric_array.ndim != 2 or not np.isfinite(numeric_array).all():
+            raise FoldExecutionError("X_numeric 必须是无 NaN/inf 的二维数组")
+    part = split_manifest[(split_manifest["repeat"] == repeat) & (split_manifest["fold"] == fold)]
+    evaluation_protocol = _contract_evaluation_protocol(contract)
+    if part.empty:
+        raise FoldExecutionError("manifest 中不存在 repeat={0}, fold={1}".format(repeat, fold))
+    valid_ids = set(part.loc[part["role"] == "valid", "sample_id"].astype(str))
+    train_ids = set(part.loc[part["role"] == "train", "sample_id"].astype(str))
+    if valid_ids.intersection(train_ids):
+        raise FoldExecutionError("manifest 的 train/valid sample_id 发生重叠")
+    if set(ids) != valid_ids.union(train_ids):
+        raise FoldExecutionError("输入 sample_ids 与 manifest 当前折的样本集合不一致")
+    train_idx = np.flatnonzero(np.isin(ids, list(train_ids)))
+    valid_idx = np.flatnonzero(np.isin(ids, list(valid_ids)))
+    if len(train_idx) == 0 or len(valid_idx) == 0:
+        raise FoldExecutionError("manifest 当前折存在空训练集或验证集")
+    requested_model_kwargs = dict(model_kwargs or {})
+    effective_model_kwargs, protocol_seed = _effective_model_kwargs(
+        contract, part, model, requested_model_kwargs
+    )
+    suffix = "{0}__{1}__r{2:02d}__f{3:02d}".format(descriptor, model, repeat, fold)
+    layout = resolve_benchmark_output_layout(contract.run_dir)
+    prediction_path = layout.predictions / (suffix + ".parquet")
+    metadata_path = layout.folds / (suffix + ".json")
+    try:
+        return _result_from_existing(prediction_path, metadata_path)
+    except FileNotFoundError:
+        pass
+    feature_metadata: Dict[str, Any] = {}
+    if fold_transformer is not None:
+        try:
+            fold_transformer.fit(component_frame.iloc[train_idx], sample_ids=ids[train_idx])
+            X_train = fold_transformer.transform(component_frame.iloc[train_idx], partition="train")
+            X_valid = fold_transformer.transform(component_frame.iloc[valid_idx], partition="valid")
+            feature_metadata = dict(fold_transformer.metadata())
+        except Exception as exc:
+            raise FoldExecutionError("fold-local 特征转换失败：{0}".format(exc)) from exc
+        if X_train.ndim != 2 or X_valid.ndim != 2 or X_train.shape[1] == 0:
+            raise FoldExecutionError("fold-local 特征转换必须产生非空二维矩阵")
+        if not np.isfinite(X_train).all() or not np.isfinite(X_valid).all():
+            raise FoldExecutionError("fold-local 特征转换产生 NaN 或 inf")
+        X_train, X_valid = _append_fold_numeric_features(
+            X_train, X_valid, X_numeric, train_idx, valid_idx
+        )
+        schema_source = np.vstack([X_train, X_valid])
+    else:
+        assert X_smiles is not None
+        X_train, X_valid = _prepare_fold_features(X_smiles, X_numeric, train_idx, valid_idx)
+        schema_source = X_smiles
+    if numeric_frame is not None:
+        try:
+            transformer = NumericConditionsTransformer(numeric_contract)
+            numeric_train = transformer.fit_transform(
+                numeric_frame.iloc[train_idx], ids[train_idx], phase=f"repeat={repeat}/fold={fold}/train"
+            )
+            numeric_valid = transformer.transform(
+                numeric_frame.iloc[valid_idx], ids[valid_idx], phase=f"repeat={repeat}/fold={fold}/valid"
+            )
+            numeric_state = transformer.state_dict()
+            feature_metadata["numeric_conditions"] = {
+                "input_identity": numeric_input_identity(numeric_frame, ids, numeric_contract),
+                "state": numeric_state,
+                "dimension": int(numeric_train.shape[1]),
+                "block_order": "after_molecular_or_categorical_features",
+            }
+            X_train = np.hstack([X_train, numeric_train])
+            X_valid = np.hstack([X_valid, numeric_valid])
+        except NumericConditionsError as exc:
+            raise FoldExecutionError(str(exc)) from exc
+    started_at_utc = datetime.now(timezone.utc).isoformat()
+    prediction, train_time_s, predict_time_s, estimator_params_snapshot, model_metadata = _fit_predict_model(
+        model=model,
+        effective_model_kwargs=effective_model_kwargs,
+        X_train=X_train,
+        y_train=y_array[train_idx],
+        X_valid=X_valid,
+        fold=fold,
+        protocol_seed=protocol_seed,
+        config_seed=contract.config.cv["seed"],
+        layout=layout,
+        suffix=suffix,
+        evaluation_protocol=evaluation_protocol,
+        schema2_model_config=schema2_model_config,
+    )
+    if not np.isfinite(prediction).all():
+        raise FoldExecutionError("模型预测包含 NaN 或 inf")
+    unique_part = part.drop_duplicates("sample_id").set_index("sample_id")
+    group_by_id = unique_part["group_id"].astype(str)
+    source_row_by_id = unique_part["source_row_index"].astype(int) if "source_row_index" in unique_part else None
+    split_id = str(part["split_id"].iloc[0])
+    split_hash = _optional_fold_value(part, "split_hash")
+    population_id = _optional_fold_value(part, "population_id", contract.config.raw.get("population_id"))
+    dataset_id = _dataset_id_for_contract(contract, population_id)
+    manifest_seed = _fold_manifest_seed(part)
+    schema_hash = _feature_schema_hash(schema_source, X_numeric, feature_metadata)
+    prediction_payload = {
+        "run_id": contract.run_id,
+        "config_hash": contract.config_hash,
+        "split_id": split_id,
+        "sample_id": ids[valid_idx],
+        "group_id": [group_by_id.loc[sample_id] for sample_id in ids[valid_idx]],
+        "descriptor": descriptor,
+        "model": model,
+        "repeat": repeat,
+        "fold": fold,
+        "y_true": y_array[valid_idx],
+        "y_pred": prediction,
+        "feature_schema_hash": schema_hash,
+        "train_time_s": train_time_s,
+        "predict_time_s": predict_time_s,
+    }
+    if evaluation_protocol == PAPER_EXACT_EVALUATION_PROTOCOL:
+        if source_row_by_id is None:
+            raise FoldExecutionError("paper_exact 预测输出必须包含 source_row_index")
+        prediction_payload.update({
+            "evaluation_protocol": evaluation_protocol,
+            "protocol_family": DEFAULT_EVALUATION_PROTOCOL,
+            "population_id": population_id,
+            "dataset_id": dataset_id,
+            "feature_id": descriptor,
+            "source_row_index": [int(source_row_by_id.loc[sample_id]) for sample_id in ids[valid_idx]],
+            "seed": manifest_seed,
+            "dataset_sha256": contract.dataset_sha256,
+            "split_hash": split_hash,
+            "feature_hash": schema_hash,
+        })
+    prediction_frame = pd.DataFrame(prediction_payload)
+    expected = set(ids[valid_idx])
+    if len(prediction_frame) != len(expected) or set(prediction_frame["sample_id"]) != expected:
+        raise FoldExecutionError("预测分片与 manifest 验证集不能一一对应")
+    prediction_path = _atomic_write_parquet(prediction_frame, prediction_path)
+    metadata = {
+        "run_id": contract.run_id,
+        "config_hash": contract.config_hash,
+        "split_id": split_id,
+        "descriptor": descriptor,
+        "model": model,
+        "evaluation_protocol": evaluation_protocol,
+        "protocol_family": DEFAULT_EVALUATION_PROTOCOL if evaluation_protocol == PAPER_EXACT_EVALUATION_PROTOCOL else evaluation_protocol,
+        "population_id": population_id,
+        "dataset_id": dataset_id,
+        "split_hash": split_hash,
+        "repeat": repeat,
+        "fold": fold,
+        "n_train": int(len(train_idx)),
+        "n_valid": int(len(valid_idx)),
+        "feature_dim": int(X_train.shape[1]),
+        "feature_schema_hash": schema_hash,
+        "train_time_s": train_time_s,
+        "predict_time_s": predict_time_s,
+        "model_random_seed": estimator_params_snapshot.get("random_state"),
+        "manifest_seed": manifest_seed,
+        "outer_seed": protocol_seed if protocol_seed is not None else manifest_seed,
+        "train_sample_ids_hash": _hash_values(ids[train_idx]),
+        "valid_sample_ids_hash": _hash_values(ids[valid_idx]),
+        "valid_source_row_index_hash": _hash_values(
+            [int(source_row_by_id.loc[sample_id]) for sample_id in ids[valid_idx]]
+            if source_row_by_id is not None else []
+        ),
+        "model_kwargs": effective_model_kwargs,
+        "requested_model_kwargs": requested_model_kwargs,
+        "effective_model_kwargs": effective_model_kwargs,
+        "estimator_params_snapshot": estimator_params_snapshot,
+        "feature_transformer": feature_metadata or None,
+        "started_at_utc": started_at_utc,
+        "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "software_versions": _software_versions(),
+        "prediction_path": str(prediction_path),
+    }
+    if model_metadata:
+        metadata["model_adapter_metadata"] = model_metadata
+        metadata["autogluon_time_limit"] = model_metadata.get("time_limit")
+        metadata["autogluon_presets"] = model_metadata.get("presets")
+        metadata["autogluon_num_cpus"] = model_metadata.get("num_cpus")
+        metadata["autogluon_seed_policy"] = model_metadata.get("random_state_policy")
+        metadata["model_artifact_path"] = model_metadata.get("model_artifact_path")
+        metadata["model_artifact_cleanup"] = model_metadata.get("model_artifact_cleanup")
+        versions = model_metadata.get("autogluon_versions") or {}
+        metadata["autogluon_version"] = versions.get("autogluon.tabular")
+    metadata_path = _atomic_write_json(metadata, metadata_path)
+    return FoldExecutionResult(prediction_path, metadata_path, len(train_idx), len(valid_idx), train_time_s, predict_time_s)

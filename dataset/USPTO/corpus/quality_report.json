@@ -1,0 +1,94 @@
+{
+  "splits": {
+    "train": {
+      "input_rows": 473963,
+      "accepted_rows": 473963,
+      "rejected_rows": 0,
+      "empty_reagents": 32691,
+      "special_character_rows": 0,
+      "invalid_chemistry_rows": 0
+    },
+    "valid": {
+      "input_rows": 26101,
+      "accepted_rows": 26101,
+      "rejected_rows": 0,
+      "empty_reagents": 1792,
+      "special_character_rows": 0,
+      "invalid_chemistry_rows": 0
+    },
+    "test": {
+      "input_rows": 26404,
+      "accepted_rows": 26404,
+      "rejected_rows": 0,
+      "empty_reagents": 1828,
+      "special_character_rows": 0,
+      "invalid_chemistry_rows": 0
+    }
+  },
+  "totals": {
+    "input_rows": 526468,
+    "accepted_rows": 526468,
+    "rejected_rows": 0,
+    "empty_reagents": 36311,
+    "special_character_rows": 0,
+    "invalid_chemistry_rows": 0
+  },
+  "chemistry": {
+    "reactants": {
+      "total_rows": 526468,
+      "empty_rows": 0,
+      "checked_rows": 526468,
+      "valid_rows": 526468,
+      "failed_rows": 0,
+      "special_character_rows": 0
+    },
+    "reagents": {
+      "total_rows": 526468,
+      "empty_rows": 36311,
+      "checked_rows": 490157,
+      "valid_rows": 490157,
+      "failed_rows": 0,
+      "special_character_rows": 0
+    },
+    "products": {
+      "total_rows": 526468,
+      "empty_rows": 0,
+      "checked_rows": 526468,
+      "valid_rows": 526468,
+      "failed_rows": 0,
+      "special_character_rows": 0
+    }
+  },
+  "duplicates": {
+    "raw": {
+      "audited_rows": 526468,
+      "within_split": {
+        "groups": 0,
+        "rows": 0,
+        "label_conflict_groups": 0
+      },
+      "cross_split": {
+        "groups": 0,
+        "rows": 0,
+        "label_conflict_groups": 0
+      },
+      "within_split_subgroups": 0
+    },
+    "normalized": {
+      "audited_rows": 526468,
+      "within_split": {
+        "groups": 0,
+        "rows": 0,
+        "label_conflict_groups": 0
+      },
+      "cross_split": {
+        "groups": 0,
+        "rows": 0,
+        "label_conflict_groups": 0
+      },
+      "within_split_subgroups": 0
+    }
+  },
+  "rdkit_version": "2022.09.5",
+  "chemistry_denominator": "Accepted standard-table rows; empty reagents are counted separately and not passed to RDKit"
+}

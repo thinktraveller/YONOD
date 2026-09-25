@@ -1,0 +1,202 @@
+schema_version: '2.0'
+project_name: pnecessity_nonstandard_sufex_morgan_rf_minus_p_v1
+stage: benchmark
+dataset:
+  path: ./result/pnecessity_nonstandard_prepare_v1/data/sufex.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants:
+    - a_smiles
+    - b_smiles
+    - c_base_smiles
+    - c_solvent_smiles
+    - c_additive1_smiles
+    - c_additive2_smiles
+    products: []
+    others: []
+    conditions:
+    - c_equiv_base
+    - c_equiv_reactant1
+    - c_equiv_reactant2
+    - c_dielectric_constant
+    - c_time_h
+    - c_temperature_c
+    - c_equiv_additive1
+    - c_equiv_additive2
+    - c_ms
+    - c_mwi
+    categoricals: []
+  numeric_conditions:
+    defaults:
+      missing:
+        strategy: error
+      scaling: standard
+    columns:
+      c_equiv_base:
+        name: c_equiv_base
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: equivalent
+          target: equivalent
+          scale: 1.0
+          offset: 0.0
+      c_equiv_reactant1:
+        name: c_equiv_reactant1
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: equivalent
+          target: equivalent
+          scale: 1.0
+          offset: 0.0
+      c_equiv_reactant2:
+        name: c_equiv_reactant2
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: equivalent
+          target: equivalent
+          scale: 1.0
+          offset: 0.0
+      c_dielectric_constant:
+        name: c_dielectric_constant
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: relative_permittivity
+          target: relative_permittivity
+          scale: 1.0
+          offset: 0.0
+      c_time_h:
+        name: c_time_h
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: h
+          target: h
+          scale: 1.0
+          offset: 0.0
+      c_temperature_c:
+        name: c_temperature_c
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: degC
+          target: degC
+          scale: 1.0
+          offset: 0.0
+      c_equiv_additive1:
+        name: c_equiv_additive1
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: equivalent
+          target: equivalent
+          scale: 1.0
+          offset: 0.0
+      c_equiv_additive2:
+        name: c_equiv_additive2
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: equivalent
+          target: equivalent
+          scale: 1.0
+          offset: 0.0
+      c_ms:
+        name: c_ms
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: indicator
+          target: indicator
+          scale: 1.0
+          offset: 0.0
+      c_mwi:
+        name: c_mwi
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: indicator
+          target: indicator
+          scale: 1.0
+          offset: 0.0
+descriptors:
+- id: morgan_rf_minus_p
+  descriptor: morgan
+  lifecycle: static_descriptor
+  mode: concat
+  columns:
+  - a_smiles
+  - b_smiles
+  - c_base_smiles
+  - c_solvent_smiles
+  - c_additive1_smiles
+  - c_additive2_smiles
+artifacts:
+  output_dir: ./result/pnecessity_nonstandard_sufex_morgan_rf_minus_p_v1/feature
+models:
+- rf
+model_params:
+  rf:
+    estimator:
+      n_estimators: 300
+      max_features: 1.0
+      min_samples_leaf: 1
+      random_state: 20260918
+      n_jobs: 19
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: component_holdout
+    component_cols:
+    - a_smiles
+    - b_smiles
+    - c_base_smiles
+    - c_solvent_smiles
+    - c_additive1_smiles
+    - c_additive2_smiles
+    protocol_label: pnecessity_sufex_non_p_component_full_population_v1
+    max_group_fraction: 0.8
+outputs:
+  root: ./result/pnecessity_nonstandard_sufex_morgan_rf_minus_p_v1
+  report_formats:
+  - html
+  - markdown
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: pnecessity-sufex-a83594d8aa82f7a9
+  dataset_id: sufex
+metadata:
+  comparison: within_source_paired_utility
+  input_arm: minus_p
+  source_type: nonstandard_high_throughput_or_curated_patent_reactions
+  source_path: ./dataset/others/SuFEx/SuFExPredictor.csv
+  source_sha256: d436cf5236d6c9b0d21426d02d3d0508daca4c385c9b5584f96d76884d5c02f4
+  prepared_sha256: a83594d8aa82f7a9c84bb592800f9f816dfe612e13da7050393396a4ec5ecad3
+  preparation_manifest: ./result/pnecessity_nonstandard_prepare_v1/source_manifest.json
+  yield_unit: fraction_0_to_1
+  split_policy: new within-source non-P component-holdout 5x3 CV on all prepared rows; the same membership
+    is generated for both arms
+  notes: Nonstandard literature/SI SuFEx; blank optional molecular C is a zero descriptor block and
+    missing component equivalents were set to zero during preparation.
+  product_embedding_execution_mapping: minus-P excludes p_smiles from all model inputs
+  limitation: nonstandard local source; estimate only within-source P embedding utility, without pooled
+    or causal claims

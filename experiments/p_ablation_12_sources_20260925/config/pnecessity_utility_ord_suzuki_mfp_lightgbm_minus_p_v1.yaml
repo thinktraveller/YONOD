@@ -1,0 +1,101 @@
+schema_version: '2.0'
+project_name: pnecessity_utility_ord_suzuki_mfp_lightgbm_minus_p_v1
+stage: benchmark
+dataset:
+  path: ./result/pnecessity_utility_prepare_v1/data/ord_suzuki.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants:
+    - a_smiles
+    - b_smiles
+    products: []
+    others:
+    - c_reagent_1_smiles
+    - c_catalyst_1_smiles
+    - c_catalyst_2_smiles
+    - c_solvent_1_smiles
+    - c_solvent_2_smiles
+    - c_solvent_3_smiles
+    - c_solvent_4_smiles
+    - c_solvent_5_smiles
+    - c_solvent_6_smiles
+    - c_solvent_7_smiles
+    conditions:
+    - c_temperature_c
+    - c_pressure_kpa
+    - c_reaction_time_s
+    - c_conditions_are_dynamic_value
+    categoricals: []
+descriptors:
+- id: mfp_lightgbm_minus_p
+  descriptor: mfp
+  lifecycle: static_descriptor
+  mode: concat
+  columns:
+  - a_smiles
+  - b_smiles
+  - c_reagent_1_smiles
+  - c_catalyst_1_smiles
+  - c_catalyst_2_smiles
+  - c_solvent_1_smiles
+  - c_solvent_2_smiles
+  - c_solvent_3_smiles
+  - c_solvent_4_smiles
+  - c_solvent_5_smiles
+  - c_solvent_6_smiles
+  - c_solvent_7_smiles
+  params:
+    radius: 3
+    fp_size: 1024
+    profile: standard
+artifacts:
+  output_dir: ./result/pnecessity_utility_ord_suzuki_mfp_lightgbm_minus_p_v1/feature
+models:
+- lightgbm
+model_params:
+  lightgbm:
+    estimator:
+      n_estimators: 500
+      learning_rate: 0.05
+      num_leaves: 31
+      min_child_samples: 1
+      random_state: 20260918
+      n_jobs: 19
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: precomputed_column
+    group_column: non_p_input_group_id
+    protocol_label: pnecessity_within_source_non_p_input
+    max_group_fraction: 0.8
+  split_manifest: ./result/pnecessity_utility_prepare_v1/manifests/ord_suzuki_non_p_input_split_manifest.parquet
+outputs:
+  root: ./result/pnecessity_utility_ord_suzuki_mfp_lightgbm_minus_p_v1
+  report_formats:
+  - html
+  - markdown
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: pnecessity-ord_suzuki-56219cde37cbccc5
+  dataset_id: ord_suzuki
+metadata:
+  comparison: within_source_paired_utility
+  input_arm: minus_p
+  source_manifest: ./result/pnecessity_utility_prepare_v1/source_manifest.json
+  prepared_data_sha256: 56219cde37cbccc556a7de41bb580920f5da87610f6f7419e639993f1297e880
+  raw_data_sha256: 75466f69ef7bcc53a3be76914166b91dd091c57471b62a4d69f5754f030c9f97
+  fixed_or_unrecorded_numeric_c:
+  - temperature_c
+  - pressure_kpa
+  - reaction_time_s
+  - conditions_are_dynamic_value
+  c_field_policy: all recorded non-product molecular C fields are descriptor components;
+    fixed numeric C fields are retained in the paired table and declared as conditions
+  limitation: within-source result only; do not pool rows, folds, repeats, or effect
+    estimates across sources

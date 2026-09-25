@@ -1,0 +1,80 @@
+schema_version: '2.0'
+project_name: pnecessity_utility_ord_chan_lam_morgan_rf_minus_p_v1
+stage: benchmark
+dataset:
+  path: ./result/pnecessity_utility_prepare_v1/data/ord_chan_lam.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants:
+    - a_smiles
+    - b_smiles
+    products: []
+    others:
+    - c_reagent_1_smiles
+    - c_catalyst_1_smiles
+    - c_solvent_1_smiles
+    - c_solvent_2_smiles
+    conditions:
+    - c_temperature_c
+    - c_reaction_time_s
+    categoricals: []
+descriptors:
+- id: morgan_rf_minus_p
+  descriptor: morgan
+  lifecycle: static_descriptor
+  mode: concat
+  columns:
+  - a_smiles
+  - b_smiles
+  - c_reagent_1_smiles
+  - c_catalyst_1_smiles
+  - c_solvent_1_smiles
+  - c_solvent_2_smiles
+artifacts:
+  output_dir: ./result/pnecessity_utility_ord_chan_lam_morgan_rf_minus_p_v1/feature
+models:
+- rf
+model_params:
+  rf:
+    estimator:
+      n_estimators: 300
+      max_features: 1.0
+      min_samples_leaf: 1
+      random_state: 20260918
+      n_jobs: 19
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: precomputed_column
+    group_column: non_p_input_group_id
+    protocol_label: pnecessity_within_source_non_p_input
+    max_group_fraction: 0.8
+  split_manifest: ./result/pnecessity_utility_prepare_v1/manifests/ord_chan_lam_non_p_input_split_manifest.parquet
+outputs:
+  root: ./result/pnecessity_utility_ord_chan_lam_morgan_rf_minus_p_v1
+  report_formats:
+  - html
+  - markdown
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: pnecessity-ord_chan_lam-1f9dec90440a7873
+  dataset_id: ord_chan_lam
+metadata:
+  comparison: within_source_paired_utility
+  input_arm: minus_p
+  source_manifest: ./result/pnecessity_utility_prepare_v1/source_manifest.json
+  prepared_data_sha256: 1f9dec90440a7873caa51f26b1afd468b62fb4dd6d4949a3b6873def3fa23ba7
+  raw_data_sha256: 648de1e73169feca1cc221f1f53858c11918f91c4f959e206f1a8a66ff4b482b
+  fixed_or_unrecorded_numeric_c:
+  - temperature_c
+  - reaction_time_s
+  c_field_policy: all recorded non-product molecular C fields are descriptor components;
+    fixed numeric C fields are retained in the paired table and declared as conditions
+  limitation: within-source result only; do not pool rows, folds, repeats, or effect
+    estimates across sources

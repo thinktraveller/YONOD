@@ -1,0 +1,347 @@
+{
+  "completed_at_utc": "2026-09-23T10:58:35.913356+00:00",
+  "config_hash": "5b41dcb652886bd6e0521d0c2e3db030e200d802c039a0712bc4a1c2d673afe8",
+  "dataset_id": "sufex",
+  "descriptor": "morgan_rf_full",
+  "effective_model_kwargs": {},
+  "estimator_params_snapshot": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "construction": "schema2_model_factory",
+    "criterion": "squared_error",
+    "effective_estimator_params": {
+      "bootstrap": true,
+      "ccp_alpha": 0.0,
+      "criterion": "squared_error",
+      "max_depth": null,
+      "max_features": 1.0,
+      "max_leaf_nodes": null,
+      "max_samples": null,
+      "min_impurity_decrease": 0.0,
+      "min_samples_leaf": 1,
+      "min_samples_split": 2,
+      "min_weight_fraction_leaf": 0.0,
+      "monotonic_cst": null,
+      "n_estimators": 300,
+      "n_jobs": 19,
+      "oob_score": false,
+      "random_state": 20260918,
+      "verbose": 0,
+      "warm_start": false
+    },
+    "max_depth": null,
+    "max_features": 1.0,
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 1,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 300,
+    "n_jobs": 19,
+    "oob_score": false,
+    "preprocessing": {},
+    "random_state": 20260918,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "evaluation_protocol": "manifest_outer_cv",
+  "feature_dim": 7178,
+  "feature_schema_hash": "e5e0b5f9e566305bd60b9a584ae42b3192dd0f43c37aa199fc646f761fcb6f2b",
+  "feature_transformer": {
+    "numeric_conditions": {
+      "block_order": "after_molecular_or_categorical_features",
+      "dimension": 10,
+      "input_identity": "sha256:05a70e551cc5fc5865c3144d8d598595ef262522af69d6fd398a5abc19f201ca",
+      "state": {
+        "columns": [
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 1.3532889976248528,
+            "name": "c_equiv_base",
+            "scale": 2.2861346115315033,
+            "source": "c_equiv_base",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 1.205180820361602,
+            "name": "c_equiv_reactant1",
+            "scale": 0.779433794394623,
+            "source": "c_equiv_reactant1",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": true,
+            "fill_value": null,
+            "location": 1.0,
+            "name": "c_equiv_reactant2",
+            "scale": 1.0,
+            "source": "c_equiv_reactant2",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 25.25912838633686,
+            "name": "c_dielectric_constant",
+            "scale": 18.313409189191102,
+            "source": "c_dielectric_constant",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 14.441044169611308,
+            "name": "c_time_h",
+            "scale": 10.963414405207464,
+            "source": "c_time_h",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 34.216136631330976,
+            "name": "c_temperature_c",
+            "scale": 23.772326036636972,
+            "source": "c_temperature_c",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 0.1758843737738516,
+            "name": "c_equiv_additive1",
+            "scale": 0.4026229456965276,
+            "source": "c_equiv_additive1",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 0.1373773066401649,
+            "name": "c_equiv_additive2",
+            "scale": 0.4229363458518817,
+            "source": "c_equiv_additive2",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 0.11366313309776208,
+            "name": "c_ms",
+            "scale": 0.3174016781180631,
+            "source": "c_ms",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 0.0076560659599528855,
+            "name": "c_mwi",
+            "scale": 0.08716335591273283,
+            "source": "c_mwi",
+            "train_missing_rows": 0
+          }
+        ],
+        "contract": {
+          "columns": [
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_equiv_base",
+              "scaling": "standard",
+              "source": "c_equiv_base",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "equivalent",
+                "target": "equivalent"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_equiv_reactant1",
+              "scaling": "standard",
+              "source": "c_equiv_reactant1",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "equivalent",
+                "target": "equivalent"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_equiv_reactant2",
+              "scaling": "standard",
+              "source": "c_equiv_reactant2",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "equivalent",
+                "target": "equivalent"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_dielectric_constant",
+              "scaling": "standard",
+              "source": "c_dielectric_constant",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "relative_permittivity",
+                "target": "relative_permittivity"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_time_h",
+              "scaling": "standard",
+              "source": "c_time_h",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "h",
+                "target": "h"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_temperature_c",
+              "scaling": "standard",
+              "source": "c_temperature_c",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "degC",
+                "target": "degC"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_equiv_additive1",
+              "scaling": "standard",
+              "source": "c_equiv_additive1",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "equivalent",
+                "target": "equivalent"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_equiv_additive2",
+              "scaling": "standard",
+              "source": "c_equiv_additive2",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "equivalent",
+                "target": "equivalent"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_ms",
+              "scaling": "standard",
+              "source": "c_ms",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "indicator",
+                "target": "indicator"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_mwi",
+              "scaling": "standard",
+              "source": "c_mwi",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "indicator",
+                "target": "indicator"
+              }
+            }
+          ],
+          "schema_version": "numeric_conditions/v1"
+        },
+        "fit_rows": 1698,
+        "fit_sample_ids_sha256": "sha256:f502e7e29048cea485f1dc6ca51ae985a427f095e5f542ab06227bb39982348e",
+        "schema_version": "numeric_conditions/v1"
+      }
+    }
+  },
+  "fold": 3,
+  "manifest_seed": 20260920,
+  "model": "rf",
+  "model_kwargs": {},
+  "model_random_seed": 20260918,
+  "n_train": 1698,
+  "n_valid": 424,
+  "outer_seed": 20260920,
+  "population_id": "pnecessity-sufex-a83594d8aa82f7a9",
+  "predict_time_s": 0.02712482899914903,
+  "prediction_path": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_nonstandard_sufex_morgan_rf_full_v1/sufex-5b41dcb65288/docs/predictions/morgan_rf_full__rf__r03__f03.parquet",
+  "protocol_family": "manifest_outer_cv",
+  "repeat": 3,
+  "requested_model_kwargs": {},
+  "run_id": "sufex-5b41dcb65288",
+  "software_versions": {
+    "autogluon.common": "1.1.1",
+    "autogluon.core": "1.1.1",
+    "autogluon.tabular": "1.1.1",
+    "catboost": "1.2.10",
+    "lightgbm": "4.3.0",
+    "numpy": "1.26.4",
+    "pandas": "2.0.3",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "pyarrow": "16.1.0",
+    "python": "3.9.23 | packaged by conda-forge | (main, Jun  4 2025, 17:57:12) \n[GCC 13.3.0]",
+    "scikit-learn": "1.4.0",
+    "xgboost": "2.0.3"
+  },
+  "split_hash": "6f9f777583b06bab0ab2cbf2d8c59b027b6d0025ef56d997b23bea792ba86b7b",
+  "split_id": "split-6f9f777583b0",
+  "started_at_utc": "2026-09-23T10:58:33.219654+00:00",
+  "train_sample_ids_hash": "f502e7e29048cea485f1dc6ca51ae985a427f095e5f542ab06227bb39982348e",
+  "train_time_s": 2.657723962998716,
+  "valid_sample_ids_hash": "d5d1a136ca7f88236baea6acef06f5da18af1cef5c4ea1ef5c38500e01364324",
+  "valid_source_row_index_hash": "1d64a05d01a9ed97e6fc14459df8b1a31b83ce83fc5237e44ae1eaf5e6bb1763"
+}

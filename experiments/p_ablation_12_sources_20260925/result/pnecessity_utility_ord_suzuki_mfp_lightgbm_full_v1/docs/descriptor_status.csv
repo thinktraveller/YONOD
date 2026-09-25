@@ -1,0 +1,2 @@
+﻿descriptor,status,stage,artifact_path,n_total,n_valid,feature_dim,skipped_model_count,reason
+mfp_lightgbm_full,computed,precompute,/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_ord_suzuki_mfp_lightgbm_full_v1/feature/mfp_lightgbm_full.npz,5760,5760,13312,0,首次生成描述符文件

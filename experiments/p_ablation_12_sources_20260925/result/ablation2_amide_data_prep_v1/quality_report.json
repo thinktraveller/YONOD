@@ -1,0 +1,84 @@
+{
+  "conditions": {
+    "blank_semantics": "blank_source_value means the source has no field value; it is not asserted to mean a chemically confirmed no-addition control",
+    "status_counts": {
+      "activation": {
+        "blank_source_value": 1,
+        "valid": 47014
+      },
+      "additive": {
+        "blank_source_value": 23220,
+        "valid": 23795
+      },
+      "base": {
+        "blank_source_value": 9686,
+        "valid": 37329
+      },
+      "solvent": {
+        "valid": 47015
+      }
+    }
+  },
+  "inclusion_rule": "finite yield in [0,1], valid A/B/P structures, and at least one usable reported C structure; this single population is shared by every ablation input set",
+  "label": {
+    "column": "yield",
+    "invalid_or_out_of_range_rows": 0,
+    "range": [
+      3.17e-05,
+      1.0
+    ],
+    "unit": "fraction"
+  },
+  "quality": {
+    "duplicate_full_input_groups": 797,
+    "duplicate_full_input_rows": 1600,
+    "duplicate_groups_with_label_conflict": 794,
+    "excluded_rows": 0,
+    "invalid_smiles_records": 0,
+    "n_acid_groups": 66,
+    "n_amine_groups": 70,
+    "n_substrate_pair_groups": 632,
+    "pairs_with_more_than_one_product": 0
+  },
+  "role_heuristics": {
+    "acid_rows_with_carboxyl_pattern": 47015,
+    "amine_rows_with_nitrogen": 47015,
+    "product_rows_with_amide_pattern": 46920
+  },
+  "role_mapping": {
+    "A": {
+      "semantic_role": "amine",
+      "source_column": "sub_1_smiles"
+    },
+    "B": {
+      "semantic_role": "carboxylic acid",
+      "source_column": "sub_2_smiles"
+    },
+    "C": {
+      "semantic_role": "reported activation/additive/base/solvent molecular inputs",
+      "source_columns": [
+        "activation",
+        "additive",
+        "base",
+        "solvent"
+      ]
+    },
+    "P": {
+      "semantic_role": "amide product",
+      "source_column": "product_smiles"
+    }
+  },
+  "source": {
+    "path": "dataset/廖矿标课题组/酰胺缩合产率/amide-coupling.csv",
+    "rows": 47015,
+    "sha256": "79bd0d92e0dc9932ab68e2eb239b973d7e4db0243a9ae69db93d21acfe4e4a8a"
+  },
+  "standardized_population": {
+    "n_rows": 47015,
+    "path": "result/ablation2_amide_data_prep_v1/data/standardized_population.csv",
+    "population_id": "amide2-population-5fae4b314ffdb4d3",
+    "sample_id_semantics": "amide2:<immutable source row_id>",
+    "sha256": "5fae4b314ffdb4d3f5eddcd6a59b627cee8ea5a939a9c375dbeb3a0f81c3989c"
+  },
+  "task_kind": "ablation2 data preparation; no model fitting"
+}

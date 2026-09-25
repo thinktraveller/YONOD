@@ -32,9 +32,6 @@ cache/
 results/
 !results/.gitkeep
 
-# Large cleaned USPTO corpus is distributed through Hugging Face.
-dataset/USPTO/
-
 # AutoGluon dumps trained models here if save_path is provided
 AutogluonModels/
 
@@ -107,4 +104,17 @@ _verify
 result
 docs
 /config/
-/experiments/
+
+# Version experimental archives and datasets, including generated artifacts.
+!/experiments/
+!/experiments/**
+!/dataset/
+!/dataset/**
+
+# Preserve credential exclusions within the versioned data directories.
+.env
+.env.*
+*.token
+*.key
+hf_token
+.cache/huggingface/

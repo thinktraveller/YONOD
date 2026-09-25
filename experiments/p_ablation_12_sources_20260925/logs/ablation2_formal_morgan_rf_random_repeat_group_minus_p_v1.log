@@ -1,0 +1,48 @@
+
+============================================================
+YONOD 数据集输入向导 v1.0
+============================================================
+
+欢迎使用YONOD数据集输入向导!
+本向导将引导您完成数据集的配置和规范化。
+============================================================
+步骤1: 指定数据集/配置文件
+============================================================
+
+请输入数据集路径(CSV)或配置文件路径(schema-2 YAML): [OK] YAML配置文件: config/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1.yaml
+
+============================================================
+检测到 schema-2 YAML 配置文件，验证中...
+============================================================
+[OK] 配置文件验证通过
+    项目名称: ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1
+    阶段: benchmark
+    数据集: /home/wangzh685/桌面/ord-data/YONOD/result/ablation2_amide_data_prep_v1/data/standardized_population.csv
+
+[OK] 配置文件有效,直接启动建模
+
+[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...
+[split] imported and revalidated external manifest: /home/wangzh685/桌面/ord-data/YONOD/result/ablation2_amide_splits_v1/manifests/random_repeat_group_split_manifest.parquet
+[plan] run_id=standardized-population-caecfd57593e theoretical_tasks=15 requeued=0 interrupted=0
+[phase 1/2] precompute or reuse eligible feature sets
+[descriptor:computed] morgan_minus_p -> /home/wangzh685/桌面/ord-data/YONOD/result/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1/feature/morgan_minus_p.npz
+[phase 2/2] folds consume artifacts or fold-local transformers by declared lifecycle
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r01__f01
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r01__f02
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r01__f03
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r01__f04
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r01__f05
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r02__f01
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r02__f02
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r02__f03
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r02__f04
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r02__f05
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r03__f01
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r03__f02
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r03__f03
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r03__f04
+[succeeded] standardized-population-caecfd57593e__split-ba15f9ebc035__morgan_minus_p__rf__r03__f05
+[state] {'succeeded': 15, 'pending': 0, 'skipped': 0, 'interrupted': 0, 'failed': 0, 'running': 0, 'total': 15}
+[report] /home/wangzh685/桌面/ord-data/YONOD/result/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1/report/benchmark_report.html
+
+[完成] 严格 benchmark 已成功完成!

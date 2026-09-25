@@ -1,0 +1,36 @@
+{
+  "purpose": "within-source Full/minus-P utility for nonstandard SuFEx and complete local USPTO",
+  "schema_version": 1,
+  "sufex": {
+    "audits": {
+      "blank_component:Additive1": 1552,
+      "blank_component:Additive2": 1892,
+      "blank_component:Base": 252,
+      "imputed_zero:equiv(Additive1)": 1552,
+      "imputed_zero:equiv(Additive2)": 1892,
+      "imputed_zero:equiv(Base)": 252,
+      "rows": 2122
+    },
+    "prepared": "result/pnecessity_nonstandard_prepare_v1/data/sufex.csv",
+    "prepared_sha256": "a83594d8aa82f7a9c84bb592800f9f816dfe612e13da7050393396a4ec5ecad3",
+    "rows": 2122,
+    "source": "dataset/others/SuFEx/SuFExPredictor.csv",
+    "source_sha256": "d436cf5236d6c9b0d21426d02d3d0508daca4c385c9b5584f96d76884d5c02f4",
+    "yield_fraction_max": "1",
+    "yield_fraction_min": "0"
+  },
+  "uspto_full": {
+    "blank_reagents": 36311,
+    "prepared": "result/pnecessity_nonstandard_prepare_v1/data/uspto_full.csv",
+    "prepared_sha256": "79f75b74060204b84b08575066c6651245928f2650c3489082a29a5d3a4fa658",
+    "rows": 526468,
+    "source": "dataset/USPTO/merged.csv",
+    "source_sha256": "e1da081d91652510337325386dfe5855d518f7ba18fb22d61b813b50eb11e49d",
+    "source_split_counts": {
+      "test": 26404,
+      "train": 473963,
+      "valid": 26101
+    }
+  },
+  "yield_unit": "fraction_0_to_1"
+}

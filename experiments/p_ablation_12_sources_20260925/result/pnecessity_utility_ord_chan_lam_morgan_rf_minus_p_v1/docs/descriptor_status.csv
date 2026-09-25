@@ -1,0 +1,2 @@
+﻿descriptor,status,stage,artifact_path,n_total,n_valid,feature_dim,skipped_model_count,reason
+morgan_rf_minus_p,computed,precompute,/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_ord_chan_lam_morgan_rf_minus_p_v1/feature/morgan_rf_minus_p.npz,9602,9602,6144,0,首次生成描述符文件

@@ -1,0 +1,2 @@
+﻿descriptor,status,stage,artifact_path,n_total,n_valid,feature_dim,skipped_model_count,reason
+mfp_lightgbm_full,computed,precompute,/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_nonstandard_sufex_mfp_lightgbm_full_v1/feature/sufex-43f947cae651/descriptors/mfp_lightgbm_full.npz,2122,2122,7168,0,首次生成描述符文件

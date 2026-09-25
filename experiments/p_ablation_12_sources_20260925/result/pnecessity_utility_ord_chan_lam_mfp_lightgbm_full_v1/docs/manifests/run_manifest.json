@@ -1,0 +1,104 @@
+{
+  "benchmark_config": {
+    "artifact_output_dir": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_ord_chan_lam_mfp_lightgbm_full_v1/feature",
+    "cv": {
+      "n_repeats": 3,
+      "n_splits": 5,
+      "seed": 20260918
+    },
+    "dataset_id": "ord_chan_lam",
+    "dataset_path": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_prepare_v1/data/ord_chan_lam.csv",
+    "dataset_sha256": "1f9dec90440a7873caa51f26b1afd468b62fb4dd6d4949a3b6873def3fa23ba7",
+    "descriptors": [
+      "mfp_lightgbm_full"
+    ],
+    "evaluation_protocol": "manifest_outer_cv",
+    "external_split_manifest_sha256": "8e8717f7f3f57af9f12e5bcfc9d7d1f0aaa00006c6ac9173c0ba04d4d14d5979",
+    "feature_sets": [
+      {
+        "algorithm": "mfp",
+        "component_cols": [
+          "a_smiles",
+          "b_smiles",
+          "c_reagent_1_smiles",
+          "c_catalyst_1_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles",
+          "p_smiles"
+        ],
+        "kind": "precomputed_descriptor",
+        "mode": "concat",
+        "name": "mfp_lightgbm_full",
+        "params": {
+          "fp_size": 1024,
+          "profile": "standard",
+          "radius": 3
+        }
+      }
+    ],
+    "grouping": {
+      "group_column": "non_p_input_group_id",
+      "max_group_fraction": 0.8,
+      "protocol_label": "pnecessity_within_source_non_p_input",
+      "strategy": "precomputed_column"
+    },
+    "label_col": "yield",
+    "model_params": {},
+    "models": [
+      "lightgbm"
+    ],
+    "outputs_root": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_ord_chan_lam_mfp_lightgbm_full_v1",
+    "population_id": "pnecessity-ord_chan_lam-1f9dec90440a7873",
+    "reproduction_protocol": {},
+    "sample_id_col": "sample_id",
+    "schema2_model_params": {
+      "lightgbm": {
+        "estimator": {
+          "learning_rate": 0.05,
+          "min_child_samples": 1,
+          "n_estimators": 500,
+          "n_jobs": 19,
+          "num_leaves": 31,
+          "random_state": 20260918
+        }
+      }
+    },
+    "smiles_cols": [
+      "a_smiles",
+      "b_smiles",
+      "p_smiles",
+      "c_reagent_1_smiles",
+      "c_catalyst_1_smiles",
+      "c_solvent_1_smiles",
+      "c_solvent_2_smiles"
+    ],
+    "task_state": {
+      "backend": "sqlite",
+      "resumable": true
+    }
+  },
+  "code_git_commit": "47523b54a2dd5c75103ef3de4e91514c7f4d71e2",
+  "config_hash": "4f1ea109a68c889fe9d0f6046939bf33caf66e6f38bc6ddd2a6a78a284a510d0",
+  "created_at_utc": "2026-09-22T18:06:07.828427+00:00",
+  "dataset_id": "ord_chan_lam",
+  "dataset_path": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_prepare_v1/data/ord_chan_lam.csv",
+  "dataset_sha256": "1f9dec90440a7873caa51f26b1afd468b62fb4dd6d4949a3b6873def3fa23ba7",
+  "evaluation_protocol": "manifest_outer_cv",
+  "external_split_manifest": {
+    "import_policy": "validated_membership_then_task_local_run_id",
+    "sha256": "8e8717f7f3f57af9f12e5bcfc9d7d1f0aaa00006c6ac9173c0ba04d4d14d5979",
+    "source_path": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_prepare_v1/manifests/ord_chan_lam_non_p_input_split_manifest.parquet"
+  },
+  "output_layout": {
+    "descriptors": "feature",
+    "docs": "docs",
+    "pictures": "pictures",
+    "report": "report"
+  },
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "population_id": "pnecessity-ord_chan_lam-1f9dec90440a7873",
+  "python_version": "3.9.23 | packaged by conda-forge | (main, Jun  4 2025, 17:57:12) \n[GCC 13.3.0]",
+  "run_id": "ord-chan-lam-4f1ea109a68c",
+  "schema_version": 2,
+  "source_config_path": "/home/wangzh685/桌面/ord-data/YONOD/config/pnecessity_utility_ord_chan_lam_mfp_lightgbm_full_v1.yaml"
+}

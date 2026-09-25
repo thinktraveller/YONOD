@@ -1,0 +1,70 @@
+schema_version: '2.0'
+project_name: pnecessity_utility_liao_ru_oh_insertion_morgan_rf_full_v1
+stage: benchmark
+dataset:
+  path: ./result/pnecessity_utility_prepare_v1/data/liao_ru_oh_insertion.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants:
+    - a_smiles
+    - b_smiles
+    products:
+    - p_smiles
+    others: []
+    conditions: []
+    categoricals: []
+descriptors:
+- id: morgan_rf_full
+  descriptor: morgan
+  lifecycle: static_descriptor
+  mode: concat
+  columns:
+  - a_smiles
+  - b_smiles
+  - p_smiles
+artifacts:
+  output_dir: ./result/pnecessity_utility_liao_ru_oh_insertion_morgan_rf_full_v1/feature
+models:
+- rf
+model_params:
+  rf:
+    estimator:
+      n_estimators: 300
+      max_features: 1.0
+      min_samples_leaf: 1
+      random_state: 20260918
+      n_jobs: 19
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: precomputed_column
+    group_column: non_p_input_group_id
+    protocol_label: pnecessity_within_source_non_p_input
+    max_group_fraction: 0.8
+  split_manifest: ./result/pnecessity_utility_prepare_v1/manifests/liao_ru_oh_insertion_non_p_input_split_manifest.parquet
+outputs:
+  root: ./result/pnecessity_utility_liao_ru_oh_insertion_morgan_rf_full_v1
+  report_formats:
+  - html
+  - markdown
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: pnecessity-liao_ru_oh_insertion-5849714cfadac418
+  dataset_id: liao_ru_oh_insertion
+metadata:
+  comparison: within_source_paired_utility
+  input_arm: full
+  source_manifest: ./result/pnecessity_utility_prepare_v1/source_manifest.json
+  prepared_data_sha256: 5849714cfadac418fed9db53b1d90ffc46e46ef680811f852b6712ccced10c66
+  raw_data_sha256: 05a64772d95781d4c2d2a0772e699f0d153100089671659e0e628381beb39066
+  fixed_or_unrecorded_numeric_c: []
+  c_field_policy: all recorded non-product molecular C fields are descriptor components;
+    fixed numeric C fields are retained in the paired table and declared as conditions
+  limitation: within-source result only; do not pool rows, folds, repeats, or effect
+    estimates across sources

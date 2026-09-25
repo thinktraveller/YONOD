@@ -1,0 +1,2 @@
+﻿descriptor,status,stage,artifact_path,n_total,n_valid,feature_dim,skipped_model_count,reason
+morgan_rf_full,computed,precompute,/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_ord_ahneman_morgan_rf_full_v1/feature/morgan_rf_full.npz,4312,4312,11264,0,首次生成描述符文件

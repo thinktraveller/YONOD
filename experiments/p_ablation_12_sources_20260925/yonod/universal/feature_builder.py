@@ -1,0 +1,344 @@
+"""通用特征构建器。
+
+将 LoadedDataset（由 csv_loader 产出）中的 smiles_cols 和 numeric_cols
+转换为下游 ML 使用的两块特征矩阵：
+
+  X_smiles  : np.ndarray, shape (n, n_smiles_cols * desc_dim)
+               多 SMILES 列的描述符向量按列拼接，顺序与 smiles_cols 一致。
+               失败行（RDKit 解析失败）被 mask 过滤掉。
+  X_numeric : np.ndarray, shape (n, n_numeric_cols) 或 None（无数值列时）
+               原始数值，**不做归一化**；归一化在 CV 循环内每折独立完成。
+
+设计约束（见构建计划书 §14.2、§14.7）：
+  - SMILES 描述符原样保留，不做 z-score / min-max。
+  - 数值列归一化时机：KFold 循环内，train_idx 切分之后，model.fit 之前。
+  - 本函数只负责"原始特征提取"，不触及 StandardScaler。
+
+支持的 desc_name 值：
+  "morgan"     → MorganDescriptor（1024 维 ECFP4）
+  "mfp"        → MFPDescriptor（论文式 count Morgan，默认 radius=3、1024 维）
+  "maccs"      → ATMOMACCSDescriptor（166 维 MACCS keys）
+  "fisd"       → FISDDescriptor（50 维 QM9 GCN）
+  "molmetalm"  → MolMetaLMDescriptor（768 维 LLM mean-pool）
+  "maf"        → MAFDescriptor（128 维 多分子加和指纹）
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from typing import Any, List, Optional, Tuple, Dict
+
+import numpy as np
+import pandas as pd
+
+from ..descriptors.base import BaseDescriptor
+
+
+# --------------------------------------------------------------------------- #
+# 描述符工厂                                                                    #
+# --------------------------------------------------------------------------- #
+
+_DESCRIPTOR_REGISTRY: dict[str, type] = {}
+
+
+_DESCRIPTOR_IMPORT_MAP: dict[str, tuple[str, str]] = {
+    "morgan":    ("..descriptors.morgan",    "MorganDescriptor"),
+    "mfp":       ("..descriptors.mfp",       "MFPDescriptor"),
+    "maccs":     ("..descriptors.atmomaccs", "ATMOMACCSDescriptor"),
+    "fisd":      ("..descriptors.fisd",      "FISDDescriptor"),
+    "molmetalm": ("..descriptors.molmetalm", "MolMetaLMDescriptor"),
+    "maf":       ("..descriptors.maf",       "MAFDescriptor"),
+    "rdkit2d":   ("..descriptors.rdkit2d",   "RDKit2DDescriptor"),
+    "drfp":      ("..descriptors.drfp_desc", "DRFPDescriptor"),
+    "chemical_vae": ("..descriptors.chemical_vae", "ChemicalVaeDescriptor"),
+}
+
+
+def _get_descriptor(
+    desc_name: str,
+    descriptor_config: Optional[Dict[str, object]] = None,
+) -> BaseDescriptor:
+    """按名称实例化描述符，按需懒加载对应模块（避免 torch_geometric 等重依赖预先导入）。"""
+    name_lower = desc_name.lower()
+    options = dict(descriptor_config or {})
+    if name_lower == "mfp":
+        # The configuration contains artifact/protocol audit fields in
+        # addition to fingerprint settings; only constructor-owned settings
+        # are consumed here.
+        from ..descriptors.mfp import MFPDescriptor
+        params = options.get("params", options)
+        if not isinstance(params, dict):
+            raise ValueError("mfp.params 必须是对象")
+        return MFPDescriptor(
+            radius=int(params.get("radius", 3)),
+            fp_size=int(params.get("fp_size", 1024)),
+        )
+    if name_lower == "chemical_vae":
+        from ..descriptors.chemical_vae import ChemicalVaeDescriptor
+        params = options.get("params", options)
+        if not isinstance(params, dict):
+            raise ValueError("chemical_vae.params 必须是对象")
+        return ChemicalVaeDescriptor(**params)
+
+    if name_lower in _DESCRIPTOR_REGISTRY:
+        return _DESCRIPTOR_REGISTRY[name_lower]()
+
+    if name_lower not in _DESCRIPTOR_IMPORT_MAP:
+        available = list(_DESCRIPTOR_IMPORT_MAP.keys())
+        raise ValueError(
+            f"未知描述符名称 {desc_name!r}。可用值：{available}"
+        )
+
+    module_path, class_name = _DESCRIPTOR_IMPORT_MAP[name_lower]
+    import importlib
+    mod = importlib.import_module(module_path, package=__package__)
+    cls = getattr(mod, class_name)
+    _DESCRIPTOR_REGISTRY[name_lower] = cls
+    return cls()
+
+
+# --------------------------------------------------------------------------- #
+# 主函数                                                                        #
+# --------------------------------------------------------------------------- #
+
+def build_universal_features(
+    smiles_cols: List[str],
+    numeric_cols: List[str],
+    df: pd.DataFrame,
+    desc_name: str,
+    smiles_roles: Optional[Dict[str, List[str]]] = None,
+    mode: str = "concat",
+    descriptor_config: Optional[Dict[str, object]] = None,
+) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray]:
+    """计算 SMILES 描述符矩阵与原始数值矩阵（支持三分类角色）。
+
+    Args:
+        smiles_cols:  SMILES 列名列表，顺序决定拼接顺序（concat 模式）或加和顺序（sum 模式）。
+        numeric_cols: 数值辅助列名列表（如温度）；空列表则返回 None。
+        df:           已通过 csv_loader 加载的 DataFrame（含所有角色列）。
+        desc_name:    描述符名称，见模块文档。
+        smiles_roles: 三分类角色映射 {'reactant': [...], 'product': [...], 'other': [...]}
+                      None 表示传统模式（所有列等价）。
+        mode:         特征构建模式：
+                      - 'concat': 逐列计算描述符后横向拼接，输出 (n, n_cols * desc_dim)
+                      - 'sum': 将多列 SMILES 用点分隔符拼接后一次性计算，输出 (n, desc_dim)
+                      默认 'concat'。
+        descriptor_config: 描述符专用参数。论文式 ``mfp`` 使用 radius、fp_size
+                           及 raw_csv_value 输入策略；其余描述符保持旧行为。
+
+    Returns:
+        X_smiles  : ndarray shape (n_valid, n_smiles_cols * desc_dim) 或 (n_valid, desc_dim)
+        X_numeric : ndarray shape (n_valid, len(numeric_cols)) 或 None
+        valid_mask: bool ndarray shape (len(df),)，True 表示该行通过描述符过滤
+    """
+    if not smiles_cols:
+        raise ValueError("smiles_cols 不能为空")
+
+    # 默认使用传统模式
+    if smiles_roles is None:
+        smiles_roles = {'reactant': [], 'product': [], 'other': smiles_cols}
+
+    descriptor = _get_descriptor(desc_name, descriptor_config)
+    options = dict(descriptor_config or {})
+    diagnostic_sink = options.get("_chemical_vae_diagnostic_sink")
+    if diagnostic_sink is not None and not isinstance(diagnostic_sink, list):
+        raise ValueError("_chemical_vae_diagnostic_sink 必须是 list")
+    n = len(df)
+
+    # The YieldSmarter profile is component-wise count Morgan over raw CSV
+    # values.  Ordinary MFP uses the common concat lifecycle below (including
+    # its ordinary valid-row mask) and is intentionally a separate profile.
+    if desc_name.lower() == "mfp":
+        if mode != "concat":
+            raise ValueError("mfp 只支持 concat 模式，必须逐组分拼接")
+        options = dict(descriptor_config or {})
+        params = options.get("params", options)
+        if not isinstance(params, dict):
+            raise ValueError("mfp.params 必须是对象")
+        inferred_profile = "vjethbkm" if (
+            "input_normalization" in options or "blank_or_invalid_component" in options
+        ) else "standard"
+        profile = str(params.get("profile", options.get("profile", inferred_profile)))
+        if profile not in {"standard", "vjethbkm"}:
+            raise ValueError("mfp.profile 仅支持 standard 或 vjethbkm")
+        if profile == "vjethbkm":
+            algorithm = str(options.get("algorithm", "morgan_count"))
+            if algorithm != "morgan_count":
+                raise ValueError("论文式 mfp.algorithm 必须为 'morgan_count'")
+            input_normalization = str(options.get("input_normalization", "raw_csv_value"))
+            if input_normalization != "raw_csv_value":
+                raise ValueError("论文式 mfp.input_normalization 必须为 'raw_csv_value'")
+            zero_policy = str(options.get("blank_or_invalid_component", "zero_block_keep_row"))
+            if zero_policy != "zero_block_keep_row":
+                raise ValueError("论文式 mfp 仅支持 blank_or_invalid_component=zero_block_keep_row")
+
+            blocks: list[np.ndarray] = []
+            for column in smiles_cols:
+                if column not in df.columns:
+                    raise KeyError(f"DataFrame 中未找到 SMILES 列 {column!r}")
+                raw_values = ["" if pd.isna(value) else str(value) for value in df[column].tolist()]
+                features, _mask = descriptor.featurize(raw_values)
+                blocks.append(features)
+            X_smiles = np.concatenate(blocks, axis=1)
+            row_mask = np.ones(n, dtype=bool)
+            X_numeric: Optional[np.ndarray] = None
+            if numeric_cols:
+                missing = [column for column in numeric_cols if column not in df.columns]
+                if missing:
+                    raise KeyError(f"DataFrame 中未找到数值列：{missing}")
+                X_numeric = df[numeric_cols].to_numpy(dtype=np.float32)
+            return X_smiles, X_numeric, row_mask
+
+    # --- 根据描述符类型选择使用的列 ---
+    # DRFP 等反应类描述符：仅使用反应物+产物
+    # 其他分子类描述符：使用所有列
+    if desc_name.lower() == "drfp":
+        # DRFP：仅使用反应物+产物列
+        cols_to_use = smiles_roles['reactant'] + smiles_roles['product']
+        if not cols_to_use:
+            raise ValueError(
+                "DRFP 描述符需要至少指定反应物或产物列。\n"
+                "请使用 --reactant-cols 和 --product-cols 参数。"
+            )
+
+        # 构建反应 SMARTS
+        from ..descriptors.drfp_desc import build_reaction_smarts_from_df, DRFPDescriptor
+        smiles_series = build_reaction_smarts_from_df(
+            df,
+            reactant_cols=smiles_roles['reactant'],
+            product_cols=smiles_roles['product'],
+        )
+        smiles_list = smiles_series.tolist()
+
+        # 计算 DRFP
+        desc = DRFPDescriptor()
+        features_full, mask = desc.featurize(smiles_list)
+        X_smiles = features_full[mask]
+        row_mask = mask
+
+        # DRFP 直接返回，跳过后续逐列处理
+        X_numeric: Optional[np.ndarray] = None
+        if numeric_cols:
+            missing = [c for c in numeric_cols if c not in df.columns]
+            if missing:
+                raise KeyError(f"DataFrame 中未找到数值列：{missing}")
+            X_numeric_full = df[numeric_cols].to_numpy(dtype=np.float32)
+            X_numeric = X_numeric_full[row_mask]
+
+        n_valid = int(row_mask.sum())
+        n_dropped = n - n_valid
+        if n_dropped:
+            _warn(
+                f"[feature_builder] 描述符计算失败，过滤掉 {n_dropped} 行 "
+                f"（共 {n} 行，保留 {n_valid} 行）"
+            )
+
+        return X_smiles, X_numeric, row_mask
+    else:
+        # 其他描述符：使用所有 SMILES 列
+        cols_to_use = smiles_cols
+
+    # --- SMILES 规范化辅助函数 ---
+    def _norm(s: str) -> str:
+        """规范化为 RDKit 标准点分隔形式（'.'）"""
+        s = s.replace(",", ".").replace("*", ".").replace("~", ".")
+        s = re.sub(r'\.{2,}', '.', s)
+        return s.strip('.')
+
+    # --- 根据 mode 选择特征构建策略 ---
+    if mode == "sum":
+        # sum 模式：将多列 SMILES 用点分隔符拼接成一个字符串，一次性计算描述符
+        # 输出维度为 (n, desc_dim)，与列顺序无关（加和具有交换律）
+        combined_smiles: List[str] = []
+        for idx in range(n):
+            parts = []
+            for col in cols_to_use:
+                if col not in df.columns:
+                    raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
+                val = df[col].iloc[idx]
+                if pd.notna(val) and isinstance(val, str) and val.strip():
+                    normed = _norm(val)
+                    if normed:
+                        parts.append(normed)
+            # 用点分隔符连接所有非空 SMILES
+            combined_smiles.append(".".join(parts) if parts else "")
+
+        # 一次性调用描述符
+        X_smiles_full, row_mask = descriptor.featurize(combined_smiles)
+        X_smiles = X_smiles_full[row_mask]
+
+    else:
+        # concat 模式（默认）：逐列计算描述符后横向拼接
+        # 输出维度为 (n, n_cols * desc_dim)
+        col_blocks: list[np.ndarray] = []
+        row_mask = np.zeros(n, dtype=bool)  # 至少一列有效则行有效（空列用零向量填充）
+
+        for col in cols_to_use:
+            if col not in df.columns:
+                raise KeyError(f"DataFrame 中未找到 SMILES 列 {col!r}")
+            if desc_name.lower() == "chemical_vae":
+                raw_values = df[col].tolist()
+                smiles_list = [s if isinstance(s, str) else "" for s in raw_values]
+            else:
+                smiles_list = [
+                    _norm(s) if isinstance(s, str) else ""
+                    for s in df[col].fillna("").tolist()
+                ]
+            feats, mask = descriptor.featurize(smiles_list)
+            if desc_name.lower() == "chemical_vae" and diagnostic_sink is not None:
+                records = getattr(descriptor, "last_diagnostics", None)
+                if not isinstance(records, list) or len(records) != n:
+                    raise RuntimeError("chemical_vae 未返回与输入行数一致的逐行诊断")
+                role = next(
+                    (name for name in ("reactant", "product", "other") if col in smiles_roles.get(name, [])),
+                    "other",
+                )
+                adjusted: list[dict[str, Any]] = []
+                for raw, record in zip(raw_values, records):
+                    item = dict(record)
+                    missing = bool(pd.isna(raw))
+                    item["raw_input"] = None if missing else str(raw)
+                    if missing:
+                        item.update(status="failed", reason="missing_input", preprocessed_text="", length=0)
+                    elif not isinstance(raw, str):
+                        item.update(status="failed", reason="non_string_input", preprocessed_text="", length=0)
+                    adjusted.append(item)
+                diagnostic_sink.append({"column": col, "role": role, "records": adjusted})
+            col_blocks.append(feats)
+            row_mask |= mask  # 任一列有效则保留该行；无效列贡献零向量
+
+        # 拼接多列描述符，只保留 valid 行
+        X_smiles_full = np.concatenate(col_blocks, axis=1)  # (n, n_cols * d)
+        X_smiles = X_smiles_full[row_mask]
+
+    # --- 数值辅助列 ---
+    X_numeric: Optional[np.ndarray] = None
+    if numeric_cols:
+        missing = [c for c in numeric_cols if c not in df.columns]
+        if missing:
+            raise KeyError(f"DataFrame 中未找到数值列：{missing}")
+        X_numeric_full = df[numeric_cols].to_numpy(dtype=np.float32)
+        X_numeric = X_numeric_full[row_mask]
+
+    n_valid = int(row_mask.sum())
+    n_dropped = n - n_valid
+    if n_dropped:
+        _warn(
+            f"[feature_builder] 描述符计算失败，过滤掉 {n_dropped} 行 "
+            f"（共 {n} 行，保留 {n_valid} 行）"
+        )
+
+    return X_smiles, X_numeric, row_mask
+
+
+# --------------------------------------------------------------------------- #
+# 辅助                                                                          #
+# --------------------------------------------------------------------------- #
+
+def _warn(msg: str) -> None:
+    """输出警告到 stderr，兼容 Windows GBK 终端。"""
+    try:
+        print(msg, file=sys.stderr)
+    except UnicodeEncodeError:
+        print(msg.encode("ascii", errors="replace").decode(), file=sys.stderr)

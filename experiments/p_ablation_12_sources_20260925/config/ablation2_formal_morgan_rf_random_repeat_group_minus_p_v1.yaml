@@ -1,0 +1,58 @@
+schema_version: "2.0"
+project_name: ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1
+stage: benchmark
+
+dataset:
+  path: ./result/ablation2_amide_data_prep_v1/data/standardized_population.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants: [amine_smiles, acid_smiles]
+    products: [product_smiles]
+    others: [activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+    conditions: []
+    categoricals: []
+
+descriptors:
+  - id: morgan_minus_p
+    descriptor: morgan
+    lifecycle: static_descriptor
+    mode: concat
+    columns: [amine_smiles, acid_smiles, activation_smiles, additive_smiles, base_smiles, solvent_smiles]
+
+artifacts:
+  output_dir: ./result/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1/feature
+
+models: [rf]
+model_params:
+  rf:
+    estimator:
+      n_estimators: 300
+      max_features: 1.0
+      min_samples_leaf: 1
+      random_state: 20260918
+      n_jobs: 19
+
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: precomputed_column
+    group_column: repeat_group_id
+  split_manifest: ./result/ablation2_amide_splits_v1/manifests/random_repeat_group_split_manifest.parquet
+
+outputs:
+  root: ./result/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1
+  report_formats: [html, markdown]
+
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: ablation2_amide_standardized_v1
+  dataset_id: ablation2_amide_coupling
+
+metadata:
+  notes: "Formal primary matrix: random repeat-group protocol, minus P (A+B+C); pre-registered before formal results."

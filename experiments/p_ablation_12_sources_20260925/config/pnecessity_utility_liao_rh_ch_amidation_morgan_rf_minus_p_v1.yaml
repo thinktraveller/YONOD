@@ -1,0 +1,68 @@
+schema_version: '2.0'
+project_name: pnecessity_utility_liao_rh_ch_amidation_morgan_rf_minus_p_v1
+stage: benchmark
+dataset:
+  path: ./result/pnecessity_utility_prepare_v1/data/liao_rh_ch_amidation.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants:
+    - a_smiles
+    - b_smiles
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+descriptors:
+- id: morgan_rf_minus_p
+  descriptor: morgan
+  lifecycle: static_descriptor
+  mode: concat
+  columns:
+  - a_smiles
+  - b_smiles
+artifacts:
+  output_dir: ./result/pnecessity_utility_liao_rh_ch_amidation_morgan_rf_minus_p_v1/feature
+models:
+- rf
+model_params:
+  rf:
+    estimator:
+      n_estimators: 300
+      max_features: 1.0
+      min_samples_leaf: 1
+      random_state: 20260918
+      n_jobs: 19
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: precomputed_column
+    group_column: non_p_input_group_id
+    protocol_label: pnecessity_within_source_non_p_input
+    max_group_fraction: 0.8
+  split_manifest: ./result/pnecessity_utility_prepare_v1/manifests/liao_rh_ch_amidation_non_p_input_split_manifest.parquet
+outputs:
+  root: ./result/pnecessity_utility_liao_rh_ch_amidation_morgan_rf_minus_p_v1
+  report_formats:
+  - html
+  - markdown
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: pnecessity-liao_rh_ch_amidation-7b9e22069ddb458b
+  dataset_id: liao_rh_ch_amidation
+metadata:
+  comparison: within_source_paired_utility
+  input_arm: minus_p
+  source_manifest: ./result/pnecessity_utility_prepare_v1/source_manifest.json
+  prepared_data_sha256: 7b9e22069ddb458b5d8b9d6f0a1691ded11d581b38dc075ce6a972a1757e09a0
+  raw_data_sha256: cbe000d97131329d7696dd4ffb7656b6402cc8e8e40db9988be41ff34c2ab25d
+  fixed_or_unrecorded_numeric_c: []
+  c_field_policy: all recorded non-product molecular C fields are descriptor components;
+    fixed numeric C fields are retained in the paired table and declared as conditions
+  limitation: within-source result only; do not pool rows, folds, repeats, or effect
+    estimates across sources

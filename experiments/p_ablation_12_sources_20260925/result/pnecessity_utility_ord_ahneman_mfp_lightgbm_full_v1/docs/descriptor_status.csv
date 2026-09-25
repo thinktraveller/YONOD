@@ -1,0 +1,2 @@
+﻿descriptor,status,stage,artifact_path,n_total,n_valid,feature_dim,skipped_model_count,reason
+mfp_lightgbm_full,computed,precompute,/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_ord_ahneman_mfp_lightgbm_full_v1/feature/mfp_lightgbm_full.npz,4312,4312,11264,0,首次生成描述符文件

@@ -1,0 +1,151 @@
+schema_version: '2.0'
+project_name: pnecessity_numeric_conditions_ord_c_n_mfp_lightgbm_full_v1
+stage: benchmark
+dataset:
+  path: ./result/pnecessity_utility_prepare_v1/data/ord_c_n.csv
+  sample_id_col: sample_id
+  column_roles:
+    label: yield
+    reactants:
+    - a_smiles
+    - b_smiles
+    - c_reagent_1_smiles
+    - c_catalyst_1_smiles
+    - c_catalyst_2_smiles
+    - c_solvent_1_smiles
+    - c_solvent_2_smiles
+    - c_solvent_3_smiles
+    - c_solvent_4_smiles
+    - c_solvent_5_smiles
+    - c_solvent_6_smiles
+    - c_solvent_7_smiles
+    - c_solvent_8_smiles
+    - c_solvent_9_smiles
+    - c_solvent_10_smiles
+    - p_smiles
+    products:
+    - p_smiles
+    others: []
+    conditions:
+    - c_temperature_c
+    - c_reaction_time_s
+    categoricals: []
+  numeric_conditions:
+    defaults:
+      missing:
+        strategy: error
+      scaling: standard
+    columns:
+      c_temperature_c:
+        name: c_temperature_c
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: degC
+          target: degC
+          scale: 1.0
+          offset: 0.0
+      c_reaction_time_s:
+        name: c_reaction_time_s
+        missing:
+          strategy: error
+        scaling: standard
+        unit:
+          source: s
+          target: s
+          scale: 1.0
+          offset: 0.0
+descriptors:
+- id: mfp_lightgbm_full
+  descriptor: mfp
+  lifecycle: static_descriptor
+  mode: concat
+  columns:
+  - a_smiles
+  - b_smiles
+  - c_reagent_1_smiles
+  - c_catalyst_1_smiles
+  - c_catalyst_2_smiles
+  - c_solvent_1_smiles
+  - c_solvent_2_smiles
+  - c_solvent_3_smiles
+  - c_solvent_4_smiles
+  - c_solvent_5_smiles
+  - c_solvent_6_smiles
+  - c_solvent_7_smiles
+  - c_solvent_8_smiles
+  - c_solvent_9_smiles
+  - c_solvent_10_smiles
+  - p_smiles
+  params:
+    radius: 3
+    fp_size: 1024
+    profile: standard
+artifacts:
+  output_dir: ./result/pnecessity_numeric_conditions_ord_c_n_mfp_lightgbm_full_v1/feature
+models:
+- lightgbm
+model_params:
+  lightgbm:
+    estimator:
+      n_estimators: 500
+      learning_rate: 0.05
+      num_leaves: 31
+      min_child_samples: 1
+      random_state: 20260918
+      n_jobs: 19
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 5
+  n_repeats: 3
+  seed: 20260918
+  grouping:
+    strategy: component_holdout
+    component_cols:
+    - a_smiles
+    - b_smiles
+    - c_reagent_1_smiles
+    - c_catalyst_1_smiles
+    - c_catalyst_2_smiles
+    - c_solvent_1_smiles
+    - c_solvent_2_smiles
+    - c_solvent_3_smiles
+    - c_solvent_4_smiles
+    - c_solvent_5_smiles
+    - c_solvent_6_smiles
+    - c_solvent_7_smiles
+    - c_solvent_8_smiles
+    - c_solvent_9_smiles
+    - c_solvent_10_smiles
+    protocol_label: pnecessity_non_p_molecular_component_holdout_numeric_v1
+    max_group_fraction: 0.8
+outputs:
+  root: ./result/pnecessity_numeric_conditions_ord_c_n_mfp_lightgbm_full_v1
+  report_formats:
+  - html
+  - markdown
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: pnecessity-numeric-ord_c_n-50d7b61282b339eb
+  dataset_id: ord_c_n
+metadata:
+  comparison: within_source_paired_utility
+  input_arm: full
+  parent_preparation_manifest: ./result/pnecessity_utility_prepare_v1/source_manifest.json
+  prepared_data_sha256: 50d7b61282b339eb95da97fb0a3635fdbb61a9cb63cfeb031190e57800997587
+  raw_data_sha256: ba845e82bb3701469aadf172a7457c64354b1e7d6f8e2ab1aad2b96c2445a012
+  molecular_c_execution_policy: A/B and every non-product molecular C are materialised
+    as strict molecular inputs; their chemical source roles remain in the parent preparation
+    manifest
+  numeric_c_execution_policy: all recorded numeric C are fold-locally parsed, unit-audited,
+    and standard-scaled; full and minus-P use the same numeric contract
+  split_policy: strict runner deterministically creates the same non-product molecular
+    component-holdout membership for each paired arm; numeric variants within an identical
+    molecular tuple stay together conservatively
+  limitation: within-source result only; do not pool rows, folds, repeats, or effect
+    estimates across sources
+  product_embedding_execution_mapping: p_smiles remains the declared product and is
+    additionally materialised as a strict molecular input only in the Full arm

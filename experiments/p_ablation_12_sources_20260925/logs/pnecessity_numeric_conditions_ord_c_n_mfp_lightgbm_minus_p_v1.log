@@ -1,0 +1,137 @@
+
+============================================================
+YONOD 数据集输入向导 v1.0
+============================================================
+
+欢迎使用YONOD数据集输入向导!
+本向导将引导您完成数据集的配置和规范化。
+============================================================
+步骤1: 指定数据集/配置文件
+============================================================
+
+请输入数据集路径(CSV)或配置文件路径(schema-2 YAML): [OK] YAML配置文件: config/pnecessity_numeric_conditions_ord_c_n_mfp_lightgbm_minus_p_v1.yaml
+
+============================================================
+检测到 schema-2 YAML 配置文件，验证中...
+============================================================
+[OK] 配置文件验证通过
+    项目名称: pnecessity_numeric_conditions_ord_c_n_mfp_lightgbm_minus_p_v1
+    阶段: benchmark
+    数据集: /home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_utility_prepare_v1/data/ord_c_n.csv
+
+[OK] 配置文件有效,直接启动建模
+
+[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...
+[plan] run_id=ord-c-n-6a267e412684 theoretical_tasks=15 requeued=0 interrupted=0
+[phase 1/2] precompute or reuse eligible feature sets
+[descriptor:computed] mfp_lightgbm_minus_p -> /home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_numeric_conditions_ord_c_n_mfp_lightgbm_minus_p_v1/feature/ord-c-n-6a267e412684/descriptors/mfp_lightgbm_minus_p.npz
+[phase 2/2] folds consume artifacts or fold-local transformers by declared lifecycle
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.025276 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.024025
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r01__f01
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.022433 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.024067
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r01__f02
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.022851 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023916
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r01__f03
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.026218 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40535, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023869
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r01__f04
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.023462 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40535, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023830
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r01__f05
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.026258 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023767
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r02__f01
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.022354 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.024154
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r02__f02
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.021752 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023989
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r02__f03
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.026985 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40535, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023728
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r02__f04
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.025392 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40535, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.024070
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r02__f05
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.023225 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023882
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r03__f01
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.023577 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023929
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r03__f02
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.021308 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40534, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.024039
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r03__f03
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.025351 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40535, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023942
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r03__f04
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.022958 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 4353
+[LightGBM] [Info] Number of data points in the train set: 40535, number of used features: 1678
+[LightGBM] [Info] Start training from score 0.023916
+[succeeded] ord-c-n-6a267e412684__split-51cd022506f6__mfp_lightgbm_minus_p__lightgbm__r03__f05
+[state] {'running': 0, 'succeeded': 15, 'failed': 0, 'skipped': 0, 'interrupted': 0, 'pending': 0, 'total': 15}
+[report] /home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_numeric_conditions_ord_c_n_mfp_lightgbm_minus_p_v1/ord-c-n-6a267e412684/report/benchmark_report.html
+
+[完成] 严格 benchmark 已成功完成!

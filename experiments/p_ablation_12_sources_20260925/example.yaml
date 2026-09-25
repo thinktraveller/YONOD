@@ -1,0 +1,62 @@
+# 可直接复制的 schema-2 YAML 示例。此文件使用仓库内的小型 fixture，
+# 仅运行 Morgan × RF 的 2-fold smoke；项目规模实验应另存配置和输出目录。
+schema_version: "2.0"
+project_name: yonod_schema2_smoke
+stage: all
+
+dataset:
+  path: ./dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+  # conditions 按这里的源列顺序进入模型；空列表时无需 numeric_conditions。
+  # 非空时可用 columns.<源列名> 覆盖 name、missing_values、missing、scaling、unit。
+  # missing: {strategy: error|mean|median|constant, constant: <有限数值>}
+  # scaling: none|standard|minmax。unit 显式声明 source、target、scale、offset，
+  # 目标值 = 原始值 * scale + offset；省略 unit 即无量纲。
+  numeric_conditions:
+    defaults:
+      missing: {strategy: error}
+      scaling: none
+    columns: {}
+
+# 每项均是单独的特征候选；不同描述符不会自动拼接。
+descriptors:
+  - id: morgan
+    descriptor: morgan
+    mode: concat
+    columns: [reactant_1_smiles, reactant_2_smiles]
+
+artifacts:
+  output_dir: ./result/smoke-test/feature
+
+models: [rf]
+model_params:
+  # 示例显式采用项目既有值；删除 estimator 中的字段即使用 sklearn 1.4.0 的库默认。
+  rf:
+    estimator:
+      n_estimators: 10
+      max_depth: null
+      min_samples_leaf: 1
+      max_features: 1.0
+      n_jobs: 1
+      random_state: 42
+      verbose: 0
+
+evaluation:
+  protocol: outer_kfold
+  n_splits: 2
+  n_repeats: 1
+  shuffle: true
+  seed: 42
+
+outputs:
+  root: ./result/smoke-test
+  report_formats: [html, markdown]
+metadata:
+  notes: "小型可运行 smoke。正式研究请使用独立 YAML、特征包和输出根目录。"

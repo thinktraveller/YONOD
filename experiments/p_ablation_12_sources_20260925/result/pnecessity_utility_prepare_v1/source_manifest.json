@@ -1,0 +1,1642 @@
+{
+  "current_runtime_capability": {
+    "evidence": "_verify/run_benchmark.py passes X_numeric=None to fold execution; only molecular descriptor component columns are materialized",
+    "variable_numeric_conditions_consumed": false
+  },
+  "protocol": {
+    "grouping": "non_p_input_group_id",
+    "n_repeats": 3,
+    "n_splits": 5,
+    "seed": 20260918
+  },
+  "sources": [
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "numeric_missing_rows": {
+          "reaction_time_s": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "reaction_time_s": 1,
+          "temperature_c": 1
+        },
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_reagent_1_smiles",
+          "c_reagent_2_smiles",
+          "c_catalyst_1_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles",
+          "c_solvent_3_smiles",
+          "c_solvent_4_smiles",
+          "c_solvent_5_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_ahneman.csv",
+      "prepared_rows": 4312,
+      "prepared_sha256": "ff085b88c0b1f101d3fe8811c110aecfaa18d2d8a0c69f248441f09c4267ede2",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 4312
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 4312
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 4312
+          }
+        },
+        "duplicate_non_p_input_rows": 0,
+        "largest_non_p_input_group_rows": 1,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 0,
+          "reagent-1": 0,
+          "reagent-2": 180,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0,
+          "solvent-4": 0,
+          "solvent-5": 0
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "reagent-1": 0,
+          "reagent-2": 0,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0,
+          "solvent-4": 0,
+          "solvent-5": 0
+        },
+        "n_non_p_input_groups": 4312,
+        "n_unique_a": 15,
+        "n_unique_b": 1,
+        "n_unique_p": 5
+      },
+      "raw_path": "dataset/ORD/ahneman_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 4312,
+      "raw_sha256": "6a912585bb987ab698e2502585e1927403c372e10d8e3bcf8ce26f93c4021acf",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [
+          "reagent-1",
+          "reagent-2",
+          "catalyst-1",
+          "solvent-1",
+          "solvent-2",
+          "solvent-3",
+          "solvent-4",
+          "solvent-5"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_ahneman",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 64680,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/ord_ahneman_non_p_input_split_manifest.parquet",
+        "sha256": "3c8b1c43872e3afa053243f1bd3bfc7cb77d475ddb0edf6a624f3e5f39b8b14c",
+        "split_id": "split-4d799b322ebf"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [
+          "reaction_time_s"
+        ],
+        "numeric_missing_rows": {
+          "reaction_time_s": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "reaction_time_s": 1,
+          "temperature_c": 3
+        },
+        "runtime_capability": "variable numeric conditions unsupported by current strict descriptor feature path",
+        "variable_numeric_c": [
+          "temperature_c"
+        ]
+      },
+      "config_status": "capability_blocked",
+      "config_status_reason": "current strict benchmark runtime validates but does not consume dataset.column_roles.conditions; variable numeric C cannot be kept in the model matrix",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_reagent_1_smiles",
+          "c_catalyst_1_smiles",
+          "c_catalyst_2_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles",
+          "c_solvent_3_smiles",
+          "c_solvent_4_smiles",
+          "c_solvent_5_smiles",
+          "c_solvent_6_smiles",
+          "c_solvent_7_smiles",
+          "c_solvent_8_smiles",
+          "c_solvent_9_smiles",
+          "c_solvent_10_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_c_n.csv",
+      "prepared_rows": 50668,
+      "prepared_sha256": "50d7b61282b339eb95da97fb0a3635fdbb61a9cb63cfeb031190e57800997587",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 50668
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 50668
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 50668
+          }
+        },
+        "duplicate_non_p_input_rows": 11257,
+        "largest_non_p_input_group_rows": 4,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 1056,
+          "catalyst-2": 6336,
+          "reagent-1": 0,
+          "solvent-1": 0,
+          "solvent-10": 45292,
+          "solvent-2": 0,
+          "solvent-3": 0,
+          "solvent-4": 0,
+          "solvent-5": 0,
+          "solvent-6": 44524,
+          "solvent-7": 44524,
+          "solvent-8": 44524,
+          "solvent-9": 44524
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "reagent-1": 0,
+          "solvent-1": 0,
+          "solvent-10": 0,
+          "solvent-2": 0,
+          "solvent-3": 0,
+          "solvent-4": 0,
+          "solvent-5": 0,
+          "solvent-6": 0,
+          "solvent-7": 0,
+          "solvent-8": 0,
+          "solvent-9": 0
+        },
+        "n_non_p_input_groups": 44570,
+        "n_unique_a": 4,
+        "n_unique_b": 2,
+        "n_unique_p": 2
+      },
+      "raw_path": "dataset/ORD/c_n_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 50668,
+      "raw_sha256": "ba845e82bb3701469aadf172a7457c64354b1e7d6f8e2ab1aad2b96c2445a012",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [
+          "reagent-1",
+          "catalyst-1",
+          "catalyst-2",
+          "solvent-1",
+          "solvent-2",
+          "solvent-3",
+          "solvent-4",
+          "solvent-5",
+          "solvent-6",
+          "solvent-7",
+          "solvent-8",
+          "solvent-9",
+          "solvent-10"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_c_n",
+      "split_manifest": null
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "numeric_missing_rows": {
+          "reaction_time_s": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "reaction_time_s": 1,
+          "temperature_c": 1
+        },
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_reagent_1_smiles",
+          "c_catalyst_1_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_chan_lam.csv",
+      "prepared_rows": 9602,
+      "prepared_sha256": "1f9dec90440a7873caa51f26b1afd468b62fb4dd6d4949a3b6873def3fa23ba7",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 9602
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 9602
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 9602
+          }
+        },
+        "duplicate_non_p_input_rows": 9130,
+        "largest_non_p_input_group_rows": 4,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 0,
+          "reagent-1": 1520,
+          "solvent-1": 0,
+          "solvent-2": 0
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "reagent-1": 0,
+          "solvent-1": 0,
+          "solvent-2": 0
+        },
+        "n_non_p_input_groups": 3541,
+        "n_unique_a": 22,
+        "n_unique_b": 2,
+        "n_unique_p": 32
+      },
+      "raw_path": "dataset/ORD/chan_lam_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 9602,
+      "raw_sha256": "648de1e73169feca1cc221f1f53858c11918f91c4f959e206f1a8a66ff4b482b",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [
+          "reagent-1",
+          "catalyst-1",
+          "solvent-1",
+          "solvent-2"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_chan_lam",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 144030,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/ord_chan_lam_non_p_input_split_manifest.parquet",
+        "sha256": "8e8717f7f3f57af9f12e5bcfc9d7d1f0aaa00006c6ac9173c0ba04d4d14d5979",
+        "split_id": "split-29966c392807"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [
+          "temperature_c",
+          "reaction_time_s",
+          "reflux_value",
+          "conditions_are_dynamic_value"
+        ],
+        "numeric_missing_rows": {
+          "conditions_are_dynamic_value": 0,
+          "reaction_time_s": 0,
+          "reflux_value": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "conditions_are_dynamic_value": 1,
+          "reaction_time_s": 1,
+          "reflux_value": 1,
+          "temperature_c": 1
+        },
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_reagent_1_smiles",
+          "c_reagent_2_smiles",
+          "c_catalyst_1_smiles",
+          "c_catalyst_2_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles",
+          "c_solvent_3_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s",
+          "c_reflux_value",
+          "c_conditions_are_dynamic_value"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_chemrxiv_ch_arylation.csv",
+      "prepared_rows": 1529,
+      "prepared_sha256": "22b7c42737a6e7b5a1336d018bf0c5812a86d3fa480817ba9f55a578e11a360f",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1529
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1529
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1529
+          }
+        },
+        "duplicate_non_p_input_rows": 0,
+        "largest_non_p_input_group_rows": 1,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "reagent-1": 0,
+          "reagent-2": 1529,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "reagent-1": 0,
+          "reagent-2": 0,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0
+        },
+        "n_non_p_input_groups": 1529,
+        "n_unique_a": 8,
+        "n_unique_b": 8,
+        "n_unique_p": 64
+      },
+      "raw_path": "dataset/ORD/chemrxiv_ch_arylation_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 1529,
+      "raw_sha256": "3d11901429869a5875d98ec4feec8239efbfa121c59d750a9bf8c04612906f7d",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [
+          "reagent-1",
+          "reagent-2",
+          "catalyst-1",
+          "catalyst-2",
+          "solvent-1",
+          "solvent-2",
+          "solvent-3"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s",
+          "reflux_value",
+          "conditions_are_dynamic_value"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_chemrxiv_ch_arylation",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 22935,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/ord_chemrxiv_ch_arylation_non_p_input_split_manifest.parquet",
+        "sha256": "bcfc0a6eb0ec2bd63bd59581aaedf6e624f515e9bc30b8f8f6f08e19e62489ba",
+        "split_id": "split-a555771870b5"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [
+          "temperature_c",
+          "reaction_time_s",
+          "illumination_wavelength_nm",
+          "reflux_value"
+        ],
+        "numeric_missing_rows": {
+          "illumination_wavelength_nm": 0,
+          "reaction_time_s": 0,
+          "reflux_value": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "illumination_wavelength_nm": 1,
+          "reaction_time_s": 1,
+          "reflux_value": 1,
+          "temperature_c": 1
+        },
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_catalyst_1_smiles",
+          "c_catalyst_2_smiles",
+          "c_catalyst_3_smiles",
+          "c_catalyst_4_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles",
+          "c_solvent_3_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s",
+          "c_illumination_wavelength_nm",
+          "c_reflux_value"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_nano.csv",
+      "prepared_rows": 1728,
+      "prepared_sha256": "f036837388c39626d1d4ad11c4c4353dc84209df7bd18f7a5c6cf10667029dc9",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1728
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1728
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1728
+          }
+        },
+        "duplicate_non_p_input_rows": 1728,
+        "largest_non_p_input_group_rows": 96,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "catalyst-3": 1728,
+          "catalyst-4": 1728,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "catalyst-3": 0,
+          "catalyst-4": 0,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0
+        },
+        "n_non_p_input_groups": 18,
+        "n_unique_a": 18,
+        "n_unique_b": 1,
+        "n_unique_p": 18
+      },
+      "raw_path": "dataset/ORD/nano_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 1728,
+      "raw_sha256": "21b8072d3587bc8b1290124dafa6fdcdceee501980b6e6a3769aee6ead804d6d",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [
+          "catalyst-1",
+          "catalyst-2",
+          "catalyst-3",
+          "catalyst-4",
+          "solvent-1",
+          "solvent-2",
+          "solvent-3"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s",
+          "illumination_wavelength_nm",
+          "reflux_value"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_nano",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 25920,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/ord_nano_non_p_input_split_manifest.parquet",
+        "sha256": "2f6f10538bc68e1934be34d9a4704c6be797e73507f93c50816cd26ae65a7935",
+        "split_id": "split-d4811a883adb"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [],
+        "numeric_missing_rows": {
+          "reaction_time_s": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "reaction_time_s": 27,
+          "temperature_c": 24
+        },
+        "runtime_capability": "variable numeric conditions unsupported by current strict descriptor feature path",
+        "variable_numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ]
+      },
+      "config_status": "capability_blocked",
+      "config_status_reason": "current strict benchmark runtime validates but does not consume dataset.column_roles.conditions; variable numeric C cannot be kept in the model matrix",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_nicolit.csv",
+      "prepared_rows": 1669,
+      "prepared_sha256": "22140736de0ac2b5397cd5e3f76d5013bacaaecf97f202eb2a5d889066ff12f5",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1669
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1669
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1669
+          }
+        },
+        "duplicate_non_p_input_rows": 825,
+        "largest_non_p_input_group_rows": 57,
+        "molecular_c_blank_rows": {},
+        "molecular_c_invalid_rows": {},
+        "n_non_p_input_groups": 967,
+        "n_unique_a": 359,
+        "n_unique_b": 301,
+        "n_unique_p": 567
+      },
+      "raw_path": "dataset/ORD/nicolit_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 1669,
+      "raw_sha256": "51f705bdfc42ff0432cdb6288cda3ee9cbd6e2294c216fff13e5015e94b3deda",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_nicolit",
+      "split_manifest": null
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [],
+        "numeric_missing_rows": {
+          "reaction_time_s": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "reaction_time_s": 34,
+          "temperature_c": 15
+        },
+        "runtime_capability": "variable numeric conditions unsupported by current strict descriptor feature path",
+        "variable_numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ]
+      },
+      "config_status": "capability_blocked",
+      "config_status_reason": "current strict benchmark runtime validates but does not consume dataset.column_roles.conditions; variable numeric C cannot be kept in the model matrix",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_reagent_2_smiles",
+          "c_reagent_3_smiles",
+          "c_reagent_4_smiles",
+          "c_reagent_5_smiles",
+          "c_catalyst_1_smiles",
+          "c_catalyst_2_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_roche_borylation.csv",
+      "prepared_rows": 890,
+      "prepared_sha256": "9617215af78f676a67a4c38434c7e4e0216a793ee808b72180be5a4e661417ef",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 890
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 890
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 890
+          }
+        },
+        "duplicate_non_p_input_rows": 161,
+        "largest_non_p_input_group_rows": 8,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 95,
+          "catalyst-2": 843,
+          "reagent-2": 53,
+          "reagent-3": 454,
+          "reagent-4": 768,
+          "reagent-5": 858,
+          "solvent-1": 38,
+          "solvent-2": 863
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "reagent-2": 0,
+          "reagent-3": 0,
+          "reagent-4": 0,
+          "reagent-5": 0,
+          "solvent-1": 0,
+          "solvent-2": 0
+        },
+        "n_non_p_input_groups": 798,
+        "n_unique_a": 446,
+        "n_unique_b": 52,
+        "n_unique_p": 472
+      },
+      "raw_path": "dataset/ORD/roche_borylation_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 890,
+      "raw_sha256": "35b3444917708e5a19956e5f871fd9b83958ad3b2484874b0ba85d21f381e5e8",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reagent-1",
+        "molecular_c": [
+          "reagent-2",
+          "reagent-3",
+          "reagent-4",
+          "reagent-5",
+          "catalyst-1",
+          "catalyst-2",
+          "solvent-1",
+          "solvent-2"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_roche_borylation",
+      "split_manifest": null
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [
+          "reaction_time_s"
+        ],
+        "numeric_missing_rows": {
+          "reaction_time_s": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "reaction_time_s": 1,
+          "temperature_c": 3
+        },
+        "runtime_capability": "variable numeric conditions unsupported by current strict descriptor feature path",
+        "variable_numeric_c": [
+          "temperature_c"
+        ]
+      },
+      "config_status": "capability_blocked",
+      "config_status_reason": "current strict benchmark runtime validates but does not consume dataset.column_roles.conditions; variable numeric C cannot be kept in the model matrix",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_reagent_1_smiles",
+          "c_catalyst_1_smiles",
+          "c_catalyst_2_smiles",
+          "c_solvent_1_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_reaction_time_s"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_shields.csv",
+      "prepared_rows": 1984,
+      "prepared_sha256": "55e8ac090e249f36ea8a13bac1250a28189c3f529dc7f2b45a534dbcda4e50f5",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1984
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1984
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1984
+          }
+        },
+        "duplicate_non_p_input_rows": 1984,
+        "largest_non_p_input_group_rows": 3,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "reagent-1": 0,
+          "solvent-1": 0
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "reagent-1": 0,
+          "solvent-1": 0
+        },
+        "n_non_p_input_groups": 672,
+        "n_unique_a": 1,
+        "n_unique_b": 1,
+        "n_unique_p": 1
+      },
+      "raw_path": "dataset/ORD/shields_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 1984,
+      "raw_sha256": "35e1698ae9f8e57ea96ca351008f78770c7cba8343db0c68ac2bd44e1362e61d",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [
+          "reagent-1",
+          "catalyst-1",
+          "catalyst-2",
+          "solvent-1"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "reaction_time_s"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_shields",
+      "split_manifest": null
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [
+          "temperature_c",
+          "pressure_kpa",
+          "reaction_time_s",
+          "conditions_are_dynamic_value"
+        ],
+        "numeric_missing_rows": {
+          "conditions_are_dynamic_value": 0,
+          "pressure_kpa": 0,
+          "reaction_time_s": 0,
+          "temperature_c": 0
+        },
+        "numeric_unique_nonblank": {
+          "conditions_are_dynamic_value": 1,
+          "pressure_kpa": 1,
+          "reaction_time_s": 1,
+          "temperature_c": 1
+        },
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield_percent",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_reagent_1_smiles",
+          "c_catalyst_1_smiles",
+          "c_catalyst_2_smiles",
+          "c_solvent_1_smiles",
+          "c_solvent_2_smiles",
+          "c_solvent_3_smiles",
+          "c_solvent_4_smiles",
+          "c_solvent_5_smiles",
+          "c_solvent_6_smiles",
+          "c_solvent_7_smiles"
+        ],
+        "numeric_c": [
+          "c_temperature_c",
+          "c_pressure_kpa",
+          "c_reaction_time_s",
+          "c_conditions_are_dynamic_value"
+        ],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/ord_suzuki.csv",
+      "prepared_rows": 5760,
+      "prepared_sha256": "56219cde37cbccc556a7de41bb580920f5da87610f6f7419e639993f1297e880",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 5760
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 5760
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 5760
+          }
+        },
+        "duplicate_non_p_input_rows": 0,
+        "largest_non_p_input_group_rows": 1,
+        "molecular_c_blank_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 480,
+          "reagent-1": 720,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0,
+          "solvent-4": 0,
+          "solvent-5": 0,
+          "solvent-6": 0,
+          "solvent-7": 0
+        },
+        "molecular_c_invalid_rows": {
+          "catalyst-1": 0,
+          "catalyst-2": 0,
+          "reagent-1": 0,
+          "solvent-1": 0,
+          "solvent-2": 0,
+          "solvent-3": 0,
+          "solvent-4": 0,
+          "solvent-5": 0,
+          "solvent-6": 0,
+          "solvent-7": 0
+        },
+        "n_non_p_input_groups": 5760,
+        "n_unique_a": 5,
+        "n_unique_b": 6,
+        "n_unique_p": 1
+      },
+      "raw_path": "dataset/ORD/suzuki_yield_structure_v1_normalized_dataset.csv",
+      "raw_rows": 5760,
+      "raw_sha256": "75466f69ef7bcc53a3be76914166b91dd091c57471b62a4d69f5754f030c9f97",
+      "role_mapping": {
+        "a": "reactant-1",
+        "b": "reactant-2",
+        "molecular_c": [
+          "reagent-1",
+          "catalyst-1",
+          "catalyst-2",
+          "solvent-1",
+          "solvent-2",
+          "solvent-3",
+          "solvent-4",
+          "solvent-5",
+          "solvent-6",
+          "solvent-7"
+        ],
+        "numeric_c": [
+          "temperature_c",
+          "pressure_kpa",
+          "reaction_time_s",
+          "conditions_are_dynamic_value"
+        ],
+        "p": "product",
+        "source_row_key": "source_row_index"
+      },
+      "source_family": "ORD",
+      "source_id": "ord_suzuki",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 86400,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/ord_suzuki_non_p_input_split_manifest.parquet",
+        "sha256": "0939347c424ba81798ad63e4a82c74095b3df1d936ff2528810826f432db7396",
+        "split_id": "split-4155f522d0bd"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [],
+        "numeric_missing_rows": {},
+        "numeric_unique_nonblank": {},
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 1.0,
+        "yield_source_column": "Yield",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [
+          "c_catalyst_smiles",
+          "c_solvent_smiles"
+        ],
+        "numeric_c": [],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/liao_dhp.csv",
+      "prepared_rows": 868,
+      "prepared_sha256": "3dbb128159a6310f834b9d98b7dae4429c61bb183ddfd55c22d6e8d2fffcea94",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 868
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 868
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 868
+          }
+        },
+        "duplicate_non_p_input_rows": 0,
+        "largest_non_p_input_group_rows": 1,
+        "molecular_c_blank_rows": {
+          "Catalyst": 0,
+          "Solvent": 0
+        },
+        "molecular_c_invalid_rows": {
+          "Catalyst": 0,
+          "Solvent": 0
+        },
+        "n_non_p_input_groups": 868,
+        "n_unique_a": 20,
+        "n_unique_b": 3,
+        "n_unique_p": 40
+      },
+      "raw_path": "dataset/廖矿标课题组/DHP 衍生物催化羧酸脱羧硒化/DHP_catalyzed_decarboxylative_selenation.csv",
+      "raw_rows": 868,
+      "raw_sha256": "e5c190a196ca460643fb281be1c157b8e301a3f92211011854f6b05ae7e0c7bf",
+      "role_mapping": {
+        "a": "Substrate_1",
+        "b": "Substrate_2",
+        "molecular_c": [
+          "Catalyst",
+          "Solvent"
+        ],
+        "numeric_c": [],
+        "p": "Product",
+        "source_row_key": "Entry"
+      },
+      "source_family": "Liao",
+      "source_id": "liao_dhp",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 13020,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/liao_dhp_non_p_input_split_manifest.parquet",
+        "sha256": "2499333c98e0aeca577676a2ca09a8cbf128de888ad78b94253252fe3d31aab1",
+        "split_id": "split-292148be2d5a"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [],
+        "numeric_missing_rows": {},
+        "numeric_unique_nonblank": {},
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "capability_blocked",
+      "config_status_reason": "the source requires its published 412/235 model/external split; manifest_outer_cv cannot encode one fixed holdout, and frozen_train_external_test rejects the published train/external role overlap required by its independent-source contract",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield (%)",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/liao_ir_oh_insertion.csv",
+      "prepared_rows": 653,
+      "prepared_sha256": "e6d504f6c1bbf27067171b403343d6e2874edbc02530e9275b5414111d84dad2",
+      "published_fixed_split": {
+        "canonical_role_overlap_train_external": {
+          "acid": 80,
+          "product": 2,
+          "ylide": 5
+        },
+        "external_path": "dataset/廖矿标课题组/Ir 催化羧酸与亚砜叶立德选择性 O–H 插入/external_set (235).xlsx",
+        "external_rows": 235,
+        "external_sha256": "2f112eba355684927e4f429f0f8409abea5d046d455c06d59be026b3963e355c",
+        "full_reaction_overlap_train_external": 0,
+        "model_path": "dataset/廖矿标课题组/Ir 催化羧酸与亚砜叶立德选择性 O–H 插入/model_set (412).xlsx",
+        "model_rows": 412,
+        "model_sha256": "862d226639b3f103a1a01d1268106e30ea4df6cc181de1c9b266f6beecf51cbd",
+        "protocol": "published_model_external_split",
+        "raw_rows_outside_published_split": 6
+      },
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 653
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 653
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 653
+          }
+        },
+        "duplicate_non_p_input_rows": 6,
+        "largest_non_p_input_group_rows": 2,
+        "molecular_c_blank_rows": {},
+        "molecular_c_invalid_rows": {},
+        "n_non_p_input_groups": 650,
+        "n_unique_a": 137,
+        "n_unique_b": 27,
+        "n_unique_p": 650
+      },
+      "raw_path": "dataset/廖矿标课题组/Ir 催化羧酸与亚砜叶立德选择性 O–H 插入/Ir_catalyzed_OH_insertion.csv",
+      "raw_rows": 653,
+      "raw_sha256": "e076e344ecc520b29c7ca61ca793dd4f1bee22434149e62abaa47aa73715900d",
+      "role_mapping": {
+        "a": "acid",
+        "b": "ylide",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "product",
+        "source_row_key": "Well"
+      },
+      "source_family": "Liao",
+      "source_id": "liao_ir_oh_insertion",
+      "split_manifest": null
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [],
+        "numeric_missing_rows": {},
+        "numeric_unique_nonblank": {},
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield (%)",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/liao_ru_oh_insertion.csv",
+      "prepared_rows": 756,
+      "prepared_sha256": "5849714cfadac418fed9db53b1d90ffc46e46ef680811f852b6712ccced10c66",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 756
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 756
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 756
+          }
+        },
+        "duplicate_non_p_input_rows": 0,
+        "largest_non_p_input_group_rows": 1,
+        "molecular_c_blank_rows": {},
+        "molecular_c_invalid_rows": {},
+        "n_non_p_input_groups": 756,
+        "n_unique_a": 42,
+        "n_unique_b": 18,
+        "n_unique_p": 756
+      },
+      "raw_path": "dataset/廖矿标课题组/Ru（钌）催化亚砜叶立德对膦酸 O–H 键插入/Ru_catalyzed_insertion.csv",
+      "raw_rows": 756,
+      "raw_sha256": "05a64772d95781d4c2d2a0772e699f0d153100089671659e0e628381beb39066",
+      "role_mapping": {
+        "a": "sulfoxonium ylide",
+        "b": "P(O)OH",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "product",
+        "source_row_key": "Well"
+      },
+      "source_family": "Liao",
+      "source_id": "liao_ru_oh_insertion",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 11340,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/liao_ru_oh_insertion_non_p_input_split_manifest.parquet",
+        "sha256": "d1f084597d56ff8e10cf0eb37e93989fefcb34273e26ba4d914ecc47138b05f4",
+        "split_id": "split-cd3cd8ccf24e"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [],
+        "numeric_missing_rows": {},
+        "numeric_unique_nonblank": {},
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 1.0,
+        "yield_source_column": "yield",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/liao_pd_ch_functionalization.csv",
+      "prepared_rows": 1032,
+      "prepared_sha256": "c1cbe4f891ad01406080f408bf0bcd0c9e3cc15bf8c5179ca0ba51c773466586",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1032
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1032
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1032
+          }
+        },
+        "duplicate_non_p_input_rows": 0,
+        "largest_non_p_input_group_rows": 1,
+        "molecular_c_blank_rows": {},
+        "molecular_c_invalid_rows": {},
+        "n_non_p_input_groups": 1032,
+        "n_unique_a": 24,
+        "n_unique_b": 43,
+        "n_unique_p": 1032
+      },
+      "raw_path": "dataset/廖矿标课题组/光诱导钯催化 C–H 官能团化三步串联/Pd_catalyzed_CH_functionalization.csv",
+      "raw_rows": 1032,
+      "raw_sha256": "3ec19a4603718ab839c21d58bb03b3db6a669d2acad39696c33cc8a56a7ba500",
+      "role_mapping": {
+        "a": "reactant1",
+        "b": "reactant2",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "product",
+        "source_row_key": "Unnamed: 0"
+      },
+      "source_family": "Liao",
+      "source_id": "liao_pd_ch_functionalization",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 15480,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/liao_pd_ch_functionalization_non_p_input_split_manifest.parquet",
+        "sha256": "7a4b93101d806c93c2b383ca1448e47ec9a6d7f6e60ac0d4527be5c2646eb49e",
+        "split_id": "split-4b3531986653"
+      }
+    },
+    {
+      "conditions": {
+        "fixed_or_unrecorded_numeric_c": [],
+        "numeric_missing_rows": {},
+        "numeric_unique_nonblank": {},
+        "runtime_capability": "no variable numeric condition needs feature-path support",
+        "variable_numeric_c": []
+      },
+      "config_status": "configurable",
+      "config_status_reason": "all varying recorded fields are molecular; numeric C is fixed or unrecorded",
+      "dropped_rows": 0,
+      "limitations": [
+        "within-source engineering utility only; neither rows nor fold metrics may be pooled across sources",
+        "source uses the locally available snapshot; local file hash does not establish upstream provenance",
+        "low molecular diversity and duplicate non-P inputs remain source-specific limits"
+      ],
+      "non_p_group_definition": "SHA-256 of canonical A/B plus every recorded non-P molecular C canonical/source text and numeric C text; never P",
+      "normalization": {
+        "molecular": "RDKit canonical isomeric SMILES; source text retained",
+        "yield_scale_divisor": 100.0,
+        "yield_source_column": "yield (%)",
+        "yield_unit": "fraction_0_to_1"
+      },
+      "prepared_columns": {
+        "a": "a_smiles",
+        "b": "b_smiles",
+        "group": "non_p_input_group_id",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "p_smiles"
+      },
+      "prepared_path": "result/pnecessity_utility_prepare_v1/data/liao_rh_ch_amidation.csv",
+      "prepared_rows": 1000,
+      "prepared_sha256": "7b9e22069ddb458b5d8b9d6f0a1691ded11d581b38dc075ce6a972a1757e09a0",
+      "published_fixed_split": null,
+      "quality": {
+        "core_status_counts": {
+          "a": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1000
+          },
+          "b": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1000
+          },
+          "p": {
+            "blank": 0,
+            "invalid": 0,
+            "valid": 1000
+          }
+        },
+        "duplicate_non_p_input_rows": 0,
+        "largest_non_p_input_group_rows": 1,
+        "molecular_c_blank_rows": {},
+        "molecular_c_invalid_rows": {},
+        "n_non_p_input_groups": 1000,
+        "n_unique_a": 40,
+        "n_unique_b": 25,
+        "n_unique_p": 996
+      },
+      "raw_path": "dataset/廖矿标课题组/铑催化的芳醛、腙的邻位C-H酰胺化反应/all_HTE_set.csv",
+      "raw_rows": 1000,
+      "raw_sha256": "cbe000d97131329d7696dd4ffb7656b6402cc8e8e40db9988be41ff34c2ab25d",
+      "role_mapping": {
+        "a": "hydrazone",
+        "b": "dioxazolone",
+        "molecular_c": [],
+        "numeric_c": [],
+        "p": "product",
+        "source_row_key": "Unnamed: 0"
+      },
+      "source_family": "Liao",
+      "source_id": "liao_rh_ch_amidation",
+      "split_manifest": {
+        "group_column": "non_p_input_group_id",
+        "group_definition_has_p": false,
+        "n_folds": 15,
+        "n_rows": 15000,
+        "path": "result/pnecessity_utility_prepare_v1/manifests/liao_rh_ch_amidation_non_p_input_split_manifest.parquet",
+        "sha256": "8517ddd3c0078d75a1149ab24420ce2a8650ccce624d496a5af4d839a6e3ad28",
+        "split_id": "split-b74a2f8d8950"
+      }
+    }
+  ],
+  "summary": {
+    "n_capability_blocked_sources": 5,
+    "n_configurable_sources": 9,
+    "n_expected_configs": 36,
+    "n_requested_sources": 14
+  },
+  "task_kind": "standardized paired population preparation; no descriptors or model fitting",
+  "task_name": "pnecessity_utility_prepare_v1"
+}

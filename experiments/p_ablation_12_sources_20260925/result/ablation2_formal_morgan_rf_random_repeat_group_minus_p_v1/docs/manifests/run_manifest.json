@@ -1,0 +1,96 @@
+{
+  "benchmark_config": {
+    "artifact_output_dir": "/home/wangzh685/桌面/ord-data/YONOD/result/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1/feature",
+    "cv": {
+      "n_repeats": 3,
+      "n_splits": 5,
+      "seed": 20260918
+    },
+    "dataset_id": "ablation2_amide_coupling",
+    "dataset_path": "/home/wangzh685/桌面/ord-data/YONOD/result/ablation2_amide_data_prep_v1/data/standardized_population.csv",
+    "dataset_sha256": "5fae4b314ffdb4d3f5eddcd6a59b627cee8ea5a939a9c375dbeb3a0f81c3989c",
+    "descriptors": [
+      "morgan_minus_p"
+    ],
+    "evaluation_protocol": "manifest_outer_cv",
+    "external_split_manifest_sha256": "9e4764a79aa6ab7d47d5c84c2231a86269283bbba403f46cf0998d0017143f5f",
+    "feature_sets": [
+      {
+        "algorithm": "morgan",
+        "component_cols": [
+          "amine_smiles",
+          "acid_smiles",
+          "activation_smiles",
+          "additive_smiles",
+          "base_smiles",
+          "solvent_smiles"
+        ],
+        "kind": "precomputed_descriptor",
+        "mode": "concat",
+        "name": "morgan_minus_p",
+        "params": {}
+      }
+    ],
+    "grouping": {
+      "group_column": "repeat_group_id",
+      "strategy": "precomputed_column"
+    },
+    "label_col": "yield",
+    "model_params": {},
+    "models": [
+      "rf"
+    ],
+    "outputs_root": "/home/wangzh685/桌面/ord-data/YONOD/result/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1",
+    "population_id": "ablation2_amide_standardized_v1",
+    "reproduction_protocol": {},
+    "sample_id_col": "sample_id",
+    "schema2_model_params": {
+      "rf": {
+        "estimator": {
+          "max_features": 1.0,
+          "min_samples_leaf": 1,
+          "n_estimators": 300,
+          "n_jobs": 19,
+          "random_state": 20260918
+        }
+      }
+    },
+    "smiles_cols": [
+      "amine_smiles",
+      "acid_smiles",
+      "product_smiles",
+      "activation_smiles",
+      "additive_smiles",
+      "base_smiles",
+      "solvent_smiles"
+    ],
+    "task_state": {
+      "backend": "sqlite",
+      "resumable": true
+    }
+  },
+  "code_git_commit": "139722da8fe97c86f4d9fa32c8a3995653c87078",
+  "config_hash": "caecfd57593ebf236f51c92f3795ad3c4ae8288fb5de42dec29b1aff91ed6f82",
+  "created_at_utc": "2026-09-19T10:04:58.841701+00:00",
+  "dataset_id": "ablation2_amide_coupling",
+  "dataset_path": "/home/wangzh685/桌面/ord-data/YONOD/result/ablation2_amide_data_prep_v1/data/standardized_population.csv",
+  "dataset_sha256": "5fae4b314ffdb4d3f5eddcd6a59b627cee8ea5a939a9c375dbeb3a0f81c3989c",
+  "evaluation_protocol": "manifest_outer_cv",
+  "external_split_manifest": {
+    "import_policy": "validated_membership_then_task_local_run_id",
+    "sha256": "9e4764a79aa6ab7d47d5c84c2231a86269283bbba403f46cf0998d0017143f5f",
+    "source_path": "/home/wangzh685/桌面/ord-data/YONOD/result/ablation2_amide_splits_v1/manifests/random_repeat_group_split_manifest.parquet"
+  },
+  "output_layout": {
+    "descriptors": "feature",
+    "docs": "docs",
+    "pictures": "pictures",
+    "report": "report"
+  },
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "population_id": "ablation2_amide_standardized_v1",
+  "python_version": "3.9.23 | packaged by conda-forge | (main, Jun  4 2025, 17:57:12) \n[GCC 13.3.0]",
+  "run_id": "standardized-population-caecfd57593e",
+  "schema_version": 2,
+  "source_config_path": "/home/wangzh685/桌面/ord-data/YONOD/config/ablation2_formal_morgan_rf_random_repeat_group_minus_p_v1.yaml"
+}

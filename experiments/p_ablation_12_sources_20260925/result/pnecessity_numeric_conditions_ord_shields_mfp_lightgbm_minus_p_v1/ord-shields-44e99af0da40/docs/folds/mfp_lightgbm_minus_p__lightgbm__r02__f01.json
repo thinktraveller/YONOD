@@ -1,0 +1,157 @@
+{
+  "completed_at_utc": "2026-09-23T05:02:03.951718+00:00",
+  "config_hash": "44e99af0da40b2e12153663e23f5b99bdf5f08e783865e536d46656ee5ff0f06",
+  "dataset_id": "ord_shields",
+  "descriptor": "mfp_lightgbm_minus_p",
+  "effective_model_kwargs": {},
+  "estimator_params_snapshot": {
+    "boosting_type": "gbdt",
+    "class_weight": null,
+    "colsample_bytree": 1.0,
+    "construction": "schema2_model_factory",
+    "effective_estimator_params": {
+      "boosting_type": "gbdt",
+      "class_weight": null,
+      "colsample_bytree": 1.0,
+      "importance_type": "split",
+      "learning_rate": 0.05,
+      "max_depth": -1,
+      "min_child_samples": 1,
+      "min_child_weight": 0.001,
+      "min_split_gain": 0.0,
+      "n_estimators": 500,
+      "n_jobs": 19,
+      "num_leaves": 31,
+      "objective": null,
+      "random_state": 20260918,
+      "reg_alpha": 0.0,
+      "reg_lambda": 0.0,
+      "subsample": 1.0,
+      "subsample_for_bin": 200000,
+      "subsample_freq": 0
+    },
+    "importance_type": "split",
+    "learning_rate": 0.05,
+    "max_depth": -1,
+    "min_child_samples": 1,
+    "min_child_weight": 0.001,
+    "min_split_gain": 0.0,
+    "n_estimators": 500,
+    "n_jobs": 19,
+    "num_leaves": 31,
+    "objective": null,
+    "preprocessing": {},
+    "random_state": 20260918,
+    "reg_alpha": 0.0,
+    "reg_lambda": 0.0,
+    "subsample": 1.0,
+    "subsample_for_bin": 200000,
+    "subsample_freq": 0
+  },
+  "evaluation_protocol": "manifest_outer_cv",
+  "feature_dim": 6146,
+  "feature_schema_hash": "c2280e906c077cae163d28fd3f59fde9919132258dd73ffcd9b40749bd1e3443",
+  "feature_transformer": {
+    "numeric_conditions": {
+      "block_order": "after_molecular_or_categorical_features",
+      "dimension": 2,
+      "input_identity": "sha256:c1894f56584f5b499b33271ff76e2c77f8fda2229a0b820e8b80f9f4b325bf30",
+      "state": {
+        "columns": [
+          {
+            "constant_train": false,
+            "fill_value": null,
+            "location": 105.24605678233438,
+            "name": "c_temperature_c",
+            "scale": 12.194637024044436,
+            "source": "c_temperature_c",
+            "train_missing_rows": 0
+          },
+          {
+            "constant_train": true,
+            "fill_value": null,
+            "location": 86400.0,
+            "name": "c_reaction_time_s",
+            "scale": 1.0,
+            "source": "c_reaction_time_s",
+            "train_missing_rows": 0
+          }
+        ],
+        "contract": {
+          "columns": [
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_temperature_c",
+              "scaling": "standard",
+              "source": "c_temperature_c",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "degC",
+                "target": "degC"
+              }
+            },
+            {
+              "missing": {
+                "strategy": "error"
+              },
+              "missing_values": [],
+              "name": "c_reaction_time_s",
+              "scaling": "standard",
+              "source": "c_reaction_time_s",
+              "unit": {
+                "offset": 0.0,
+                "scale": 1.0,
+                "source": "s",
+                "target": "s"
+              }
+            }
+          ],
+          "schema_version": "numeric_conditions/v1"
+        },
+        "fit_rows": 1585,
+        "fit_sample_ids_sha256": "sha256:12c91bd917860b52f55691f8c6b71d6c10330bfc1d7dea9a2c140c86db3ab461",
+        "schema_version": "numeric_conditions/v1"
+      }
+    }
+  },
+  "fold": 1,
+  "manifest_seed": 20260919,
+  "model": "lightgbm",
+  "model_kwargs": {},
+  "model_random_seed": 20260918,
+  "n_train": 1585,
+  "n_valid": 399,
+  "outer_seed": 20260919,
+  "population_id": "pnecessity-numeric-ord_shields-55e8ac090e249f36",
+  "predict_time_s": 0.0013236419908935204,
+  "prediction_path": "/home/wangzh685/桌面/ord-data/YONOD/result/pnecessity_numeric_conditions_ord_shields_mfp_lightgbm_minus_p_v1/ord-shields-44e99af0da40/docs/predictions/mfp_lightgbm_minus_p__lightgbm__r02__f01.parquet",
+  "protocol_family": "manifest_outer_cv",
+  "repeat": 2,
+  "requested_model_kwargs": {},
+  "run_id": "ord-shields-44e99af0da40",
+  "software_versions": {
+    "autogluon.common": "1.1.1",
+    "autogluon.core": "1.1.1",
+    "autogluon.tabular": "1.1.1",
+    "catboost": "1.2.10",
+    "lightgbm": "4.3.0",
+    "numpy": "1.26.4",
+    "pandas": "2.0.3",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "pyarrow": "16.1.0",
+    "python": "3.9.23 | packaged by conda-forge | (main, Jun  4 2025, 17:57:12) \n[GCC 13.3.0]",
+    "scikit-learn": "1.4.0",
+    "xgboost": "2.0.3"
+  },
+  "split_hash": "b76b45cd2d1533e582caf4441e605e79d1e0478cada2af41563dfc1536001e9b",
+  "split_id": "split-b76b45cd2d15",
+  "started_at_utc": "2026-09-23T05:02:02.675237+00:00",
+  "train_sample_ids_hash": "12c91bd917860b52f55691f8c6b71d6c10330bfc1d7dea9a2c140c86db3ab461",
+  "train_time_s": 1.2650262230017688,
+  "valid_sample_ids_hash": "cfba47a74cbd25ea7fa101afaad07555e63fbbd4e08eb6159a6058632944c8d5",
+  "valid_source_row_index_hash": "0d7d3f0c200d9d418cb15d66a9c847537af86477394345754dd62c44f98f893d"
+}
