@@ -2504,7 +2504,7 @@ def main():
                         print("\n[启动] 正在通过 yonod.py 运行 frozen_train_external_test...")
                         result_code = run_frozen_external_test(Path(basic_info['dataset_path']))
                     else:
-                        from _verify.run_benchmark import run_benchmark
+                        from yonod.benchmark.runner import run_benchmark
 
                         print("\n[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...")
                         result_code = run_benchmark(Path(basic_info['dataset_path']))
