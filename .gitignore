@@ -111,6 +111,12 @@ docs
 !/dataset/
 !/dataset/**
 
+# Large USPTO assets are distributed through YONOD-datasets, not GitHub Git.
+/dataset/USPTO/corpus/provenance.csv
+/dataset/USPTO/corpus/US_patents_1976-Sep2016_1product_reactions_yield_ok_cropped_data_train.csv
+/dataset/USPTO/merged.csv
+/dataset/USPTO/train.csv
+
 # Preserve credential exclusions within the versioned data directories.
 .env
 .env.*
