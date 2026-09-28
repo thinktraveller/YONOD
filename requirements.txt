@@ -26,6 +26,9 @@ torch_geometric==2.5.3
 # Machine learning
 scikit-learn==1.4.0
 xgboost==2.0.3
+# Optional at runtime: only schema-2 runs with hpo.enabled=true import Optuna.
+# Candidate 4.5.0 passed the yonod/Python 3.9.23 SQLite and three-tree fit gate.
+optuna==4.5.0
 
 # Data processing
 pandas==2.0.3

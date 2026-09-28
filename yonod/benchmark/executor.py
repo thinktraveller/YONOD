@@ -6,9 +6,11 @@ import copy
 import hashlib
 import importlib.metadata
 import json
+import os
 import platform
 import sys
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -237,6 +239,7 @@ def _fit_predict_model(
     suffix: str,
     evaluation_protocol: str = DEFAULT_EVALUATION_PROTOCOL,
     schema2_model_config: Optional[Mapping[str, Any]] = None,
+    persist_estimator: bool = False,
 ) -> tuple[np.ndarray, float, float, Dict[str, Any], Dict[str, Any]]:
     """Fit one external fold and return predictions plus audit metadata."""
     if model == "autogluon":
@@ -332,7 +335,24 @@ def _fit_predict_model(
     start = time.perf_counter()
     prediction = np.asarray(estimator.predict(X_valid), dtype=float)
     predict_time_s = time.perf_counter() - start
-    return prediction, train_time_s, predict_time_s, estimator_params_snapshot, {}
+    model_metadata: Dict[str, Any] = {}
+    if persist_estimator:
+        import joblib
+
+        model_dir = layout.run_dir / "models" / suffix
+        model_dir.mkdir(parents=True, exist_ok=True)
+        model_path = model_dir / ("model-" + uuid.uuid4().hex + ".joblib")
+        temporary = model_dir / (".model-" + uuid.uuid4().hex + ".tmp")
+        try:
+            joblib.dump(estimator, temporary, compress=3)
+            os.replace(temporary, model_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        model_metadata = {
+            "model_path": model_path.relative_to(layout.run_dir).as_posix(),
+            "model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+        }
+    return prediction, train_time_s, predict_time_s, estimator_params_snapshot, model_metadata
 
 
 def _effective_model_kwargs(
@@ -395,6 +415,48 @@ def _result_from_existing(prediction_path: Path, metadata_path: Path) -> FoldExe
         raise FoldExecutionError("已有折级元数据字段不完整：{0}".format(metadata_path)) from exc
 
 
+def _verify_existing_hpo_fold(metadata_path: Path, output_root: Path) -> None:
+    """An old fixed fold is never accepted as an optimized fold."""
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        audit = metadata["hpo"]
+        relative = Path(audit["study_dir"])
+        study_dir = (output_root / relative).resolve()
+        study_dir.relative_to(output_root.resolve())
+        manifest = study_dir / "study_manifest.json"
+        trials = study_dir / "trials.json"
+        if not manifest.is_file() or not trials.is_file():
+            raise FoldExecutionError("已有 HPO 折缺少持久 study 证据")
+        if hashlib.sha256(manifest.read_bytes()).hexdigest() != audit["study_manifest_sha256"]:
+            raise FoldExecutionError("已有 HPO study manifest 哈希不匹配")
+        if hashlib.sha256(trials.read_bytes()).hexdigest() != audit["study_trials_sha256"]:
+            raise FoldExecutionError("已有 HPO trial 导出哈希不匹配")
+        model_audit = metadata["model_adapter_metadata"]
+        bundle_path = (output_root / model_audit["bundle_path"]).resolve()
+        bundle_path.relative_to(output_root.resolve())
+        if hashlib.sha256(bundle_path.read_bytes()).hexdigest() != model_audit["bundle_sha256"]:
+            raise FoldExecutionError("已有 HPO 模型包哈希不匹配")
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        if bundle.get("schema_version") != "yonod_strict_model_bundle/v1" or bundle.get("hpo", {}).get("study_id") != audit["study_id"]:
+            raise FoldExecutionError("已有 HPO 模型包身份不匹配")
+        model_path = (output_root / bundle["model_path"]).resolve()
+        model_path.relative_to(output_root.resolve())
+        if hashlib.sha256(model_path.read_bytes()).hexdigest() != bundle["model_sha256"]:
+            raise FoldExecutionError("已有 HPO 模型文件哈希不匹配")
+        if bundle.get("numeric_state_path"):
+            numeric_path = (output_root / bundle["numeric_state_path"]).resolve()
+            numeric_path.relative_to(output_root.resolve())
+            if hashlib.sha256(numeric_path.read_bytes()).hexdigest() != bundle["numeric_state_sha256"]:
+                raise FoldExecutionError("已有 HPO 数值状态哈希不匹配")
+        if bundle.get("ohe_state_path"):
+            from yonod.descriptors.ohe import OHEFeature
+            ohe_path = (output_root / bundle["ohe_state_path"]).resolve()
+            ohe_path.relative_to(output_root.resolve())
+            OHEFeature.load(ohe_path)
+    except (KeyError, TypeError, ValueError, OSError) as exc:
+        raise FoldExecutionError("已有 strict 折缺少完整 HPO 身份，拒绝复用") from exc
+
+
 def execute_fold(
     contract: BenchmarkContract,
     split_manifest: pd.DataFrame,
@@ -412,6 +474,7 @@ def execute_fold(
     schema2_model_config: Optional[Mapping[str, Any]] = None,
     numeric_frame: Optional[pd.DataFrame] = None,
     numeric_contract: Optional[Mapping[str, Any]] = None,
+    hpo_raw: Optional[Mapping[str, Any]] = None,
 ) -> FoldExecutionResult:
     """Fit exactly one manifest-defined fold and write its prediction shard.
 
@@ -474,9 +537,33 @@ def execute_fold(
     prediction_path = layout.predictions / (suffix + ".parquet")
     metadata_path = layout.folds / (suffix + ".json")
     try:
-        return _result_from_existing(prediction_path, metadata_path)
+        existing = _result_from_existing(prediction_path, metadata_path)
+        if hpo_raw and hpo_raw.get("enabled") and model in hpo_raw.get("models", []):
+            _verify_existing_hpo_fold(metadata_path, layout.run_dir)
+        return existing
     except FileNotFoundError:
         pass
+    hpo_audit = None
+    if hpo_raw and hpo_raw.get("enabled") and model in hpo_raw.get("models", []):
+        if schema2_model_config is None:
+            raise FoldExecutionError("HPO 必须经 schema-2 模型工厂接入")
+        from yonod.hpo.strict import select_strict_outer_parameters
+        if fold_transformer is not None:
+            ohe_factory = lambda: type(fold_transformer)(fold_transformer.component_cols)
+        else:
+            ohe_factory = None
+        hpo_audit = select_strict_outer_parameters(
+            output_root=layout.run_dir, sample_ids=ids.tolist(), labels=y_array,
+            split_manifest=split_manifest, repeat=repeat, fold=fold,
+            descriptor=descriptor, model=model, model_config=schema2_model_config,
+            hpo_raw=hpo_raw, models=contract.config.models,
+            grouping_strategy=str(contract.config.grouping.get("strategy", "")),
+            feature_matrix=X_smiles, categorical_frame=component_frame,
+            ohe_factory=ohe_factory, numeric_frame=numeric_frame,
+            numeric_contract=numeric_contract,
+        )
+        schema2_model_config = copy.deepcopy(dict(schema2_model_config))
+        schema2_model_config["estimator"] = hpo_audit["effective_estimator_parameters"]
     feature_metadata: Dict[str, Any] = {}
     if fold_transformer is not None:
         try:
@@ -532,9 +619,50 @@ def execute_fold(
         suffix=suffix,
         evaluation_protocol=evaluation_protocol,
         schema2_model_config=schema2_model_config,
+        persist_estimator=hpo_audit is not None,
     )
     if not np.isfinite(prediction).all():
         raise FoldExecutionError("模型预测包含 NaN 或 inf")
+    if hpo_audit is not None:
+        model_dir = layout.run_dir / "models" / suffix
+        ohe_state_dir = None
+        if fold_transformer is not None:
+            ohe_state_dir = model_dir / ("ohe-" + uuid.uuid4().hex)
+            fold_transformer.save(ohe_state_dir, context={
+                "run_id": contract.run_id, "descriptor": descriptor,
+                "model": model, "repeat": repeat, "fold": fold,
+            })
+        numeric_state_path = None
+        if numeric_frame is not None:
+            numeric_state_path = model_dir / ("numeric-" + uuid.uuid4().hex + ".json")
+            _atomic_write_json(numeric_state, numeric_state_path)
+        feature_spec = next(
+            (dict(item) for item in contract.config.feature_sets if item["name"] == descriptor), None
+        )
+        bundle = {
+            "schema_version": "yonod_strict_model_bundle/v1",
+            "run_id": contract.run_id, "config_hash": contract.config_hash,
+            "descriptor": descriptor, "model": model,
+            "repeat": repeat, "fold": fold,
+            "feature_spec": feature_spec,
+            "dataset_roles": contract.config.raw.get("dataset_roles"),
+            "sample_id_col": contract.config.sample_id_col,
+            "feature_dim": int(X_train.shape[1]),
+            "descriptor_dim": int(X_train.shape[1] - (len(numeric_contract["columns"]) if numeric_frame is not None else 0)),
+            "model_path": model_metadata["model_path"],
+            "model_sha256": model_metadata["model_sha256"],
+            "ohe_state_path": ohe_state_dir.relative_to(layout.run_dir).as_posix() if ohe_state_dir else None,
+            "numeric_contract": dict(numeric_contract) if numeric_frame is not None else None,
+            "numeric_state_path": numeric_state_path.relative_to(layout.run_dir).as_posix() if numeric_state_path else None,
+            "numeric_state_sha256": hashlib.sha256(numeric_state_path.read_bytes()).hexdigest() if numeric_state_path else None,
+            "train_sample_ids_hash": _hash_values(ids[train_idx]),
+            "hpo": hpo_audit,
+            "software_versions": _software_versions(),
+        }
+        bundle_path = model_dir / ("bundle-" + uuid.uuid4().hex + ".json")
+        _atomic_write_json(bundle, bundle_path)
+        model_metadata["bundle_path"] = bundle_path.relative_to(layout.run_dir).as_posix()
+        model_metadata["bundle_sha256"] = hashlib.sha256(bundle_path.read_bytes()).hexdigest()
     unique_part = part.drop_duplicates("sample_id").set_index("sample_id")
     group_by_id = unique_part["group_id"].astype(str)
     source_row_by_id = unique_part["source_row_index"].astype(int) if "source_row_index" in unique_part else None
@@ -617,6 +745,7 @@ def execute_fold(
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
         "software_versions": _software_versions(),
         "prediction_path": str(prediction_path),
+        **({"hpo": hpo_audit} if hpo_audit is not None else {}),
     }
     if model_metadata:
         metadata["model_adapter_metadata"] = model_metadata

@@ -35,7 +35,7 @@ MODEL_PARAMETER_ROUTES: Dict[str, frozenset[str]] = {
 _STAGES = frozenset({"features", "train", "all", "benchmark"})
 _TOP_LEVEL_KEYS = frozenset({
     "schema_version", "project_name", "stage", "dataset", "descriptors",
-    "artifacts", "models", "model_params", "evaluation", "outputs", "benchmark", "metadata",
+    "artifacts", "models", "model_params", "evaluation", "outputs", "benchmark", "metadata", "hpo",
 })
 _DATASET_KEYS = frozenset({"path", "sample_id_col", "column_roles", "numeric_conditions"})
 _COLUMN_ROLE_KEYS = frozenset({
@@ -368,6 +368,17 @@ def validate_run_config(raw: Mapping[str, Any]) -> Dict[str, Any]:
     models = _validate_models(mapping, required=stage in {"train", "all", "benchmark"})
     _validate_model_params(mapping, models)
     _validate_evaluation(mapping.get("evaluation"))
+    # The HPO contract is pure data: disabled and feature-only configurations
+    # do not import the optional search engine or a model implementation.
+    from yonod.hpo.contracts import HPOContractError, validate_hpo_declaration
+    try:
+        validate_hpo_declaration(
+            mapping.get("hpo"), models=models, stage=stage,
+            evaluation=mapping.get("evaluation"), model_params=mapping.get("model_params"),
+            benchmark=mapping.get("benchmark"),
+        )
+    except HPOContractError as exc:
+        raise ConfigContractError(str(exc)) from exc
     if stage == "benchmark":
         _validate_frozen_external_evaluation(mapping.get("evaluation"))
     _validate_outputs(mapping.get("outputs"))

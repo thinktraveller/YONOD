@@ -137,3 +137,119 @@ def predict_saved_fold(
     if len(prediction) != len(sample_ids) or not np.isfinite(prediction).all():
         raise PredictionContractError("模型预测数量或有限性无效")
     return pd.DataFrame({"sample_id": sample_ids, "y_pred": prediction})
+
+
+def predict_saved_strict_fold(
+    task_root: Path | str,
+    frame: pd.DataFrame,
+    *,
+    descriptor: str,
+    model: str,
+    repeat: int,
+    fold: int,
+    input_units: Mapping[str, str] | None = None,
+    descriptor_config_path: Path | str | None = None,
+) -> pd.DataFrame:
+    """Load a strict HPO fold bundle and predict raw rows without refitting."""
+    import json
+
+    from yonod.benchmark.layout import resolve_benchmark_output_layout
+
+    root = Path(task_root).resolve()
+    layout = resolve_benchmark_output_layout(root)
+    suffix = f"{descriptor}__{model}__r{repeat:02d}__f{fold:02d}"
+    metadata_path = layout.folds / (suffix + ".json")
+    if not metadata_path.is_file():
+        raise PredictionContractError("严格折级元数据不存在")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        adapter = metadata["model_adapter_metadata"]
+        bundle_path = _within(root, adapter["bundle_path"])
+        if _sha256_file(bundle_path) != adapter["bundle_sha256"]:
+            raise PredictionContractError("严格模型包哈希不匹配")
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise PredictionContractError("严格模型包或折级元数据无效") from exc
+    if bundle.get("schema_version") != "yonod_strict_model_bundle/v1":
+        raise PredictionContractError("严格模型包版本不受支持")
+    if (bundle.get("run_id"), bundle.get("descriptor"), bundle.get("model"),
+        bundle.get("repeat"), bundle.get("fold")) != (
+        metadata.get("run_id"), descriptor, model, repeat, fold,
+    ):
+        raise PredictionContractError("严格模型包与折级身份不一致")
+    if not isinstance(frame, pd.DataFrame) or frame.columns.has_duplicates or frame.empty:
+        raise PredictionContractError("预测输入必须是非空且列名唯一的 DataFrame")
+    source_roles = bundle.get("dataset_roles") or {}
+    id_col = source_roles.get("sample_id_col")
+    if id_col is None:
+        # The schema-2 strict bundle includes its resolved dataset sample ID
+        # separately so that the caller need not load the original task YAML.
+        id_col = bundle.get("sample_id_col")
+    if not isinstance(id_col, str) or id_col not in frame.columns:
+        raise PredictionContractError("严格模型包或预测输入缺少 sample_id 列")
+    sample_ids = frame[id_col].astype(str).tolist()
+    if frame[id_col].isna().any() or len(set(sample_ids)) != len(sample_ids) or any(not item.strip() for item in sample_ids):
+        raise PredictionContractError("预测 sample_id 必须非空且唯一")
+    spec_raw = bundle.get("feature_spec")
+    if not isinstance(spec_raw, Mapping):
+        raise PredictionContractError("严格模型包缺少特征声明")
+    algorithm = str(spec_raw.get("algorithm", ""))
+    columns = list(spec_raw.get("component_cols") or [])
+    if spec_raw.get("kind") == "fold_transform":
+        state_dir = _within(root, str(bundle.get("ohe_state_path")), file=False)
+        transformer = OHEFeature.load(state_dir)
+        descriptor_matrix = transformer.transform(frame, partition="predict")
+    else:
+        if not columns or any(column not in frame.columns for column in columns):
+            raise PredictionContractError("预测数据缺少严格描述符源列")
+        if algorithm == "chemical_vae" and descriptor_config_path is None:
+            raise PredictionContractError("chemical_vae 预测需提供原始 YAML 路径以定位资产")
+        spec = normalise_feature_specs([{
+            "id": spec_raw["name"], "descriptor": algorithm,
+            "lifecycle": "static_descriptor", "mode": spec_raw.get("mode", "concat"),
+            "columns": columns, "params": spec_raw.get("params", {}),
+        }])[0]
+        roles = bundle.get("dataset_roles") or {}
+        smiles_roles = {
+            "reactant": list(roles.get("reactants", [])),
+            "product": list(roles.get("products", [])),
+            "other": list(roles.get("others", [])),
+        }
+        matrix, valid, _ = _production_feature_computer(
+            spec, frame, columns, smiles_roles,
+            config_path=Path(descriptor_config_path) if descriptor_config_path is not None else bundle_path,
+        )
+        if not np.asarray(valid, dtype=bool).all():
+            raise PredictionContractError("预测分子输入存在不可编码行")
+        descriptor_matrix = np.asarray(matrix, dtype=float)
+    if descriptor_matrix.shape != (len(frame), bundle.get("descriptor_dim")):
+        raise PredictionContractError("严格描述符维度与模型包不一致")
+    contract = bundle.get("numeric_contract")
+    if contract is not None:
+        units = dict(input_units or {})
+        for entry in contract["columns"]:
+            unit = entry["unit"]["source"]
+            if unit != "dimensionless" and units.get(entry["source"]) != unit:
+                raise PredictionContractError(f"预测列 {entry['source']!r} 必须声明输入单位 {unit!r}")
+            if entry["source"] in units and units[entry["source"]] != unit:
+                raise PredictionContractError("预测数值列单位与训练不一致")
+        state_path = _within(root, bundle["numeric_state_path"])
+        if _sha256_file(state_path) != bundle["numeric_state_sha256"]:
+            raise PredictionContractError("严格数值状态哈希不匹配")
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        numeric = NumericConditionsTransformer.from_state_dict(state)
+        if numeric.contract != contract:
+            raise PredictionContractError("严格数值状态契约不匹配")
+        descriptor_matrix = np.hstack([
+            descriptor_matrix, numeric.transform(frame, sample_ids, phase="predict")
+        ])
+    if descriptor_matrix.shape[1] != bundle.get("feature_dim") or not np.isfinite(descriptor_matrix).all():
+        raise PredictionContractError("严格模型实际输入维度或有限性无效")
+    model_path = _within(root, bundle["model_path"])
+    if _sha256_file(model_path) != bundle["model_sha256"]:
+        raise PredictionContractError("严格模型文件哈希不匹配")
+    estimator = joblib.load(model_path)
+    prediction = np.asarray(estimator.predict(descriptor_matrix), dtype=float).reshape(-1)
+    if len(prediction) != len(sample_ids) or not np.isfinite(prediction).all():
+        raise PredictionContractError("严格模型预测数量或有限性无效")
+    return pd.DataFrame({"sample_id": sample_ids, "y_pred": prediction})

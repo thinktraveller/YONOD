@@ -408,6 +408,7 @@ class BenchmarkConfig:
         task_state = copy.deepcopy(dict(benchmark["task_state"]))
         internal_raw: Dict[str, Any] = {
             "schema_version": "2.0",
+            "hpo": copy.deepcopy(raw.get("hpo", {"enabled": False})),
             "model_params": legacy_model_kwargs,
             "schema2_model_params": copy.deepcopy(model_configs),
             "reproduction_protocol": copy.deepcopy(dict(benchmark.get("reproduction_protocol", {}))),
@@ -416,6 +417,8 @@ class BenchmarkConfig:
             "project_name": raw["project_name"],
             "numeric_contract": numeric_contract,
         }
+        if raw.get("hpo", {}).get("enabled"):
+            internal_raw["dataset_roles"] = copy.deepcopy(dict(roles))
         for field in ("population_id", "dataset_id"):
             if field in benchmark:
                 internal_raw[field] = benchmark[field]
@@ -605,6 +608,8 @@ class BenchmarkConfig:
                 if self.split_manifest_path is not None else None
             ),
         }
+        if self.raw.get("hpo", {}).get("enabled"):
+            normalized["hpo"] = self.raw["hpo"]
         for optional_field in ("population_id", "dataset_id", "paper_exact", "evaluation_protocol"):
             if optional_field in self.raw:
                 normalized[optional_field] = self.raw[optional_field]

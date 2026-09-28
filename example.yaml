@@ -48,6 +48,31 @@ model_params:
       random_state: 42
       verbose: 0
 
+# HPO 缺省关闭；固定参数 smoke 不需要安装 Optuna。开启时必须显式写出
+# models、sampler、seed、objective、inner_cv、budget、search_spaces。
+# hpo.models 只能包含顶层 models 中的 rf/xgb/lightgbm；其他模型仍按固定参数运行。
+# 每个 feature × model × outer fold 独立搜索，inner-fold 指标取算术平均。
+# study_timeout_s/task_timeout_s 是可选软上限，当前 trial 可完成。
+hpo:
+  enabled: false
+# 下面是开启 RF 搜索的字段规范；请复制到独立 config/<task>.yaml，
+# 为正式任务同时将 model_params.rf.estimator.n_jobs 改为 19，并隔离 result 路径。
+# hpo:
+#   enabled: true
+#   models: [rf]
+#   sampler: tpe
+#   seed: 42
+#   objective: {metric: rmse, direction: minimize}
+#   inner_cv: {n_splits: 3, seed: 42, shuffle: true}
+#   budget: {max_trials: 20}
+#   search_spaces:
+#     rf:
+#       preset: compact-v1
+#       parameters: {}  # 可按同名参数整体覆盖分布
+#   final_model: {enabled: false}
+# 分布只支持 type=int/float/categorical 与安全 low/high/step/log/choices。
+# final_model 开启时另需 development_population_id 和独立 budget.max_trials。
+
 evaluation:
   protocol: outer_kfold
   n_splits: 2

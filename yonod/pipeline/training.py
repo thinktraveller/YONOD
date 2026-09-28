@@ -634,6 +634,7 @@ def _run_identity(
     label_identity: str,
     split_identity: str,
     numeric_identity: str | None = None,
+    hpo_identity: Mapping[str, Any] | None = None,
 ) -> str:
     payload = {
         "training_schema_version": TRAINING_SCHEMA_VERSION,
@@ -646,6 +647,8 @@ def _run_identity(
     }
     if numeric_identity is not None:
         payload["numeric_identity"] = numeric_identity
+    if hpo_identity is not None:
+        payload["hpo"] = dict(hpo_identity)
     return "train-" + _sha256_text(_canonical_json(payload))[:20]
 
 
@@ -678,6 +681,24 @@ def _existing_complete_run(run_dir: Path, expected_run_id: str) -> TrainingRun |
         raise TrainingServiceError(f"无法读取已有训练结果：{exc}") from exc
     if not isinstance(payload, Mapping) or payload.get("run_id") != expected_run_id:
         raise TrainingServiceError("已有训练目录的 run_id 与本次身份不一致，拒绝覆盖")
+    hpo_payload = payload.get("hpo")
+    if hpo_payload is not None:
+        task_root_path = run_dir.parent.parent.resolve()
+        hpo_audits = hpo_payload.get("outer_folds", [])
+        if not isinstance(hpo_audits, list) or len(hpo_audits) != int(payload.get("n_folds", -1)):
+            raise TrainingServiceError("已有 HPO 结果缺少完整逐外层折 study")
+        for fold_audit in hpo_audits:
+            try:
+                study_path = (task_root_path / str(fold_audit["study_dir"])).resolve()
+                study_path.relative_to(task_root_path)
+                expected_files = (
+                    (study_path / "study_manifest.json", fold_audit["study_manifest_sha256"]),
+                    (study_path / "trials.json", fold_audit["study_trials_sha256"]),
+                )
+                if any(not path.is_file() or _sha256_file(path) != checksum for path, checksum in expected_files):
+                    raise TrainingServiceError("已有 HPO study/试验审计缺失或哈希不匹配")
+            except (KeyError, TypeError, ValueError, OSError) as exc:
+                raise TrainingServiceError("已有 HPO 折缺少可核验的持久 study") from exc
     required_prediction = {"sample_id", "y_true", "y_pred", "repeat", "fold"}
     if predictions.empty or not required_prediction.issubset(predictions.columns) or metrics.empty:
         raise TrainingServiceError("已有训练结果缺少完整预测或 fold 指标，拒绝恢复")
@@ -860,9 +881,17 @@ def _run_one_artifact(
         raise TrainingServiceError(
             "该模型存在内部验证划分；尚不能保证数值条件仅在内部训练子集拟合，拒绝运行"
         )
+    hpo_declaration = None
+    if (config.get("hpo") or {}).get("enabled") and model in config["hpo"]["models"]:
+        from yonod.hpo.contracts import validate_hpo_declaration
+        hpo_declaration = validate_hpo_declaration(
+            config["hpo"], models=config["models"], stage=config["stage"],
+            evaluation=config.get("evaluation"), model_params=config.get("model_params"),
+        )
     run_id = _run_identity(
         artifact, model=model, model_config=resolved, label_identity=label_identity,
         split_identity=split_identity, numeric_identity=numeric_identity,
+        hpo_identity=hpo_declaration,
     )
     result_root = _result_root(loaded, config)
     run_dir = result_root / "runs" / combination_name(str(artifact.manifest["feature_id"]), model)
@@ -879,8 +908,23 @@ def _run_one_artifact(
     fold_records: list[Dict[str, Any]] = []
     prediction_records: list[Dict[str, Any]] = []
     model_bundles: list[str] = []
+    hpo_folds: list[Dict[str, Any]] = []
     try:
         for repeat, fold, train_index, valid_index in rows:
+            search_audit = None
+            fold_resolved = resolved
+            if hpo_declaration is not None:
+                from yonod.hpo.ordinary import select_outer_parameters
+                search_audit = select_outer_parameters(
+                    artifact=artifact, config=config, aligned=aligned,
+                    sample_ids=sample_ids, labels=labels, outer_train_index=train_index,
+                    repeat=repeat, fold=fold, model=model,
+                    numeric_contract=numeric_contract, output_root=result_root,
+                )
+                selected_config = copy.deepcopy(dict(config.get("model_params", {}).get(model, {})))
+                selected_config["estimator"] = search_audit["effective_estimator_parameters"]
+                fold_resolved = resolve_model_config(model, selected_config)
+                hpo_folds.append({"repeat": repeat, "fold": fold, **search_audit})
             fold_context = {
                 "run_id": run_id,
                 "artifact_id": artifact.manifest["artifact_id"],
@@ -896,7 +940,7 @@ def _run_one_artifact(
             )
             started = time.perf_counter()
             prediction, model_audit = runner(
-                resolved, X_train, labels[train_index], X_valid, aligned,
+                fold_resolved, X_train, labels[train_index], X_valid, aligned,
                 train_index, staging / "models" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}",
                 label_col, fold,
             )
@@ -935,6 +979,7 @@ def _run_one_artifact(
                     "train_sample_ids_sha256": fold_context["train_sample_ids_sha256"],
                     "split_identity": split_identity,
                     "software_versions": software_versions(model),
+                    **({"hpo": search_audit} if search_audit is not None else {}),
                 }
                 _atomic_yaml(bundle_path, bundle)
                 model_bundles.append(bundle_path.relative_to(staging).as_posix())
@@ -952,6 +997,8 @@ def _run_one_artifact(
                 "model_predict_time_s": float(model_audit.get("predict_time_s", 0.0)),
                 "transform_audit": _canonical_json(transform_audit),
                 "model_audit": _canonical_json(model_audit),
+                **({"hpo_study_id": search_audit["study_id"], "hpo_best_trial": search_audit["best_trial_number"],
+                    "hpo_best_inner_score": search_audit["best_value"]} if search_audit is not None else {}),
             })
             prediction_records.extend({
                 "sample_id": sample_ids[index], "repeat": repeat, "fold": fold,
@@ -978,6 +1025,7 @@ def _run_one_artifact(
             "feature_content_identity": artifact_content_identity(artifact.manifest),
             "model": model,
             "model_request": resolved.as_audit_dict(),
+            **({"hpo": {"declaration": hpo_declaration, "outer_folds": hpo_folds}} if hpo_declaration is not None else {}),
             "dataset_identity": dataset_identity,
             "label_identity": label_identity,
             "label_column": label_col,
@@ -1043,6 +1091,19 @@ def _run_one_artifact(
 
 def validate_training_model_parameters(config: Mapping[str, Any]) -> Dict[str, ResolvedModelConfig]:
     """Validate all selected models before a stage can start expensive work."""
+    if (config.get("hpo") or {}).get("enabled"):
+        from yonod.hpo.contracts import require_search_engine, validate_hpo_declaration
+        hpo = validate_hpo_declaration(
+            config["hpo"], models=config["models"], stage=config["stage"],
+            evaluation=config.get("evaluation"), model_params=config.get("model_params"),
+        )
+        require_search_engine()
+        if set(hpo["models"]) - {"rf"}:
+            raise TrainingServiceError("XGBoost/LightGBM 的嵌套 HPO 真实入口尚未验收；当前只开放 RF 小型工程 smoke")
+        if hpo["final_model"]["enabled"]:
+            raise TrainingServiceError("显式最终模型搜索尚未验收；请保持 hpo.final_model.enabled=false")
+        if hpo["budget"].get("study_timeout_s") or hpo["budget"].get("task_timeout_s"):
+            raise TrainingServiceError("HPO 软时限的持久活跃账本尚未接入；请仅使用 max_trials")
     models = list(config.get("models") or [])
     if not models:
         raise TrainingServiceError("train/all 必须选择至少一个模型")

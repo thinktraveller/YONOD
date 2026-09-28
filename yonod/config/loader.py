@@ -158,6 +158,28 @@ def normalise_model_aliases(raw: Mapping[str, Any]) -> Dict[str, Any]:
             canonical_params[canonical] = params
             first_path[canonical] = field
         result["model_params"] = canonical_params
+    hpo = result.get("hpo")
+    if isinstance(hpo, Mapping):
+        hpo = copy.deepcopy(dict(hpo))
+        hpo_models = hpo.get("models")
+        if isinstance(hpo_models, Sequence) and not isinstance(hpo_models, (str, bytes)):
+            canonical_hpo_models: list[str] = []
+            for index, raw_name in enumerate(hpo_models):
+                canonical = _canonical_model_name(raw_name, f"hpo.models[{index}]")
+                if canonical in canonical_hpo_models:
+                    raise ConfigLoadError(f"hpo.models[{index}] 与前项规范化后重复：{canonical}")
+                canonical_hpo_models.append(canonical)
+            hpo["models"] = canonical_hpo_models
+        raw_spaces = hpo.get("search_spaces")
+        if isinstance(raw_spaces, Mapping):
+            canonical_spaces: Dict[str, Any] = {}
+            for raw_name, space in raw_spaces.items():
+                canonical = _canonical_model_name(raw_name, f"hpo.search_spaces.{raw_name}")
+                if canonical in canonical_spaces:
+                    raise ConfigLoadError(f"hpo.search_spaces.{raw_name} 与前项规范化后重复：{canonical}")
+                canonical_spaces[canonical] = space
+            hpo["search_spaces"] = canonical_spaces
+        result["hpo"] = hpo
     return result
 
 

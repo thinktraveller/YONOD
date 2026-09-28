@@ -197,6 +197,10 @@ def run_benchmark(
     protocol.
     """
     config = BenchmarkConfig.from_file(config_path)
+    if config.raw.get("hpo", {}).get("enabled"):
+        from yonod.hpo.contracts import require_search_engine
+        require_search_engine()
+        raise ValueError("strict HPO 搜索执行器尚未接入；本次运行未开始，避免将固定参数折误记为调参折")
     _require_parquet_engine()
     contract = create_benchmark_contract(config)
     _reject_incompatible_numeric_folds(config)
@@ -274,6 +278,7 @@ def run_benchmark(
                 ),
                 numeric_frame=numeric_frame,
                 numeric_contract=numeric_contract if numeric_frame is not None else None,
+                hpo_raw=config.raw.get("hpo"),
             )
             state.mark_succeeded(claimed, result.prediction_path, result.metadata_path)
             print("[succeeded]", claimed.spec.task_key)
