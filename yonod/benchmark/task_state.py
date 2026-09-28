@@ -395,6 +395,22 @@ class TaskStateStore:
             )
             self._event(connection, claimed.spec.task_key, "running", "failed", summary)
 
+    def defer_claimed(self, claimed: ClaimedTask, reason: str) -> None:
+        """Return an unstarted fold to pending after a soft task deadline."""
+        with self._transaction() as connection:
+            row = connection.execute(
+                "SELECT status, attempts FROM tasks WHERE task_key=?", (claimed.spec.task_key,)
+            ).fetchone()
+            if row is None or row["status"] != "running" or int(row["attempts"]) != claimed.attempts:
+                raise TaskStateError("只能延期当前已认领的 running 任务")
+            connection.execute(
+                """UPDATE tasks SET status='pending', attempts=attempts-1,
+                   started_at_utc=NULL, heartbeat_at_utc=NULL, worker_info_json=NULL,
+                   error_type=NULL, error_summary=NULL WHERE task_key=?""",
+                (claimed.spec.task_key,),
+            )
+            self._event(connection, claimed.spec.task_key, "running", "pending", reason[:2000])
+
     def summary(self) -> Dict[str, int]:
         with closing(self._connect()) as connection:
             rows = connection.execute("SELECT status, COUNT(*) AS n FROM tasks GROUP BY status").fetchall()

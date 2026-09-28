@@ -452,6 +452,8 @@ def _verify_existing_hpo_fold(metadata_path: Path, output_root: Path) -> None:
             from yonod.descriptors.ohe import OHEFeature
             ohe_path = (output_root / bundle["ohe_state_path"]).resolve()
             ohe_path.relative_to(output_root.resolve())
+            if hashlib.sha256((ohe_path / "metadata.json").read_bytes()).hexdigest() != bundle.get("ohe_state_metadata_sha256"):
+                raise FoldExecutionError("已有 HPO OHE 状态元数据哈希不匹配")
             OHEFeature.load(ohe_path)
     except (KeyError, TypeError, ValueError, OSError) as exc:
         raise FoldExecutionError("已有 strict 折缺少完整 HPO 身份，拒绝复用") from exc
@@ -475,6 +477,7 @@ def execute_fold(
     numeric_frame: Optional[pd.DataFrame] = None,
     numeric_contract: Optional[Mapping[str, Any]] = None,
     hpo_raw: Optional[Mapping[str, Any]] = None,
+    task_budget: Any = None,
 ) -> FoldExecutionResult:
     """Fit exactly one manifest-defined fold and write its prediction shard.
 
@@ -561,9 +564,12 @@ def execute_fold(
             feature_matrix=X_smiles, categorical_frame=component_frame,
             ohe_factory=ohe_factory, numeric_frame=numeric_frame,
             numeric_contract=numeric_contract,
+            task_budget=task_budget,
         )
         schema2_model_config = copy.deepcopy(dict(schema2_model_config))
-        schema2_model_config["estimator"] = hpo_audit["effective_estimator_parameters"]
+        schema2_model_config["estimator"] = hpo_audit["constructor_parameters"]
+        if task_budget is not None:
+            task_budget.require_start("严格外层重训")
     feature_metadata: Dict[str, Any] = {}
     if fold_transformer is not None:
         try:
@@ -652,6 +658,9 @@ def execute_fold(
             "model_path": model_metadata["model_path"],
             "model_sha256": model_metadata["model_sha256"],
             "ohe_state_path": ohe_state_dir.relative_to(layout.run_dir).as_posix() if ohe_state_dir else None,
+            "ohe_state_metadata_sha256": (
+                hashlib.sha256((ohe_state_dir / "metadata.json").read_bytes()).hexdigest() if ohe_state_dir else None
+            ),
             "numeric_contract": dict(numeric_contract) if numeric_frame is not None else None,
             "numeric_state_path": numeric_state_path.relative_to(layout.run_dir).as_posix() if numeric_state_path else None,
             "numeric_state_sha256": hashlib.sha256(numeric_state_path.read_bytes()).hexdigest() if numeric_state_path else None,

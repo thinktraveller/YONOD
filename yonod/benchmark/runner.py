@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import itertools
 import json
@@ -58,6 +59,14 @@ def _require_parquet_engine() -> None:
         "严格 benchmark 需要 pyarrow 或 fastparquet 来原子发布/验证 split、预测与指标 parquet；"
         "当前 yonod 环境均未安装。请安装 requirements.txt 中的 pyarrow 后，通过 yonod.py 重新启动。"
     )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _prepare_feature_artifacts(config: BenchmarkConfig, frame, run_dir: Path):
@@ -197,10 +206,35 @@ def run_benchmark(
     protocol.
     """
     config = BenchmarkConfig.from_file(config_path)
-    if config.raw.get("hpo", {}).get("enabled"):
+    hpo = config.raw.get("hpo", {})
+    if hpo.get("enabled"):
         from yonod.hpo.contracts import require_search_engine
         require_search_engine()
-        raise ValueError("strict HPO 搜索执行器尚未接入；本次运行未开始，避免将固定参数折误记为调参折")
+    from contextlib import nullcontext
+    from yonod.hpo.budget import ActiveBudgetLedger
+    budget_context = (
+        ActiveBudgetLedger(
+            config.outputs_root, {
+                "hpo": hpo,
+                "dataset_sha256": _sha256_file(config.dataset_path),
+            },
+            hpo["budget"]["task_timeout_s"],
+        ) if hpo.get("enabled") and hpo.get("budget", {}).get("task_timeout_s") is not None
+        else nullcontext(None)
+    )
+    with budget_context as task_budget:
+        return _run_benchmark_impl(
+            config, rerun_failed=rerun_failed, task_keys=task_keys,
+            stale_seconds=stale_seconds, bootstrap_n=bootstrap_n,
+            task_budget=task_budget,
+        )
+
+
+def _run_benchmark_impl(
+    config: BenchmarkConfig, *, rerun_failed: bool,
+    task_keys: list[str] | None, stale_seconds: float,
+    bootstrap_n: int, task_budget: Any,
+) -> int:
     _require_parquet_engine()
     contract = create_benchmark_contract(config)
     _reject_incompatible_numeric_folds(config)
@@ -245,7 +279,13 @@ def run_benchmark(
     model_params: Dict[str, Dict[str, Any]] = dict(config.legacy_model_kwargs)
     feature_cache, descriptor_failures = _prepare_feature_artifacts(config, frame, contract.run_dir)
     feature_sets = {str(item["name"]): item for item in config.feature_sets}
-    while claimed := state.claim_next(rerun_failed=rerun_failed, task_keys=task_keys):
+    while True:
+        if task_budget is not None and task_budget.remaining_s() <= 0:
+            print("[hpo] task_timeout_s 已耗尽，剩余外层任务保持 pending", flush=True)
+            break
+        claimed = state.claim_next(rerun_failed=rerun_failed, task_keys=task_keys)
+        if claimed is None:
+            break
         try:
             if claimed.spec.descriptor in descriptor_failures:
                 raise RuntimeError(
@@ -279,14 +319,101 @@ def run_benchmark(
                 numeric_frame=numeric_frame,
                 numeric_contract=numeric_contract if numeric_frame is not None else None,
                 hpo_raw=config.raw.get("hpo"),
+                task_budget=task_budget,
             )
             state.mark_succeeded(claimed, result.prediction_path, result.metadata_path)
             print("[succeeded]", claimed.spec.task_key)
         except BaseException as exc:
+            from yonod.hpo.budget import TaskBudgetExpired
+            if isinstance(exc, TaskBudgetExpired):
+                state.defer_claimed(claimed, str(exc))
+                print("[hpo] task_timeout_s 已耗尽，当前外层任务保持 pending", flush=True)
+                break
             state.mark_failed(claimed, exc)
             print("[failed] {0}: {1}".format(claimed.spec.task_key, exc), file=sys.stderr)
             if isinstance(exc, KeyboardInterrupt):
                 raise
+
+    final_status = None
+    hpo = config.raw.get("hpo", {})
+    if hpo.get("enabled") and hpo.get("final_model", {}).get("enabled"):
+        from contextlib import nullcontext
+        from yonod.hpo.budget import ActiveBudgetLedger, TaskBudgetExpired
+        from yonod.hpo.finalize import fit_strict_final_model
+        from yonod.hpo.storage import _atomic_json
+        from yonod.hpo.strict import select_strict_outer_parameters
+
+        expected = [(descriptor, model) for descriptor, model in itertools.product(config.descriptors, hpo["models"])]
+        final_status = {"schema": "yonod-strict-final-status/v1", "expected": len(expected),
+                        "completed": [], "failed": [], "pending": []}
+        if any(state.summary()[key] for key in ("pending", "running", "failed", "interrupted")):
+            final_status["pending"] = [f"{descriptor}__{model}" for descriptor, model in expected]
+        else:
+            for descriptor, model in expected:
+                combination = f"{descriptor}__{model}"
+                feature_set = feature_sets[descriptor]
+                feature_matrix, _ = feature_cache[descriptor]
+                categorical_frame = (frame.loc[:, list(feature_set["component_cols"])].copy()
+                                     if feature_set["kind"] == "fold_transform" else None)
+                if categorical_frame is not None:
+                    from yonod.benchmark.fold_preprocessors import ReactionComponentOHE
+                    ohe_factory = lambda columns=list(feature_set["component_cols"]): ReactionComponentOHE(columns)
+                else:
+                    ohe_factory = None
+                final_timeout = hpo["final_model"]["budget"].get("task_timeout_s")
+                final_context = (
+                    ActiveBudgetLedger(
+                        contract.run_dir,
+                        {"run_id": contract.run_id, "purpose": "strict_final", "combination": combination},
+                        final_timeout,
+                        study_dir=contract.run_dir / "hpo" / "final_task_budget" / combination,
+                    ) if final_timeout is not None else nullcontext(None)
+                )
+                try:
+                    with final_context as final_budget:
+                        if task_budget is not None:
+                            task_budget.require_start("严格最终模型搜索")
+                        selected = select_strict_outer_parameters(
+                            output_root=contract.run_dir, sample_ids=sample_ids,
+                            labels=labels, split_manifest=split_manifest,
+                            repeat=0, fold=0, descriptor=descriptor, model=model,
+                            model_config=config.model_configs[model], hpo_raw=hpo,
+                            models=config.models,
+                            grouping_strategy=str(config.grouping.get("strategy", "")),
+                            feature_matrix=feature_matrix,
+                            categorical_frame=categorical_frame, ohe_factory=ohe_factory,
+                            numeric_frame=numeric_frame,
+                            numeric_contract=numeric_contract if numeric_frame is not None else None,
+                            source_frame=frame, task_budget=task_budget,
+                            final_budget=final_budget, purpose="final_model",
+                        )
+                        if task_budget is not None:
+                            task_budget.require_start("严格完整开发集最终重训")
+                        if final_budget is not None:
+                            final_budget.require_start("严格完整开发集最终重训")
+                        final_info = fit_strict_final_model(
+                            contract=contract, frame=frame, feature_set=feature_set,
+                            feature_matrix=feature_matrix, numeric_frame=numeric_frame,
+                            numeric_contract=numeric_contract, model=model,
+                            search_audit=selected,
+                        )
+                    final_status["completed"].append({"combination": combination, **final_info})
+                    print("[hpo] final_model complete", combination, flush=True)
+                except TaskBudgetExpired as exc:
+                    final_status["pending"].append(combination)
+                    print(f"[hpo] final_model pending {combination}: {exc}", flush=True)
+                    final_status["pending"].extend(
+                        f"{other_descriptor}__{other_model}" for other_descriptor, other_model in expected
+                        if f"{other_descriptor}__{other_model}" not in [
+                            item["combination"] for item in final_status["completed"]
+                        ] and f"{other_descriptor}__{other_model}" not in final_status["pending"]
+                    )
+                    break
+                except Exception as exc:
+                    final_status["failed"].append({"combination": combination,
+                                                   "reason": f"{type(exc).__name__}: {exc}"})
+                    print(f"[hpo] final_model failed {combination}: {exc}", file=sys.stderr)
+        _atomic_json(contract.run_dir / "final_models" / "final_status.json", final_status)
 
     rebuilt = rebuild_fold_metrics(contract.run_dir)
     complete_metrics = _complete_metrics(rebuilt)
@@ -307,7 +434,8 @@ def run_benchmark(
     counts = state.summary()
     print("[state]", counts)
     print("[report]", report.html_path)
-    return 0 if counts["failed"] == 0 and counts["interrupted"] == 0 and counts["pending"] == 0 else 2
+    return 0 if (counts["failed"] == 0 and counts["interrupted"] == 0 and counts["pending"] == 0 and
+                 (final_status is None or (not final_status["failed"] and not final_status["pending"]))) else 2
 
 
 def main() -> int:

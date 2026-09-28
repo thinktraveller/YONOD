@@ -687,7 +687,18 @@ def _existing_complete_run(run_dir: Path, expected_run_id: str) -> TrainingRun |
         hpo_audits = hpo_payload.get("outer_folds", [])
         if not isinstance(hpo_audits, list) or len(hpo_audits) != int(payload.get("n_folds", -1)):
             raise TrainingServiceError("已有 HPO 结果缺少完整逐外层折 study")
-        for fold_audit in hpo_audits:
+        final_info = hpo_payload.get("final_model")
+        if hpo_payload.get("declaration", {}).get("final_model", {}).get("enabled") and not isinstance(final_info, Mapping):
+            raise TrainingServiceError("已有 HPO 结果缺少显式最终模型审计")
+        all_studies = list(hpo_audits)
+        if isinstance(final_info, Mapping):
+            if final_info.get("purpose") != "final_model" or not isinstance(final_info.get("study"), Mapping):
+                raise TrainingServiceError("已有最终模型 study 用途无效")
+            all_studies.append(final_info["study"])
+            final_bundle = run_dir / str(final_info.get("bundle_path", ""))
+            if not final_bundle.is_file() or _sha256_file(final_bundle) != final_info.get("bundle_sha256"):
+                raise TrainingServiceError("已有最终模型包缺失或哈希不匹配")
+        for fold_audit in all_studies:
             try:
                 study_path = (task_root_path / str(fold_audit["study_dir"])).resolve()
                 study_path.relative_to(task_root_path)
@@ -706,6 +717,10 @@ def _existing_complete_run(run_dir: Path, expected_run_id: str) -> TrainingRun |
         bundle_path = run_dir / str(name)
         if not bundle_path.is_file():
             raise TrainingServiceError(f"已有模型包缺失，拒绝复用：{bundle_path}")
+        bundle_hashes = payload.get("model_bundle_sha256")
+        if hpo_payload is not None and (not isinstance(bundle_hashes, Mapping) or
+                                        _sha256_file(bundle_path) != bundle_hashes.get(str(name))):
+            raise TrainingServiceError(f"已有 HPO 模型包与运行 manifest 哈希不匹配：{bundle_path}")
         bundle = yaml.safe_load(bundle_path.read_text(encoding="utf-8"))
         if not isinstance(bundle, Mapping) or bundle.get("run_id") != expected_run_id:
             raise TrainingServiceError(f"已有模型包身份不一致，拒绝复用：{bundle_path}")
@@ -716,6 +731,10 @@ def _existing_complete_run(run_dir: Path, expected_run_id: str) -> TrainingRun |
             state_path = run_dir / str(bundle["numeric_state_path"])
             if not state_path.is_file() or _sha256_file(state_path) != bundle.get("numeric_state_sha256"):
                 raise TrainingServiceError(f"已有数值拟合状态缺失或篡改，拒绝复用：{state_path}")
+        if bundle.get("ohe_state_path") and (bundle.get("hpo") or bundle.get("purpose") == "final_model"):
+            metadata_path = run_dir / str(bundle["ohe_state_path"]) / "metadata.json"
+            if not metadata_path.is_file() or _sha256_file(metadata_path) != bundle.get("ohe_state_metadata_sha256"):
+                raise TrainingServiceError(f"已有 OHE 状态元数据缺失或篡改，拒绝复用：{metadata_path}")
     return TrainingRun(
         run_id=expected_run_id,
         artifact_id=str(payload.get("artifact_id")),
@@ -745,6 +764,8 @@ def _publish_failed_run(
     n_samples: int,
     n_folds: int,
     cause: Exception,
+    hpo_declaration: Mapping[str, Any] | None = None,
+    hpo_folds: Sequence[Mapping[str, Any]] = (),
 ) -> TrainingRun:
     """Publish immutable failure evidence without disturbing other combinations.
 
@@ -760,6 +781,8 @@ def _publish_failed_run(
     failure_dir = failure_parent / f"{run_id}-{attempt_id}"
     staging = failure_parent / f".{run_id}-{attempt_id}.tmp"
     reason = f"{type(cause).__name__}: {cause}"
+    from yonod.hpo.budget import TaskBudgetExpired
+    status = "incomplete" if isinstance(cause, TaskBudgetExpired) else "failed"
     try:
         staging.mkdir()
         shutil.copy2(loaded.path, staging / "source_config.yaml")
@@ -767,13 +790,17 @@ def _publish_failed_run(
         manifest = {
             "schema_version": TRAINING_SCHEMA_VERSION,
             "kind": "yonod_training_run",
-            "status": "failed",
+            "status": status,
             "run_id": run_id,
             "artifact_id": artifact.manifest["artifact_id"],
             "feature_id": artifact.manifest["feature_id"],
             "feature_content_identity": artifact_content_identity(artifact.manifest),
             "model": model,
             "model_request": resolved.as_audit_dict(),
+            **({"hpo": {"declaration": dict(hpo_declaration),
+                        "outer_folds": list(hpo_folds),
+                        "completed_outer_folds": len(hpo_folds),
+                        "expected_outer_folds": int(n_folds)}} if hpo_declaration is not None else {}),
             "dataset_identity": dataset_identity,
             "label_identity": label_identity,
             "label_column": str(config["dataset"]["column_roles"]["label"]),
@@ -786,7 +813,7 @@ def _publish_failed_run(
             "effective_config_sha256": _sha256_file(staging / "effective_config.yaml"),
             "dependency_versions": software_versions(model),
             "failure": {
-                "phase": "fold_execution_or_result_publication",
+                "phase": "soft_task_budget" if status == "incomplete" else "fold_execution_or_result_publication",
                 "reason": reason,
             },
             "outputs": {
@@ -810,7 +837,7 @@ def _publish_failed_run(
         artifact_id=str(artifact.manifest["artifact_id"]),
         feature_id=str(artifact.manifest["feature_id"]),
         model=model,
-        status="failed",
+        status=status,
         run_dir=failure_dir,
         manifest_path=failure_dir / "run_manifest.yaml",
         predictions_path=failure_dir / "predictions.csv",
@@ -832,12 +859,35 @@ def _result_root(loaded: LoadedRunConfig, config: Mapping[str, Any]) -> Path:
     return task_root(loaded.path, config)
 
 
+def _task_budget_context(loaded: LoadedRunConfig, config: Mapping[str, Any]):
+    """Share one active HPO task clock across features and all model combinations."""
+    from contextlib import nullcontext
+
+    hpo = config.get("hpo") or {}
+    if not hpo.get("enabled") or hpo.get("budget", {}).get("task_timeout_s") is None:
+        return nullcontext(None)
+    from yonod.hpo.budget import ActiveBudgetLedger
+    from yonod.hpo.contracts import validate_hpo_declaration
+
+    normalized = validate_hpo_declaration(
+        hpo, models=config["models"], stage=config["stage"],
+        evaluation=config.get("evaluation"), model_params=config.get("model_params"),
+    )
+    dataset_path = resolve_config_path(loaded.path, config["dataset"]["path"])
+    return ActiveBudgetLedger(
+        _result_root(loaded, config),
+        {"hpo": normalized, "dataset_sha256": _sha256_file(dataset_path)},
+        normalized["budget"]["task_timeout_s"],
+    )
+
+
 def _run_one_artifact(
     loaded: LoadedRunConfig,
     artifact_path: Path,
     *,
     model: str,
     fold_runner: FoldRunner | None = None,
+    task_budget: Any = None,
 ) -> TrainingRun:
     config = loaded.effective
     try:
@@ -909,6 +959,11 @@ def _run_one_artifact(
     prediction_records: list[Dict[str, Any]] = []
     model_bundles: list[str] = []
     hpo_folds: list[Dict[str, Any]] = []
+    owned_task_budget = False
+    if task_budget is None and hpo_declaration is not None and hpo_declaration["budget"].get("task_timeout_s") is not None:
+        task_budget = _task_budget_context(loaded, config)
+        task_budget.__enter__()
+        owned_task_budget = True
     try:
         for repeat, fold, train_index, valid_index in rows:
             search_audit = None
@@ -920,11 +975,14 @@ def _run_one_artifact(
                     sample_ids=sample_ids, labels=labels, outer_train_index=train_index,
                     repeat=repeat, fold=fold, model=model,
                     numeric_contract=numeric_contract, output_root=result_root,
+                    task_budget=task_budget,
                 )
                 selected_config = copy.deepcopy(dict(config.get("model_params", {}).get(model, {})))
-                selected_config["estimator"] = search_audit["effective_estimator_parameters"]
+                selected_config["estimator"] = search_audit["constructor_parameters"]
                 fold_resolved = resolve_model_config(model, selected_config)
                 hpo_folds.append({"repeat": repeat, "fold": fold, **search_audit})
+                if task_budget is not None:
+                    task_budget.require_start("外层重训")
             fold_context = {
                 "run_id": run_id,
                 "artifact_id": artifact.manifest["artifact_id"],
@@ -976,6 +1034,10 @@ def _run_one_artifact(
                         (staging / "fold_transforms" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}" / "transform").relative_to(staging).as_posix()
                         if artifact.manifest["lifecycle"] == "fold_transform" else None
                     ),
+                    "ohe_state_metadata_sha256": (
+                        _sha256_file(staging / "fold_transforms" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}" / "transform" / "metadata.json")
+                        if artifact.manifest["lifecycle"] == "fold_transform" else None
+                    ),
                     "train_sample_ids_sha256": fold_context["train_sample_ids_sha256"],
                     "split_identity": split_identity,
                     "software_versions": software_versions(model),
@@ -1004,6 +1066,40 @@ def _run_one_artifact(
                 "sample_id": sample_ids[index], "repeat": repeat, "fold": fold,
                 "y_true": float(labels[index]), "y_pred": float(value),
             } for index, value in zip(valid_index.tolist(), prediction.tolist()))
+        final_info = None
+        if hpo_declaration is not None and hpo_declaration["final_model"]["enabled"]:
+            from contextlib import nullcontext
+            from yonod.hpo.budget import ActiveBudgetLedger
+            from yonod.hpo.finalize import fit_final_model
+            from yonod.hpo.ordinary import select_outer_parameters
+            final_timeout = hpo_declaration["final_model"]["budget"].get("task_timeout_s")
+            final_budget_context = (
+                ActiveBudgetLedger(
+                    result_root, {"run_id": run_id, "purpose": "final_model"}, final_timeout,
+                    study_dir=result_root / "hpo" / "final_task_budget" / run_id,
+                ) if final_timeout is not None else nullcontext(None)
+            )
+            with final_budget_context as final_budget:
+                if task_budget is not None:
+                    task_budget.require_start("最终模型独立搜索")
+                final_search = select_outer_parameters(
+                    artifact=artifact, config=config, aligned=aligned,
+                    sample_ids=sample_ids, labels=labels,
+                    outer_train_index=np.arange(len(sample_ids), dtype=int),
+                    repeat=0, fold=0, model=model, numeric_contract=numeric_contract,
+                    output_root=result_root, task_budget=task_budget,
+                    final_budget=final_budget, purpose="final_model",
+                )
+                if task_budget is not None:
+                    task_budget.require_start("完整开发集最终重训")
+                if final_budget is not None:
+                    final_budget.require_start("完整开发集最终重训")
+                final_info = fit_final_model(
+                    artifact=artifact, config=config, aligned=aligned,
+                    sample_ids=sample_ids, labels=labels, numeric_contract=numeric_contract,
+                    model=model, run_id=run_id, staging=staging, search_audit=final_search,
+                )
+            model_bundles.append(final_info["bundle_path"])
         predictions = pd.DataFrame.from_records(prediction_records)
         metrics = pd.DataFrame.from_records(fold_records)
         if len(predictions) != len(sample_ids) * int(evaluation["n_repeats"]):
@@ -1025,7 +1121,8 @@ def _run_one_artifact(
             "feature_content_identity": artifact_content_identity(artifact.manifest),
             "model": model,
             "model_request": resolved.as_audit_dict(),
-            **({"hpo": {"declaration": hpo_declaration, "outer_folds": hpo_folds}} if hpo_declaration is not None else {}),
+            **({"hpo": {"declaration": hpo_declaration, "outer_folds": hpo_folds,
+                        **({"final_model": final_info} if final_info is not None else {})}} if hpo_declaration is not None else {}),
             "dataset_identity": dataset_identity,
             "label_identity": label_identity,
             "label_column": label_col,
@@ -1036,6 +1133,9 @@ def _run_one_artifact(
             "n_samples": int(len(sample_ids)),
             "n_folds": int(len(rows)),
             "model_bundles": model_bundles,
+            **({"model_bundle_sha256": {
+                name: _sha256_file(staging / name) for name in model_bundles
+            }} if hpo_declaration is not None else {}),
             "source_config_filename": loaded.path.name,
             "source_config_sha256": _sha256_file(staging / "source_config.yaml"),
             "effective_config_sha256": _sha256_file(staging / "effective_config.yaml"),
@@ -1068,13 +1168,27 @@ def _run_one_artifact(
             os.replace(staging / "failed_attempts", run_dir / "failed_attempts")
         if staging.exists():
             shutil.rmtree(staging)
-        return _publish_failed_run(
+        failed_run = _publish_failed_run(
             loaded, config, artifact,
             model=model, resolved=resolved, run_id=run_id,
             dataset_identity=dataset_identity, label_identity=label_identity,
             split_identity=split_identity, evaluation=evaluation,
             n_samples=len(sample_ids), n_folds=len(rows), cause=exc,
+            hpo_declaration=hpo_declaration, hpo_folds=hpo_folds,
         )
+        if hpo_declaration is not None:
+            try:
+                from yonod.pipeline.reporting import rebuild_schema2_hpo_status_report
+                rebuild_schema2_hpo_status_report(
+                    result_root, formats=config["outputs"].get("report_formats"),
+                )
+            except Exception as report_exc:
+                import sys
+                print(f"[hpo] 状态报告生成失败，原始训练错误仍为：{failed_run.reason}；报告错误：{report_exc}", file=sys.stderr)
+        return failed_run
+    finally:
+        if owned_task_budget:
+            task_budget.__exit__(None, None, None)
     return TrainingRun(
         run_id=run_id,
         artifact_id=str(artifact.manifest["artifact_id"]),
@@ -1098,12 +1212,6 @@ def validate_training_model_parameters(config: Mapping[str, Any]) -> Dict[str, R
             evaluation=config.get("evaluation"), model_params=config.get("model_params"),
         )
         require_search_engine()
-        if set(hpo["models"]) - {"rf"}:
-            raise TrainingServiceError("XGBoost/LightGBM 的嵌套 HPO 真实入口尚未验收；当前只开放 RF 小型工程 smoke")
-        if hpo["final_model"]["enabled"]:
-            raise TrainingServiceError("显式最终模型搜索尚未验收；请保持 hpo.final_model.enabled=false")
-        if hpo["budget"].get("study_timeout_s") or hpo["budget"].get("task_timeout_s"):
-            raise TrainingServiceError("HPO 软时限的持久活跃账本尚未接入；请仅使用 max_trials")
     models = list(config.get("models") or [])
     if not models:
         raise TrainingServiceError("train/all 必须选择至少一个模型")
@@ -1122,6 +1230,7 @@ def run_train(
     *,
     input_manifests: Sequence[Path | str] | None = None,
     fold_runner: FoldRunner | None = None,
+    task_budget: Any = None,
 ) -> tuple[TrainingRun, ...]:
     """Run models from existing artifacts only; it never invokes feature generation.
 
@@ -1152,10 +1261,16 @@ def run_train(
                 raise TrainingServiceError("组合目录名称冲突；请为特征指定不同的 id（不区分大小写）")
             names.add(name)
     create_task_layout(_result_root(loaded, config))
+    from contextlib import nullcontext
+    context = _task_budget_context(loaded, config) if task_budget is None else nullcontext(task_budget)
     results: list[TrainingRun] = []
-    for path in paths:
-        for model in config["models"]:
-            results.append(_run_one_artifact(loaded, path, model=str(model), fold_runner=fold_runner))
+    with context as active_budget:
+        for path in paths:
+            for model in config["models"]:
+                results.append(_run_one_artifact(
+                    loaded, path, model=str(model), fold_runner=fold_runner,
+                    task_budget=active_budget,
+                ))
     return tuple(results)
 
 
@@ -1176,9 +1291,11 @@ def run_all(
         raise TrainingServiceError("run_all 只接受 stage: all 配置")
     validate_training_model_parameters(loaded.effective)
     from .features import run_features
-    feature_result = run_features(config_path, feature_computer=feature_computer, allow_all=True)
-    manifests = [item.manifest_path for item in feature_result.features if item.status in {"ready", "reused"} and item.manifest_path]
-    if not manifests:
-        raise TrainingServiceError("所有特征候选均失败；不会开始任何模型训练")
-    runs = run_train(config_path, input_manifests=manifests, fold_runner=fold_runner)
+    with _task_budget_context(loaded, loaded.effective) as task_budget:
+        feature_result = run_features(config_path, feature_computer=feature_computer, allow_all=True)
+        manifests = [item.manifest_path for item in feature_result.features if item.status in {"ready", "reused"} and item.manifest_path]
+        if not manifests:
+            raise TrainingServiceError("所有特征候选均失败；不会开始任何模型训练")
+        runs = run_train(config_path, input_manifests=manifests, fold_runner=fold_runner,
+                         task_budget=task_budget)
     return AllRunResult(feature_result.status_manifest_path, feature_result.status, runs)

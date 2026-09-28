@@ -29,6 +29,19 @@ _METRIC_DIRECTIONS = {
 }
 
 
+def _audit_value(value: Any) -> Any:
+    """Make library default snapshots strict JSON without changing fitted models."""
+    if isinstance(value, Mapping):
+        return {str(key): _audit_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_audit_value(item) for item in value]
+    if isinstance(value, (float, np.floating)) and not math.isfinite(float(value)):
+        return str(value)
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 @dataclass(frozen=True)
 class SearchPopulation:
     """Already sliced outer-train values; never include outer-validation data."""
@@ -152,9 +165,7 @@ def run_inner_search(
         model_config["estimator"] = {**fixed_estimator, **suggestion}
         trial.set_user_attr("suggested_parameters", suggestion)
         trial.set_user_attr("fixed_estimator_parameters", fixed_estimator)
-        trial.set_user_attr("parameter_sources", {
-            name: "hpo_trial" if name in suggestion else "yaml" for name in model_config["estimator"]
-        })
+        trial.set_user_attr("constructor_parameters", model_config["estimator"])
         fold_audits = []
         fold_scores = []
         for fold in folds:
@@ -169,6 +180,16 @@ def run_inner_search(
             estimator, construction = construct_estimator(
                 resolved, n_features=matrices.X_train.shape[1], n_train=len(fold.train_index)
             )
+            effective = _audit_value(construction["effective_estimator_params"])
+            if fold_audits and effective != fold_audits[0]["effective_estimator"]:
+                raise SearchError("同一 trial 的不同 inner-fold 有不同估计器有效参数")
+            trial.set_user_attr("effective_estimator_parameters", effective)
+            trial.set_user_attr("parameter_sources", {
+                name: ("hpo_trial" if name in suggestion else "yaml" if name in fixed_estimator
+                       else "runtime" if name == "device" and "device_policy" in fixed.get("runtime", {})
+                       else "library_default")
+                for name in effective
+            })
             fit_params = materialise_fit_parameters(
                 resolved, population.fit_frame if population.fit_frame is not None else pd.DataFrame(index=range(len(labels))),
                 np.asarray(fold.train_index, dtype=int),
@@ -198,7 +219,7 @@ def run_inner_search(
             fold_scores.append(score)
             fold_audits.append({
                 **fold.audit(), "metric": metric, "score": score,
-                "transform": matrices.state, "effective_estimator": construction["effective_estimator_params"],
+                "transform": matrices.state, "effective_estimator": effective,
             })
             trial.set_user_attr("folds", fold_audits)
             print(f"[hpo] study={study.study_name} trial={trial.number} inner={fold.number}/{len(folds)} {metric}={score:.6g}", flush=True)
@@ -218,6 +239,10 @@ def run_inner_search(
         best = min(complete, key=lambda trial: (trial.value, trial.number))
     else:
         best = min(complete, key=lambda trial: (-trial.value, trial.number))
+    full_params = best.user_attrs.get("effective_estimator_parameters")
+    sources = best.user_attrs.get("parameter_sources")
+    if not isinstance(full_params, dict) or not isinstance(sources, dict) or set(full_params) != set(sources):
+        raise SearchError("最佳 trial 缺少完整有效参数与来源审计")
     if stop_reason is None:
         stop_reason = "max_trials" if len(trials) >= max_trials else "soft_timeout"
     return {
@@ -225,10 +250,9 @@ def run_inner_search(
         "best_trial_number": best.number,
         "best_value": float(best.value),
         "best_parameters": copy.deepcopy(best.params),
-        "effective_estimator_parameters": {**fixed_estimator, **best.params},
-        "parameter_sources": {
-            name: "hpo_trial" if name in best.params else "yaml" for name in {**fixed_estimator, **best.params}
-        },
+        "constructor_parameters": {**fixed_estimator, **best.params},
+        "effective_estimator_parameters": full_params,
+        "parameter_sources": sources,
         "attempted_trials": len(trials), "complete_trials": len(complete),
         "failed_trials": sum(trial.state == optuna.trial.TrialState.FAIL for trial in trials),
         "stop_reason": stop_reason,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import json
+import math
 import os
 import tempfile
 from contextlib import contextmanager
@@ -101,7 +102,7 @@ def _single_writer(path: Path) -> Iterator[None]:
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
-def _trial_snapshot(trial: Any) -> dict[str, Any]:
+def _trial_snapshot(trial: Any, interrupted: Mapping[int, str] | None = None) -> dict[str, Any]:
     return {
         "number": trial.number,
         "state": trial.state.name,
@@ -110,6 +111,7 @@ def _trial_snapshot(trial: Any) -> dict[str, Any]:
         "user_attrs": trial.user_attrs,
         "datetime_start": trial.datetime_start.isoformat() if trial.datetime_start else None,
         "datetime_complete": trial.datetime_complete.isoformat() if trial.datetime_complete else None,
+        "interrupted_reason": (interrupted or {}).get(trial.number),
     }
 
 
@@ -125,6 +127,7 @@ class PersistentStudy:
         self.manifest_path = self.root / "study_manifest.json"
         self.trials_path = self.root / "trials.json"
         self.database_path = self.root / "study.sqlite"
+        self.recovery_path = self.root / "recovery.json"
         self.lock_path = self.root / ".writer.lock"
 
     @contextmanager
@@ -154,8 +157,17 @@ class PersistentStudy:
                 sampler=optuna.samplers.TPESampler(seed=self.payload["seed"]),
                 pruner=optuna.pruners.NopPruner(),
             )
-            for trial in study.get_trials(deepcopy=False):
-                if trial.state == optuna.trial.TrialState.RUNNING:
+            running = [trial for trial in study.get_trials(deepcopy=False)
+                       if trial.state == optuna.trial.TrialState.RUNNING]
+            if running:
+                recovered = self._read_recovery()
+                for trial in running:
+                    recovered.setdefault(trial.number, "previous_writer_exited_during_trial")
+                _atomic_json(self.recovery_path, [
+                    {"trial_number": number, "reason": reason}
+                    for number, reason in sorted(recovered.items())
+                ])
+                for trial in running:
                     study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
             self._reconcile(study)
             try:
@@ -165,12 +177,90 @@ class PersistentStudy:
 
     def _reconcile(self, study: Any) -> None:
         """Derived JSON may be rebuilt after DB commit; conflict is corruption."""
-        expected = [_trial_snapshot(trial) for trial in study.get_trials(deepcopy=False)]
+        trials = study.get_trials(deepcopy=False)
+        interrupted = self._read_recovery()
+        states = {trial.number: trial.state.name for trial in trials}
+        if any(states.get(number) not in {"FAIL", "RUNNING"} for number in interrupted):
+            raise StudyStorageError("中断恢复记录与 trial 状态不一致")
+        for trial in trials:
+            if trial.state.name == "COMPLETE":
+                self._verify_completed_trial(trial)
+        expected = [_trial_snapshot(trial, interrupted) for trial in trials]
         if self.trials_path.exists():
             try:
                 existing = json.loads(self.trials_path.read_text(encoding="utf-8"))
             except (OSError, ValueError) as exc:
                 raise StudyStorageError("trial 导出损坏") from exc
-            if not isinstance(existing, list) or len(existing) > len(expected) or existing != expected[:len(existing)]:
+            if not isinstance(existing, list) or len(existing) > len(expected):
                 raise StudyStorageError("trial 导出与数据库不一致，拒绝覆盖证据")
+            for previous, current in zip(existing, expected):
+                if previous == current:
+                    continue
+                transition = (
+                    isinstance(previous, dict) and previous.get("state") == "RUNNING" and
+                    current["state"] == "FAIL" and current["number"] in interrupted and
+                    previous.get("number") == current["number"] and
+                    previous.get("value") is None and current["value"] is None and
+                    previous.get("datetime_start") == current["datetime_start"] and
+                    isinstance(previous.get("params"), dict) and
+                    all(current["params"].get(key) == value for key, value in previous["params"].items()) and
+                    isinstance(previous.get("user_attrs"), dict) and
+                    all(current["user_attrs"].get(key) == value for key, value in previous["user_attrs"].items())
+                )
+                if not transition:
+                    raise StudyStorageError("trial 导出与数据库不一致，拒绝覆盖证据")
         _atomic_json(self.trials_path, expected)
+
+    def _read_recovery(self) -> dict[int, str]:
+        if not self.recovery_path.exists():
+            return {}
+        try:
+            rows = json.loads(self.recovery_path.read_text(encoding="utf-8"))
+            if not isinstance(rows, list):
+                raise ValueError("recovery must be list")
+            result: dict[int, str] = {}
+            for row in rows:
+                number, reason = row["trial_number"], row["reason"]
+                if (isinstance(number, bool) or not isinstance(number, int) or number < 0 or
+                    number in result or reason != "previous_writer_exited_during_trial"):
+                    raise ValueError("invalid recovery row")
+                result[number] = reason
+            return result
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise StudyStorageError("中断恢复记录损坏") from exc
+
+    def _verify_completed_trial(self, trial: Any) -> None:
+        """A DB COMMIT is insufficient without full inner-fold evidence."""
+        attrs = trial.user_attrs
+        folds = attrs.get("folds")
+        declared = self.payload["inner_folds"]
+        if not isinstance(declared, list) or not isinstance(folds, list) or len(folds) != len(declared):
+            raise StudyStorageError(f"COMPLETE trial {trial.number} 缺少完整 inner-fold 审计")
+        scores = []
+        for actual, expected in zip(folds, declared):
+            if not isinstance(actual, dict) or not isinstance(expected, dict):
+                raise StudyStorageError(f"COMPLETE trial {trial.number} 的 inner-fold 审计格式无效")
+            for key in ("fold", "n_train", "n_valid", "train_ids_sha256", "valid_ids_sha256"):
+                if actual.get(key) != expected.get(key):
+                    raise StudyStorageError(f"COMPLETE trial {trial.number} 的 inner-fold 身份不一致")
+            score = actual.get("score")
+            if (actual.get("metric") != self.payload["objective"]["metric"] or
+                isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score)):
+                raise StudyStorageError(f"COMPLETE trial {trial.number} 的逐折分数无效")
+            if not isinstance(actual.get("transform"), dict) or not isinstance(actual.get("effective_estimator"), dict):
+                raise StudyStorageError(f"COMPLETE trial {trial.number} 缺少处理或模型审计")
+            scores.append(float(score))
+        objective = attrs.get("objective_value")
+        if (trial.value is None or not math.isfinite(trial.value) or
+            not isinstance(objective, (int, float)) or not math.isfinite(objective) or
+            attrs.get("objective_aggregation") != "arithmetic_mean_of_inner_fold_scores" or
+            not math.isclose(float(objective), float(trial.value), rel_tol=1e-12, abs_tol=1e-12) or
+            not math.isclose(float(objective), sum(scores) / len(scores), rel_tol=1e-12, abs_tol=1e-12)):
+            raise StudyStorageError(f"COMPLETE trial {trial.number} 的目标聚合与数据库不一致")
+        effective = attrs.get("effective_estimator_parameters")
+        sources = attrs.get("parameter_sources")
+        if (not isinstance(effective, dict) or not isinstance(sources, dict) or
+            set(effective) != set(sources) or
+            any(source not in {"hpo_trial", "yaml", "runtime", "library_default"} for source in sources.values()) or
+            attrs.get("suggested_parameters") != trial.params):
+            raise StudyStorageError(f"COMPLETE trial {trial.number} 缺少有效参数或来源审计")

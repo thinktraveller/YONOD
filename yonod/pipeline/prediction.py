@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import sqlite3
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -36,6 +38,31 @@ def _within(root: Path, reference: str, *, file: bool = True) -> Path:
     return path
 
 
+def _verify_strict_fold_state(layout: Any, metadata_path: Path, metadata: Mapping[str, Any]) -> None:
+    """Bind strict fold metadata to the successful SQLite task-state record."""
+    database = layout.state / "tasks.sqlite"
+    if not database.is_file():
+        raise PredictionContractError("严格折级任务状态数据库不存在")
+    try:
+        with sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True) as connection:
+            rows = connection.execute(
+                """SELECT output_record_json FROM tasks WHERE run_id=? AND config_hash=? AND split_id=?
+                   AND descriptor=? AND model=? AND repeat_index=? AND fold=? AND status='succeeded'""",
+                (metadata["run_id"], metadata["config_hash"], metadata["split_id"],
+                 metadata["descriptor"], metadata["model"], metadata["repeat"], metadata["fold"]),
+            ).fetchall()
+        if len(rows) != 1:
+            raise PredictionContractError("严格折级任务状态不是唯一 succeeded")
+        record = json.loads(rows[0][0])
+        if (Path(record["metadata_path"]).resolve() != metadata_path.resolve() or
+            record["metadata_sha256"] != _sha256_file(metadata_path)):
+            raise PredictionContractError("严格折级元数据与任务状态哈希不匹配")
+    except PredictionContractError:
+        raise
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+        raise PredictionContractError("严格折级任务状态审计无效") from exc
+
+
 def predict_saved_fold(
     run_dir: Path | str,
     frame: pd.DataFrame,
@@ -52,8 +79,36 @@ def predict_saved_fold(
     separately versioned model asset. The caller is responsible for treating
     untrusted joblib files as untrusted code and should load only local runs.
     """
+    return _predict_saved_ordinary(
+        run_dir, frame, bundle_reference=f"model_bundles/repeat-{repeat:02d}-fold-{fold:02d}.yaml",
+        repeat=repeat, fold=fold, input_units=input_units,
+        descriptor_config_path=descriptor_config_path,
+    )
+
+
+def predict_saved_final(
+    run_dir: Path | str,
+    frame: pd.DataFrame,
+    *,
+    input_units: Mapping[str, str] | None = None,
+    descriptor_config_path: Path | str | None = None,
+) -> pd.DataFrame:
+    """Predict from the explicitly trained full-development final model."""
+    return _predict_saved_ordinary(
+        run_dir, frame, bundle_reference="model_bundles/final.yaml",
+        repeat=None, fold=None, input_units=input_units,
+        descriptor_config_path=descriptor_config_path,
+    )
+
+
+def _predict_saved_ordinary(
+    run_dir: Path | str, frame: pd.DataFrame, *, bundle_reference: str,
+    repeat: int | None, fold: int | None,
+    input_units: Mapping[str, str] | None,
+    descriptor_config_path: Path | str | None,
+) -> pd.DataFrame:
     root = Path(run_dir).resolve()
-    bundle_path = _within(root, f"model_bundles/repeat-{repeat:02d}-fold-{fold:02d}.yaml")
+    bundle_path = _within(root, bundle_reference)
     manifest_path = _within(root, "run_manifest.yaml")
     config_path = _within(root, "effective_config.yaml")
     try:
@@ -62,11 +117,23 @@ def predict_saved_fold(
         config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
         raise PredictionContractError(f"无法读取预测契约：{exc}") from exc
-    if not isinstance(bundle, dict) or bundle.get("schema_version") != "yonod_model_bundle/v1":
+    expected_schema = "yonod_final_model_bundle/v1" if repeat is None else "yonod_model_bundle/v1"
+    if not isinstance(bundle, dict) or bundle.get("schema_version") != expected_schema:
         raise PredictionContractError("模型包版本不受支持")
     if not isinstance(manifest, dict) or bundle.get("run_id") != manifest.get("run_id"):
         raise PredictionContractError("模型包与训练结果身份不一致")
-    if int(bundle.get("repeat", -1)) != repeat or int(bundle.get("fold", -1)) != fold:
+    if manifest.get("hpo"):
+        hashes = manifest.get("model_bundle_sha256")
+        if not isinstance(hashes, Mapping) or _sha256_file(bundle_path) != hashes.get(bundle_reference):
+            raise PredictionContractError("HPO 模型包与运行 manifest 哈希不匹配")
+    if repeat is None:
+        final_info = manifest.get("hpo", {}).get("final_model")
+        if (bundle.get("purpose") != "final_model" or not isinstance(final_info, Mapping) or
+            final_info.get("bundle_path") != bundle_reference or
+            _sha256_file(bundle_path) != final_info.get("bundle_sha256") or
+            bundle.get("hpo", {}).get("study_id") != final_info.get("study", {}).get("study_id")):
+            raise PredictionContractError("最终模型包与独立 final-purpose study 不一致")
+    elif int(bundle.get("repeat", -1)) != repeat or int(bundle.get("fold", -1)) != fold:
         raise PredictionContractError("模型包 repeat/fold 不匹配")
     if not isinstance(frame, pd.DataFrame) or frame.columns.has_duplicates:
         raise PredictionContractError("预测数据必须是列名唯一的 DataFrame")
@@ -81,6 +148,10 @@ def predict_saved_fold(
     lifecycle = bundle.get("feature_lifecycle")
     if lifecycle == "fold_transform":
         directory = _within(root, str(bundle.get("ohe_state_path")), file=False)
+        if bundle.get("hpo") or bundle.get("purpose") == "final_model":
+            metadata_path = _within(root, str(Path(bundle["ohe_state_path"]) / "metadata.json"))
+            if _sha256_file(metadata_path) != bundle.get("ohe_state_metadata_sha256"):
+                raise PredictionContractError("OHE 状态元数据哈希不匹配")
         transformer = OHEFeature.load(directory)
         descriptor = transformer.transform(frame, partition="predict")
     elif lifecycle == "static_descriptor":
@@ -149,6 +220,7 @@ def predict_saved_strict_fold(
     fold: int,
     input_units: Mapping[str, str] | None = None,
     descriptor_config_path: Path | str | None = None,
+    _purpose: str = "outer_fold",
 ) -> pd.DataFrame:
     """Load a strict HPO fold bundle and predict raw rows without refitting."""
     import json
@@ -157,26 +229,58 @@ def predict_saved_strict_fold(
 
     root = Path(task_root).resolve()
     layout = resolve_benchmark_output_layout(root)
-    suffix = f"{descriptor}__{model}__r{repeat:02d}__f{fold:02d}"
-    metadata_path = layout.folds / (suffix + ".json")
-    if not metadata_path.is_file():
-        raise PredictionContractError("严格折级元数据不存在")
-    try:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        adapter = metadata["model_adapter_metadata"]
-        bundle_path = _within(root, adapter["bundle_path"])
-        if _sha256_file(bundle_path) != adapter["bundle_sha256"]:
-            raise PredictionContractError("严格模型包哈希不匹配")
-        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise PredictionContractError("严格模型包或折级元数据无效") from exc
-    if bundle.get("schema_version") != "yonod_strict_model_bundle/v1":
+    if _purpose == "final_model":
+        try:
+            run_manifest = json.loads((layout.manifests / "run_manifest.json").read_text(encoding="utf-8"))
+            status = json.loads((root / "final_models" / "final_status.json").read_text(encoding="utf-8"))
+            matches = [item for item in status["completed"] if item["combination"] == f"{descriptor}__{model}"]
+            if len(matches) != 1:
+                raise PredictionContractError("严格最终模型未完整发布")
+            info = matches[0]
+            bundle_path = _within(root, info["bundle_path"])
+            if _sha256_file(bundle_path) != info["bundle_sha256"]:
+                raise PredictionContractError("严格最终模型包哈希不匹配")
+            bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+            audit = info["study"]
+            study_dir = (root / audit["study_dir"]).resolve()
+            if study_dir.parent.parent != root / "hpo":
+                raise PredictionContractError("严格最终 study 路径越界")
+            if (_sha256_file(_within(root, str(Path(audit["study_dir"]) / "study_manifest.json"))) != audit["study_manifest_sha256"] or
+                _sha256_file(_within(root, str(Path(audit["study_dir"]) / "trials.json"))) != audit["study_trials_sha256"]):
+                raise PredictionContractError("严格最终 study 哈希不匹配")
+            metadata = {"run_id": run_manifest["run_id"]}
+        except PredictionContractError:
+            raise
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise PredictionContractError("严格最终模型状态或模型包无效") from exc
+    else:
+        suffix = f"{descriptor}__{model}__r{repeat:02d}__f{fold:02d}"
+        metadata_path = layout.folds / (suffix + ".json")
+        if not metadata_path.is_file():
+            raise PredictionContractError("严格折级元数据不存在")
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            _verify_strict_fold_state(layout, metadata_path, metadata)
+            adapter = metadata["model_adapter_metadata"]
+            bundle_path = _within(root, adapter["bundle_path"])
+            if _sha256_file(bundle_path) != adapter["bundle_sha256"]:
+                raise PredictionContractError("严格模型包哈希不匹配")
+            bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        except PredictionContractError:
+            raise
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise PredictionContractError("严格模型包或折级元数据无效") from exc
+    expected_schema = "yonod_strict_final_model_bundle/v1" if _purpose == "final_model" else "yonod_strict_model_bundle/v1"
+    if bundle.get("schema_version") != expected_schema:
         raise PredictionContractError("严格模型包版本不受支持")
-    if (bundle.get("run_id"), bundle.get("descriptor"), bundle.get("model"),
-        bundle.get("repeat"), bundle.get("fold")) != (
-        metadata.get("run_id"), descriptor, model, repeat, fold,
-    ):
+    identity = (bundle.get("run_id"), bundle.get("descriptor"), bundle.get("model"))
+    if identity != (metadata.get("run_id"), descriptor, model):
         raise PredictionContractError("严格模型包与折级身份不一致")
+    if _purpose == "final_model":
+        if bundle.get("purpose") != "final_model" or bundle.get("hpo", {}).get("study_id") != info["study"]["study_id"]:
+            raise PredictionContractError("严格最终模型包与独立 study 不一致")
+    elif (bundle.get("repeat"), bundle.get("fold")) != (repeat, fold):
+        raise PredictionContractError("严格模型包 repeat/fold 不匹配")
     if not isinstance(frame, pd.DataFrame) or frame.columns.has_duplicates or frame.empty:
         raise PredictionContractError("预测输入必须是非空且列名唯一的 DataFrame")
     source_roles = bundle.get("dataset_roles") or {}
@@ -197,6 +301,9 @@ def predict_saved_strict_fold(
     columns = list(spec_raw.get("component_cols") or [])
     if spec_raw.get("kind") == "fold_transform":
         state_dir = _within(root, str(bundle.get("ohe_state_path")), file=False)
+        metadata_path = _within(root, str(Path(bundle["ohe_state_path"]) / "metadata.json"))
+        if _sha256_file(metadata_path) != bundle.get("ohe_state_metadata_sha256"):
+            raise PredictionContractError("严格 OHE 状态元数据哈希不匹配")
         transformer = OHEFeature.load(state_dir)
         descriptor_matrix = transformer.transform(frame, partition="predict")
     else:
@@ -253,3 +360,18 @@ def predict_saved_strict_fold(
     if len(prediction) != len(sample_ids) or not np.isfinite(prediction).all():
         raise PredictionContractError("严格模型预测数量或有限性无效")
     return pd.DataFrame({"sample_id": sample_ids, "y_pred": prediction})
+
+
+def predict_saved_strict_final(
+    task_root: Path | str,
+    frame: pd.DataFrame,
+    *, descriptor: str, model: str,
+    input_units: Mapping[str, str] | None = None,
+    descriptor_config_path: Path | str | None = None,
+) -> pd.DataFrame:
+    """Load only an explicit full-development strict final model."""
+    return predict_saved_strict_fold(
+        task_root, frame, descriptor=descriptor, model=model, repeat=0, fold=0,
+        input_units=input_units, descriptor_config_path=descriptor_config_path,
+        _purpose="final_model",
+    )
