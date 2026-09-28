@@ -42,6 +42,20 @@ _PRESETS: Dict[str, Dict[str, Dict[str, Any]]] = {
     },
 }
 
+# These are Booster aliases admitted by this project's model-parameter catalog.
+# A fixed alias and a searched sklearn key would reach the same Booster option
+# with ambiguous precedence. Other library aliases are rejected by the model
+# configuration catalog before a search starts.
+_LIGHTGBM_SEARCH_ALIASES = {
+    "min_child_samples": ("min_data_in_leaf",),
+    "min_child_weight": ("min_sum_hessian_in_leaf",),
+    "subsample": ("bagging_fraction",),
+    "colsample_bytree": ("feature_fraction",),
+    "reg_alpha": ("lambda_l1",),
+    "reg_lambda": ("lambda_l2",),
+    "min_split_gain": ("min_gain_to_split",),
+}
+
 
 def _number(value: Any, field: str) -> Decimal:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
@@ -137,6 +151,15 @@ def expand_search_space(model: str, declaration: Any, fixed_estimator: Mapping[s
     if model == "xgb" and fixed.get("booster", "gbtree") != "gbtree" and preset:
         raise SpaceContractError("xgb compact-v1 仅适用于 booster=gbtree")
     if model == "lightgbm":
+        aliases = sorted(
+            f"{name}/{alias}"
+            for name, names in _LIGHTGBM_SEARCH_ALIASES.items() if name in expanded
+            for alias in names if alias in fixed
+        )
+        if aliases:
+            raise SpaceContractError(
+                "lightgbm 搜索参数与固定参数别名冲突：" + ", ".join(aliases)
+            )
         if "subsample" in expanded and fixed.get("subsample_freq", 0) <= 0:
             raise SpaceContractError("lightgbm 搜索 subsample 时必须固定正数 subsample_freq")
         max_depth = fixed.get("max_depth")
