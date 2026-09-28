@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import datetime as _dt
 import html as _html
+import json
 import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -660,6 +661,107 @@ def _section_numeric_audit(task_info: Dict[str, Any]) -> str:
     )
 
 
+def _hpo_cell(value: Any) -> str:
+    if value is None:
+        return "N/A"
+    if isinstance(value, float):
+        return "N/A" if not math.isfinite(value) else f"{value:.4f}"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return str(value)
+
+
+_HPO_TABLES = (
+    ("studies", "搜索状态与最佳参数", (
+        ("combination", "组合"), ("repeat", "repeat"), ("fold", "fold"),
+        ("study_id", "study"), ("status", "状态"), ("objective", "目标"),
+        ("attempted", "尝试"), ("complete", "成功"), ("failed", "失败"),
+        ("best_trial", "最佳 trial"), ("best_inner", "最佳内层均分"),
+        ("stop_reason", "停止原因"), ("search_time_s", "搜索活跃秒"),
+        ("best_parameters", "实际模型参数"), ("parameter_sources", "参数来源"),
+        ("trial_export", "trial 导出"),
+    )),
+    ("trials", "Trial 轨迹", (
+        ("combination", "组合"), ("repeat", "repeat"), ("fold", "fold"),
+        ("trial", "trial"), ("state", "状态"), ("objective", "内层目标均分"),
+        ("best_so_far", "截至该次最佳"), ("inner_fold_scores", "逐内层折分数"),
+        ("parameters", "建议参数"), ("failure", "失败原因"),
+    )),
+    ("outer", "独立外层折评估与成本", (
+        ("combination", "组合"), ("repeat", "repeat"), ("fold", "fold"),
+        ("n_valid", "验证行"), ("r2", "R²"), ("rmse", "RMSE"),
+        ("mae", "MAE"), ("kendall_tau", "Kendall τ"),
+        ("kendall_tau_reason", "τ 缺失原因"),
+        ("outer_train_time_s", "外层训练秒"),
+        ("outer_predict_time_s", "外层预测秒"),
+    )),
+    ("final", "显式最终模型（与外层 OOF 分开）", (
+        ("combination", "组合"), ("status", "状态"), ("study_id", "独立 study"),
+        ("n_development_rows", "开发集行数"), ("attempted", "尝试"),
+        ("best_trial", "最佳 trial"), ("best_inner", "最佳内层均分"),
+        ("best_parameters", "实际模型参数"), ("search_time_s", "搜索活跃秒"),
+        ("full_refit_time_s", "完整开发集重训秒"),
+        ("independent_test_score", "独立测试分数"), ("bundle_path", "模型包"),
+    )),
+)
+
+
+def _section_hpo(task_info: Dict[str, Any]) -> str:
+    report = task_info.get("hpo_report")
+    if not report:
+        return ""
+    parts = [
+        "<section><h2>超参数搜索与嵌套评估</h2>",
+        "<p>内层目标是各 inner-fold 分数的算术平均；下方外层折指标只使用未参与选参的验证行。"
+        "任务其他结果表中的 ordinary 指标是每个 repeat 的 pooled OOF，再跨 repeat 汇总；两种口径不混算。"
+        "搜索时间只计活跃执行，外层训练与预测单列；未列出的特征准备和端到端时间不计入这些数字。</p>",
+    ]
+    for key, title, columns in _HPO_TABLES:
+        if key == "final" and not report.get("final_enabled"):
+            continue
+        rows = report.get(key) or []
+        parts.append(f"<h3>{_esc(title)}</h3>")
+        if not rows:
+            parts.append("<p>N/A：该阶段尚无可核验记录。</p>")
+            continue
+        head = "".join(f"<th>{_esc(label)}</th>" for _, label in columns)
+        body = "".join(
+            "<tr>" + "".join(f"<td>{_esc(_hpo_cell(row.get(field)))}</td>" for field, _ in columns) + "</tr>"
+            for row in rows
+        )
+        parts.append(f"<div class='table-scroll'><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>")
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def _markdown_hpo(task_info: Dict[str, Any]) -> List[str]:
+    report = task_info.get("hpo_report")
+    if not report:
+        return []
+    lines = [
+        "---", "", "## 超参数搜索与嵌套评估", "",
+        "内层目标是逐 inner-fold 分数的算术平均；外层折指标只使用未参与选参的验证行。"
+        "普通结果表另按每个 repeat 的 pooled OOF 汇总，不与折均值混算。"
+        "搜索秒数只含活跃执行；外层训练和预测单列，不包括特征准备或端到端时间。", "",
+    ]
+    for key, title, columns in _HPO_TABLES:
+        if key == "final" and not report.get("final_enabled"):
+            continue
+        rows = report.get(key) or []
+        lines += [f"### {title}", ""]
+        if not rows:
+            lines += ["N/A：该阶段尚无可核验记录。", ""]
+            continue
+        lines.append("| " + " | ".join(label for _, label in columns) + " |")
+        lines.append("|" + "---|" * len(columns))
+        for row in rows:
+            cells = [_hpo_cell(row.get(field)).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+                     for field, _ in columns]
+            lines.append("| " + " | ".join(cells) + " |")
+        lines.append("")
+    return lines
+
+
 def _section_grid(df: pd.DataFrame) -> str:
     """4×N 描述符 × 模型矩阵，单元格显示 R²/RMSE/MAE 及协议。"""
     if df.empty:
@@ -1107,6 +1209,7 @@ def generate_report(
     body = (
         _section_intro(task_info, now)
         + _section_numeric_audit(task_info)
+        + _section_hpo(task_info)
         + _section_grid(metrics_df)
         + _section_glossary()
         + _section_protocol_guard(metrics_df)
@@ -1228,6 +1331,8 @@ def generate_markdown_report(
             fields = [row.get(key, "—") for key in ("run", "repeat", "fold", "source", "name", "unit", "missing", "scaling", "train_missing_rows", "constant_train", "numeric_dimension", "input_dimension")]
             lines.append("| " + " | ".join(str(value).replace("|", "\\|") for value in fields) + " |")
         lines.append("")
+
+    lines.extend(_markdown_hpo(task_info))
 
     # ── 任务信息 ─────────────────────────────────────────────────────────────
     lines += [

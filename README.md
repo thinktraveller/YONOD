@@ -111,7 +111,7 @@ python -u yonod.py
 
 唯一可复制、可校验的 YAML 规范是仓库根目录的 [example.yaml](example.yaml)。每个新任务应将它的 schema-2 结构复制到 `config/` 下的新文件，仅替换任务专属的数据集、描述符、模型、评估参数和隔离的 `result/` 路径；不要在 Markdown 文档中维护第二份 YAML。
 
-HPO 正按计划书步骤 2-14 分阶段实施。`hpo` 省略或 `enabled: false` 时沿用固定参数路径，不导入 Optuna；已安装的候选版本固定为 4.5.0。当前只开放 RF 的小型 ordinary `outer_kfold` 工程 smoke，预算用 `max_trials` 显式指定；XGBoost/LightGBM 的嵌套入口、strict 入口、软时限和独立最终模型仍有验收缺口，会在昂贵特征生成前拒绝。字段、搜索空间和默认关闭示例仅见 [example.yaml](example.yaml)。每个外层训练折的 HPO study 与内层折独立持久化在该任务的 `result/<task_name>/hpo/`，不能把内层搜索分数当成外层 OOF 成绩；当前不以搜索分数上升作为通过标准。
+HPO 正按计划书步骤 2-14 分阶段实施。`hpo` 省略或 `enabled: false` 时沿用固定参数路径，不导入 Optuna；候选版本固定为 4.5.0。普通 RF 的小型 `outer_kfold` 嵌套工程 smoke 已实际完成；XGBoost、LightGBM、strict 入口、软时限和独立最终模型已有代码与聚焦测试，但仍须完成各自的真实入口验收，不应把当前阶段视为 HPO 全面发布。预算用 `max_trials` 显式指定；字段、搜索空间和默认关闭示例仅见 [example.yaml](example.yaml)。每个外层训练折的 HPO study 与内层折独立持久化在该任务的 `result/<task_name>/hpo/`，不能把内层搜索分数当成外层 OOF 成绩；不以搜索分数上升作为通过标准。
 
 每个运行配置必须声明 schema 版本、项目名、阶段、数据集和稳定样本 ID。解析器只接受 UTF-8 的 `.yaml`/`.yml` 单文档，拒绝重复键、别名、未知字段和不支持的模型/参数区段。`dataset.column_roles.label` 是 `train` 与 `all` 的必填项；特征阶段可以不声明标签。`sample_id_col` 必须在数据集中存在、非空并且唯一，不能用 DataFrame 行号代替。
 
@@ -132,6 +132,8 @@ HPO 正按计划书步骤 2-14 分阶段实施。`hpo` 省略或 `enabled: false
 对 schema-2 的 `train` / `all`，`outputs.report_formats` 省略时生成 HTML 和 Markdown；支持 `html`、`markdown`（或 `md`），空列表关闭自动报告。每个完成 run 从自身的 `run_manifest.yaml`、预测、fold 指标及 YAML 快照生成 `pictures/` 与 `report/`；散点图使用每个 repeat 的 OOF 预测，HTML 内嵌 PNG，Markdown 使用 `../pictures/` 相对链接。`features` 阶段不会生成报告。
 
 无需原始数据、描述符权重或模型即可通过 `yonod.pipeline.reporting.rebuild_schema2_report` 重建普通结果报告。该函数会校验 manifest、配置快照哈希、OOF 身份和有限数值，不会训练或改写源结果。旧的专用脚本保存在本地 `backup/scripts/`，不再作为当前项目入口。
+
+完成的 HPO 组合另有“超参数搜索与嵌套评估”区：逐 study/trial 轨迹、每折实际参数与来源、独立外层折指标，以及搜索、外层训练和预测的分项耗时。普通汇总表仍按每个 repeat 的 pooled OOF 计算，不能把它与逐折均值或内层搜索分数混称。显式最终模型单列开发集搜索和重训；没有独立测试时不填测试分数。重建器只读核验持久 study 导出的哈希，不打开数据库或重新拟合。HPO 失败/软截止的 `report/hpo_status.html` 与 `.md` 只展示状态和已核验搜索证据，不把不完整折当作 OOF。
 
 特征服务把静态矩阵、样本 ID、有效性掩码、身份和哈希发布到独立包。训练服务把每个 `feature × model` 的结果发布到 `outputs.root/runs/run_<feature-id>-<model>/`；内容派生的 `run_id` 保留在 manifest 中用于复用校验，其中包括：
 

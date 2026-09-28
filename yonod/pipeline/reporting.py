@@ -7,6 +7,7 @@ model ``fit`` method, so it is also the implementation behind offline rebuild.
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import math
 import os
@@ -14,6 +15,7 @@ import re
 import shutil
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -152,6 +154,142 @@ def _numeric_report_rows(run_dir: Path, folds: pd.DataFrame, manifest: Mapping[s
     return rows
 
 
+def _hpo_report_rows(
+    run_dir: Path, predictions: pd.DataFrame, folds: pd.DataFrame,
+    manifest: Mapping[str, Any],
+) -> dict[str, list[dict[str, Any]]] | None:
+    """Read verified, exported study evidence without opening its SQLite DB."""
+    hpo = manifest.get("hpo")
+    if not hpo:
+        return None
+    audits = hpo.get("outer_folds") if isinstance(hpo, Mapping) else None
+    if not isinstance(audits, list) or len(audits) != len(folds):
+        raise ReportServiceError("HPO 外层折审计与 fold_metrics 行数不一致")
+    task_root = run_dir.parent.parent.resolve()
+    studies: list[dict[str, Any]] = []
+    trials: list[dict[str, Any]] = []
+    outer: list[dict[str, Any]] = []
+    from scipy.stats import kendalltau
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+    for audit in audits:
+        repeat, fold = int(audit["repeat"]), int(audit["fold"])
+        matching_fold = folds.loc[(folds["repeat"] == repeat) & (folds["fold"] == fold)]
+        points = predictions.loc[(predictions["repeat"] == repeat) & (predictions["fold"] == fold)]
+        if len(matching_fold) != 1 or points.empty:
+            raise ReportServiceError(f"HPO repeat={repeat}/fold={fold} 缺少唯一折指标或预测")
+        study_dir = (task_root / str(audit["study_dir"])).resolve()
+        if task_root not in study_dir.parents or study_dir.parent.parent != task_root / "hpo":
+            raise ReportServiceError("HPO study 路径超出任务 hpo 根目录")
+        manifest_path, trials_path = study_dir / "study_manifest.json", study_dir / "trials.json"
+        if not manifest_path.is_file() or not trials_path.is_file():
+            raise ReportServiceError(f"HPO study 证据缺失：{study_dir}")
+        if _sha256(manifest_path) != audit.get("study_manifest_sha256") or _sha256(trials_path) != audit.get("study_trials_sha256"):
+            raise ReportServiceError(f"HPO study 证据哈希不匹配：{study_dir}")
+        try:
+            study_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            snapshots = json.loads(trials_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ReportServiceError(f"HPO study JSON 无法读取：{study_dir}") from exc
+        if study_manifest.get("study_id") != audit.get("study_id") or not isinstance(snapshots, list):
+            raise ReportServiceError("HPO study 身份或 trial 导出无效")
+        if len(snapshots) != int(audit["attempted_trials"]):
+            raise ReportServiceError("HPO trial 尝试数与审计不一致")
+        complete = [item for item in snapshots if item.get("state") == "COMPLETE"]
+        failed = [item for item in snapshots if item.get("state") == "FAIL"]
+        if len(complete) != int(audit["complete_trials"]) or len(failed) != int(audit["failed_trials"]):
+            raise ReportServiceError("HPO trial 状态数与审计不一致")
+        best = next((item for item in complete if item.get("number") == audit["best_trial_number"]), None)
+        if best is None or not math.isclose(float(best["value"]), float(audit["best_value"]), rel_tol=1e-10, abs_tol=1e-12):
+            raise ReportServiceError("HPO 最佳 trial 与持久审计不一致")
+        fold_row = matching_fold.iloc[0]
+        truth, predicted = points["y_true"].to_numpy(dtype=float), points["y_pred"].to_numpy(dtype=float)
+        tau = float("nan")
+        tau_reason = ""
+        if len(truth) < 2 or np.unique(truth).size < 2 or np.unique(predicted).size < 2:
+            tau_reason = "样本不足或真实/预测值为常量"
+        else:
+            tau = float(kendalltau(truth, predicted).statistic)
+            if not math.isfinite(tau):
+                tau_reason = "Kendall τ 不可定义"
+        label = f"{manifest['feature_id']} × {manifest['model']}"
+        studies.append({
+            "combination": label, "repeat": repeat, "fold": fold,
+            "study_id": audit["study_id"], "status": "complete",
+            "attempted": len(snapshots), "complete": len(complete), "failed": len(failed),
+            "best_trial": audit["best_trial_number"], "best_inner": float(audit["best_value"]),
+            "objective": hpo["declaration"]["objective"]["metric"],
+            "stop_reason": audit["stop_reason"],
+            "search_time_s": float(audit["active_search_time_s"]),
+            "best_parameters": audit["effective_estimator_parameters"],
+            "parameter_sources": audit["parameter_sources"],
+            "trial_export": (Path("hpo") / study_dir.parent.name / study_dir.name / "trials.json").as_posix(),
+        })
+        best_so_far: float | None = None
+        direction = hpo["declaration"]["objective"]["direction"]
+        for trial in snapshots:
+            attrs = trial.get("user_attrs") or {}
+            fold_scores = [item.get("score") for item in attrs.get("folds", [])]
+            value = trial.get("value") if trial.get("state") == "COMPLETE" else None
+            if value is not None:
+                best_so_far = float(value) if best_so_far is None else (
+                    min(best_so_far, float(value)) if direction == "minimize" else max(best_so_far, float(value))
+                )
+            trials.append({
+                "combination": label, "repeat": repeat, "fold": fold,
+                "trial": trial.get("number"), "state": trial.get("state"),
+                "objective": value, "best_so_far": best_so_far,
+                "inner_fold_scores": fold_scores,
+                "parameters": trial.get("params", {}),
+                "failure": (attrs.get("failure") or {}).get("reason", ""),
+            })
+        outer.append({
+            "combination": label, "repeat": repeat, "fold": fold,
+            "n_valid": len(points),
+            "r2": float(r2_score(truth, predicted)) if len(truth) >= 2 and np.unique(truth).size > 1 else float("nan"),
+            "rmse": float(np.sqrt(mean_squared_error(truth, predicted))),
+            "mae": float(mean_absolute_error(truth, predicted)),
+            "kendall_tau": tau, "kendall_tau_reason": tau_reason,
+            "outer_train_time_s": float(fold_row.get("model_train_time_s", float("nan"))),
+            "outer_predict_time_s": float(fold_row.get("model_predict_time_s", float("nan"))),
+        })
+    final_rows: list[dict[str, Any]] = []
+    final_info = hpo.get("final_model")
+    final_enabled = bool(hpo["declaration"]["final_model"]["enabled"])
+    if final_enabled:
+        if not isinstance(final_info, Mapping) or final_info.get("purpose") != "final_model":
+            raise ReportServiceError("启用的 HPO 最终模型缺少独立完成证据")
+        final_study = final_info.get("study")
+        if not isinstance(final_study, Mapping) or final_study.get("purpose") != "final_model":
+            raise ReportServiceError("最终模型 study 用途不匹配")
+        study_dir = (task_root / str(final_study["study_dir"])).resolve()
+        if study_dir.parent.parent != task_root / "hpo":
+            raise ReportServiceError("最终模型 study 路径越界")
+        for filename, digest_key in (("study_manifest.json", "study_manifest_sha256"), ("trials.json", "study_trials_sha256")):
+            path = study_dir / filename
+            if not path.is_file() or _sha256(path) != final_study.get(digest_key):
+                raise ReportServiceError("最终模型 study 证据缺失或哈希不匹配")
+        bundle_path = (run_dir / str(final_info["bundle_path"])).resolve()
+        if run_dir not in bundle_path.parents or not bundle_path.is_file() or _sha256(bundle_path) != final_info.get("bundle_sha256"):
+            raise ReportServiceError("最终模型包缺失或哈希不匹配")
+        final_rows.append({
+            "combination": f"{manifest['feature_id']} × {manifest['model']}",
+            "status": "complete",
+            "study_id": final_study["study_id"],
+            "n_development_rows": final_info["n_development_rows"],
+            "attempted": final_study["attempted_trials"],
+            "best_trial": final_study["best_trial_number"],
+            "best_inner": final_study["best_value"],
+            "best_parameters": final_study["effective_estimator_parameters"],
+            "search_time_s": final_study["active_search_time_s"],
+            "full_refit_time_s": final_info["train_time_s"],
+            "independent_test_score": final_info.get("independent_test_score"),
+            "bundle_path": final_info["bundle_path"],
+        })
+    return {"studies": studies, "trials": trials, "outer": outer,
+            "final": final_rows, "final_enabled": final_enabled}
+
+
 def _plot_repeat(points: pd.DataFrame, manifest: Mapping[str, Any], target: Path) -> None:
     import matplotlib
     matplotlib.use("Agg", force=True)
@@ -213,7 +351,7 @@ def rebuild_schema2_report(run_dir: Path | str, *, output_root: Path | str | Non
             if picture.stat().st_size < 128: raise ReportServiceError(f"散点图为空：{picture.name}")
             pictures.append(picture)
         metadata = source.get("metadata") if isinstance(source.get("metadata"), Mapping) else {}
-        info = {"task_name": source.get("project_name", manifest["run_id"]), "project_folder": str(root), "csv_path": "<stored training result>", "n_samples": manifest.get("n_samples"), "label_col": manifest.get("label_column"), "n_combinations": 1, "run_id": manifest["run_id"], "artifact_id": manifest["artifact_id"], "split_identity": manifest["split_identity"], "model_request": manifest.get("model_request"), "dataset_citation": metadata.get("doi"), "dataset_url": metadata.get("source_url", metadata.get("repo_url")), "dataset_notes": metadata.get("notes", metadata.get("source_notes")), "numeric_audit_rows": _numeric_report_rows(run_dir, folds, manifest)}
+        info = {"task_name": source.get("project_name", manifest["run_id"]), "project_folder": str(root), "csv_path": "<stored training result>", "n_samples": manifest.get("n_samples"), "label_col": manifest.get("label_column"), "n_combinations": 1, "run_id": manifest["run_id"], "artifact_id": manifest["artifact_id"], "split_identity": manifest["split_identity"], "model_request": manifest.get("model_request"), "dataset_citation": metadata.get("doi"), "dataset_url": metadata.get("source_url", metadata.get("repo_url")), "dataset_notes": metadata.get("notes", metadata.get("source_notes")), "numeric_audit_rows": _numeric_report_rows(run_dir, folds, manifest), "hpo_report": _hpo_report_rows(run_dir, predictions, folds, manifest)}
         metrics = _metrics(predictions, folds, manifest)
         html_path = generate_report(metrics, info, staging, scatter_paths=pictures) if "html" in selected else None
         markdown_path = generate_markdown_report(metrics, info, staging, scatter_paths=pictures) if "markdown" in selected else None
@@ -312,6 +450,14 @@ def rebuild_schema2_summary_report(
             "dataset_notes": metadata.get("notes", metadata.get("source_notes")),
             "numeric_audit_rows": [row for (manifest, _, folds), run_dir in zip(records, directories) for row in _numeric_report_rows(run_dir, folds, manifest)],
         }
+        hpo_sections = [section for (manifest, predictions, folds), run_dir in zip(records, directories)
+                        if (section := _hpo_report_rows(run_dir, predictions, folds, manifest)) is not None]
+        if hpo_sections:
+            info["hpo_report"] = {
+                key: [item for section in hpo_sections for item in section[key]]
+                for key in ("studies", "trials", "outer", "final")
+            }
+            info["hpo_report"]["final_enabled"] = any(section["final_enabled"] for section in hpo_sections)
         metrics = pd.concat(metric_frames, ignore_index=True)
         html_path = generate_report(metrics, info, staging, scatter_paths=pictures) if "html" in selected else None
         markdown_path = generate_markdown_report(metrics, info, staging, scatter_paths=pictures) if "markdown" in selected else None
@@ -325,3 +471,120 @@ def rebuild_schema2_summary_report(
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+
+
+def rebuild_schema2_hpo_status_report(
+    task_root: Path | str, failed_manifests: Sequence[Path | str] | None = None,
+    formats: Sequence[str] | None = None,
+) -> ReportResult:
+    """Render incomplete/failed HPO evidence without treating it as OOF.
+
+    This reads failure manifests and their hash-bound study exports. It never
+    opens SQLite, fits a model, or changes a source artefact. A completed task
+    report, if present, remains separate from these status files.
+    """
+    root = Path(task_root).resolve()
+    paths = ([Path(path).resolve() for path in failed_manifests] if failed_manifests is not None
+             else sorted(root.glob("runs/*/failed_attempts/*/run_manifest.yaml")))
+    if not paths:
+        raise ReportServiceError("没有 HPO incomplete/failed manifest 可用于状态报告")
+    aliases = {"html": "html", "markdown": "markdown", "md": "markdown"}
+    try:
+        selected = [aliases[str(value).strip().lower()] for value in (formats if formats is not None else ("html", "markdown"))]
+    except KeyError as exc:
+        raise ReportServiceError(f"不支持的 HPO 状态报告格式：{exc.args[0]}") from exc
+    if len(set(selected)) != len(selected):
+        raise ReportServiceError("HPO 状态报告格式不能重复")
+    records: list[dict[str, Any]] = []
+    studies: list[dict[str, Any]] = []
+    for path in paths:
+        if root not in path.parents or path.name != "run_manifest.yaml":
+            raise ReportServiceError(f"HPO 失败 manifest 越界：{path}")
+        manifest = _load_yaml(path)
+        if manifest.get("kind") != "yonod_training_run" or manifest.get("status") not in {"incomplete", "failed"}:
+            raise ReportServiceError(f"HPO 状态报告只读取 incomplete/failed 训练 manifest：{path}")
+        hpo = manifest.get("hpo")
+        if not isinstance(hpo, Mapping) or not (hpo.get("declaration") or {}).get("enabled"):
+            continue
+        outputs = manifest.get("outputs") or {}
+        for key, digest_key in (("source_config", "source_config_sha256"), ("effective_config", "effective_config_sha256")):
+            source = _required_file(path.parent, outputs, key)
+            if _sha256(source) != manifest.get(digest_key):
+                raise ReportServiceError(f"HPO 失败配置快照哈希不匹配：{path}")
+        records.append({
+            "combination": f"{manifest['feature_id']} × {manifest['model']}",
+            "status": manifest["status"],
+            "completed": int(hpo.get("completed_outer_folds", 0)),
+            "expected": int(hpo.get("expected_outer_folds", manifest.get("n_folds", 0))),
+            "reason": (manifest.get("failure") or {}).get("reason", ""),
+            "manifest": path.relative_to(root).as_posix(),
+        })
+        for audit in hpo.get("outer_folds", []):
+            study_dir = (root / str(audit["study_dir"])).resolve()
+            if study_dir.parent.parent != root / "hpo":
+                raise ReportServiceError("HPO 失败 study 路径越界")
+            study_manifest = study_dir / "study_manifest.json"
+            trials_path = study_dir / "trials.json"
+            if not study_manifest.is_file() or not trials_path.is_file():
+                raise ReportServiceError("HPO 失败 study 证据缺失")
+            if _sha256(study_manifest) != audit.get("study_manifest_sha256") or _sha256(trials_path) != audit.get("study_trials_sha256"):
+                raise ReportServiceError("HPO 失败 study 证据哈希不匹配")
+            studies.append({
+                "combination": records[-1]["combination"],
+                "repeat": audit["repeat"], "fold": audit["fold"],
+                "study_id": audit["study_id"], "attempted": audit["attempted_trials"],
+                "complete": audit["complete_trials"], "failed": audit["failed_trials"],
+                "best_inner": audit["best_value"], "stop_reason": audit["stop_reason"],
+                "search_time_s": audit["active_search_time_s"],
+            })
+    if not records:
+        raise ReportServiceError("失败 manifest 中没有启用的 HPO 记录")
+
+    def cell(value: Any) -> str:
+        return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+    report_dir = root / "report"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).isoformat()
+    html_path = markdown_path = None
+    if "html" in selected:
+        def html_table(rows: Sequence[Mapping[str, Any]], columns: Sequence[tuple[str, str]]) -> str:
+            if not rows:
+                return "<p>N/A：尚无已核验的完整外层搜索折。</p>"
+            heads = "".join(f"<th>{html.escape(label)}</th>" for _, label in columns)
+            body = "".join("<tr>" + "".join(f"<td>{html.escape(str(row.get(key, 'N/A')))}</td>" for key, _ in columns) + "</tr>" for row in rows)
+            return f"<table border='1'><thead><tr>{heads}</tr></thead><tbody>{body}</tbody></table>"
+        content = (
+            "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><title>YONOD HPO 状态</title></head><body>"
+            "<h1>HPO 未完成与失败状态</h1><p>此报告不含完整外层 OOF，也不将内层搜索分数当作外部评估。"
+            "仅读取已保存且哈希核验的证据；未发布外层折不计为完成。</p>"
+            f"<p>生成时间：{html.escape(timestamp)}</p>"
+            + html_table(records, (("combination", "组合"), ("status", "状态"), ("completed", "完成外层折"),
+                                   ("expected", "预期外层折"), ("reason", "原因"), ("manifest", "manifest")))
+            + "<h2>已核验的搜索折</h2>"
+            + html_table(studies, (("combination", "组合"), ("repeat", "repeat"), ("fold", "fold"),
+                                   ("study_id", "study"), ("attempted", "尝试"), ("complete", "成功"),
+                                   ("failed", "失败"), ("best_inner", "最佳内层均分"),
+                                   ("stop_reason", "停止原因"), ("search_time_s", "搜索活跃秒")))
+            + "</body></html>"
+        )
+        html_path = report_dir / "hpo_status.html"
+        temporary = report_dir / f".hpo_status-{uuid.uuid4().hex}.html.tmp"
+        temporary.write_text(content, encoding="utf-8")
+        os.replace(temporary, html_path)
+    if "markdown" in selected:
+        lines = ["# YONOD HPO 未完成与失败状态", "", "此报告不含完整外层 OOF；内层搜索分数不是外部评估。", "", f"生成时间：{timestamp}", "",
+                 "| 组合 | 状态 | 完成外层折 | 预期外层折 | 原因 | manifest |", "|---|---|---:|---:|---|---|"]
+        lines += ["| " + " | ".join(cell(row[key]) for key in ("combination", "status", "completed", "expected", "reason", "manifest")) + " |" for row in records]
+        lines += ["", "## 已核验的搜索折", ""]
+        if studies:
+            lines += ["| 组合 | repeat | fold | study | 尝试 | 成功 | 失败 | 最佳内层均分 | 停止原因 | 搜索活跃秒 |",
+                      "|---|---:|---:|---|---:|---:|---:|---:|---|---:|"]
+            lines += ["| " + " | ".join(cell(row[key]) for key in ("combination", "repeat", "fold", "study_id", "attempted", "complete", "failed", "best_inner", "stop_reason", "search_time_s")) + " |" for row in studies]
+        else:
+            lines.append("N/A：尚无已核验的完整外层搜索折。")
+        markdown_path = report_dir / "hpo_status.md"
+        temporary = report_dir / f".hpo_status-{uuid.uuid4().hex}.md.tmp"
+        temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        os.replace(temporary, markdown_path)
+    return ReportResult("hpo_status", root, (), html_path, markdown_path)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import math
 import sqlite3
@@ -22,7 +23,7 @@ from .metrics import (
     write_dimension_time_summaries,
 )
 from .layout import BenchmarkOutputLayout, resolve_benchmark_output_layout
-from yonod.universal.report import _configure_chinese_matplotlib
+from yonod.universal.report import _configure_chinese_matplotlib, _markdown_hpo, _section_hpo
 
 
 class BenchmarkReportError(RuntimeError):
@@ -51,6 +52,185 @@ def _read_json(path: Path) -> Dict[str, Any]:
     if not isinstance(value, dict):
         raise BenchmarkReportError("报告输入 JSON 根节点必须是对象：{0}".format(path))
     return value
+
+
+def _strict_hpo_report_rows(layout: BenchmarkOutputLayout, config: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """Read fold and study exports only; never open the Optuna database."""
+    hpo = config.get("hpo") if isinstance(config, Mapping) else None
+    if not isinstance(hpo, Mapping) or not hpo.get("enabled"):
+        return None
+    from scipy.stats import kendalltau
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+    final_enabled = bool((hpo.get("final_model") or {}).get("enabled"))
+    report: Dict[str, Any] = {"studies": [], "trials": [], "outer": [], "final": [],
+                              "final_enabled": final_enabled}
+    root = layout.run_dir.resolve()
+    objective = (hpo.get("objective") or {}).get("metric", "rmse")
+    direction = (hpo.get("objective") or {}).get("direction", "minimize")
+    referenced_studies: set[Path] = set()
+    for path in sorted(layout.folds.glob("*.json")):
+        metadata = _read_json(path)
+        audit = metadata.get("hpo")
+        if not isinstance(audit, Mapping):
+            continue
+        study_dir = (root / str(audit["study_dir"])).resolve()
+        if study_dir.parent.parent != root / "hpo":
+            raise BenchmarkReportError("strict HPO study 路径越界")
+        manifest_path, trials_path = study_dir / "study_manifest.json", study_dir / "trials.json"
+        if not manifest_path.is_file() or not trials_path.is_file():
+            raise BenchmarkReportError("strict HPO study 证据缺失")
+        if hashlib.sha256(manifest_path.read_bytes()).hexdigest() != audit.get("study_manifest_sha256") or hashlib.sha256(trials_path.read_bytes()).hexdigest() != audit.get("study_trials_sha256"):
+            raise BenchmarkReportError("strict HPO study 证据哈希不匹配")
+        study_manifest = _read_json(manifest_path)
+        if study_manifest.get("study_id") != audit.get("study_id"):
+            raise BenchmarkReportError("strict HPO study 身份不匹配")
+        referenced_studies.add(study_dir)
+        try:
+            snapshots = json.loads(trials_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise BenchmarkReportError("strict HPO trial 导出无法读取") from exc
+        if not isinstance(snapshots, list) or len(snapshots) != int(audit["attempted_trials"]):
+            raise BenchmarkReportError("strict HPO trial 尝试数与折审计不一致")
+        complete = [trial for trial in snapshots if trial.get("state") == "COMPLETE"]
+        failed = [trial for trial in snapshots if trial.get("state") == "FAIL"]
+        if len(complete) != int(audit["complete_trials"]) or len(failed) != int(audit["failed_trials"]):
+            raise BenchmarkReportError("strict HPO trial 状态与折审计不一致")
+        best = next((trial for trial in complete if trial.get("number") == audit["best_trial_number"]), None)
+        if best is None or not math.isclose(float(best["value"]), float(audit["best_value"]), rel_tol=1e-10, abs_tol=1e-12):
+            raise BenchmarkReportError("strict HPO 最佳 trial 与折审计不一致")
+        repeat, fold = int(metadata["repeat"]), int(metadata["fold"])
+        label = f"{metadata['descriptor']} × {metadata['model']}"
+        report["studies"].append({
+            "combination": label, "repeat": repeat, "fold": fold,
+            "study_id": audit["study_id"], "status": "complete", "objective": objective,
+            "attempted": len(snapshots), "complete": len(complete), "failed": len(failed),
+            "best_trial": audit["best_trial_number"], "best_inner": float(audit["best_value"]),
+            "stop_reason": audit["stop_reason"], "search_time_s": float(audit["active_search_time_s"]),
+            "best_parameters": audit["effective_estimator_parameters"],
+            "parameter_sources": audit["parameter_sources"],
+            "trial_export": (Path("hpo") / study_dir.parent.name / study_dir.name / "trials.json").as_posix(),
+        })
+        best_so_far: Optional[float] = None
+        for trial in snapshots:
+            attrs = trial.get("user_attrs") or {}
+            value = trial.get("value") if trial.get("state") == "COMPLETE" else None
+            if value is not None:
+                best_so_far = float(value) if best_so_far is None else (
+                    min(best_so_far, float(value)) if direction == "minimize" else max(best_so_far, float(value))
+                )
+            report["trials"].append({
+                "combination": label, "repeat": repeat, "fold": fold,
+                "trial": trial.get("number"), "state": trial.get("state"),
+                "objective": value, "best_so_far": best_so_far,
+                "inner_fold_scores": [item.get("score") for item in attrs.get("folds", [])],
+                "parameters": trial.get("params", {}),
+                "failure": (attrs.get("failure") or {}).get("reason", ""),
+            })
+        prediction_path = layout.predictions / (path.stem + ".parquet")
+        if not prediction_path.is_file():
+            raise BenchmarkReportError("strict HPO 折缺少外层预测")
+        points = pd.read_parquet(prediction_path)
+        truth, predicted = points["y_true"].to_numpy(dtype=float), points["y_pred"].to_numpy(dtype=float)
+        tau = float("nan")
+        tau_reason = ""
+        if len(truth) < 2 or np.unique(truth).size < 2 or np.unique(predicted).size < 2:
+            tau_reason = "样本不足或真实/预测值为常量"
+        else:
+            tau = float(kendalltau(truth, predicted).statistic)
+            if not math.isfinite(tau):
+                tau_reason = "Kendall τ 不可定义"
+        report["outer"].append({
+            "combination": label, "repeat": repeat, "fold": fold,
+            "n_valid": len(points),
+            "r2": float(r2_score(truth, predicted)) if len(truth) >= 2 and np.unique(truth).size > 1 else float("nan"),
+            "rmse": float(np.sqrt(mean_squared_error(truth, predicted))),
+            "mae": float(mean_absolute_error(truth, predicted)),
+            "kendall_tau": tau, "kendall_tau_reason": tau_reason,
+            "outer_train_time_s": float(metadata.get("train_time_s", float("nan"))),
+            "outer_predict_time_s": float(metadata.get("predict_time_s", float("nan"))),
+        })
+    # A search may have finished before outer refit or metadata publication.
+    # Show it as unpublished; never add it to outer OOF or complete-fold counts.
+    for manifest_path in sorted((root / "hpo").glob("*/*/study_manifest.json")):
+        study_dir = manifest_path.parent.resolve()
+        if study_dir in referenced_studies:
+            continue
+        try:
+            study_manifest = _read_json(manifest_path)
+        except BenchmarkReportError:
+            report["studies"].append({"combination": study_dir.parent.name,
+                                       "status": "corrupt: study_manifest.json 无法读取"})
+            continue
+        identity = study_manifest.get("identity") or {}
+        if identity.get("purpose") != "outer_fold":
+            continue
+        fold_identity = identity.get("outer_fold") or {}
+        trials_path = study_dir / "trials.json"
+        try:
+            snapshots = json.loads(trials_path.read_text(encoding="utf-8"))
+            if not isinstance(snapshots, list):
+                raise ValueError("trial export root is not a list")
+        except (OSError, ValueError):
+            report["studies"].append({
+                "combination": study_dir.parent.name,
+                "repeat": fold_identity.get("repeat"), "fold": fold_identity.get("fold"),
+                "study_id": study_manifest.get("study_id"),
+                "status": "corrupt: trials.json 无法读取；外层折未发布",
+            })
+            continue
+        complete = [trial for trial in snapshots if trial.get("state") == "COMPLETE"]
+        failed = [trial for trial in snapshots if trial.get("state") == "FAIL"]
+        report["studies"].append({
+            "combination": study_dir.parent.name,
+            "repeat": fold_identity.get("repeat"), "fold": fold_identity.get("fold"),
+            "study_id": study_manifest.get("study_id"),
+            "status": "unpublished: 无完整外层折元数据",
+            "objective": identity.get("objective", {}).get("metric", objective),
+            "attempted": len(snapshots), "complete": len(complete), "failed": len(failed),
+            "trial_export": (Path("hpo") / study_dir.parent.name / study_dir.name / "trials.json").as_posix(),
+        })
+    if final_enabled:
+        status_path = root / "final_models" / "final_status.json"
+        if not status_path.is_file():
+            report["final"].append({"combination": "N/A", "status": "pending: final_status.json 缺失"})
+        else:
+            final_status = _read_json(status_path)
+            if final_status.get("schema") != "yonod-strict-final-status/v1":
+                raise BenchmarkReportError("strict 最终模型状态 schema 无效")
+            for combination in final_status.get("pending", []):
+                report["final"].append({"combination": combination, "status": "pending"})
+            for failure in final_status.get("failed", []):
+                report["final"].append({"combination": failure.get("combination"),
+                                        "status": "failed: " + str(failure.get("reason", ""))})
+            for completed in final_status.get("completed", []):
+                study = completed.get("study")
+                if completed.get("purpose") != "final_model" or not isinstance(study, Mapping) or study.get("purpose") != "final_model":
+                    raise BenchmarkReportError("strict 最终模型完成记录缺少 final-purpose study")
+                study_dir = (root / str(study["study_dir"])).resolve()
+                if study_dir.parent.parent != root / "hpo":
+                    raise BenchmarkReportError("strict 最终模型 study 路径越界")
+                for filename, key in (("study_manifest.json", "study_manifest_sha256"), ("trials.json", "study_trials_sha256")):
+                    evidence = study_dir / filename
+                    if not evidence.is_file() or hashlib.sha256(evidence.read_bytes()).hexdigest() != study.get(key):
+                        raise BenchmarkReportError("strict 最终模型 study 证据哈希不匹配")
+                bundle_path = (root / str(completed["bundle_path"])).resolve()
+                if root not in bundle_path.parents or not bundle_path.is_file() or hashlib.sha256(bundle_path.read_bytes()).hexdigest() != completed.get("bundle_sha256"):
+                    raise BenchmarkReportError("strict 最终模型包缺失或哈希不匹配")
+                report["final"].append({
+                    "combination": completed["combination"], "status": "complete",
+                    "study_id": study["study_id"],
+                    "n_development_rows": completed["n_development_rows"],
+                    "attempted": study["attempted_trials"],
+                    "best_trial": study["best_trial_number"],
+                    "best_inner": study["best_value"],
+                    "best_parameters": study["effective_estimator_parameters"],
+                    "search_time_s": study["active_search_time_s"],
+                    "full_refit_time_s": completed["train_time_s"],
+                    "independent_test_score": completed.get("independent_test_score"),
+                    "bundle_path": completed["bundle_path"],
+                })
+    return report
 
 
 def _load_tables(layout: BenchmarkOutputLayout) -> Dict[str, pd.DataFrame]:
@@ -578,6 +758,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     time_figures = (combination_time_figure, descriptor_time_figure, model_time_figure)
     figures = stability_figures + time_figures
     config = run_manifest.get("benchmark_config", {})
+    hpo_report = _strict_hpo_report_rows(layout, config)
     traceability = pd.DataFrame([{
         "run_id": run_id, "config_hash": run_manifest.get("config_hash"),
         "dataset_sha256": run_manifest.get("dataset_sha256"), "code_git_commit": run_manifest.get("code_git_commit"),
@@ -635,7 +816,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     conclusion_html = "<ul>" + "".join("<li>{0}</li>".format(html.escape(line)) for line in model_conclusions + descriptor_conclusions) + "</ul>"
     html_content = """<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>YONOD Benchmark {run}</title>{css}</head><body>
 <h1>YONOD 严谨模型比较报告</h1><p>生成时间：{now}；本报告只读取已保存 artefacts，不会重新训练模型。</p>
- {trace}{protocol}{descriptors}{split}{protocol_guard}{performance}{time}{figures}{statistics}{tukey}{costs}{limits}
+ {trace}{protocol}{descriptors}{split}{protocol_guard}{performance}{hpo}{time}{figures}{statistics}{tukey}{costs}{limits}
 </body></html>""".format(
         run=html.escape(run_id), css=css, now=html.escape(now),
         trace=section("实验可追溯性", _table_html(traceability)),
@@ -656,6 +837,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
             + _table_html(protocol_inventory),
         ),
         performance=section("性能矩阵与完成度", _table_html(performance) + _table_html(tables["completeness"])),
+        hpo=_section_hpo({"hpo_report": hpo_report}) if hpo_report is not None else "",
         time=section("建模耗时与成本对比", time_section_html),
         figures=section("预测与稳定性", figures_html or "<p class='empty'>没有可用预测图；请检查 fold_metrics 中的预测路径。</p>"),
         statistics=section("双维统计比较", conclusion_html + "<h3>固定描述符比较模型</h3>" + _table_html(tables["model_comparisons"]) + "<h3>固定模型比较描述符</h3>" + _table_html(tables["descriptor_comparisons"]) + "<h3>不可比较记录</h3>" + _table_html(tables["comparison_exclusions"])),
@@ -678,6 +860,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "strict benchmark 的比较/排名只纳入 `evaluation_protocol=manifest_outer_cv` 且 expected/valid fold 完整的组合；旧 `autogluon_internal_holdout` 只展示并明确排除。", "",
         _table_markdown(protocol_inventory),
         "", "## 性能矩阵与完成度", "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
+        "", *_markdown_hpo({"hpo_report": hpo_report}),
         "", "## 建模耗时与成本对比", "",
         "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",
         "", "### 描述符 × 建模方法组合", "", _table_markdown(tables["combination_time_summary"]),
