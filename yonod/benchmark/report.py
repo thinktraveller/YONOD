@@ -768,6 +768,97 @@ def _strict_diagnostic_table(layout: BenchmarkOutputLayout, split_manifest: pd.D
     return pd.DataFrame(rows)
 
 
+def _strict_diagnostic_trace_tables(
+    layout: BenchmarkOutputLayout, split_manifest: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Trace every saved heldout prediction to its declared split row and group."""
+    samples: list[dict[str, Any]] = []
+    groups: list[dict[str, Any]] = []
+    required = {"repeat", "fold", "role", "sample_id"}
+    has_split = required <= set(split_manifest.columns)
+    for path in sorted(layout.folds.glob("*.json")):
+        metadata = _read_json(path)
+        if not {"descriptor", "model", "repeat", "fold"} <= set(metadata):
+            continue
+        descriptor, model = str(metadata["descriptor"]), str(metadata["model"])
+        repeat, fold = int(metadata["repeat"]), int(metadata["fold"])
+        shard = layout.predictions / path.with_suffix(".parquet").name
+        if not shard.is_file():
+            groups.append({"feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                           "status": "unavailable", "reason": "外层预测分片缺失"})
+            continue
+        points = pd.read_parquet(shard)
+        if not {"sample_id", "y_true", "y_pred"} <= set(points.columns) or points.empty:
+            groups.append({"feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                           "status": "unavailable", "reason": "外层预测分片无有效行"})
+            continue
+        points = points.copy()
+        points["sample_id"] = points["sample_id"].astype(str)
+        if points["sample_id"].duplicated().any() or not has_split:
+            reason = "外层预测 sample_id 重复" if has_split else "split manifest 缺少身份列"
+            groups.append({"feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                           "status": "unavailable", "reason": reason})
+            continue
+        part = split_manifest.loc[(split_manifest["repeat"] == repeat) &
+                                  (split_manifest["fold"] == fold)].copy()
+        valid = part.loc[part["role"] == "valid"].copy()
+        train = part.loc[part["role"] == "train"].copy()
+        valid["sample_id"] = valid["sample_id"].astype(str)
+        if valid["sample_id"].duplicated().any() or set(valid["sample_id"]) != set(points["sample_id"]):
+            groups.append({"feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                           "status": "unavailable", "reason": "split manifest 与预测 sample_id 无法一对一关联"})
+            continue
+        if "group_id" in points.columns and "group_id" in valid.columns:
+            shard_groups = points.set_index("sample_id")["group_id"].astype(str)
+            manifest_groups = valid.set_index("sample_id").loc[shard_groups.index, "group_id"].astype(str)
+            if not shard_groups.equals(manifest_groups):
+                groups.append({"feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                               "status": "unavailable", "reason": "预测分片 group_id 与 split manifest 不一致"})
+                continue
+            points = points.drop(columns="group_id")
+        detail = points.merge(valid, on="sample_id", validate="one_to_one", sort=False)
+        detail["residual_y_true_minus_pred"] = detail["y_true"].astype(float) - detail["y_pred"].astype(float)
+        detail["absolute_error"] = detail["residual_y_true_minus_pred"].abs()
+        group_available = "group_id" in detail and detail["group_id"].notna().all()
+        source_available = "source_row_index" in detail and detail["source_row_index"].notna().all()
+        for row in detail.to_dict(orient="records"):
+            samples.append({
+                "feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                "sample_id": row["sample_id"], "y_true": float(row["y_true"]),
+                "y_pred": float(row["y_pred"]),
+                "residual_y_true_minus_pred": float(row["residual_y_true_minus_pred"]),
+                "absolute_error": float(row["absolute_error"]),
+                "group_id": str(row["group_id"]) if group_available else None,
+                "source_row_index": int(row["source_row_index"]) if source_available else None,
+                "trace_status": "complete" if group_available and source_available else "metadata_unavailable",
+            })
+        if not group_available:
+            groups.append({"feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                           "status": "unavailable", "reason": "split manifest 缺少可用 group_id"})
+            continue
+        for group_id, subset in detail.groupby("group_id", sort=True, dropna=False):
+            train_count = int((train["group_id"].astype(str) == str(group_id)).sum())
+            worst = subset.loc[subset["absolute_error"].idxmax()]
+            groups.append({
+                "feature": descriptor, "model": model, "repeat": repeat, "fold": fold,
+                "group_id": str(group_id), "group_kind": "component" if str(group_id).startswith("component:") else "opaque",
+                "n_train": train_count, "n_heldout": len(subset),
+                "target_min": float(subset["y_true"].min()), "target_max": float(subset["y_true"].max()),
+                "mean_absolute_error": float(subset["absolute_error"].mean()),
+                "max_absolute_error": float(subset["absolute_error"].max()),
+                "worst_sample_id": str(worst["sample_id"]),
+                "small_group": len(subset) < 2, "status": "complete",
+                "reason": "少于 2 个留出样本，组误差不稳定" if len(subset) < 2 else "",
+            })
+    sample_columns = ("feature", "model", "repeat", "fold", "sample_id", "y_true", "y_pred",
+                      "residual_y_true_minus_pred", "absolute_error", "group_id",
+                      "source_row_index", "trace_status")
+    group_columns = ("feature", "model", "repeat", "fold", "group_id", "group_kind",
+                     "n_train", "n_heldout", "target_min", "target_max", "mean_absolute_error",
+                     "max_absolute_error", "worst_sample_id", "small_group", "status", "reason")
+    return pd.DataFrame(samples, columns=sample_columns), pd.DataFrame(groups, columns=group_columns)
+
+
 def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     """Rebuild benchmark HTML and Markdown reports without any model fitting."""
     root = Path(run_dir)
@@ -800,6 +891,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     config = run_manifest.get("benchmark_config", {})
     hpo_report = _strict_hpo_report_rows(layout, config)
     diagnostic_table = _strict_diagnostic_table(layout, split_manifest)
+    diagnostic_samples, diagnostic_groups = _strict_diagnostic_trace_tables(layout, split_manifest)
     from yonod.diagnostics import summarize_diagnostic_rows
     diagnostic_summary = pd.DataFrame(summarize_diagnostic_rows(diagnostic_table.to_dict(orient="records")))
     traceability = pd.DataFrame([{
@@ -883,7 +975,9 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         hpo=_section_hpo({"hpo_report": hpo_report}) if hpo_report is not None else "",
         diagnostics=section("训练与外层评估诊断",
             "<p>训练分数是已见样本上的拟合诊断；基线为每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不参与外层排名。</p>"
-            + _table_html(diagnostic_table) + "<h3>按 repeat 折间汇总</h3><p>标准差使用 ddof=0，各指标分别披露有效折数。</p>" + _table_html(diagnostic_summary)),
+            + _table_html(diagnostic_table) + "<h3>按 repeat 折间汇总</h3><p>标准差使用 ddof=0，各指标分别披露有效折数。</p>" + _table_html(diagnostic_summary)
+            + "<h3>全量外层留出样本与组追溯</h3><p>逐样本残差为 y_true − y_pred；组表保留全部组与折。少于 2 个留出样本的组不宜解释为稳定规律；opaque 组键不能推断反应类型。完整数据见 <a href='diagnostic_sample_trace.csv'>逐样本 CSV</a> 与 <a href='diagnostic_group_trace.csv'>逐组 CSV</a>。</p>"
+            + _table_html(diagnostic_groups) + _table_html(diagnostic_samples)),
         time=section("建模耗时与成本对比", time_section_html),
         figures=section("预测与稳定性", figures_html or "<p class='empty'>没有可用预测图；请检查 fold_metrics 中的预测路径。</p>"),
         statistics=section("双维统计比较", conclusion_html + "<h3>固定描述符比较模型</h3>" + _table_html(tables["model_comparisons"]) + "<h3>固定模型比较描述符</h3>" + _table_html(tables["descriptor_comparisons"]) + "<h3>不可比较记录</h3>" + _table_html(tables["comparison_exclusions"])),
@@ -911,6 +1005,9 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "训练分数是已见样本上的拟合诊断；基线为每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不参与外层排名。", "",
         _table_markdown(diagnostic_table), "", "### 按 repeat 折间汇总", "",
         "标准差使用 ddof=0，各指标分别披露有效折数。", "", _table_markdown(diagnostic_summary), "",
+        "### 全量外层留出样本与组追溯", "",
+        "逐样本残差为 y_true − y_pred；组表保留全部组与折。少于 2 个留出样本的组不宜解释为稳定规律；opaque 组键不能推断反应类型。完整数据：[逐样本 CSV](diagnostic_sample_trace.csv)、[逐组 CSV](diagnostic_group_trace.csv)。", "",
+        _table_markdown(diagnostic_groups), "", _table_markdown(diagnostic_samples), "",
         "", "## 建模耗时与成本对比", "",
         "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",
         "", "### 描述符 × 建模方法组合", "", _table_markdown(tables["combination_time_summary"]),
@@ -935,6 +1032,8 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "", "## 统计限制", "", "比较单位是 CV fold。折之间并非完全独立，p 值不是唯一证据；必须结合差值、bootstrap CI、稳定性图和缺失任务解读。`no_significant_difference` 不代表性能完全相同。Tukey HSD 与配对检验并列呈现，不可任选有利结果。", "",
     ]
     reports_dir = layout.report
+    _atomic_write(reports_dir / "diagnostic_sample_trace.csv", diagnostic_samples.to_csv(index=False))
+    _atomic_write(reports_dir / "diagnostic_group_trace.csv", diagnostic_groups.to_csv(index=False))
     return BenchmarkReportResult(
         html_path=_atomic_write(reports_dir / "benchmark_report.html", html_content),
         markdown_path=_atomic_write(reports_dir / "benchmark_report.md", "\n".join(markdown)),

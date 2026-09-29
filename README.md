@@ -143,6 +143,18 @@ python -u yonod.py
 
 普通运行的每折紧凑诊断位于 `runs/<组合>/diagnostics/repeat-NN-fold-NN.yaml`，可选逐行预测为同名 `-train.csv`，由 `run_manifest.yaml` 的 `diagnostics.folds` 通过相对路径和 SHA-256 引用。strict 运行的紧凑诊断位于任务根的 `diagnostics/<描述符>__<模型>__rNN__fNN.json`，可选逐行为同名 `-train.parquet`，由折元数据的 `diagnostic` 字段引用。报告只读这些证据；旧结果没有诊断时显示“未记录”，损坏或失败时显示原因，不从 OOF 或 HPO 内层分数反推训练成绩。离线重建报告不拟合模型，也不补算缺失诊断。
 
+strict 报告的“全量外层留出样本与组追溯”区从保存的 split manifest 和预测分片重建。完整行位于 `report/diagnostic_sample_trace.csv` 与 `report/diagnostic_group_trace.csv`；报告展示预览并链接 CSV。逐样本表保留残差方向、组键和源行号；逐组表保留训练/留出数量、目标范围及误差。缺失、重复或错配的组身份显示 `unavailable`，单样本组标明不稳定性；不透明组键不能推断反应类型。
+
+`yonod.diagnostic_repair` 是独立的**只预测后处理**，不执行 fit、HPO、特征 fit 或启动新的建模任务。它从已完成折的原始数据、模型和变换状态重算诊断，将证据写入新的 `result/<repair_task>/`；原 OOF、模型、study、manifest 和报告不改写，原报告也不会自动引用修复结果。仅支持有完整可核验模型包的 ordinary/strict × fixed/HPO 三树折；缺包、数据身份不符或保存的外层预测不一致时拒绝发布。所有正式建模仍须先建 `config/` 中的独立 schema-2 YAML，并通过 `yonod.py` 启动。
+
+在仓库根、已激活 `yonod` 环境的 Bash 或 PowerShell 中，可对单个已保存折执行后处理（任务名和源路径按实际替换；日志保存在 `logs/`）：
+
+```text
+python -m yonod.diagnostic_repair --mode strict --source-root result/diag215_20260929_strict_fixed_v1 --dataset-path dataset/numeric_strict_smoke_fixture.csv --destination result/my_repair_task --feature morgan --model rf --repeat 1 --fold 1 > logs/my_repair_task.log 2>&1
+```
+
+成功时日志给出 `repair_manifest.json` 路径；同名目标目录已存在时会拒绝覆盖。修复产物中的 `fit_calls=0`、`search_calls=0` 是操作声明，验收通过拦截拟合/搜索调用、独立重载和源文件哈希对照来核实。
+
 特征服务把静态矩阵、样本 ID、有效性掩码、身份和哈希发布到独立包。训练服务把每个 `feature × model` 的结果发布到 `outputs.root/runs/run_<feature-id>-<model>/`；内容派生的 `run_id` 保留在 manifest 中用于复用校验，其中包括：
 
 - `predictions.csv` 与 `fold_metrics.csv`；
