@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import os
 import platform
+import shutil
 import sys
 import time
 import uuid
@@ -415,6 +416,63 @@ def _result_from_existing(prediction_path: Path, metadata_path: Path) -> FoldExe
         raise FoldExecutionError("已有折级元数据字段不完整：{0}".format(metadata_path)) from exc
 
 
+def _quarantine_incomplete_hpo_fold(
+    contract: BenchmarkContract, layout: Any, prediction_path: Path, metadata_path: Path,
+    part: pd.DataFrame, valid_ids: Sequence[str], descriptor: str, model: str,
+    repeat: int, fold: int,
+) -> None:
+    """Preserve one identity-matched orphan before retrying an HPO fold."""
+    present = [path for path in (prediction_path, metadata_path) if path.exists()]
+    if len(present) != 1:
+        return
+    orphan = present[0]
+    try:
+        orphan.resolve().relative_to(Path(layout.run_dir).resolve())
+        split_id = str(part["split_id"].iloc[0])
+        if orphan == prediction_path:
+            frame = pd.read_parquet(orphan)
+            if (len(frame) != len(valid_ids) or
+                frame["sample_id"].astype(str).tolist() != list(valid_ids)):
+                raise ValueError("预测样本与当前 manifest 不一致")
+            expected = {
+                "run_id": contract.run_id, "config_hash": contract.config_hash,
+                "split_id": split_id, "descriptor": descriptor, "model": model,
+                "repeat": repeat, "fold": fold,
+            }
+            if any(column not in frame or frame[column].nunique(dropna=False) != 1 or
+                   frame[column].iloc[0] != value for column, value in expected.items()):
+                raise ValueError("预测身份与当前任务不一致")
+        else:
+            payload = json.loads(orphan.read_text(encoding="utf-8"))
+            expected = {
+                "run_id": contract.run_id, "config_hash": contract.config_hash,
+                "split_id": split_id, "descriptor": descriptor, "model": model,
+                "repeat": repeat, "fold": fold, "n_valid": len(valid_ids),
+                "valid_sample_ids_hash": _hash_values(valid_ids),
+            }
+            if any(payload.get(key) != value for key, value in expected.items()):
+                raise ValueError("元数据身份与当前任务不一致")
+            _verify_existing_hpo_fold(metadata_path, Path(layout.run_dir))
+    except Exception as exc:
+        raise FoldExecutionError("孤立 HPO 折输出损坏或身份冲突，拒绝恢复：{0}".format(orphan)) from exc
+    digest = hashlib.sha256(orphan.read_bytes()).hexdigest()
+    destination = layout.docs / "incomplete_folds" / (
+        prediction_path.stem + "-" + uuid.uuid4().hex
+    )
+    destination.mkdir(parents=True, exist_ok=False)
+    try:
+        _atomic_write_json({
+            "reason": "one_of_prediction_or_metadata_missing",
+            "original_path": orphan.relative_to(layout.run_dir).as_posix(),
+            "sha256": digest, "run_id": contract.run_id,
+        }, destination / "recovery.json")
+        os.replace(orphan, destination / orphan.name)
+    except BaseException:
+        if orphan.exists():
+            shutil.rmtree(destination, ignore_errors=True)
+        raise
+
+
 def _verify_existing_hpo_fold(metadata_path: Path, output_root: Path) -> None:
     """An old fixed fold is never accepted as an optimized fold."""
     try:
@@ -539,6 +597,11 @@ def execute_fold(
     layout = resolve_benchmark_output_layout(contract.run_dir)
     prediction_path = layout.predictions / (suffix + ".parquet")
     metadata_path = layout.folds / (suffix + ".json")
+    if hpo_raw and hpo_raw.get("enabled") and model in hpo_raw.get("models", []):
+        _quarantine_incomplete_hpo_fold(
+            contract, layout, prediction_path, metadata_path, part,
+            ids[valid_idx].tolist(), descriptor, model, repeat, fold,
+        )
     try:
         existing = _result_from_existing(prediction_path, metadata_path)
         if hpo_raw and hpo_raw.get("enabled") and model in hpo_raw.get("models", []):

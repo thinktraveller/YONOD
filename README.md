@@ -111,7 +111,7 @@ python -u yonod.py
 
 唯一可复制、可校验的 YAML 规范是仓库根目录的 [example.yaml](example.yaml)。每个新任务应将它的 schema-2 结构复制到 `config/` 下的新文件，仅替换任务专属的数据集、描述符、模型、评估参数和隔离的 `result/` 路径；不要在 Markdown 文档中维护第二份 YAML。
 
-HPO 正按计划书步骤 2-14 分阶段实施。`hpo` 省略或 `enabled: false` 时沿用固定参数路径，不导入 Optuna；候选版本固定为 4.5.0。普通 RF 的小型 `outer_kfold` 嵌套工程 smoke 已实际完成；XGBoost、LightGBM、strict 入口、软时限和独立最终模型已有代码与聚焦测试，但仍须完成各自的真实入口验收，不应把当前阶段视为 HPO 全面发布。预算用 `max_trials` 显式指定；字段、搜索空间和默认关闭示例仅见 [example.yaml](example.yaml)。每个外层训练折的 HPO study 与内层折独立持久化在该任务的 `result/<task_name>/hpo/`，不能把内层搜索分数当成外层 OOF 成绩；不以搜索分数上升作为通过标准。
+步骤 2-14 的 HPO 在 Linux `yonod` 环境已通过普通 RF/XGBoost/LightGBM、strict 数值及 OHE 入口、软时限、断点恢复和独立最终模型的工程验收；Windows 实机验证依用户安排暂缓，仍为 `not_verified`。`hpo` 省略或 `enabled: false` 时沿用固定参数路径，不导入 Optuna；依赖版本固定为 4.5.0。预算用 `max_trials` 显式指定；字段、搜索空间和默认关闭示例仅见 [example.yaml](example.yaml)。每个外层训练折的 HPO study 与内层折独立持久化在该任务的 `result/<task_name>/hpo/`，不能把内层搜索分数当成外层 OOF 成绩；不以搜索分数上升作为通过标准。完整 Linux 验收入口为 `_verify/accept_hpo_all.py`，其脚本与本地证据按项目约定不进入主仓。
 
 每个运行配置必须声明 schema 版本、项目名、阶段、数据集和稳定样本 ID。解析器只接受 UTF-8 的 `.yaml`/`.yml` 单文档，拒绝重复键、别名、未知字段和不支持的模型/参数区段。`dataset.column_roles.label` 是 `train` 与 `all` 的必填项；特征阶段可以不声明标签。`sample_id_col` 必须在数据集中存在、非空并且唯一，不能用 DataFrame 行号代替。
 
