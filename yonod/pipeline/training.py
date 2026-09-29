@@ -18,6 +18,7 @@ import shutil
 import tempfile
 import time
 import uuid
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -412,9 +413,11 @@ def _early_stopping_audit(
         "inner_training_rows_sha256": _sha256_text(
             _canonical_json(train_index[inner_train].astype(int).tolist())
         ),
+        "inner_training_row_indices": train_index[inner_train].astype(int).tolist(),
         "inner_validation_rows_sha256": _sha256_text(
             _canonical_json(train_index[inner_valid].astype(int).tolist())
         ),
+        "inner_validation_row_indices": train_index[inner_valid].astype(int).tolist(),
         "best_iteration": None if best_iteration is None else int(best_iteration),
     }
 
@@ -487,7 +490,26 @@ def _default_fold_runner(
     fold_dir: Path,
     label_col: str,
     fold_number: int,
+    *,
+    diagnostic_enabled: bool = False,
+    task_budget: Any = None,
 ) -> tuple[np.ndarray, Dict[str, Any]]:
+    def diagnostic_prediction(estimator: Any) -> Dict[str, Any]:
+        if not diagnostic_enabled or resolved.model not in {"rf", "xgb", "lightgbm"}:
+            return {}
+        started = time.perf_counter()
+        try:
+            context = task_budget.exclude_time() if hasattr(task_budget, "exclude_time") else nullcontext()
+            with context:
+                values = np.asarray(estimator.predict(X_train), dtype=float).reshape(-1)
+            if len(values) != len(X_train) or not np.isfinite(values).all():
+                raise TrainingServiceError("训练诊断预测长度不匹配或包含非有限值")
+            return {"__diagnostic_train_prediction": values,
+                    "diagnostic_predict_time_s": float(time.perf_counter() - started)}
+        except Exception as exc:
+            return {"__diagnostic_error": f"{type(exc).__name__}: {exc}",
+                    "diagnostic_predict_time_s": float(time.perf_counter() - started)}
+
     fit_params = materialise_fit_parameters(resolved, aligned, train_index)
     if resolved.model != "autogluon":
         estimator, audit = construct_estimator(resolved, n_features=X_train.shape[1], n_train=len(X_train))
@@ -499,6 +521,7 @@ def _default_fold_runner(
             return prediction, {
                 **audit,
                 **model_file,
+                **diagnostic_prediction(estimator),
                 "effective_fit_parameters": {
                     key: ("<training_fold_array>" if isinstance(value, np.ndarray) else value)
                     for key, value in fit_params.items()
@@ -576,6 +599,7 @@ def _default_fold_runner(
         return prediction, {
             **audit,
             **model_file,
+            **diagnostic_prediction(estimator),
             "effective_fit_parameters": {key: ("<training_fold_array>" if isinstance(value, np.ndarray) else value) for key, value in fit_params.items()},
             **({"svm_subsample": svm_subsample_audit} if svm_subsample_audit is not None else {}),
             "train_time_s": float(train_time),
@@ -635,6 +659,7 @@ def _run_identity(
     split_identity: str,
     numeric_identity: str | None = None,
     hpo_identity: Mapping[str, Any] | None = None,
+    diagnostic_request: Mapping[str, Any] | None = None,
 ) -> str:
     payload = {
         "training_schema_version": TRAINING_SCHEMA_VERSION,
@@ -649,6 +674,8 @@ def _run_identity(
         payload["numeric_identity"] = numeric_identity
     if hpo_identity is not None:
         payload["hpo"] = dict(hpo_identity)
+    if diagnostic_request is not None:
+        payload["diagnostic_request"] = dict(diagnostic_request)
     return "train-" + _sha256_text(_canonical_json(payload))[:20]
 
 
@@ -938,10 +965,15 @@ def _run_one_artifact(
             config["hpo"], models=config["models"], stage=config["stage"],
             evaluation=config.get("evaluation"), model_params=config.get("model_params"),
         )
+    diagnostics_raw = (config.get("outputs") or {}).get("diagnostics") or {}
+    diagnostics_enabled = diagnostics_raw.get("enabled", True) and model in {"rf", "xgb", "lightgbm"}
+    save_train_predictions = bool(diagnostics_raw.get("save_train_predictions", False))
+    diagnostic_request = {"enabled": bool(diagnostics_enabled), "save_train_predictions": save_train_predictions}
     run_id = _run_identity(
         artifact, model=model, model_config=resolved, label_identity=label_identity,
         split_identity=split_identity, numeric_identity=numeric_identity,
         hpo_identity=hpo_declaration,
+        diagnostic_request=diagnostic_request if "diagnostics" in (config.get("outputs") or {}) else None,
     )
     result_root = _result_root(loaded, config)
     run_dir = result_root / "runs" / combination_name(str(artifact.manifest["feature_id"]), model)
@@ -959,6 +991,7 @@ def _run_one_artifact(
     prediction_records: list[Dict[str, Any]] = []
     model_bundles: list[str] = []
     hpo_folds: list[Dict[str, Any]] = []
+    diagnostic_records: list[Dict[str, Any]] = []
     owned_task_budget = False
     if task_budget is None and hpo_declaration is not None and hpo_declaration["budget"].get("task_timeout_s") is not None:
         task_budget = _task_budget_context(loaded, config)
@@ -997,11 +1030,20 @@ def _run_one_artifact(
                 staging / "fold_transforms" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}", fold_context,
             )
             started = time.perf_counter()
-            prediction, model_audit = runner(
+            runner_args = (
                 fold_resolved, X_train, labels[train_index], X_valid, aligned,
                 train_index, staging / "models" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}",
                 label_col, fold,
             )
+            if fold_runner is None:
+                prediction, model_audit = runner(*runner_args, diagnostic_enabled=diagnostics_enabled,
+                                                 task_budget=task_budget)
+            else:
+                prediction, model_audit = runner(*runner_args)
+            model_audit = dict(model_audit)
+            diagnostic_train_prediction = model_audit.pop("__diagnostic_train_prediction", None)
+            diagnostic_error = model_audit.pop("__diagnostic_error", None)
+            bundle_path = None
             if "model_file" in model_audit:
                 model_path = staging / "models" / f"repeat-{repeat:02d}" / f"fold-{fold:02d}" / str(model_audit["model_file"])
                 if not model_path.is_file() or _sha256_file(model_path) != model_audit.get("model_sha256"):
@@ -1049,6 +1091,63 @@ def _run_one_artifact(
             prediction = np.asarray(prediction, dtype=float).reshape(-1)
             if len(prediction) != len(valid_index) or not np.isfinite(prediction).all():
                 raise TrainingServiceError("模型预测必须与验证折等长且全部为有限数值")
+            diagnostic_record: Dict[str, Any] = {"repeat": repeat, "fold": fold, "status": "disabled"}
+            if model not in {"rf", "xgb", "lightgbm"}:
+                diagnostic_record["status"] = "unsupported"
+            elif diagnostics_enabled:
+                diagnostic_budget_context = task_budget.exclude_time() if hasattr(task_budget, "exclude_time") else nullcontext()
+                diagnostic_budget_context.__enter__()
+                try:
+                    from yonod.diagnostics import build_fold_diagnostic
+                    if diagnostic_error is not None:
+                        raise TrainingServiceError(diagnostic_error)
+                    if diagnostic_train_prediction is None:
+                        raise TrainingServiceError("runner 未提供最终折模型的训练预测")
+                    early = model_audit.get("early_stopping") or {}
+                    fit_indices = early.get("inner_training_row_indices")
+                    stop_indices = early.get("inner_validation_row_indices")
+                    diagnostic = build_fold_diagnostic(
+                        identity={"run_id": run_id, "feature_id": artifact.manifest["feature_id"],
+                                  "artifact_id": artifact.manifest["artifact_id"], "model": model,
+                                  "split_identity": split_identity, "repeat": repeat, "fold": fold,
+                                  "model_bundle": bundle_path.relative_to(staging).as_posix() if bundle_path else None,
+                                  "source_predictions": "predictions.csv"},
+                        train_ids=sample_ids[train_index], heldout_ids=sample_ids[valid_index],
+                        y_train=labels[train_index], pred_train=diagnostic_train_prediction,
+                        y_heldout=labels[valid_index], pred_heldout=prediction,
+                        fit_ids=sample_ids[np.asarray(fit_indices, dtype=int)] if fit_indices is not None else None,
+                        stop_ids=sample_ids[np.asarray(stop_indices, dtype=int)] if stop_indices is not None else None,
+                        label_column=label_col,
+                        preprocessing_fit_ids=sample_ids[train_index],
+                    )
+                    diagnostic["prediction_time_s"] = model_audit.get("diagnostic_predict_time_s")
+                    diagnostic["outer_prediction_values_sha256"] = _sha256_text(_canonical_json({
+                        "sample_id": sample_ids[valid_index].astype(str).tolist(),
+                        "y_true": labels[valid_index].astype(float).tolist(),
+                        "y_pred": prediction.astype(float).tolist(),
+                    }))
+                    if save_train_predictions:
+                        train_predictions_path = staging / "diagnostics" / f"repeat-{repeat:02d}-fold-{fold:02d}-train.csv"
+                        _atomic_csv(train_predictions_path, pd.DataFrame({
+                            "sample_id": sample_ids[train_index], "repeat": repeat, "fold": fold,
+                            "population": "outer_train", "y_true": labels[train_index],
+                            "y_pred": diagnostic_train_prediction,
+                        }))
+                        diagnostic["train_predictions"] = {
+                            "path": train_predictions_path.relative_to(staging).as_posix(),
+                            "sha256": _sha256_file(train_predictions_path),
+                        }
+                    diagnostic_path = staging / "diagnostics" / f"repeat-{repeat:02d}-fold-{fold:02d}.yaml"
+                    _atomic_yaml(diagnostic_path, diagnostic)
+                    diagnostic_record = {"repeat": repeat, "fold": fold, "status": "complete",
+                                         "path": diagnostic_path.relative_to(staging).as_posix(),
+                                         "sha256": _sha256_file(diagnostic_path)}
+                except Exception as exc:
+                    diagnostic_record = {"repeat": repeat, "fold": fold, "status": "failed",
+                                         "reason": f"{type(exc).__name__}: {exc}"}
+                finally:
+                    diagnostic_budget_context.__exit__(None, None, None)
+            diagnostic_records.append(diagnostic_record)
             r2, rmse, mae = _metrics(labels[valid_index], prediction)
             fold_records.append({
                 "repeat": repeat, "fold": fold,
@@ -1059,6 +1158,7 @@ def _run_one_artifact(
                 "model_predict_time_s": float(model_audit.get("predict_time_s", 0.0)),
                 "transform_audit": _canonical_json(transform_audit),
                 "model_audit": _canonical_json(model_audit),
+                "diagnostic_status": diagnostic_record["status"],
                 **({"hpo_study_id": search_audit["study_id"], "hpo_best_trial": search_audit["best_trial_number"],
                     "hpo_best_inner_score": search_audit["best_value"]} if search_audit is not None else {}),
             })
@@ -1068,7 +1168,6 @@ def _run_one_artifact(
             } for index, value in zip(valid_index.tolist(), prediction.tolist()))
         final_info = None
         if hpo_declaration is not None and hpo_declaration["final_model"]["enabled"]:
-            from contextlib import nullcontext
             from yonod.hpo.budget import ActiveBudgetLedger
             from yonod.hpo.finalize import fit_final_model
             from yonod.hpo.ordinary import select_outer_parameters
@@ -1133,6 +1232,8 @@ def _run_one_artifact(
             "n_samples": int(len(sample_ids)),
             "n_folds": int(len(rows)),
             "model_bundles": model_bundles,
+            "diagnostics": {"schema_version": "yonod_fold_diagnostic/v1", "request": diagnostic_request,
+                            "folds": diagnostic_records},
             **({"model_bundle_sha256": {
                 name: _sha256_file(staging / name) for name in model_bundles
             }} if hpo_declaration is not None else {}),

@@ -728,6 +728,46 @@ def _atomic_write(path: Path, content: str) -> Path:
     return path
 
 
+def _strict_diagnostic_table(layout: BenchmarkOutputLayout, split_manifest: pd.DataFrame) -> pd.DataFrame:
+    from yonod.diagnostics import diagnostic_table_row, read_diagnostic
+
+    rows: list[dict[str, Any]] = []
+    for path in sorted(layout.folds.glob("*.json")):
+        metadata = _read_json(path)
+        if not {"run_id", "descriptor", "model", "repeat", "fold"}.issubset(metadata):
+            continue
+        repeat, fold = int(metadata["repeat"]), int(metadata["fold"])
+        record = read_diagnostic(layout.run_dir, metadata.get("diagnostic"), identity={
+            "run_id": metadata["run_id"], "descriptor": metadata["descriptor"],
+            "model": metadata["model"], "repeat": repeat, "fold": fold,
+        })
+        row = diagnostic_table_row(record, feature=str(metadata["descriptor"]),
+                                   model=str(metadata["model"]), repeat=repeat, fold=fold)
+        shard = layout.predictions / path.with_suffix(".parquet").name
+        if shard.is_file():
+            points = pd.read_parquet(shard)
+            if not points.empty and {"sample_id", "y_true", "y_pred"}.issubset(points):
+                residual = points["y_true"].to_numpy(dtype=float) - points["y_pred"].to_numpy(dtype=float)
+                worst = int(np.argmax(np.abs(residual)))
+                sample_id = str(points.iloc[worst]["sample_id"])
+                row.update({"worst_sample_id": sample_id,
+                            "worst_residual_y_true_minus_pred": float(residual[worst]),
+                            "heldout_target_min": float(points["y_true"].min()),
+                            "heldout_target_max": float(points["y_true"].max())})
+                matching = split_manifest.loc[(split_manifest["repeat"] == repeat) &
+                                              (split_manifest["fold"] == fold) &
+                                              (split_manifest["role"] == "valid") &
+                                              (split_manifest["sample_id"].astype(str) == sample_id)]
+                if len(matching) == 1:
+                    row["worst_group_id"] = str(matching.iloc[0]["group_id"])
+                    if "source_row_index" in matching:
+                        row["worst_source_row_index"] = int(matching.iloc[0]["source_row_index"])
+                else:
+                    row["trace_reason"] = "split manifest 的样本身份无法唯一关联"
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     """Rebuild benchmark HTML and Markdown reports without any model fitting."""
     root = Path(run_dir)
@@ -759,6 +799,9 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     figures = stability_figures + time_figures
     config = run_manifest.get("benchmark_config", {})
     hpo_report = _strict_hpo_report_rows(layout, config)
+    diagnostic_table = _strict_diagnostic_table(layout, split_manifest)
+    from yonod.diagnostics import summarize_diagnostic_rows
+    diagnostic_summary = pd.DataFrame(summarize_diagnostic_rows(diagnostic_table.to_dict(orient="records")))
     traceability = pd.DataFrame([{
         "run_id": run_id, "config_hash": run_manifest.get("config_hash"),
         "dataset_sha256": run_manifest.get("dataset_sha256"), "code_git_commit": run_manifest.get("code_git_commit"),
@@ -816,7 +859,7 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     conclusion_html = "<ul>" + "".join("<li>{0}</li>".format(html.escape(line)) for line in model_conclusions + descriptor_conclusions) + "</ul>"
     html_content = """<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>YONOD Benchmark {run}</title>{css}</head><body>
 <h1>YONOD 严谨模型比较报告</h1><p>生成时间：{now}；本报告只读取已保存 artefacts，不会重新训练模型。</p>
- {trace}{protocol}{descriptors}{split}{protocol_guard}{performance}{hpo}{time}{figures}{statistics}{tukey}{costs}{limits}
+ {trace}{protocol}{descriptors}{split}{protocol_guard}{performance}{hpo}{diagnostics}{time}{figures}{statistics}{tukey}{costs}{limits}
 </body></html>""".format(
         run=html.escape(run_id), css=css, now=html.escape(now),
         trace=section("实验可追溯性", _table_html(traceability)),
@@ -838,6 +881,9 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         ),
         performance=section("性能矩阵与完成度", _table_html(performance) + _table_html(tables["completeness"])),
         hpo=_section_hpo({"hpo_report": hpo_report}) if hpo_report is not None else "",
+        diagnostics=section("训练与外层评估诊断",
+            "<p>训练分数是已见样本上的拟合诊断；基线为每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不参与外层排名。</p>"
+            + _table_html(diagnostic_table) + "<h3>按 repeat 折间汇总</h3><p>标准差使用 ddof=0，各指标分别披露有效折数。</p>" + _table_html(diagnostic_summary)),
         time=section("建模耗时与成本对比", time_section_html),
         figures=section("预测与稳定性", figures_html or "<p class='empty'>没有可用预测图；请检查 fold_metrics 中的预测路径。</p>"),
         statistics=section("双维统计比较", conclusion_html + "<h3>固定描述符比较模型</h3>" + _table_html(tables["model_comparisons"]) + "<h3>固定模型比较描述符</h3>" + _table_html(tables["descriptor_comparisons"]) + "<h3>不可比较记录</h3>" + _table_html(tables["comparison_exclusions"])),
@@ -861,6 +907,10 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         _table_markdown(protocol_inventory),
         "", "## 性能矩阵与完成度", "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
         "", *_markdown_hpo({"hpo_report": hpo_report}),
+        "", "## 训练与外层评估诊断", "",
+        "训练分数是已见样本上的拟合诊断；基线为每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不参与外层排名。", "",
+        _table_markdown(diagnostic_table), "", "### 按 repeat 折间汇总", "",
+        "标准差使用 ddof=0，各指标分别披露有效折数。", "", _table_markdown(diagnostic_summary), "",
         "", "## 建模耗时与成本对比", "",
         "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",
         "", "### 描述符 × 建模方法组合", "", _table_markdown(tables["combination_time_summary"]),

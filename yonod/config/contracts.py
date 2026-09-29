@@ -45,7 +45,8 @@ _DESCRIPTOR_KEYS = frozenset({
     "id", "descriptor", "lifecycle", "mode", "columns", "extra_reactants", "params",
 })
 _ARTIFACT_KEYS = frozenset({"output_dir", "input_manifest"})
-_OUTPUT_KEYS = frozenset({"root", "report_formats"})
+_OUTPUT_KEYS = frozenset({"root", "report_formats", "diagnostics"})
+_DIAGNOSTIC_KEYS = frozenset({"enabled", "save_train_predictions"})
 _EVALUATION_KEYS = frozenset({
     "protocol", "n_splits", "n_repeats", "shuffle", "seed", "grouping",
     "split_manifest", "population_manifest", "metrics", "external_test",
@@ -309,6 +310,14 @@ def _validate_outputs(value: Any) -> None:
     _reject_unknown(mapping, _OUTPUT_KEYS, "outputs")
     if "root" in mapping:
         _require_string(mapping["root"], "outputs.root")
+    if "diagnostics" in mapping:
+        diagnostics = _as_mapping(mapping["diagnostics"], "outputs.diagnostics")
+        _reject_unknown(diagnostics, _DIAGNOSTIC_KEYS, "outputs.diagnostics")
+        for key in _DIAGNOSTIC_KEYS:
+            if key in diagnostics and type(diagnostics[key]) is not bool:
+                raise ConfigContractError(f"outputs.diagnostics.{key} 必须是布尔值")
+        if diagnostics.get("enabled") is False and diagnostics.get("save_train_predictions") is True:
+            raise ConfigContractError("关闭诊断时不能保存训练逐行预测")
     if "report_formats" in mapping:
         formats = _string_list(mapping["report_formats"], "outputs.report_formats", required=True)
         normalised = [item.strip().lower() for item in formats]

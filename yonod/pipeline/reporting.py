@@ -314,6 +314,32 @@ def _plot_repeat(points: pd.DataFrame, manifest: Mapping[str, Any], target: Path
     figure.savefig(target, format="png", bbox_inches="tight"); plt.close(figure)
 
 
+def _diagnostic_rows(run_dir: Path, predictions: pd.DataFrame, folds: pd.DataFrame, manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
+    from yonod.diagnostics import diagnostic_table_row, read_diagnostic
+
+    references = (manifest.get("diagnostics") or {}).get("folds") or []
+    by_fold = {(int(item["repeat"]), int(item["fold"])): item for item in references}
+    rows: list[dict[str, Any]] = []
+    for _, fold_row in folds.iterrows():
+        repeat, fold = int(fold_row["repeat"]), int(fold_row["fold"])
+        record = read_diagnostic(run_dir, by_fold.get((repeat, fold)), identity={
+            "run_id": manifest["run_id"], "feature_id": manifest["feature_id"],
+            "model": manifest["model"], "repeat": repeat, "fold": fold,
+        })
+        row = diagnostic_table_row(record, feature=str(manifest["feature_id"]),
+                                   model=str(manifest["model"]), repeat=repeat, fold=fold)
+        points = predictions.loc[(predictions["repeat"] == repeat) & (predictions["fold"] == fold)]
+        if not points.empty:
+            residual = points["y_true"].to_numpy(dtype=float) - points["y_pred"].to_numpy(dtype=float)
+            worst = int(np.argmax(np.abs(residual)))
+            row.update({"worst_sample_id": str(points.iloc[worst]["sample_id"]),
+                        "worst_residual_y_true_minus_pred": float(residual[worst]),
+                        "heldout_target_min": float(points["y_true"].min()),
+                        "heldout_target_max": float(points["y_true"].max())})
+        rows.append(row)
+    return rows
+
+
 def rebuild_schema2_report(run_dir: Path | str, *, output_root: Path | str | None = None, formats: Sequence[str] | None = None) -> ReportResult:
     run_dir = Path(run_dir).resolve()
     manifest_path = run_dir / "run_manifest.yaml"
@@ -351,7 +377,7 @@ def rebuild_schema2_report(run_dir: Path | str, *, output_root: Path | str | Non
             if picture.stat().st_size < 128: raise ReportServiceError(f"散点图为空：{picture.name}")
             pictures.append(picture)
         metadata = source.get("metadata") if isinstance(source.get("metadata"), Mapping) else {}
-        info = {"task_name": source.get("project_name", manifest["run_id"]), "project_folder": str(root), "csv_path": "<stored training result>", "n_samples": manifest.get("n_samples"), "label_col": manifest.get("label_column"), "n_combinations": 1, "run_id": manifest["run_id"], "artifact_id": manifest["artifact_id"], "split_identity": manifest["split_identity"], "model_request": manifest.get("model_request"), "dataset_citation": metadata.get("doi"), "dataset_url": metadata.get("source_url", metadata.get("repo_url")), "dataset_notes": metadata.get("notes", metadata.get("source_notes")), "numeric_audit_rows": _numeric_report_rows(run_dir, folds, manifest), "hpo_report": _hpo_report_rows(run_dir, predictions, folds, manifest)}
+        info = {"task_name": source.get("project_name", manifest["run_id"]), "project_folder": str(root), "csv_path": "<stored training result>", "n_samples": manifest.get("n_samples"), "label_col": manifest.get("label_column"), "n_combinations": 1, "run_id": manifest["run_id"], "artifact_id": manifest["artifact_id"], "split_identity": manifest["split_identity"], "model_request": manifest.get("model_request"), "dataset_citation": metadata.get("doi"), "dataset_url": metadata.get("source_url", metadata.get("repo_url")), "dataset_notes": metadata.get("notes", metadata.get("source_notes")), "numeric_audit_rows": _numeric_report_rows(run_dir, folds, manifest), "hpo_report": _hpo_report_rows(run_dir, predictions, folds, manifest), "diagnostic_rows": _diagnostic_rows(run_dir, predictions, folds, manifest)}
         metrics = _metrics(predictions, folds, manifest)
         html_path = generate_report(metrics, info, staging, scatter_paths=pictures) if "html" in selected else None
         markdown_path = generate_markdown_report(metrics, info, staging, scatter_paths=pictures) if "markdown" in selected else None
@@ -449,6 +475,7 @@ def rebuild_schema2_summary_report(
             "dataset_url": metadata.get("source_url", metadata.get("repo_url")),
             "dataset_notes": metadata.get("notes", metadata.get("source_notes")),
             "numeric_audit_rows": [row for (manifest, _, folds), run_dir in zip(records, directories) for row in _numeric_report_rows(run_dir, folds, manifest)],
+            "diagnostic_rows": [row for (manifest, predictions, folds), run_dir in zip(records, directories) for row in _diagnostic_rows(run_dir, predictions, folds, manifest)],
         }
         hpo_sections = [section for (manifest, predictions, folds), run_dir in zip(records, directories)
                         if (section := _hpo_report_rows(run_dir, predictions, folds, manifest)) is not None]

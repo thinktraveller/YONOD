@@ -12,6 +12,7 @@ import shutil
 import sys
 import time
 import uuid
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -241,6 +242,9 @@ def _fit_predict_model(
     evaluation_protocol: str = DEFAULT_EVALUATION_PROTOCOL,
     schema2_model_config: Optional[Mapping[str, Any]] = None,
     persist_estimator: bool = False,
+    diagnostic_enabled: bool = False,
+    task_budget: Any = None,
+    diagnostic_only_persistence: bool = False,
 ) -> tuple[np.ndarray, float, float, Dict[str, Any], Dict[str, Any]]:
     """Fit one external fold and return predictions plus audit metadata."""
     if model == "autogluon":
@@ -337,22 +341,36 @@ def _fit_predict_model(
     prediction = np.asarray(estimator.predict(X_valid), dtype=float)
     predict_time_s = time.perf_counter() - start
     model_metadata: Dict[str, Any] = {}
+    if diagnostic_enabled and model in {"rf", "xgb", "lightgbm"}:
+        started = time.perf_counter()
+        try:
+            context = task_budget.exclude_time() if hasattr(task_budget, "exclude_time") else nullcontext()
+            with context:
+                train_prediction = np.asarray(estimator.predict(X_train), dtype=float).reshape(-1)
+            if len(train_prediction) != len(X_train) or not np.isfinite(train_prediction).all():
+                raise FoldExecutionError("训练诊断预测长度不匹配或包含非有限值")
+            model_metadata["__diagnostic_train_prediction"] = train_prediction
+        except Exception as exc:
+            model_metadata["__diagnostic_error"] = f"{type(exc).__name__}: {exc}"
+        model_metadata["diagnostic_predict_time_s"] = float(time.perf_counter() - started)
     if persist_estimator:
         import joblib
-
-        model_dir = layout.run_dir / "models" / suffix
-        model_dir.mkdir(parents=True, exist_ok=True)
-        model_path = model_dir / ("model-" + uuid.uuid4().hex + ".joblib")
-        temporary = model_dir / (".model-" + uuid.uuid4().hex + ".tmp")
-        try:
-            joblib.dump(estimator, temporary, compress=3)
-            os.replace(temporary, model_path)
-        finally:
-            temporary.unlink(missing_ok=True)
-        model_metadata = {
-            "model_path": model_path.relative_to(layout.run_dir).as_posix(),
-            "model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
-        }
+        context = (task_budget.exclude_time() if diagnostic_only_persistence and hasattr(task_budget, "exclude_time")
+                   else nullcontext())
+        with context:
+            model_dir = layout.run_dir / "models" / suffix
+            model_dir.mkdir(parents=True, exist_ok=True)
+            model_path = model_dir / ("model-" + uuid.uuid4().hex + ".joblib")
+            temporary = model_dir / (".model-" + uuid.uuid4().hex + ".tmp")
+            try:
+                joblib.dump(estimator, temporary, compress=3)
+                os.replace(temporary, model_path)
+            finally:
+                temporary.unlink(missing_ok=True)
+            model_metadata.update({
+                "model_path": model_path.relative_to(layout.run_dir).as_posix(),
+                "model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+            })
     return prediction, train_time_s, predict_time_s, estimator_params_snapshot, model_metadata
 
 
@@ -590,6 +608,9 @@ def execute_fold(
     if len(train_idx) == 0 or len(valid_idx) == 0:
         raise FoldExecutionError("manifest 当前折存在空训练集或验证集")
     requested_model_kwargs = dict(model_kwargs or {})
+    diagnostic_raw = (contract.config.raw.get("outputs") or {}).get("diagnostics") or {}
+    diagnostic_enabled = diagnostic_raw.get("enabled", True) and model in {"rf", "xgb", "lightgbm"}
+    save_train_predictions = bool(diagnostic_raw.get("save_train_predictions", False))
     effective_model_kwargs, protocol_seed = _effective_model_kwargs(
         contract, part, model, requested_model_kwargs
     )
@@ -688,11 +709,17 @@ def execute_fold(
         suffix=suffix,
         evaluation_protocol=evaluation_protocol,
         schema2_model_config=schema2_model_config,
-        persist_estimator=hpo_audit is not None,
+        persist_estimator=hpo_audit is not None or (diagnostic_enabled and schema2_model_config is not None),
+        diagnostic_enabled=diagnostic_enabled,
+        task_budget=task_budget,
+        diagnostic_only_persistence=diagnostic_enabled and hpo_audit is None,
     )
+    model_metadata = dict(model_metadata)
+    diagnostic_train_prediction = model_metadata.pop("__diagnostic_train_prediction", None)
+    diagnostic_error = model_metadata.pop("__diagnostic_error", None)
     if not np.isfinite(prediction).all():
         raise FoldExecutionError("模型预测包含 NaN 或 inf")
-    if hpo_audit is not None:
+    if hpo_audit is not None or (diagnostic_enabled and schema2_model_config is not None and model_metadata.get("model_path")):
         model_dir = layout.run_dir / "models" / suffix
         ohe_state_dir = None
         if fold_transformer is not None:
@@ -728,7 +755,7 @@ def execute_fold(
             "numeric_state_path": numeric_state_path.relative_to(layout.run_dir).as_posix() if numeric_state_path else None,
             "numeric_state_sha256": hashlib.sha256(numeric_state_path.read_bytes()).hexdigest() if numeric_state_path else None,
             "train_sample_ids_hash": _hash_values(ids[train_idx]),
-            "hpo": hpo_audit,
+            **({"hpo": hpo_audit} if hpo_audit is not None else {}),
             "software_versions": _software_versions(),
         }
         bundle_path = model_dir / ("bundle-" + uuid.uuid4().hex + ".json")
@@ -780,6 +807,51 @@ def execute_fold(
     if len(prediction_frame) != len(expected) or set(prediction_frame["sample_id"]) != expected:
         raise FoldExecutionError("预测分片与 manifest 验证集不能一一对应")
     prediction_path = _atomic_write_parquet(prediction_frame, prediction_path)
+    diagnostic_record: Dict[str, Any] = {"status": "disabled"}
+    if model not in {"rf", "xgb", "lightgbm"}:
+        diagnostic_record["status"] = "unsupported"
+    elif diagnostic_enabled:
+        diagnostic_budget_context = task_budget.exclude_time() if hasattr(task_budget, "exclude_time") else nullcontext()
+        diagnostic_budget_context.__enter__()
+        try:
+            from yonod.diagnostics import build_fold_diagnostic
+            if diagnostic_error is not None:
+                raise FoldExecutionError(diagnostic_error)
+            if diagnostic_train_prediction is None:
+                raise FoldExecutionError("最终严格折模型缺少训练预测")
+            diagnostic = build_fold_diagnostic(
+                identity={"run_id": contract.run_id, "config_hash": contract.config_hash,
+                          "descriptor": descriptor, "model": model, "split_id": split_id,
+                          "repeat": repeat, "fold": fold,
+                          "source_predictions": prediction_path.relative_to(layout.run_dir).as_posix(),
+                          "model_bundle": model_metadata.get("bundle_path")},
+                train_ids=ids[train_idx], heldout_ids=ids[valid_idx],
+                y_train=y_array[train_idx], pred_train=diagnostic_train_prediction,
+                y_heldout=y_array[valid_idx], pred_heldout=prediction,
+                label_column=str(contract.config.label_col),
+                preprocessing_fit_ids=ids[train_idx],
+            )
+            diagnostic["prediction_time_s"] = model_metadata.get("diagnostic_predict_time_s")
+            diagnostic["source_predictions_sha256"] = hashlib.sha256(prediction_path.read_bytes()).hexdigest()
+            if save_train_predictions:
+                train_prediction_path = layout.run_dir / "diagnostics" / (suffix + "-train.parquet")
+                train_prediction_path = _atomic_write_parquet(pd.DataFrame({
+                    "sample_id": ids[train_idx], "repeat": repeat, "fold": fold,
+                    "population": "outer_train", "y_true": y_array[train_idx],
+                    "y_pred": diagnostic_train_prediction,
+                }), train_prediction_path)
+                diagnostic["train_predictions"] = {
+                    "path": train_prediction_path.relative_to(layout.run_dir).as_posix(),
+                    "sha256": hashlib.sha256(train_prediction_path.read_bytes()).hexdigest(),
+                }
+            diagnostic_path = _atomic_write_json(diagnostic, layout.run_dir / "diagnostics" / (suffix + ".json"))
+            diagnostic_record = {"status": "complete",
+                                 "path": diagnostic_path.relative_to(layout.run_dir).as_posix(),
+                                 "sha256": hashlib.sha256(diagnostic_path.read_bytes()).hexdigest()}
+        except Exception as exc:
+            diagnostic_record = {"status": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+        finally:
+            diagnostic_budget_context.__exit__(None, None, None)
     metadata = {
         "run_id": contract.run_id,
         "config_hash": contract.config_hash,
@@ -817,6 +889,7 @@ def execute_fold(
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
         "software_versions": _software_versions(),
         "prediction_path": str(prediction_path),
+        "diagnostic": diagnostic_record,
         **({"hpo": hpo_audit} if hpo_audit is not None else {}),
     }
     if model_metadata:

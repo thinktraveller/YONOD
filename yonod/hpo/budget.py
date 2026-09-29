@@ -12,6 +12,7 @@ import json
 import math
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -44,6 +45,8 @@ class ActiveBudgetLedger:
         self._writer = None
         self._started_monotonic = 0.0
         self._started_charged = 0.0
+        self._excluded_s = 0.0
+        self._excluded_since: float | None = None
         self._state: dict[str, Any] | None = None
         self._error: BaseException | None = None
 
@@ -78,6 +81,8 @@ class ActiveBudgetLedger:
             self._state = state
             self._started_charged = float(state["charged_s"])
             self._started_monotonic = time.monotonic()
+            self._excluded_s = 0.0
+            self._excluded_since = None
             state["sessions"] = int(state.get("sessions", 0)) + 1
             state["active"] = True
             self._checkpoint()
@@ -92,7 +97,7 @@ class ActiveBudgetLedger:
     def _checkpoint(self) -> None:
         with self._lock:
             assert self._state is not None
-            self._state["charged_s"] = self._started_charged + max(0.0, time.monotonic() - self._started_monotonic)
+            self._state["charged_s"] = self._elapsed_locked()
             self._state["last_checkpoint_wall_s"] = time.time()
             _atomic_json(self.path, self._state)
 
@@ -107,7 +112,31 @@ class ActiveBudgetLedger:
     def elapsed_s(self) -> float:
         if self._error is not None:
             raise StudyStorageError("任务时间账本写入失败") from self._error
-        return self._started_charged + max(0.0, time.monotonic() - self._started_monotonic)
+        with self._lock:
+            return self._elapsed_locked()
+
+    def _elapsed_locked(self) -> float:
+        now = time.monotonic()
+        excluded = self._excluded_s
+        if self._excluded_since is not None:
+            excluded += max(0.0, now - self._excluded_since)
+        return self._started_charged + max(0.0, now - self._started_monotonic - excluded)
+
+    @contextmanager
+    def exclude_time(self):
+        """Do post-fit diagnostics without consuming the modeling soft budget."""
+        with self._lock:
+            if self._excluded_since is not None:
+                raise StudyStorageError("任务时间账本不支持嵌套暂停")
+            self._excluded_since = time.monotonic()
+        try:
+            yield
+        finally:
+            with self._lock:
+                assert self._excluded_since is not None
+                self._excluded_s += max(0.0, time.monotonic() - self._excluded_since)
+                self._excluded_since = None
+            self._checkpoint()
 
     def remaining_s(self) -> float | None:
         if self.timeout_s is None:

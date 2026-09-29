@@ -1206,10 +1206,19 @@ def generate_report(
     now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ranked = rank_combinations(metrics_df)
 
+    from yonod.diagnostics import summarize_diagnostic_rows
+    diagnostic_rows = task_info.get("diagnostic_rows") or []
+    diagnostic_summary = summarize_diagnostic_rows(diagnostic_rows)
+    diagnostic_section = "<section><h2>训练与外层评估诊断</h2><p>训练分数是已见样本上的拟合诊断，不代表泛化；基线常数取每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不会参与外层排名。</p>"
+    diagnostic_section += (pd.DataFrame(diagnostic_rows).to_html(index=False, escape=True, classes="data-table")
+                           if diagnostic_rows else "<p>未记录训练诊断。</p>") + "</section>"
+    if diagnostic_summary:
+        diagnostic_section += "<section><h2>训练诊断折间汇总</h2><p>按 repeat 单列；标准差使用 ddof=0，各指标分别披露有效折数。原普通 OOF 仍按每个 repeat 汇总。</p>" + pd.DataFrame(diagnostic_summary).to_html(index=False, escape=True, classes="data-table") + "</section>"
     body = (
         _section_intro(task_info, now)
         + _section_numeric_audit(task_info)
         + _section_hpo(task_info)
+        + diagnostic_section
         + _section_grid(metrics_df)
         + _section_glossary()
         + _section_protocol_guard(metrics_df)
@@ -1333,6 +1342,25 @@ def generate_markdown_report(
         lines.append("")
 
     lines.extend(_markdown_hpo(task_info))
+    diagnostic_rows = task_info.get("diagnostic_rows") or []
+    lines += ["## 训练与外层评估诊断", "",
+              "训练分数是已见样本上的拟合诊断，不代表泛化。基线常数取每折 outer-train 标签均值；R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不进入外层排名。", ""]
+    if diagnostic_rows:
+        columns = list(dict.fromkeys(key for row in diagnostic_rows for key in row))
+        lines += ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
+        for row in diagnostic_rows:
+            lines.append("| " + " | ".join(_md(row.get(key)) for key in columns) + " |")
+        lines.append("")
+        from yonod.diagnostics import summarize_diagnostic_rows
+        summaries = summarize_diagnostic_rows(diagnostic_rows)
+        summary_columns = list(summaries[0])
+        lines += ["### 折间汇总", "", "按 repeat 单列；标准差使用 ddof=0，各指标分别披露有效折数。原普通 OOF 仍按每个 repeat 汇总。", "",
+                  "| " + " | ".join(summary_columns) + " |", "|" + "|".join("---" for _ in summary_columns) + "|"]
+        for row in summaries:
+            lines.append("| " + " | ".join(_md(row.get(key)) for key in summary_columns) + " |")
+        lines.append("")
+    else:
+        lines += ["未记录训练诊断。", ""]
 
     # ── 任务信息 ─────────────────────────────────────────────────────────────
     lines += [

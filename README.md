@@ -135,6 +135,14 @@ python -u yonod.py
 
 完成的 HPO 组合另有“超参数搜索与嵌套评估”区：逐 study/trial 轨迹、每折实际参数与来源、独立外层折指标，以及搜索、外层训练和预测的分项耗时。普通汇总表仍按每个 repeat 的 pooled OOF 计算，不能把它与逐折均值或内层搜索分数混称。显式最终模型单列开发集搜索和重训；没有独立测试时不填测试分数。重建器只读核验持久 study 导出的哈希，不打开数据库或重新拟合。HPO 失败/软截止的 `report/hpo_status.html` 与 `.md` 只展示状态和已核验搜索证据，不把不完整折当作 OOF。
 
+### 训练与外层评估诊断（步骤 2-15，实施中）
+
+`outputs.diagnostics.enabled` 控制 RF、XGBoost、LightGBM 的折级训练诊断（默认 `true`）；`outputs.diagnostics.save_train_predictions` 控制是否另外保存训练逐行预测（默认 `false`，验收任务应设为 `true`）。唯一完整 YAML 结构见 `example.yaml`。这些选项只控制诊断，不改变外层 OOF 的文件格式或评分口径。SVM、AutoGluon 暂无同口径训练诊断，原建模能力保持。
+
+诊断复用最终外层折模型和已拟合特征状态，计算 outer-train 的训练分数、outer-heldout 分数，以及以该折 outer-train 标签算术均值作常数预测的 heldout 基线。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。早停时另记录实际 fit 与内部早停留出人口；训练分数是已见样本的拟合诊断，不代表泛化。无单位声明时单位标为未知，常量标签等不可定义的 R² 保留原因，不填 0。
+
+普通运行的每折紧凑诊断位于 `runs/<组合>/diagnostics/repeat-NN-fold-NN.yaml`，可选逐行预测为同名 `-train.csv`，由 `run_manifest.yaml` 的 `diagnostics.folds` 通过相对路径和 SHA-256 引用。strict 运行的紧凑诊断位于任务根的 `diagnostics/<描述符>__<模型>__rNN__fNN.json`，可选逐行为同名 `-train.parquet`，由折元数据的 `diagnostic` 字段引用。报告只读这些证据；旧结果没有诊断时显示“未记录”，损坏或失败时显示原因，不从 OOF 或 HPO 内层分数反推训练成绩。离线重建报告不拟合模型，也不补算缺失诊断。
+
 特征服务把静态矩阵、样本 ID、有效性掩码、身份和哈希发布到独立包。训练服务把每个 `feature × model` 的结果发布到 `outputs.root/runs/run_<feature-id>-<model>/`；内容派生的 `run_id` 保留在 manifest 中用于复用校验，其中包括：
 
 - `predictions.csv` 与 `fold_metrics.csv`；
