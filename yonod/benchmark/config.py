@@ -408,6 +408,7 @@ class BenchmarkConfig:
         task_state = copy.deepcopy(dict(benchmark["task_state"]))
         internal_raw: Dict[str, Any] = {
             "schema_version": "2.0",
+            "outputs": {"diagnostics": copy.deepcopy(dict(outputs.get("diagnostics") or {}))},
             "hpo": copy.deepcopy(raw.get("hpo", {"enabled": False})),
             "model_params": legacy_model_kwargs,
             "schema2_model_params": copy.deepcopy(model_configs),
@@ -416,9 +417,8 @@ class BenchmarkConfig:
             "task_state": task_state,
             "project_name": raw["project_name"],
             "numeric_contract": numeric_contract,
+            "dataset_roles": copy.deepcopy(dict(roles)),
         }
-        if raw.get("hpo", {}).get("enabled"):
-            internal_raw["dataset_roles"] = copy.deepcopy(dict(roles))
         for field in ("population_id", "dataset_id"):
             if field in benchmark:
                 internal_raw[field] = benchmark[field]
