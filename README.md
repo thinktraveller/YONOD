@@ -135,7 +135,9 @@ python -u yonod.py
 
 完成的 HPO 组合另有“超参数搜索与嵌套评估”区：逐 study/trial 轨迹、每折实际参数与来源、独立外层折指标，以及搜索、外层训练和预测的分项耗时。普通汇总表仍按每个 repeat 的 pooled OOF 计算，不能把它与逐折均值或内层搜索分数混称。显式最终模型单列开发集搜索和重训；没有独立测试时不填测试分数。重建器只读核验持久 study 导出的哈希，不打开数据库或重新拟合。HPO 失败/软截止的 `report/hpo_status.html` 与 `.md` 只展示状态和已核验搜索证据，不把不完整折当作 OOF。
 
-### 训练与外层评估诊断（步骤 2-15，实施中）
+### 训练与外层评估诊断（步骤 2-15，Linux 三树范围已验收）
+
+九个隔离小样本任务覆盖普通与 strict 的 RF、XGBoost、LightGBM、fixed/HPO、诊断开关及普通早停；外层折预测、诊断数值、模型重载和双报告已独立核对。`logs/diag215_20260929_acceptance_resume5.log` 保存统一验收记录。历史 SVM/AutoGluon 结果可读并明确显示“未记录”诊断；本轮没有重新拟合 AutoGluon，Windows 实机仍未验证。这些工程验收不代表真实化学数据的模型效果。
 
 `outputs.diagnostics.enabled` 控制 RF、XGBoost、LightGBM 的折级训练诊断（默认 `true`）；`outputs.diagnostics.save_train_predictions` 控制是否另外保存训练逐行预测（默认 `false`，验收任务应设为 `true`）。唯一完整 YAML 结构见 `example.yaml`。这些选项只控制诊断，不改变外层 OOF 的文件格式或评分口径。SVM、AutoGluon 暂无同口径训练诊断，原建模能力保持。
 
