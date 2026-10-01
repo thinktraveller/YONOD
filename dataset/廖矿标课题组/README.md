@@ -20,6 +20,12 @@
 | Ir 催化羧酸与亚砜叶立德选择性 O–H 插入 | `Ir_catalyzed_OH_insertion.csv`（653）；`model_set (412).xlsx`、`external_set (235).xlsx`、`bioactive molecules (6).xlsx` | Xu, Y. *et al.* [HTE and machine learning-assisted development of iridium(I)-catalyzed selective O–H bond insertion reactions toward carboxymethyl ketones](https://doi.org/10.1039/D2QO01954J), *Organic Chemistry Frontiers* **2023**, 10, 1153–1159. | 📄 公开数据位于 [RSC SI](https://www.rsc.org/suppdata/d2/qo/d2qo01954j/d2qo01954j2.pdf)；✅ [KNIME 公开工作流](https://hub.knime.com/theliaogroup/spaces/O-H_bond_insertion)；[在线预测服务](https://www.pangu-drug.com/ylide) | SI 明确给出 412 个建模反应、235 个外部验证反应及工作流地址；本地 653 行 CSV 对应三份数据合并，另有 6 个生物活性分子案例。在线服务用于预测，不应当视为源码发布。 |
 | DHP 衍生物催化羧酸脱羧硒化 | `DHP_catalyzed_decarboxylative_selenation.csv`（868） | Yu, Z. *et al.* [HTE- and AI-assisted development of DHP-catalyzed decarboxylative selenation](https://doi.org/10.1039/D2CC06217H), *Chemical Communications* **2023**, 59, 2935–2938. | 📄 公开数据位于 [RSC SI](https://www.rsc.org/suppdata/d2/cc/d2cc06217h/d2cc06217h3.pdf)；未找到独立作者仓库。 | 原始实验与 HTE 资料位于 SI；本次未检索到能与该论文精确对应的作者公开代码库。 |
 
+## Ir O–H 插入合并去重数据集
+
+使用独立文件 [Ir_catalyzed_OH_insertion_merged_deduplicated.csv](<Ir 催化羧酸与亚砜叶立德选择性 O–H 插入/Ir_catalyzed_OH_insertion_merged_deduplicated.csv>)（653 行）。2026-10-02 将两个同源目录中的 6 份 XLSX 与既有 653 行 CSV 合并，按 `acid + ylide + product + yield (%)` 去除重复观测：共读入 1,959 行，去除 1,306 行重复副本。两个目录的对应 XLSX 字节相同；既有 CSV 与一套 XLSX 拼接后逐行一致。所有源文件保留。
+
+输出保留原五列和 Well 顺序，编码为 UTF-8 BOM。`W1–W412` 属于原建模集，`W413–W647` 属于原外部验证集，`W648–W653` 属于生物活性分子案例。规范化分子结构后有 650 个唯一 `acid + ylide + product` 组合；`W74/W580`、`W234/W595`、`W426/W610` 三对产率不同，均保留，不做任意取舍或平均。它们跨原建模/外部验证分区，后续评估需考虑结构重叠。详细输入指纹与验收记录位于独立文档仓库 `project-docs/docs/ir-oh-insertion-merge-20261002.md`。
+
 ## 检索与核验记录
 
 1. 通过 Z-AIHub 的已向量化“课题组文章”记录，按数据集反应名称匹配原论文，并读取其 Zotero 元数据（标题、作者、年份、DOI、期刊）。
