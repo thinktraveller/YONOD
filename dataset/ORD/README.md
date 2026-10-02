@@ -1,6 +1,6 @@
 # ORD 标准化反应数据
 
-本目录保存 19 个可直接建模的 CSV 表，共 **128,712** 条数据记录（不含表头；于 2026-09-16 按本地文件统计）。文件名中的 `structure_v1_normalized_dataset` 表示本项目采用的扁平化、结构化字段版本；它们不是完整的原始 ORD 反应 JSON。
+本目录保存 19 个上游发布的可直接建模 CSV 表，共 **128,712** 条数据记录（不含表头；于 2026-09-16 按本地文件统计），以及下面说明的 Ahneman 本地溶剂去重版。去重版复用原表的 4,312 条记录，不计作新增独立反应。文件名中的 `structure_v1_normalized_dataset` 表示本项目采用的扁平化、结构化字段版本；它们不是完整的原始 ORD 反应 JSON。
 
 ## 来源与追溯
 
@@ -35,3 +35,11 @@
 | `suzuki_yield_structure_v1_normalized_dataset.csv` | 5,760 | `yield_percent` |
 
 使用前请读取各 CSV 的表头：反应组分以角色（如 `reactant-*`、`reagent-*`、`catalyst-*`、`solvent-*`）展开，空单元格不代表化学上必然不存在该角色，而可能是源记录未结构化或未报告。若需要完整实验过程、测量方法、原始数据集或论文出处，应回到源发布物的对应数据包及其 `source-links.json`。
+
+## Ahneman 本地溶剂去重版
+
+`ahneman_yield_structure_v1_solvent_deduplicated_dataset.csv` 为本地结构建模变体，包含 **4,312 行、10 列**。它保留 `solvent-1`，删除逐行与其完全相同的 `solvent-2`、`solvent-3`、`solvent-4`、`solvent-5`；其余单元格的文本、行序和收率标签均保持一致。原始发布快照继续保留供追溯。
+
+已逐条核对原始反应 JSON 和发布物的行映射：4,312 条反应的 `toluidine`、`aryl halide`、`base`、`catalyst`、`additive` 五个输入均各自含一个 DMSO 溶剂条目，每个条目记录 0.2 μL、`volume_includes_solutes=true`。原表保留这些输入条目的出现次数并展开为五个溶剂槽位；它们代表同一种溶剂出现在不同加料条目中。去重版仅合并溶剂身份表示，不能替代原始加料/体积记录。
+
+选用去重版时，数据路径应指向该文件，模型配置的溶剂字段仅使用 `solvent-1`。使用八个分子条件槽位的历史脚本及配置仍对应原表；去重版只有四个分子条件槽位：`reagent-1`、`reagent-2`、`catalyst-1`、`solvent-1`。本地变体不再与上游原始 CSV 字节相同。
