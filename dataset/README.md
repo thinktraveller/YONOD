@@ -17,14 +17,14 @@
 | 位置 | 当前内容与规模 | 主要标签/格式 | 来源与使用边界 | 详细说明 |
 | --- | --- | --- | --- | --- |
 | [ORD/](ORD/) | 19 个模型就绪 CSV，合计 128,712 条记录 | `yield_percent`、`conversion_percent`、`lc_area_percent`、相对 LC 面积比、`ee_s_minus_r_percent` 等 | 来自 `thinktraveller/ord-datasets` 的 model-ready 预发布快照；本地仅保存 CSV，缺少源发布物的行映射、审计、上游链接与校验文件。 | [ORD/README.md](ORD/README.md) |
-| [USPTO/](USPTO/) | train/valid/test 三个固定切分，共 526,468 条记录 | `Yield`；UTF-8 兼容的制表符分隔文本 | 本地派生快照；Lowe USPTO 归档是最合理的候选上游，`Schwaller_` 前缀只说明处理语境，不能证明与某个公开包逐字节对应。 | [USPTO/README.md](USPTO/README.md) |
-| [others/](others/) | 6 个专题表，共 17,904 条记录 | 收率、`Ratio` 与 LC–MS 产物比并存 | SuFEx 来自论文 SI；四个原 `yieldmaster` HTE 数据集来自其对应论文/归档；另有一个 Doyle–Ahneman C–N 偶联的适配子集。 | [others/README.md](others/README.md) |
+| [USPTO/](USPTO/) | train/valid/test 三个固定切分，共 526,468 条记录；源 TSV、标准 CSV、合并和 provenance 共 8 表文件 | `Yield`；原始为 TSV，标准表为 CSV | Lowe → Schwaller 2018 分组切分 → Minidis 2021 产率清洗；公开 ZIP 成员文件名、大小与 CRC32 已与本地对应，整包加密哈希验证仍未完成。 | [USPTO/README.md](USPTO/README.md) |
+| [others/](others/) | 6 个专题表，共 17,904 条记录 | 收率、`Ratio` 与 LC–MS 产物比并存 | SuFEx 来自论文 SI；四个原 `yieldmaster` HTE 数据集来自其对应论文/归档；另有 GraphRXN 2023 的 1,558 行自建 C–N HTE 表，其历史目录名误写为 Doyle–Ahneman。 | [others/README.md](others/README.md) |
 | [廖矿标课题组/](廖矿标课题组/) | README 已文档化 8 类反应；包括 CSV、XLSX 和预处理结果 | 以各反应项目的实验产率/选择性等标签为准 | 每一类数据对应论文 SI、作者数据/代码仓库或公开工作流；有些条目是外部基准，不能仅因位于本目录而归为课题组原始数据。 | [廖矿标课题组/README.md](廖矿标课题组/README.md) |
 | `benchmark_smoke_fixture.csv` | 12 条合成的最小 fixture | `yield` | 项目内 smoke 测试输入，不是外部基准或实验数据集。 | [`example.yaml`](../example.yaml) |
 
 ## 跨目录使用注意事项
 
-- **不要跨目录直接相加记录数。** ORD 的不同目标表可复用同一反应；`others/` 中 Doyle–Ahneman HTE 表与其 C–N `Ratio` 子集共享上游数据脉络；廖矿标目录还包含建模/外部验证划分及预处理结果。
+- **不要跨目录直接相加记录数。** ORD 的不同目标表可复用同一反应；ORD 和 `others/` 的 Ahneman/Suzuki 表有共同原文，仍需按样本核对。1,558 行 `Ratio` 表实际来自 GraphRXN，不是 Doyle–Ahneman 子集；廖矿标目录还包含建模/外部验证划分及预处理结果。
 - **收率并非统一标签。** `yield_percent` / `Yield`、转化率、LC 面积比、LC–MS 产物比和 ee 的实验含义与量纲不同。跨表比较或合并前必须先查看目标列及其子目录说明。
 - **保留既有切分。** USPTO 的 train/valid/test 边界是本地快照的一部分；部分专题数据也已提供训练/外部验证划分，不应在不了解论文方案时覆盖。
 - **廖矿标目录的文件夹数不等于独立数据集数。** 当前有 12 个一级子目录，而其 README 只将内容归为 8 类反应；存在不同命名的目录和派生结果。聚合、去重或建模前请按该 README 的本地文件清单核对实际来源与角色。

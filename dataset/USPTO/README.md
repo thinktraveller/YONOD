@@ -77,7 +77,9 @@ assert train["yield_percent"].between(0, 100).all()
 
 当前普通 YONOD `train/all` 工作流仍使用 KFold，不能仅凭标准表的 `split` 列复现固定 train/valid/test 协议。不要合并三表后运行普通 KFold，再称结果为原始 test 评估；固定三分训练、调参与测试隔离仍需单独实现。
 
-本地快照最合理的候选上游是 Daniel Lowe，*Chemical reactions from US patents (1976-Sep2016)*，Figshare，2017，DOI：[10.6084/m9.figshare.5104873.v1](https://doi.org/10.6084/m9.figshare.5104873.v1)。Schwaller 等人的 [MolecularTransformer 仓库](https://github.com/pschwllr/MolecularTransformer) 描述了 Lowe 数据的 canonicalized 固定切分子集，相关论文见 [Schwaller *et al.* (2019)](https://doi.org/10.1021/acscentsci.9b00576)。本地没有上游归档哈希、完整转换记录、筛选规则或切分算法，故这些资料不能证明本地副本与公开包逐字节对应。候选上游采用 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)；本地派生副本没有独立许可证，使用或再发布前应自行确认适用条款。
+原始专利抽取上游为 Daniel Lowe，*Chemical reactions from US patents (1976-Sep2016)*，Figshare，2017，DOI：[10.6084/m9.figshare.5104873.v1](https://doi.org/10.6084/m9.figshare.5104873.v1)。当前产率清洗快照更直接对应 Alexander Minidis，*Yield curation USPTO rsmi/csv datasets*，2021，[10.6084/m9.figshare.14414039.v1](https://doi.org/10.6084/m9.figshare.14414039.v1) 及[作者清洗代码](https://github.com/DocMinus/Yield_curation_USPTO)。现有[2026-09-23 来源核查](../../project-docs/docs/uspto_merge_sources_20260923.md)已核公开 ZIP 中三成员的文件名、未压缩字节数和 CRC32 与本地 corpus 相同；尚未完成整包 MD5 或解压后 SHA-256 验证，不能称全包密码学身份已确认。
+
+上游切分依据为 Schwaller *et al.*，[*Found in Translation*（2018）](https://doi.org/10.1039/C8SC02339E)：带相同反应物分组约束的随机 18:1:1 划分。Minidis 逐文件清洗而未重新切分；清洗保留 `0 < Yield <= 100`，两种产率都可用时取较大值、范围取上界、零或无可用产率剔除。不能把清洗标签称为未经处理的实测产率。2018 原文和后续 Molecular Transformer 的任务是产物预测，其准确率不是当前产率回归的基线。Lowe 归档采用 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)；本地派生副本没有独立许可证。
 
 ## 复核
 
