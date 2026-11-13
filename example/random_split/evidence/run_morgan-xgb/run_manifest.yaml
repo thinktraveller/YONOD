@@ -1,0 +1,67 @@
+schema_version: '1.0'
+kind: yonod_training_run
+status: complete
+run_id: train-b03bd61d318975db5739
+artifact_id: morgan-bc01a1e755f0-c2b8195415e6
+feature_id: morgan
+feature_content_identity: 4148e375c6cc254bcac518aae8042cb387440b701c3c6c96794cd85197cd7851
+model: xgb
+model_request:
+  model: xgb
+  estimator:
+    n_estimators: 2
+    max_depth: 2
+    learning_rate: 0.1
+    n_jobs: 19
+    random_state: 42
+  fit: {}
+  preprocessing: {}
+  runtime: {}
+  parameter_sources:
+    estimator.n_estimators: yaml
+    estimator.max_depth: yaml
+    estimator.learning_rate: yaml
+    estimator.n_jobs: yaml
+    estimator.random_state: yaml
+dataset_identity: sha256:bc01a1e755f031e58d8f0f193482355fbfe56ac02b1db3b2d126a58e5b00cd59
+label_identity: sha256:a3d5e77762742b68da5d8ef191c2804fde76cd53fbdc0ea0d8ecc5f05eab5ef9
+label_column: yield
+split_identity: sha256:de1f7e223fc78216cd18e8e7995978c93f27aca33af686cf05154a2ecbd2a830
+numeric_identity: null
+numeric_contract: null
+evaluation:
+  protocol: outer_kfold
+  n_splits: 2
+  n_repeats: 1
+  seed: 42
+  shuffle: true
+n_samples: 12
+n_folds: 2
+model_bundles:
+- model_bundles/repeat-01-fold-01.yaml
+- model_bundles/repeat-01-fold-02.yaml
+diagnostics:
+  schema_version: yonod_fold_diagnostic/v1
+  request:
+    enabled: false
+    save_train_predictions: false
+  folds:
+  - repeat: 1
+    fold: 1
+    status: disabled
+  - repeat: 1
+    fold: 2
+    status: disabled
+source_config_filename: diag215_20260929_ordinary_fixed_off_v1.yaml
+source_config_sha256: 37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2
+effective_config_sha256: 62e5f8026154e6d4c4eefbfab002335f8f3813f859a94471a8c65c979a574bf7
+dependency_versions:
+  xgboost: 2.0.3
+outputs:
+  predictions: predictions.csv
+  fold_metrics: fold_metrics.csv
+  fold_transform_states: null
+  model_bundles: model_bundles
+  source_config: source_config.yaml
+  effective_config: effective_config.yaml
+completed_at: '2026-09-29T06:22:55.962226+00:00'

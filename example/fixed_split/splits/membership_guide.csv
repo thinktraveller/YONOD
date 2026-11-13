@@ -1,0 +1,13 @@
+reaction_id,fixed_block,fold_1_role,fold_2_role
+fixed-01,block_A,held_out,train
+fixed-02,block_A,held_out,train
+fixed-03,block_A,held_out,train
+fixed-04,block_A,held_out,train
+fixed-05,block_A,held_out,train
+fixed-06,block_A,held_out,train
+fixed-07,block_B,train,held_out
+fixed-08,block_B,train,held_out
+fixed-09,block_B,train,held_out
+fixed-10,block_B,train,held_out
+fixed-11,block_B,train,held_out
+fixed-12,block_B,train,held_out

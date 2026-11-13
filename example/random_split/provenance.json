@@ -1,0 +1,92 @@
+{
+  "task_name": "example_random_split_20261113",
+  "source_task": "diag215_20260929_ordinary_fixed_off_v1",
+  "source_run_directory": "result/diag215_20260929_ordinary_fixed_off_v1",
+  "data_kind": "synthetic_pipeline_fixture_not_experimental_measurements",
+  "new_task_execution": "not_run",
+  "report_kind": "byte_identical_archived_actual_output",
+  "canonical_config": "config/example_random_split_20261113.yaml",
+  "display_config": "run.yaml",
+  "dataset_file_sha256": "d334bc1eea51ea1cfc9156f0ce602545ae13c40c88f996ab4cd44a5b110d0479",
+  "metrics_scope": "one_repeat_pooled_out_of_fold_predictions",
+  "source_runs": [
+    {
+      "model": "rf",
+      "run_id": "train-255d17b4d79594a1c7fc",
+      "status": "complete",
+      "dataset_identity": "sha256:bc01a1e755f031e58d8f0f193482355fbfe56ac02b1db3b2d126a58e5b00cd59",
+      "label_identity": "sha256:a3d5e77762742b68da5d8ef191c2804fde76cd53fbdc0ea0d8ecc5f05eab5ef9",
+      "split_identity": "sha256:de1f7e223fc78216cd18e8e7995978c93f27aca33af686cf05154a2ecbd2a830",
+      "completed_at_utc": "2026-09-29T06:22:55.568905+00:00",
+      "source_config_sha256": "37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2",
+      "effective_config_sha256": "62e5f8026154e6d4c4eefbfab002335f8f3813f859a94471a8c65c979a574bf7"
+    },
+    {
+      "model": "xgb",
+      "run_id": "train-b03bd61d318975db5739",
+      "status": "complete",
+      "dataset_identity": "sha256:bc01a1e755f031e58d8f0f193482355fbfe56ac02b1db3b2d126a58e5b00cd59",
+      "label_identity": "sha256:a3d5e77762742b68da5d8ef191c2804fde76cd53fbdc0ea0d8ecc5f05eab5ef9",
+      "split_identity": "sha256:de1f7e223fc78216cd18e8e7995978c93f27aca33af686cf05154a2ecbd2a830",
+      "completed_at_utc": "2026-09-29T06:22:55.962226+00:00",
+      "source_config_sha256": "37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2",
+      "effective_config_sha256": "62e5f8026154e6d4c4eefbfab002335f8f3813f859a94471a8c65c979a574bf7"
+    },
+    {
+      "model": "lightgbm",
+      "run_id": "train-1032ca46ad135691fc13",
+      "status": "complete",
+      "dataset_identity": "sha256:bc01a1e755f031e58d8f0f193482355fbfe56ac02b1db3b2d126a58e5b00cd59",
+      "label_identity": "sha256:a3d5e77762742b68da5d8ef191c2804fde76cd53fbdc0ea0d8ecc5f05eab5ef9",
+      "split_identity": "sha256:de1f7e223fc78216cd18e8e7995978c93f27aca33af686cf05154a2ecbd2a830",
+      "completed_at_utc": "2026-09-29T06:22:56.222675+00:00",
+      "source_config_sha256": "37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2",
+      "effective_config_sha256": "62e5f8026154e6d4c4eefbfab002335f8f3813f859a94471a8c65c979a574bf7"
+    }
+  ],
+  "new_config_changes": [
+    "project_name",
+    "input/output locations",
+    "teaching metadata and comments"
+  ],
+  "unchanged_experimental_settings": [
+    "dataset contents",
+    "column roles",
+    "descriptor",
+    "models",
+    "model_params",
+    "evaluation",
+    "hpo",
+    "diagnostics"
+  ],
+  "not_included": [
+    "trained model binaries",
+    "full descriptor packages",
+    "software environment"
+  ],
+  "original_files_sha256": {
+    "config/diag215_20260929_ordinary_fixed_off_v1.yaml": "37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2",
+    "dataset/benchmark_smoke_fixture.csv": "d334bc1eea51ea1cfc9156f0ce602545ae13c40c88f996ab4cd44a5b110d0479",
+    "result/diag215_20260929_ordinary_fixed_off_v1/report/report.html": "cfe8c009db4bc5b59295d9271717e451832f1e1c25052b9325d5f5ff2720d3f4",
+    "result/diag215_20260929_ordinary_fixed_off_v1/report/report.md": "8ea218d20647f79ca3c265e9ffe1b3d3103d0283d4e443b78d4cacd3df31fb02",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-rf/run_manifest.yaml": "9d8c8a78f4cc85720c3d0c028600c0f5b49ecf250d60f45d3e935915a57f2306",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-rf/source_config.yaml": "37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-rf/effective_config.yaml": "62e5f8026154e6d4c4eefbfab002335f8f3813f859a94471a8c65c979a574bf7",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-rf/predictions.csv": "4e8141cec46b156690d25909b6b46dcfe2ce4862815f465a4cc7a4b9b9cabff4",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-rf/fold_metrics.csv": "25e1252896c89d00b912c81744bbbea2e0bbfc5f5800b9cdd1572f21b409b96c",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-xgb/run_manifest.yaml": "f92816ef64944562e9dca43b32d96b2f6de3b7545f9aad2dbfcbc6ab9519123b",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-xgb/source_config.yaml": "37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-xgb/effective_config.yaml": "62e5f8026154e6d4c4eefbfab002335f8f3813f859a94471a8c65c979a574bf7",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-xgb/predictions.csv": "f9784e637b52237218c0d5cfd23d23d858f75119997ee9c54b4ec1d62bac8e82",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-xgb/fold_metrics.csv": "ac0dbdddf06277b26c4087b0c8a6fe5a30b46363270450260ea31da48a942e83",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-lightgbm/run_manifest.yaml": "242108a5c2081033144003199a311d89d294af37e1e481d8eccdf99b2d205f1a",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-lightgbm/source_config.yaml": "37ef5516cc49385df2e90988aba440bf01c9d1c49d0470435cbbbfe10049dca2",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-lightgbm/effective_config.yaml": "62e5f8026154e6d4c4eefbfab002335f8f3813f859a94471a8c65c979a574bf7",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-lightgbm/predictions.csv": "77d6dedb0b40c94e6e6bf0c3c1cec3cd5872c321ee290b3f4b9d088cfaeccf90",
+    "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-lightgbm/fold_metrics.csv": "86b64dea36d5e63122dca3bb4d493be3b68c620c29a9430e9f7a0b925800dabe"
+  },
+  "canonical_config_base": "repository_root",
+  "display_config_base": "package_root",
+  "repackaged_from": "backup/random_split_example_20261113",
+  "repackaging_date": "2026-11-13"
+}

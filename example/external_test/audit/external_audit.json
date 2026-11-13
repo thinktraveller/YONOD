@@ -1,0 +1,37 @@
+{
+  "task_name": "synthetic_external_teaching_audit_v1",
+  "teaching_only": true,
+  "data_status": "synthetic_not_measured",
+  "independent_experimental_source": false,
+  "candidate_source_sha256": "1801f2879cc2486983cfc5c33ab0c5b7fe26f18bbe1f91766e52d9f1dc06e44f",
+  "physical_dataset_id": "teaching-external-v1",
+  "row_count": 6,
+  "exact_canonical_overlap": {
+    "amine": 0,
+    "acid": 0,
+    "product": 0
+  },
+  "canonical_structure_counts": {
+    "amine": {
+      "unique_train": 4,
+      "unique_external": 3,
+      "overlap": []
+    },
+    "acid": {
+      "unique_train": 3,
+      "unique_external": 3,
+      "overlap": []
+    },
+    "product": {
+      "unique_train": 12,
+      "unique_external": 6,
+      "overlap": []
+    }
+  },
+  "canonicalization": "RDKit MolFromSmiles then MolToSmiles(canonical=True); exact structures only",
+  "limits": [
+    "Artificial yields and structures illustrate file shape; no experimental independence is established.",
+    "Zero exact structural overlap does not establish distributional independence or chemical dissimilarity.",
+    "This is the current external adapter's A/B/P-zero-overlap example; do not copy zero counts for real data without audit."
+  ]
+}

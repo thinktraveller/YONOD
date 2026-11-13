@@ -1,0 +1,7 @@
+external_id,source_record_id,amine_group,external_amine,external_acid,external_product,measured_yield
+external-01,teaching-external-v1:record-01,amine_A,Nc1ccccc1,CCCC(=O)O,CCCC(=O)Nc1ccccc1,0.22
+external-02,teaching-external-v1:record-02,amine_A,Nc1ccccc1,O=C(O)C1CC1,O=C(Nc1ccccc1)C1CC1,0.31
+external-03,teaching-external-v1:record-03,amine_B,NC1CC1,CCCC(=O)O,CCCC(=O)NC1CC1,0.44
+external-04,teaching-external-v1:record-04,amine_B,NC1CC1,O=C(O)c1ccncc1,O=C(NC1CC1)c1ccncc1,0.51
+external-05,teaching-external-v1:record-05,amine_C,NCCO,O=C(O)C1CC1,O=C(NCCO)C1CC1,0.60
+external-06,teaching-external-v1:record-06,amine_C,NCCO,O=C(O)c1ccncc1,O=C(NCCO)c1ccncc1,0.69

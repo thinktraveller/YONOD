@@ -1,0 +1,13 @@
+reaction_id,yield,reactant_1_smiles,reactant_2_smiles
+smoke-01,0.10,C,CO
+smoke-02,0.16,CC,CO
+smoke-03,0.22,CCC,CO
+smoke-04,0.28,CCCC,CO
+smoke-05,0.34,CCO,CO
+smoke-06,0.40,CCN,CO
+smoke-07,0.46,CCCl,CO
+smoke-08,0.52,CCBr,CO
+smoke-09,0.58,CCF,CO
+smoke-10,0.64,CC=O,CO
+smoke-11,0.70,CC#N,CO
+smoke-12,0.76,C1CC1,CO

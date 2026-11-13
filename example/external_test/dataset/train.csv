@@ -1,0 +1,13 @@
+reaction_id,yield,amine_smiles,acid_smiles,product_smiles
+train-01,0.12,CN,CC(=O)O,CC(=O)NC
+train-02,0.17,CN,CCC(=O)O,CCC(=O)NC
+train-03,0.22,CN,O=C(O)c1ccccc1,O=C(NC)c1ccccc1
+train-04,0.27,CCN,CC(=O)O,CC(=O)NCC
+train-05,0.32,CCN,CCC(=O)O,CCC(=O)NCC
+train-06,0.37,CCN,O=C(O)c1ccccc1,O=C(NCC)c1ccccc1
+train-07,0.42,CCCN,CC(=O)O,CC(=O)NCCC
+train-08,0.47,CCCN,CCC(=O)O,CCC(=O)NCCC
+train-09,0.52,CCCN,O=C(O)c1ccccc1,O=C(NCCC)c1ccccc1
+train-10,0.57,CCCCN,CC(=O)O,CC(=O)NCCCC
+train-11,0.62,CCCCN,CCC(=O)O,CCC(=O)NCCCC
+train-12,0.67,CCCCN,O=C(O)c1ccccc1,O=C(NCCCC)c1ccccc1

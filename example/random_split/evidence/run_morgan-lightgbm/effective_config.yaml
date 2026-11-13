@@ -1,0 +1,72 @@
+schema_version: '2.0'
+project_name: diag215_20260929_ordinary_fixed_off_v1
+stage: all
+dataset:
+  path: ./dataset/benchmark_smoke_fixture.csv
+  sample_id_col: reaction_id
+  column_roles:
+    label: yield
+    reactants:
+    - reactant_1_smiles
+    - reactant_2_smiles
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+  numeric_conditions:
+    defaults:
+      missing:
+        strategy: error
+      scaling: none
+    columns: {}
+descriptors:
+- id: morgan
+  descriptor: morgan
+  mode: concat
+  columns:
+  - reactant_1_smiles
+  - reactant_2_smiles
+artifacts:
+  output_dir: /home/wangzh685/桌面/ord-data/YONOD/result/diag215_20260929_ordinary_fixed_off_v1/feature
+models:
+- rf
+- xgb
+- lightgbm
+model_params:
+  rf:
+    estimator:
+      n_estimators: 2
+      n_jobs: 19
+      random_state: 42
+  xgb:
+    estimator:
+      n_estimators: 2
+      max_depth: 2
+      learning_rate: 0.1
+      n_jobs: 19
+      random_state: 42
+  lightgbm:
+    estimator:
+      n_estimators: 2
+      num_leaves: 2
+      min_child_samples: 1
+      n_jobs: 19
+      random_state: 42
+hpo:
+  enabled: false
+evaluation:
+  protocol: outer_kfold
+  n_splits: 2
+  n_repeats: 1
+  shuffle: true
+  seed: 42
+outputs:
+  root: /home/wangzh685/桌面/ord-data/YONOD/result/diag215_20260929_ordinary_fixed_off_v1
+  report_formats:
+  - html
+  - markdown
+  diagnostics:
+    enabled: false
+    save_train_predictions: false
+metadata:
+  notes: Step 2-15 isolated engineering acceptance; no scientific claim.

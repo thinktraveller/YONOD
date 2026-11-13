@@ -1,0 +1,69 @@
+# 固定名单两折内测：人工教学数据；本次仅准备文件，没有建立模型。
+# 正式运行前使用仓库根 config/ 中的同名任务副本。
+schema_version: "2.0"
+project_name: example_fixed_split_20261113
+stage: benchmark  # 严格核查并执行预先给定的训练/留出名单
+
+dataset:
+  path: ./dataset/reactions.csv
+  sample_id_col: reaction_id  # 唯一反应记录编号，不作为模型输入
+  column_roles:
+    label: yield             # 参考产率：0.10表示10%；本例为人工数值
+    reactants: [reactant_1_smiles, reactant_2_smiles]
+    products: []
+    others: []
+    conditions: []
+    categoricals: []
+  numeric_conditions:
+    defaults:
+      missing: {strategy: error}
+      scaling: none
+    columns: {}
+
+descriptors:
+  - id: morgan
+    descriptor: morgan       # 结构数值编码（Morgan指纹）
+    lifecycle: static_descriptor  # 每条结构可独立计算的编码
+    mode: concat             # 按列顺序拼接两个反应物编码
+    columns: [reactant_1_smiles, reactant_2_smiles]
+
+artifacts:
+  output_dir: ../../result/example_fixed_split_20261113/feature
+
+models: [rf]                 # 随机森林回归；只是小型操作示例
+model_params:
+  rf:
+    estimator:
+      n_estimators: 10       # 教学预算，不是推荐科研参数
+      n_jobs: 19
+      random_state: 42
+
+hpo:
+  enabled: false             # 不自动筛选模型设置
+
+evaluation:
+  protocol: manifest_outer_cv
+  n_splits: 2                # 两折轮换，每条记录恰好留出一次
+  n_repeats: 1
+  seed: 42                   # 保留运行身份；实际成员由下方名单决定
+  grouping:
+    strategy: precomputed_column
+    group_column: fixed_block  # 仅约束同组不拆开，不输入模型
+  split_manifest: ./splits/fixed_split_manifest.csv  # 预先指定每条记录的角色
+
+outputs:
+  root: ../../result/example_fixed_split_20261113
+  report_formats: [html, markdown]
+  diagnostics:
+    enabled: false
+    save_train_predictions: false
+
+benchmark:
+  task_state:
+    backend: sqlite
+    resumable: true
+  population_id: teaching_fixed_12_records_v1
+  dataset_id: synthetic_fixed_split_teaching_v1
+
+metadata:
+  notes: "人工教学数据；固定block_A/block_B名单两折轮换；组名没有化学含义；静态准备，未建模。"

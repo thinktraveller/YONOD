@@ -1,0 +1,42 @@
+{
+  "teaching_only": true,
+  "new_task_execution": "not_run",
+  "data_status": "synthetic_not_measured",
+  "independent_experimental_source": false,
+  "task_name": "example_external_test_20261113",
+  "train_sha256": "3bb9715d841d8e0a72afab961288b403bcccbd488a918c1880a0846454b7af35",
+  "external_sha256": "1801f2879cc2486983cfc5c33ab0c5b7fe26f18bbe1f91766e52d9f1dc06e44f",
+  "audit_sha256": "e4145e45f41d95003509380960496a1b43b0ef86290f9ed0d72fcf5066b1be77",
+  "canonical_structure_counts": {
+    "amine": {
+      "unique_train": 4,
+      "unique_external": 3,
+      "overlap": []
+    },
+    "acid": {
+      "unique_train": 3,
+      "unique_external": 3,
+      "overlap": []
+    },
+    "product": {
+      "unique_train": 12,
+      "unique_external": 6,
+      "overlap": []
+    }
+  },
+  "display_config": {
+    "path": "run.yaml",
+    "path_base": "package_directory"
+  },
+  "formal_config": {
+    "path": "config/example_external_test_20261113.yaml",
+    "path_base": "repository_root"
+  },
+  "copy_to_config_template": "run_from_root.yaml",
+  "expected_reports_after_run": [
+    "result/example_external_test_20261113/report/external_test_report.html",
+    "result/example_external_test_20261113/report/external_test_report.md"
+  ],
+  "provided_reports": [],
+  "scientific_performance_claims": []
+}
