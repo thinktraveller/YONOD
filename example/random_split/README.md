@@ -2,14 +2,16 @@
 
 这是供化学研究人员阅读的完整示例入口。建议先用浏览器打开 [index.html](index.html)，再按下面顺序看文件。
 
-**数据是12条人工构造的流程测试记录，不是实验测量数据。** 分子结构文本用于演示输入格式，不表示这两列分子一定能发生合理反应。报告是同一批数据、同一模型和随机划分设置的历史实际计算输出；本次整理没有重新训练或预测，也没有把新任务设置冒充已经运行的结果。
+**数据是12条人工构造的流程测试记录，不是实验测量数据。** 分子结构文本用于演示输入格式，不表示这两列分子一定能发生合理反应。本页保留同一批数据、同一模型与随机划分设置的历史实际计算输出，供对照来源。本轮已用本目录YAML完整运行并验收，新增结果与历史报告分开保存。
+
+本轮下载快照：[网页报告](completed_run/report/report.html) · [文字报告](completed_run/report/report.md)。快照保存在 `completed_run/`，重新运行仍写入独立的 `result/example_random_split_20261113/`。
 
 ## 1. 示例文件夹里有什么
 
 | 文件 | 先看什么 |
 |---|---|
 | [dataset/reactions.csv](dataset/reactions.csv) | 反应数据表（CSV）：每行一条记录，含编号、参考产率和两列分子结构 |
-| [run.yaml](run.yaml) | 建模任务设置文件（YAML）的阅读展示副本：说明选哪些列、怎样编码、采用哪些建模方法和怎样测试 |
+| [run.yaml](run.yaml) | 可直接在本文件夹运行的建模任务设置文件（YAML）：说明选哪些列、怎样编码、采用哪些建模方法和怎样测试 |
 | [tables/split_assignments.csv](tables/split_assignments.csv) | 每条记录在哪一批测试中被留出；它们不是三套不同模型各自随意拆出的数据 |
 | [tables/metrics.csv](tables/metrics.csv) | 从已保存逐条预测核对得到的评分，保留全部三种方法及负分 |
 | [report/report.html](report/report.html) | 原始完整网页报告，保留原任务名和原报告用语 |
@@ -18,7 +20,7 @@
 | `evidence/run_morgan-rf/` 等 | 历史原始设置、生效设置、逐条预测、每批评分及运行记录清单的审计节选 |
 | [provenance.json](provenance.json) | 数据和报告来自哪里、哪些文件是原字节复制、哪些是本次整理的展示内容 |
 
-包内设置副本用于阅读，路径按其所在位置说明。若以后明确要在当前 YONOD 仓库运行，使用已准备并静态校验的[正式任务设置](../../config/example_random_split_20261113.yaml)，从仓库根通过 `yonod.py` 启动。正式设置的任务名和输入、输出路径属于这个新示例；**它尚未运行**。包内历史报告来自 `diag215_20260929_ordinary_fixed_off_v1`，不会因新文件名而变成新结果。
+直接进入本目录，通过 `../../yonod.py` 选择 `run.yaml`。输入和结果路径都相对本YAML所在目录，无须复制到根 `config/`。新报告位于 `result/example_random_split_20261113/report/`；旧报告仍位于 `report/`，来自 `diag215_20260929_ordinary_fixed_off_v1`，保留原任务名称与日期。
 
 `evidence/` 不是整套可重载模型的交付。保存预测和评分，并不等于保存了全部模型、转换文件及原运行环境；请勿据此直接调用模型预测接口。
 
@@ -46,7 +48,7 @@
 | `schema_version` | `2.0` | 使用当前设置格式 |
 | `project_name` | `example_random_split_20261113` | 新示例任务的独立名称；历史报告保留原任务名 |
 | `stage` | `all` | 连续完成输入编码、建立模型与内测报告 |
-| `dataset.path` | 指向本包的 `dataset/reactions.csv` | 读取哪张反应表；阅读副本与正式设置按各自位置解析路径 |
+| `dataset.path` | 指向本包的 `dataset/reactions.csv` | 读取本目录中的反应表，输入和输出都按YAML所在目录解析 |
 | `dataset.sample_id_col` | `reaction_id` | 哪列是反应记录编号 |
 | `dataset.column_roles.label` | `yield` | 哪列是希望预测的参考产率 |
 | `dataset.column_roles.reactants` | 两列结构文本 | 这些列可以作为已知分子输入 |
@@ -61,7 +63,7 @@
 | `evaluation.shuffle` | `true` | 先打乱记录顺序后再划分 |
 | `evaluation.seed` | `42` | 固定随机安排，方便核对划分；这个数字没有化学含义 |
 | `artifacts.output_dir` | 新任务的 `feature/` 子目录 | 将结构编码保存到任务自己的文件夹 |
-| `outputs.root` | 正式设置为 `./result/example_random_split_20261113` | 新任务结果与历史任务分开保存，不覆盖旧报告 |
+| `outputs.root` | `./result/example_random_split_20261113` | 在当前示例目录内保存新结果，与历史报告分开 |
 | `outputs.report_formats` | `html`、`markdown` | 完成时生成网页和文字两种报告 |
 | `outputs.diagnostics.enabled` | `false` | 关闭已学反应与留出反应的额外效果对照；不关闭正常内测预测和评分 |
 
@@ -103,17 +105,29 @@ R²比较模型与统一使用该测试结果均值预测的表现。负值表�
 - 开头“训练与外层评估诊断”的 `disabled` 表示额外效果对照被关闭。该诊断汇总的完成数为0，不表示三种模型的正常两折内测失败；正常评分表和各运行清单显示完整内测结果。
 - “严格外层CV加权排名”是历史报告的标题。本例实际协议为随机 `outer_kfold`，不能从“严格”两个字推断采用了底物分组留出。
 - 任务信息中的“SMILES列”为 `—` 是旧报告展示项未填；实际模型明确使用两列分子结构，见YAML和原始设置记录。
-- 原任务名、生成日期和原项目路径有意保留，用来追查历史来源；报告不是在本次新任务名下重新计算的。
+- 原任务名、生成日期和原项目路径有意保留，用来追查历史来源；这份旧报告没有改写；本轮新任务的报告另存于包内的 `result/`。
 - 原报告保留历史通用指标文案，其中固定R²/误差阈值及用途建议不能直接作为本例或其他化学体系的可靠性标准。R²按“1减去误差平方和／测试值离均差平方和”理解；0–1尺度的误差乘100才是百分点，MAE也并非完全不受极端误差影响。本包的指标解读以本页和导览页为准。
 - 原报告网页可能用在线公式排版资源；主要图片已内嵌。文字版的图片位于同包的 `pictures/`，请一起保留。
 
 想看现有平台的整体功能，可读[解释版结构说明](../../project-docs/docs/yonod-structure-behavior-20261109.md)或[术语对照版](../../project-docs/docs/yonod-structure-behavior-20261109-technical.md)。
 
 
-## 在当前仓库操作
+## 在本文件夹运行
 
-1. 检查数据和包内的 [run.yaml](run.yaml)。
-2. 将 [run_from_root.yaml](run_from_root.yaml) 复制到根目录 `config/example_random_split_20261113.yaml`；该文件的路径已按仓根填写，不能用阅读副本原样替代。当前仓库已经备好相同正式文件。
-3. 按[总入口](../README.md)通过 `yonod.py` 依次启动任务。新结果写入 `result/example_random_split_20261113/`；这里的历史报告供阅读，目录中的原报告不会因运行新任务而更新。
+1. 从YONOD根目录进入 `example/random_split/`，检查数据和同目录的 [run.yaml](run.yaml)，无需复制设置。
+2. Linux按[总操作说明](../README.md)使用后台命令，激活 `yonod` 环境并绑定19个可用逻辑CPU，通过 `python -u ../../yonod.py` 启动，首次提示输入 `run.yaml`。日志与PID位于根 `logs/example_random_split_20261113_selfcontained.log` 和 `.pid`。
+3. 新结果写入本目录的 `result/example_random_split_20261113/`；网页与文字报告为其中的 `report/report.html` 和 `report/report.md`。本轮已完整运行并验收，最终完成状态以运行记录为准。
 
-本目录从上一版教学包重新整理；原历史数据、报告、图片和预测证据逐字节保持一致，`checksums.json`针对当前位置重新生成。
+Windows Conda Prompt从YONOD根目录执行：
+
+```text
+cd example\random_split
+conda activate yonod
+python -u ..\..\yonod.py
+```
+
+首次提示输入 `run.yaml`。每次只运行一个示例。
+
+本目录的历史数据、报告、图片和预测证据保留原字节；`evidence/`中的历史YAML仅用于追溯原计算，不是本轮的任务入口。下载压缩包附本轮完整输出；源码克隆后自行运行生成包内 `result/`。
+
+本轮逐条验收记录：[verification.json](verification.json)。

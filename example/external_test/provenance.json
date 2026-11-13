@@ -1,6 +1,6 @@
 {
   "teaching_only": true,
-  "new_task_execution": "not_run",
+  "new_task_execution": "complete",
   "data_status": "synthetic_not_measured",
   "independent_experimental_source": false,
   "task_name": "example_external_test_20261113",
@@ -24,19 +24,21 @@
       "overlap": []
     }
   },
-  "display_config": {
-    "path": "run.yaml",
-    "path_base": "package_directory"
-  },
-  "formal_config": {
-    "path": "config/example_external_test_20261113.yaml",
-    "path_base": "repository_root"
-  },
-  "copy_to_config_template": "run_from_root.yaml",
   "expected_reports_after_run": [
     "result/example_external_test_20261113/report/external_test_report.html",
     "result/example_external_test_20261113/report/external_test_report.md"
   ],
   "provided_reports": [],
-  "scientific_performance_claims": []
+  "scientific_performance_claims": [],
+  "configuration": {
+    "path": "run.yaml",
+    "path_base": "example_directory"
+  },
+  "output_root": "result/example_external_test_20261113",
+  "verification": "verification.json",
+  "completed_run_snapshot": "completed_run",
+  "current_reports": {
+    "html": "completed_run/report/external_test_report.html",
+    "md": "completed_run/report/external_test_report.md"
+  }
 }

@@ -1,6 +1,6 @@
 # 固定名单两折内测：先决定谁用于建模、谁用于检验
 
-本包展示**怎样让所有模型严格使用事先指定的同一份名单**。12条记录和产率都是人工教学数据，结构搭配不代表经过实验验证的反应；本次只准备文件并检查配置，**尚未运行，也没有本包的预测分数或最终报告**。
+本包展示**怎样让所有模型严格使用事先指定的同一份名单**。12条记录和产率都是人工教学数据，结构搭配不代表经过实验验证的反应；**本轮已完整运行并验收，记录见verification.json。**
 
 与随机划分不同，这里直接写明每条记录在每一轮的用途。固定名单属于数据划分方法，固定模型参数属于模型设置，两者是两件事。
 
@@ -11,9 +11,8 @@
 | [dataset/reactions.csv](dataset/reactions.csv) | 12条人工记录，附加`fixed_block`分组列。 |
 | [splits/membership_guide.csv](splits/membership_guide.csv) | 最易阅读的12行角色对照表：`held_out`是暂不用于建立模型的留出记录。 |
 | [splits/fixed_split_manifest.csv](splits/fixed_split_manifest.csv) | 程序真正读取的24行划分清单（split manifest），每折列出全部12条记录。 |
-| [run.yaml](run.yaml) | 包内阅读版配置，路径相对本包目录；与正式副本的数据和模型设置相同。 |
-| [run_from_root.yaml](run_from_root.yaml) | 操作模板：复制到仓库根`config/example_fixed_split_20261113.yaml`后运行，`./`路径相对仓库根。 |
-| [provenance.json](provenance.json) | 数据来源、校验码、预期输出与“未运行”状态。 |
+| [run.yaml](run.yaml) | 直接在本目录运行的任务配置；所有输入与输出路径相对本文件所在目录。 |
+| [provenance.json](provenance.json) | 数据来源、校验码与本轮运行记录。 |
 
 ## 数据表中的列是什么意思
 
@@ -47,31 +46,29 @@
 
 程序会核查导入名单的成员、文件身份及组是否跨训练/留出；它不会仅凭组名判断化学结构是否真正未见。
 
-## 如何运行本例
+## 在本文件夹运行
 
-本次没有执行以下建模命令。先把整个`example/`放在YONOD仓库根目录，然后在**仓库根**操作。
+从YONOD根目录进入 `example/fixed_split/`。不用复制或移动 `run.yaml`。数据、固定名单和新结果均在本包内；保留19线程预算并与其他示例依次运行。
 
-Linux Bash：
+Linux Bash按[总操作说明](../README.md)使用后台命令：把示例目录改为 `example/fixed_split`，日志名和PID名改为 `example_fixed_split_20261113_selfcontained`。程序入口为 `python -u ../../yonod.py`，首次提示输入 `run.yaml`；日志位于仓库根 `logs/`。
 
-```bash
-mkdir -p config
-cp example/fixed_split/run_from_root.yaml config/example_fixed_split_20261113.yaml
+Windows Conda Prompt：
+
+```text
+cd example\fixed_split
+conda activate yonod
+python -u ..\..\yonod.py
 ```
 
-Windows PowerShell：
-
-```powershell
-New-Item -ItemType Directory -Force -Path config | Out-Null
-Copy-Item example/fixed_split/run_from_root.yaml config/example_fixed_split_20261113.yaml
-```
-
-随后按[总操作说明](../README.md)启动`yonod.py`，首次提示时提供`config/example_fixed_split_20261113.yaml`。Linux需使用`yonod`环境、19个可用逻辑CPU、无头启动及任务专属`logs/`日志；任务按顺序运行。不要直接把包内`run.yaml`或`run_from_root.yaml`当成位于根`config/`的正式配置启动。
+首次提示输入 `run.yaml`。新结果写入本目录的 `result/example_fixed_split_20261113/`。
 
 ## 运行完成后会看到什么
 
-以下是**预期路径和内容**，本次尚未生成：
+下载包的[本轮网页报告](completed_run/report/benchmark_report.html)与[文字报告](completed_run/report/benchmark_report.md)保存在 `completed_run/` 完整快照中。重新运行使用同目录YAML，在本包 `result/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
 
-| 路径（相对YONOD根目录） | 内容 |
+以下路径均相对当前示例文件夹。本轮已完整运行并验收，已生成并检查以下结果：
+
+| 路径（相对当前示例目录） | 内容 |
 | --- | --- |
 | `result/example_fixed_split_20261113/report/benchmark_report.html` | 网页报告：模型结果、数据划分核对、每折完成情况和图表。 |
 | `result/example_fixed_split_20261113/report/benchmark_report.md` | 同一次计算的Markdown报告。 |
@@ -79,3 +76,5 @@ Copy-Item example/fixed_split/run_from_root.yaml config/example_fixed_split_2026
 | `result/example_fixed_split_20261113/docs/predictions/` | 每折逐条留出预测，便于核对实际成员。 |
 
 先检查两折都完成，再看预测误差。R²（决定系数）不是正确率；MAE（平均绝对误差）在本例0–1产率单位下乘100后，才是产率百分点。固定名单本身不保证模型好，也不自动证明未见底物预测能力。
+
+本轮逐条验收记录：[verification.json](verification.json)。

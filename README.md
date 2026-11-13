@@ -15,7 +15,7 @@ python -u yonod.py
 
 仓库根目录的 [example.yaml](example.yaml) 是一个可直接运行的 12 样本 Morgan × Random Forest、2-fold smoke。成功时应看到 `features=ready` 和 `morgan × rf: complete` 或 `reused`；运行 ID 是内容派生的，不应写死。Chemical VAE 的历史验收 YAML 已归档在 [configs_20260916.tar.gz](backup/configs_20260916.tar.gz)，不是 `example.yaml` 的隐式组成部分。
 
-面向化学研究人员的[三种检验方式示例](example/index.html)集中在 [example/](example/README.md)：随机划分内测、固定名单两折内测和独立外测流程。各包提供人工教学数据、注释配置和操作说明；随机包附历史实际报告，新增固定名单与外测设置尚未运行。
+面向化学研究人员的[三种检验方式示例](example/index.html)集中在 [example/](example/README.md)：随机划分内测、固定名单两折内测和独立外测流程。三个 `run.yaml` 均已从各自目录实际运行，结果保存在本包 `result/`；无需复制配置。下载包附本轮已完成输出快照，数据均为人工教学记录。
 
 | 目的 | 当前入口 |
 | --- | --- |

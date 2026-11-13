@@ -28,7 +28,7 @@ descriptors:
     columns: [amine_smiles, acid_smiles, product_smiles]
 
 artifacts:
-  output_dir: ../../result/example_external_test_20261113/feature
+  output_dir: ./result/example_external_test_20261113/feature
 
 models: [rf]
 model_params:
@@ -60,7 +60,7 @@ evaluation:
     audit_manifest_sha256: e4145e45f41d95003509380960496a1b43b0ef86290f9ed0d72fcf5066b1be77
 
 outputs:
-  root: ../../result/example_external_test_20261113
+  root: ./result/example_external_test_20261113
   report_formats: [html, markdown]
 
 benchmark:
@@ -71,4 +71,4 @@ benchmark:
   dataset_id: synthetic_external_teaching_v1
 
 metadata:
-  notes: "12条训练+6条外测人工教学记录；A/B/P结构零交集已实际检查；不具备独立实验来源；未建模。"
+  notes: "12条训练+6条外测人工教学记录；A/B/P结构零交集已实际检查；不具备独立实验来源；执行状态见verification.json。"

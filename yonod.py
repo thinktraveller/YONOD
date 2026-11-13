@@ -2380,9 +2380,13 @@ def step9_auto_launch_modeling(config_path: str) -> bool:
     print("步骤9: 启动建模")
     print("=" * 60)
 
+    # Resolve in the caller's directory before the child switches to the
+    # repository root. Dataset/output references still belong to this YAML.
+    config_path = str(Path(config_path).resolve())
+
     # 构建等效命令
     main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
-    cmd_str = f'python main.py --config "{config_path}"'
+    cmd_str = f'"{sys.executable}" "{main_script}" --config "{config_path}"'
 
     print("\n是否立即启动建模?")
     print(f"\n等效命令: {cmd_str}")
@@ -2481,11 +2485,14 @@ def main():
 
     # 如果是 schema-2 YAML 配置文件，验证后在本入口分派运行时。
     if basic_info['is_config_file']:
+        # Keep the caller's YAML identity when the ordinary runtime changes
+        # working directory to the repository root.
+        config_path = Path(basic_info['dataset_path']).resolve()
         print("\n" + "=" * 60)
         print("检测到 schema-2 YAML 配置文件，验证中...")
         print("=" * 60)
 
-        if validate_config_file(basic_info['dataset_path']):
+        if validate_config_file(str(config_path)):
             print("\n[OK] 配置文件有效,直接启动建模")
 
             # Strict benchmarks are deliberately not routed through main.py:
@@ -2494,20 +2501,20 @@ def main():
             # interactive YAML path remains the mandatory public launcher.
             try:
                 from yonod.config.loader import load_run_config
-                stage = str(load_run_config(Path(basic_info['dataset_path'])).effective['stage'])
+                effective = load_run_config(config_path).effective
+                stage = str(effective['stage'])
                 if stage == 'benchmark':
-                    effective = load_run_config(Path(basic_info['dataset_path'])).effective
                     protocol = str(effective.get('evaluation', {}).get('protocol', ''))
                     if protocol == 'frozen_train_external_test':
                         from yonod.benchmark.frozen_external import run_frozen_external_test
 
                         print("\n[启动] 正在通过 yonod.py 运行 frozen_train_external_test...")
-                        result_code = run_frozen_external_test(Path(basic_info['dataset_path']))
+                        result_code = run_frozen_external_test(config_path)
                     else:
                         from yonod.benchmark.runner import run_benchmark
 
                         print("\n[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...")
-                        result_code = run_benchmark(Path(basic_info['dataset_path']))
+                        result_code = run_benchmark(config_path)
                     if result_code == 0:
                         print("\n[完成] 严格 benchmark 已成功完成!")
                     else:
@@ -2519,8 +2526,8 @@ def main():
 
             # 构建命令
             main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
-            cmd = [sys.executable, main_script, '--config', basic_info['dataset_path']]
-            cmd_str = f'python main.py --config "{basic_info["dataset_path"]}"'
+            cmd = [sys.executable, main_script, '--config', str(config_path)]
+            cmd_str = f'"{sys.executable}" "{main_script}" --config "{config_path}"'
 
             print(f"\n执行命令: {cmd_str}")
             print("=" * 60)

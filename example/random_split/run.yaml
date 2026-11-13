@@ -1,6 +1,6 @@
 # 随机划分教学示例：12条人工记录，不是实验测量数据。
-# 本次只展示文件，未执行此新任务；随包报告来自相同数据/模型/划分设置的历史任务。
-# 此为包内阅读副本；正式任务使用根config/example_random_split_20261113.yaml。
+# 本目录report/保留历史报告；本配置的新计算输出保存在本目录result/。
+# 从本文件夹启动python ../../yonod.py，首提示输入run.yaml，无需复制配置。
 schema_version: "2.0"
 project_name: example_random_split_20261113
 stage: all  # 先准备输入编码，再建立模型并做内测
@@ -28,7 +28,7 @@ descriptors:
     columns: [reactant_1_smiles, reactant_2_smiles]
 
 artifacts:
-  output_dir: ../../result/example_random_split_20261113/feature
+  output_dir: ./result/example_random_split_20261113/feature
 
 models: [rf, xgb, lightgbm]   # 同一数据、同一划分，比较三种建模方法
 model_params:
@@ -63,11 +63,11 @@ evaluation:
   seed: 42                   # 固定打乱方式；不表示未见底物或独立外测
 
 outputs:
-  root: ../../result/example_random_split_20261113
+  root: ./result/example_random_split_20261113
   report_formats: [html, markdown]
   diagnostics:
     enabled: false           # 与历史报告一致，不另算已学反应效果对照
     save_train_predictions: false
 
 metadata:
-  notes: "人工教学数据；模型与划分设置对应历史任务diag215_20260929_ordinary_fixed_off_v1；新任务仅静态准备，未执行。"
+  notes: "人工教学数据；模型与划分设置对应历史任务diag215_20260929_ordinary_fixed_off_v1；当前配置可从本目录独立启动；结果写入本目录result。"

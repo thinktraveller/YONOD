@@ -1,6 +1,6 @@
 {
   "teaching_only": true,
-  "new_task_execution": "not_run",
+  "new_task_execution": "complete",
   "data_status": "synthetic_not_measured",
   "task_name": "example_fixed_split_20261113",
   "dataset_sha256": "f67415bd6ba2496bc7b890f8241169febbd8a54bde8341b23b046d099ab65ff8",
@@ -8,19 +8,21 @@
   "input_origin_sha256": "d334bc1eea51ea1cfc9156f0ce602545ae13c40c88f996ab4cd44a5b110d0479",
   "split_rule": "fold 1 holds out block_A; fold 2 holds out block_B; each block has 6 records",
   "chemical_scope": "Blocks are arbitrary teaching labels, not substrates, scaffolds, or independent experiments.",
-  "display_config": {
-    "path": "run.yaml",
-    "path_base": "package_directory"
-  },
-  "formal_config": {
-    "path": "config/example_fixed_split_20261113.yaml",
-    "path_base": "repository_root"
-  },
-  "copy_to_config_template": "run_from_root.yaml",
   "expected_reports_after_run": [
     "result/example_fixed_split_20261113/report/benchmark_report.html",
     "result/example_fixed_split_20261113/report/benchmark_report.md"
   ],
   "provided_reports": [],
-  "scientific_performance_claims": []
+  "scientific_performance_claims": [],
+  "configuration": {
+    "path": "run.yaml",
+    "path_base": "example_directory"
+  },
+  "output_root": "result/example_fixed_split_20261113",
+  "verification": "verification.json",
+  "completed_run_snapshot": "completed_run",
+  "current_reports": {
+    "html": "completed_run/report/benchmark_report.html",
+    "md": "completed_run/report/benchmark_report.md"
+  }
 }

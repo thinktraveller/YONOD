@@ -1,0 +1,87 @@
+{
+  "status": "passed",
+  "example": "external_test",
+  "tested_at_utc": "2026-11-13T04:58:59.020418+00:00",
+  "launch": {
+    "working_directory": ".",
+    "command": "python ../../yonod.py",
+    "first_input": "run.yaml",
+    "return_code": 0,
+    "cpu_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "config_sha256": "a2581203087e8859bb0789ade202fcdab74ac251babe202a00fa84bb057ce408",
+    "launcher_source_sha256": "715942484d466dfe84438553a3e5ca7c222996ab7f5ff9bcdd8919861555a76b"
+  },
+  "environment": {
+    "python": "3.9.23 | packaged by conda-forge | (main, Jun  4 2025, 17:57:12) \n[GCC 13.3.0]",
+    "numpy": "1.26.4",
+    "pandas": "2.0.3",
+    "scikit-learn": "1.4.0",
+    "xgboost": "2.0.3",
+    "lightgbm": "4.3.0",
+    "rdkit": "2023.9.5"
+  },
+  "new_output_root": "result/example_external_test_20261113",
+  "reference_snapshot": "completed_run",
+  "checks": {
+    "run_id": "frozen-external-b3a72ce2d389",
+    "output_path": "/home/wangzh685/桌面/ord-data/YONOD/example/external_test/result/example_external_test_20261113",
+    "n_train": 12,
+    "n_external": 6,
+    "n_external_groups": 3,
+    "metrics": {
+      "r2": -0.4908350305498981,
+      "mae": 0.1766666666666666,
+      "rmse": 0.19655363983740753
+    },
+    "artifacts": {
+      "predictions": [
+        {
+          "path": "docs/predictions/morgan__rf.parquet",
+          "sha256": "ff4daa97f657fe1d948f4251d8be6486ec16d1a95d7648e1aa3a7e662634bce0",
+          "rows": 6
+        }
+      ],
+      "reports": [
+        {
+          "path": "report/external_test_report.html",
+          "sha256": "a943482dc112ea28a2e42b3380268a3cb0007dc083f37be964b96c14d5f77298",
+          "bytes": 1628
+        },
+        {
+          "path": "report/external_test_report.md",
+          "sha256": "6c35cf6ad9ba89d38bc58ad3f9711082d4836fd9312ed6dc1e05ae92ecbd0f1c",
+          "bytes": 1711
+        }
+      ]
+    },
+    "status": "passed"
+  },
+  "reports": {
+    "html": "completed_run/report/external_test_report.html",
+    "md": "completed_run/report/external_test_report.md"
+  },
+  "data_status": "synthetic_not_measured",
+  "platform_tested": "Linux",
+  "logs": "../../logs/example_external_test_20261113_selfcontained.log",
+  "snapshot_note": "Saved outputs for inspection. A fresh run creates result/<task> and does not reuse completed_run. Snapshot model portability has not been tested."
+}

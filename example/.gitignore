@@ -1,0 +1,3 @@
+# Fresh runs belong to each example; archives carry a separate reference snapshot.
+*/result/
+*/completed_run/

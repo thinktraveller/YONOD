@@ -1,0 +1,110 @@
+{
+  "status": "passed",
+  "example": "fixed_split",
+  "tested_at_utc": "2026-11-13T04:58:58.461244+00:00",
+  "launch": {
+    "working_directory": ".",
+    "command": "python ../../yonod.py",
+    "first_input": "run.yaml",
+    "return_code": 0,
+    "cpu_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "config_sha256": "82934bd491b23715719e38b126e2d103d6ef08413d2cbeb194f7589b5da23885",
+    "launcher_source_sha256": "715942484d466dfe84438553a3e5ca7c222996ab7f5ff9bcdd8919861555a76b"
+  },
+  "environment": {
+    "python": "3.9.23 | packaged by conda-forge | (main, Jun  4 2025, 17:57:12) \n[GCC 13.3.0]",
+    "numpy": "1.26.4",
+    "pandas": "2.0.3",
+    "scikit-learn": "1.4.0",
+    "xgboost": "2.0.3",
+    "lightgbm": "4.3.0",
+    "rdkit": "2023.9.5"
+  },
+  "new_output_root": "result/example_fixed_split_20261113",
+  "reference_snapshot": "completed_run",
+  "checks": {
+    "run_id": "reactions-2be664e4d329",
+    "output_path": "/home/wangzh685/桌面/ord-data/YONOD/example/fixed_split/result/example_fixed_split_20261113",
+    "n_records": 12,
+    "folds": [
+      {
+        "fold": 1,
+        "r2": -12.956571428571422,
+        "mae": 0.342,
+        "rmse": 0.3828106581588344
+      },
+      {
+        "fold": 2,
+        "r2": -12.572571428571424,
+        "mae": 0.3499999999999999,
+        "rmse": 0.3775076158172176
+      }
+    ],
+    "mean_fold_metrics": {
+      "r2": -12.764571428571422,
+      "mae": 0.346,
+      "rmse": 0.380159136988026
+    },
+    "pooled_heldout_metrics_descriptive": {
+      "r2": -2.368951048951049,
+      "mae": 0.34600000000000003,
+      "rmse": 0.3801683837459396
+    },
+    "metric_scope_note": "The saved strict summary uses mean fold scores, not pooled-record R2.",
+    "artifacts": {
+      "predictions": [
+        {
+          "path": "docs/predictions/morgan__rf__r01__f01.parquet",
+          "sha256": "c32eb5875989334fcf7eba2899a01477b4032c5d4adfee50d8cee2f7601e0e00",
+          "rows": 6
+        },
+        {
+          "path": "docs/predictions/morgan__rf__r01__f02.parquet",
+          "sha256": "0a67fd1c4cc7358d3d77630118ec7ab3184c312433984ef57aedda059699c68d",
+          "rows": 6
+        }
+      ],
+      "reports": [
+        {
+          "path": "report/benchmark_report.html",
+          "sha256": "e8010e0a1bf4f38d05419436329c2f4bc8ece97a759c93a3d5c38d25aad8a95a",
+          "bytes": 23790
+        },
+        {
+          "path": "report/benchmark_report.md",
+          "sha256": "a485d9b9e7c85f32524dd22db8df85a69f63d789c2a92f395f1f58b13b3daa8d",
+          "bytes": 12151
+        }
+      ]
+    },
+    "status": "passed"
+  },
+  "reports": {
+    "html": "completed_run/report/benchmark_report.html",
+    "md": "completed_run/report/benchmark_report.md"
+  },
+  "data_status": "synthetic_not_measured",
+  "platform_tested": "Linux",
+  "logs": "../../logs/example_fixed_split_20261113_selfcontained.log",
+  "snapshot_note": "Saved outputs for inspection. A fresh run creates result/<task> and does not reuse completed_run. Snapshot model portability has not been tested."
+}

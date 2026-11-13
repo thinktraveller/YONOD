@@ -3,10 +3,8 @@
   "source_task": "diag215_20260929_ordinary_fixed_off_v1",
   "source_run_directory": "result/diag215_20260929_ordinary_fixed_off_v1",
   "data_kind": "synthetic_pipeline_fixture_not_experimental_measurements",
-  "new_task_execution": "not_run",
+  "new_task_execution": "complete",
   "report_kind": "byte_identical_archived_actual_output",
-  "canonical_config": "config/example_random_split_20261113.yaml",
-  "display_config": "run.yaml",
   "dataset_file_sha256": "d334bc1eea51ea1cfc9156f0ce602545ae13c40c88f996ab4cd44a5b110d0479",
   "metrics_scope": "one_repeat_pooled_out_of_fold_predictions",
   "source_runs": [
@@ -85,8 +83,17 @@
     "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-lightgbm/predictions.csv": "77d6dedb0b40c94e6e6bf0c3c1cec3cd5872c321ee290b3f4b9d088cfaeccf90",
     "result/diag215_20260929_ordinary_fixed_off_v1/runs/run_morgan-lightgbm/fold_metrics.csv": "86b64dea36d5e63122dca3bb4d493be3b68c620c29a9430e9f7a0b925800dabe"
   },
-  "canonical_config_base": "repository_root",
-  "display_config_base": "package_root",
   "repackaged_from": "backup/random_split_example_20261113",
-  "repackaging_date": "2026-11-13"
+  "repackaging_date": "2026-11-13",
+  "configuration": {
+    "path": "run.yaml",
+    "path_base": "example_directory"
+  },
+  "output_root": "result/example_random_split_20261113",
+  "verification": "verification.json",
+  "completed_run_snapshot": "completed_run",
+  "current_reports": {
+    "html": "completed_run/report/report.html",
+    "md": "completed_run/report/report.md"
+  }
 }

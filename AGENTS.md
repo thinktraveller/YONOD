@@ -49,6 +49,15 @@ Every modeling task must follow this order from the repository root:
    shown, provide the already-created YAML path; the script validates it and
    launches the configured modeling run.
 
+The user-maintained teaching examples under `example/` are a specific
+exception to the root `config/` location: each example has one executable
+`run.yaml`, with input paths relative to its own folder and outputs under
+its own `result/<task_name>/`. From that folder, run `python ../../yonod.py`
+and enter `run.yaml`; no configuration copy is required. Keep the same
+schema-2, 19-CPU, serial-execution, and dual-report requirements. Operational
+logs and PID files remain in the repository-root `logs/` directory. This
+exception does not change the configuration location for research tasks.
+
 Use the 19 CPU cores within one modeling task, but schedule tasks linearly:
 run one task to completion before starting the next. Do not launch multiple
 YONOD runs, descriptors, model combinations, or CV folds as separate
@@ -189,6 +198,9 @@ tail -n 100 logs/my_task.log
 Once task startup has been confirmed, provide the user with the command block
 above and end the conversation. Do not keep polling, monitoring, or reporting
 unchanged task status; the user can run the commands when they want an update.
+When the user explicitly requests complete end-to-end acceptance of all
+teaching examples, run them serially to completion and verify the saved
+predictions, split membership, metrics, and reports before finishing.
 
 <!-- --- project-initializer (managed) START --- -->
 ## Repository layout and collaboration rules

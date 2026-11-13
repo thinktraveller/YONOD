@@ -2,7 +2,7 @@
 
 本包展示**训练CSV、外测CSV、列名对应关系和来源核查文件怎样配合**。这里有12条训练记录、6条外测记录，所有产率都为人工编造；结构只是形式上的酰胺示例，没有反应条件或实验测量依据。**本包演示外测操作，不构成独立实验来源的科学验证。**
 
-本次只准备数据并做静态核查，没有建立模型、生成预测或运行报告。不要把下面的预期报告路径理解为已经完成的结果。
+本轮已从本目录读取YAML，完成建立模型、外测预测与报告输出，并通过逐条验收。
 
 ## 文件如何分工
 
@@ -11,9 +11,8 @@
 | [dataset/train.csv](dataset/train.csv) | 12条建立模型用的记录：反应编号、人工参考产率、胺、酸和产物结构。 |
 | [dataset/external.csv](dataset/external.csv) | 6条留待外测的记录；额外保留来源编号和胺分组，并故意采用不同列名展示对应方法。 |
 | [audit/external_audit.json](audit/external_audit.json) | 外测来源与结构重叠核查清单（audit manifest），明确人工教学身份及结构交集。 |
-| [run.yaml](run.yaml) | 包内阅读版YAML，路径相对本包目录。 |
-| [run_from_root.yaml](run_from_root.yaml) | 操作模板：复制为仓库根`config/example_external_test_20261113.yaml`后运行。 |
-| [provenance.json](provenance.json) | 训练/外测文件校验码、实际结构交集、预期输出与未运行状态。 |
+| [run.yaml](run.yaml) | 直接在本目录运行的任务配置；路径相对本文件所在目录。 |
+| [provenance.json](provenance.json) | 训练/外测文件校验码、实际结构交集与本轮运行记录。 |
 
 ## 两份表怎样对应
 
@@ -68,31 +67,29 @@
 
 这里同时使用胺、酸和产物结构，所以真正使用时须确认预测时确实已知目标产物。它不是仅输入反应物就自动推断产物的功能。
 
-## 如何运行本例
+## 在本文件夹运行
 
-本次没有执行以下建模命令。保持整个`example/`位于YONOD仓库根，并在**仓库根**操作。
+从YONOD根目录进入 `example/external_test/`。不用复制或移动 `run.yaml`；训练表、外测表、来源核查记录和新结果均在本包内。
 
-Linux Bash：
+Linux Bash按[总操作说明](../README.md)使用后台命令：把示例目录改为 `example/external_test`，日志名和PID名改为 `example_external_test_20261113_selfcontained`。程序入口为 `python -u ../../yonod.py`，首次提示输入 `run.yaml`；日志位于仓库根 `logs/`。保留19线程预算，等其他示例完成后再启动。
 
-```bash
-mkdir -p config
-cp example/external_test/run_from_root.yaml config/example_external_test_20261113.yaml
+Windows Conda Prompt：
+
+```text
+cd example\external_test
+conda activate yonod
+python -u ..\..\yonod.py
 ```
 
-Windows PowerShell：
-
-```powershell
-New-Item -ItemType Directory -Force -Path config | Out-Null
-Copy-Item example/external_test/run_from_root.yaml config/example_external_test_20261113.yaml
-```
-
-随后按[总操作说明](../README.md)经`yonod.py`启动，首次提示提供`config/example_external_test_20261113.yaml`。Linux使用`yonod`环境、19个可用逻辑CPU、无头任务专属`logs/`日志，并与其他示例顺序运行。包内`run_from_root.yaml`须先复制到根`config/`，不能在原位置直接作为正式任务启动。
+首次提示输入 `run.yaml`。新结果写入本目录的 `result/example_external_test_20261113/`。
 
 ## 真正完成运行后的报告在哪里
 
-以下文件目前**没有生成**，运行完成后预期位于：
+下载包的[本轮网页报告](completed_run/report/external_test_report.html)与[文字报告](completed_run/report/external_test_report.md)保存在 `completed_run/` 完整快照中。重新运行使用同目录YAML，在本包 `result/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
 
-| 路径（相对YONOD根目录） | 内容 |
+以下路径均相对当前示例文件夹。本轮已完整运行并验收，已生成并检查以下结果：
+
+| 路径（相对当前示例目录） | 内容 |
 | --- | --- |
 | `result/example_external_test_20261113/report/external_test_report.html` | 外测网页报告，包含实际训练/外测规模与外测指标。 |
 | `result/example_external_test_20261113/report/external_test_report.md` | Markdown版外测报告。 |
@@ -100,3 +97,5 @@ Copy-Item example/external_test/run_from_root.yaml config/example_external_test_
 | `result/example_external_test_20261113/docs/predictions/morgan__rf.parquet` | 6条外测记录的参考值、预测值、来源编号与组信息。 |
 
 R²（决定系数）不是预测正确率；MAE（平均绝对误差）在本例0–1产率表示下乘100才是百分点。人工小样例只用于检查操作流程，不能据其分数评价真实化学预测效果。
+
+本轮逐条验收记录：[verification.json](verification.json)。

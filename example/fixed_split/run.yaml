@@ -1,5 +1,5 @@
-# 固定名单两折内测：人工教学数据；本次仅准备文件，没有建立模型。
-# 正式运行前使用仓库根 config/ 中的同名任务副本。
+# 固定名单两折内测：人工教学数据，用于完整流程测试。
+# 从本文件夹启动python ../../yonod.py，首提示输入run.yaml，无需复制配置。
 schema_version: "2.0"
 project_name: example_fixed_split_20261113
 stage: benchmark  # 严格核查并执行预先给定的训练/留出名单
@@ -28,7 +28,7 @@ descriptors:
     columns: [reactant_1_smiles, reactant_2_smiles]
 
 artifacts:
-  output_dir: ../../result/example_fixed_split_20261113/feature
+  output_dir: ./result/example_fixed_split_20261113/feature
 
 models: [rf]                 # 随机森林回归；只是小型操作示例
 model_params:
@@ -52,7 +52,7 @@ evaluation:
   split_manifest: ./splits/fixed_split_manifest.csv  # 预先指定每条记录的角色
 
 outputs:
-  root: ../../result/example_fixed_split_20261113
+  root: ./result/example_fixed_split_20261113
   report_formats: [html, markdown]
   diagnostics:
     enabled: false
@@ -66,4 +66,4 @@ benchmark:
   dataset_id: synthetic_fixed_split_teaching_v1
 
 metadata:
-  notes: "人工教学数据；固定block_A/block_B名单两折轮换；组名没有化学含义；静态准备，未建模。"
+  notes: "人工教学数据；固定block_A/block_B名单两折轮换；组名没有化学含义；可从本目录独立启动，执行状态见verification.json。"
