@@ -1,17 +1,20 @@
-# YONOD Python dependencies
+# YONOD Python dependencies (Python 3.9 baseline)
 #
-# NOTE: torch / torchvision / torchaudio are NOT listed here — install them
-# from the official CUDA 12.1 wheel index FIRST:
+# PyTorch is installed separately FIRST. The teaching examples work on CPU:
+#
+#     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
+#         --index-url https://download.pytorch.org/whl/cpu
+#
+# Alternatively, for a CUDA 12.1 installation use:
 #
 #     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
 #         --index-url https://download.pytorch.org/whl/cu121
 #
 # Then run: pip install -r requirements.txt
-# Finally:  pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
+# LightGBM and SciPy are included below for the current examples and reports.
 #
-# (AutoGluon is split out because its dependency tree is heavy; on Python 3.9
-# the `fastai` extra fails due to spacy>=3.10 requirement -- only use
-# [lightgbm,catboost] extras.)
+# Install AutoGluon separately only when selecting models: [autogluon]:
+#     pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 
 # Chemistry / featurization
 rdkit==2023.9.5
@@ -26,9 +29,13 @@ torch_geometric==2.5.3
 # Machine learning
 scikit-learn==1.4.0
 xgboost==2.0.3
+lightgbm==4.3.0
+# Kendall correlations, paired statistics, and ordinary/external reports.
+scipy==1.12.0
 # Optional at runtime: only schema-2 runs with hpo.enabled=true import Optuna.
-# Candidate 4.5.0 passed the yonod/Python 3.9.23 SQLite and three-tree fit gate.
 optuna==4.5.0
+# Directly imported by the persistent HPO SQLite storage adapter.
+sqlalchemy>=1.4.2,<3
 
 # Data processing
 pandas==2.0.3

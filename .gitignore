@@ -105,9 +105,10 @@ result
 docs
 /config/
 
-# Version experimental archives and datasets, including generated artifacts.
-!/experiments/
-!/experiments/**
+# Retired experiment archives must not be reintroduced.
+/experiments/
+
+# Version datasets, including generated artifacts.
 !/dataset/
 !/dataset/**
 

@@ -21,10 +21,9 @@ conda create -n yonod python=3.9 -y
 conda activate yonod
 pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
-pip install lightgbm==4.3.0
 ```
 
-这里安装的是 CPU 版 PyTorch，足以运行三个教学样例。需要 CUDA 时，按 [requirements.txt](requirements.txt) 中的版本说明选择与本机匹配的 PyTorch 安装源。PyTorch 和 LightGBM 未列入基础依赖列表，不能省略对应安装步骤。只有使用 AutoGluon 时才需要额外安装：
+这里安装的是 CPU 版 PyTorch，足以运行三个教学样例。需要 CUDA 时，按 [requirements.txt](requirements.txt) 中的版本说明选择与本机匹配的 PyTorch 安装源。LightGBM 和 SciPy 已列入 `requirements.txt`，PyTorch 仍需事先单独安装。只有使用 AutoGluon 时才需要额外安装：
 
 ```bash
 pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
@@ -176,7 +175,7 @@ mkdir -p config
 cp example.yaml config/my_reaction.yaml
 ```
 
-在新文件中逐项修改：任务名、数据路径和列用途、编码与模型、模型预算、划分规则，以及 `./result/my_reaction` 和其中的 `feature/`。根格式样例是小型测试设置；正式研究应把所选模型的 CPU 预算设为19，并自行确定科学问题与计算预算。固定名单或外测另需参照对应教学样例补齐专用字段，不能只替换 `protocol` 字符串。修改后仍通过 `yonod.py` 首提示读取该 YAML。
+在新文件中逐项修改：任务名、数据路径和列用途、编码与模型、模型预算、划分规则，以及 `./result/my_reaction` 和其中的 `feature/`。根格式样例使用12条人工记录、两折和10棵RF树，CPU预算已设为19；正式研究应为所选模型保留19CPU预算，并自行确定科学问题与计算预算。固定名单或外测另需参照对应教学样例补齐专用字段，不能只替换 `protocol` 字符串。修改后仍通过 `yonod.py` 首提示读取该 YAML。
 
 解析器拒绝重复键、别名和未知字段。JSON 不是运行配置；`main.py` 是底层运行时，不是正式任务启动入口。`yonod.py` 也可从 CSV 交互收集列用途并生成设置；保存位置和任务隔离仍按 [AGENTS.md](AGENTS.md) 执行。
 

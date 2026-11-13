@@ -21,10 +21,9 @@ conda create -n yonod python=3.9 -y
 conda activate yonod
 pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
-pip install lightgbm==4.3.0
 ```
 
-These commands install CPU PyTorch, which is sufficient for the three teaching examples. For CUDA, follow the version notes in [requirements.txt](requirements.txt) and choose a PyTorch wheel source appropriate for your machine. PyTorch and LightGBM are not included in the base dependency list, so their installation steps cannot be omitted. Install the following additional dependency only when using AutoGluon:
+These commands install CPU PyTorch, which is sufficient for the three teaching examples. For CUDA, follow the version notes in [requirements.txt](requirements.txt) and choose a PyTorch wheel source appropriate for your machine. LightGBM and SciPy are included in `requirements.txt`; PyTorch must be installed separately first. Install the following additional dependency only when using AutoGluon:
 
 ```bash
 pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
@@ -176,7 +175,7 @@ mkdir -p config
 cp example.yaml config/my_reaction.yaml
 ```
 
-In the new file, update the task name, data path and column roles, encodings and models, model budget, split rules, and `./result/my_reaction` with its `feature/` child. The root format example uses small test settings. For research, set selected models' CPU budgets to 19 and determine the scientific question and computation budget yourself. Fixed membership and external testing also require their dedicated fields from the corresponding teaching example; changing only the `protocol` string is insufficient. Continue to supply the edited YAML at the first `yonod.py` prompt.
+In the new file, update the task name, data path and column roles, encodings and models, model budget, split rules, and `./result/my_reaction` with its `feature/` child. The root format example uses 12 synthetic records, two folds, and 10 RF trees with a 19-CPU budget. For research, retain the 19-CPU budget for selected models and determine the scientific question and computation budget yourself. Fixed membership and external testing also require their dedicated fields from the corresponding teaching example; changing only the `protocol` string is insufficient. Continue to supply the edited YAML at the first `yonod.py` prompt.
 
 The parser rejects duplicate keys, aliases, and unknown fields. JSON is not a run configuration. `main.py` is the underlying runtime, not the formal task launcher. `yonod.py` can also collect column roles interactively from a CSV and create settings; configuration locations and task isolation still follow [AGENTS.md](AGENTS.md).
 
