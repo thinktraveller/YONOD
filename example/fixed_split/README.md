@@ -1,6 +1,6 @@
 # 固定名单两折内测：先决定谁用于建模、谁用于检验
 
-本包展示**怎样让所有模型严格使用事先指定的同一份名单**。12条记录和产率都是人工教学数据，结构搭配不代表经过实验验证的反应；**本轮已完整运行并验收，记录见verification.json。**
+本包展示**怎样让所有模型严格使用事先指定的同一份名单**。12条记录和产率都是人工教学数据，结构搭配不代表经过实验验证的反应；**已有完整运行快照，实际测试配置版本与平台见verification.json。**
 
 与随机划分不同，这里直接写明每条记录在每一轮的用途。固定名单属于数据划分方法，固定模型参数属于模型设置，两者是两件事。
 
@@ -48,25 +48,47 @@
 
 ## 在本文件夹运行
 
-从YONOD根目录进入 `example/fixed_split/`。不用复制或移动 `run.yaml`。数据、固定名单和新结果均在本包内；保留19线程预算并与其他示例依次运行。
+从YONOD根目录进入 `example/fixed_split/`，检查同目录的 [run.yaml](run.yaml)，无需复制或移动设置。输入和新结果保留在本包中；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
 
-Linux Bash按[总操作说明](../README.md)使用后台命令：把示例目录改为 `example/fixed_split`，日志名和PID名改为 `example_fixed_split_20261113_selfcontained`。程序入口为 `python -u ../../yonod.py`，首次提示输入 `run.yaml`；日志位于仓库根 `logs/`。
+### Linux：Bash
 
-Windows Conda Prompt：
+先初始化本机Conda并激活环境，从YONOD根目录执行以下后台启动块：
 
-```text
-cd example\fixed_split
+```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate yonod
+export PYTHONUTF8=1
+cd example/fixed_split
+mkdir -p ../../logs
+printf '%s\n' 'run.yaml' > ../../logs/example_fixed_split_20261113.stdin.txt
+nohup python -u ../../yonod.py \
+  < ../../logs/example_fixed_split_20261113.stdin.txt \
+  > ../../logs/example_fixed_split_20261113.log 2>&1 &
+echo $! > ../../logs/example_fixed_split_20261113.pid
+```
+
+若 `conda` 尚未加入shell路径，请先用本机安装目录的 `etc/profile.d/conda.sh` 初始化。日志和PID位于仓库根 `logs/`；[总操作说明](../README.md#linuxbash-后台运行)包含按需查询状态的命令。
+
+### Windows：Conda PowerShell
+
+在 Anaconda PowerShell Prompt 或已初始化Conda的PowerShell中，从YONOD根目录执行：
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = '1'
+Set-Location .\example\fixed_split
 python -u ..\..\yonod.py
 ```
 
-首次提示输入 `run.yaml`。新结果写入本目录的 `result/example_fixed_split_20261113/`。
+首次提示输入 `run.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
+
+新结果写入本目录的 `result/example_fixed_split_20261113/`，网页报告为其中的 `report/benchmark_report.html`。下载包的 `completed_run/` 保留已完成运行的快照；具体测试配置版本和平台见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
 
 ## 运行完成后会看到什么
 
 下载包的[本轮网页报告](completed_run/report/benchmark_report.html)与[文字报告](completed_run/report/benchmark_report.md)保存在 `completed_run/` 完整快照中。重新运行使用同目录YAML，在本包 `result/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
 
-以下路径均相对当前示例文件夹。本轮已完整运行并验收，已生成并检查以下结果：
+以下路径均相对当前示例文件夹；运行成功后应生成并核对这些结果：
 
 | 路径（相对当前示例目录） | 内容 |
 | --- | --- |

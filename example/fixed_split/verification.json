@@ -1,34 +1,14 @@
 {
   "status": "passed",
   "example": "fixed_split",
-  "tested_at_utc": "2026-11-13T04:58:58.461244+00:00",
+  "tested_at_utc": "2026-11-13T16:46:16.178948+00:00",
   "launch": {
     "working_directory": ".",
     "command": "python ../../yonod.py",
     "first_input": "run.yaml",
     "return_code": 0,
-    "cpu_ids": [
-      0,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-      17,
-      18
-    ],
-    "config_sha256": "82934bd491b23715719e38b126e2d103d6ef08413d2cbeb194f7589b5da23885",
+    "resource_policy": "model_library_defaults_no_affinity_override",
+    "config_sha256": "12313fbf363ec1514e6b968204b92de515cd88975e2b32fead0381cc9b2bab11",
     "launcher_source_sha256": "715942484d466dfe84438553a3e5ca7c222996ab7f5ff9bcdd8919861555a76b"
   },
   "environment": {
@@ -43,7 +23,7 @@
   "new_output_root": "result/example_fixed_split_20261113",
   "reference_snapshot": "completed_run",
   "checks": {
-    "run_id": "reactions-2be664e4d329",
+    "run_id": "reactions-b2a09e655559",
     "output_path": "/home/wangzh685/桌面/ord-data/YONOD/example/fixed_split/result/example_fixed_split_20261113",
     "n_records": 12,
     "folds": [
@@ -75,24 +55,24 @@
       "predictions": [
         {
           "path": "docs/predictions/morgan__rf__r01__f01.parquet",
-          "sha256": "c32eb5875989334fcf7eba2899a01477b4032c5d4adfee50d8cee2f7601e0e00",
+          "sha256": "2dda9cd7c89fc8d1ea9ec175a17159d283cc0a999cc11d5ca151be05cae5b3f5",
           "rows": 6
         },
         {
           "path": "docs/predictions/morgan__rf__r01__f02.parquet",
-          "sha256": "0a67fd1c4cc7358d3d77630118ec7ab3184c312433984ef57aedda059699c68d",
+          "sha256": "4e14dbffc767b7c23f9de60dad54c3018111748e9e0f52e374fb140004d2623a",
           "rows": 6
         }
       ],
       "reports": [
         {
           "path": "report/benchmark_report.html",
-          "sha256": "e8010e0a1bf4f38d05419436329c2f4bc8ece97a759c93a3d5c38d25aad8a95a",
+          "sha256": "43e7fbe598fd6c5609047f97cedee05e93a193431e74e7e2f42767d69cf053c2",
           "bytes": 23790
         },
         {
           "path": "report/benchmark_report.md",
-          "sha256": "a485d9b9e7c85f32524dd22db8df85a69f63d789c2a92f395f1f58b13b3daa8d",
+          "sha256": "082e640e976b7c628c05082a8adfa15f38cc155161cab5c25e21a223d9714f8a",
           "bytes": 12151
         }
       ]
@@ -105,6 +85,6 @@
   },
   "data_status": "synthetic_not_measured",
   "platform_tested": "Linux",
-  "logs": "../../logs/example_fixed_split_20261113_selfcontained.log",
+  "logs": "../../logs/example_fixed_split_portable_20261114.log",
   "snapshot_note": "Saved outputs for inspection. A fresh run creates result/<task> and does not reuse completed_run. Snapshot model portability has not been tested."
 }

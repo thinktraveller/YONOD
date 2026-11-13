@@ -45,14 +45,15 @@
   "new_config_changes": [
     "project_name",
     "input/output locations",
-    "teaching metadata and comments"
+    "teaching metadata and comments",
+    "CPU fields omitted for model-library defaults",
+    "platform-specific launch and status instructions"
   ],
   "unchanged_experimental_settings": [
     "dataset contents",
     "column roles",
     "descriptor",
     "models",
-    "model_params",
     "evaluation",
     "hpo",
     "diagnostics"
@@ -95,5 +96,15 @@
   "current_reports": {
     "html": "completed_run/report/report.html",
     "md": "completed_run/report/report.md"
-  }
+  },
+  "resource_policy": {
+    "live_configuration": "CPU thread fields omitted; use installed model-library defaults or configure explicitly for the local machine",
+    "cpu_affinity_required": false,
+    "platform_instructions": [
+      "Linux Bash",
+      "Windows Conda PowerShell"
+    ],
+    "historical_resource_parameters": "Preserved only in frozen evidence; not current defaults"
+  },
+  "historical_model_settings_note": "Model algorithms, small tree counts and split remain the teaching choices; resource fields in the live YAML differ from frozen historical evidence."
 }

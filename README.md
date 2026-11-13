@@ -12,9 +12,12 @@ Start with the [random-split teaching example](example/random_split/README.md), 
 
 ### 1.1 Get the project and prepare the environment
 
-Install Git and Conda first. The project baseline is Python 3.9. For first-time setup:
+Install Git and Conda first. The project baseline is Python 3.9. Choose the commands for your shell. The Linux examples assume Conda is under `$HOME/miniconda3`; replace that prefix with your installation directory. For Windows, open **Anaconda PowerShell Prompt** or a PowerShell session initialized with `conda init powershell` and restarted. Conda Prompt also supports the plain `conda`, `pip`, and `python` commands, but the PowerShell background/status blocks below require PowerShell.
+
+**Linux Bash — first-time setup**
 
 ```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
 git clone https://github.com/thinktraveller/YONOD.git
 cd YONOD
 conda create -n yonod python=3.9 -y
@@ -23,65 +26,84 @@ pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https
 pip install -r requirements.txt
 ```
 
-These commands install CPU PyTorch, which is sufficient for the three teaching examples. For CUDA, follow the version notes in [requirements.txt](requirements.txt) and choose a PyTorch wheel source appropriate for your machine. LightGBM and SciPy are included in `requirements.txt`; PyTorch must be installed separately first. Install the following additional dependency only when using AutoGluon:
+**Windows Conda PowerShell — first-time setup**
 
-```bash
+```powershell
+git clone https://github.com/thinktraveller/YONOD.git
+Set-Location YONOD
+conda create -n yonod python=3.9 -y
+conda activate yonod
+pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+```
+
+These commands install CPU PyTorch, which is sufficient for the three teaching examples. For CUDA, follow the version notes in [requirements.txt](requirements.txt) and choose a PyTorch wheel source appropriate for your machine. LightGBM and SciPy are included in `requirements.txt`; PyTorch must be installed separately first. Install the following only when using AutoGluon; it works in either Linux Bash or Windows Conda PowerShell after environment activation:
+
+```text
 pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```
 
-If you already have a `yonod` environment, skip creation and installation. Initialize and activate Conda in each new Linux shell. The following example assumes an installation under `~/miniconda3`; adjust it for another location. On Windows, activate the environment in Conda Prompt.
+If you already have a `yonod` environment, skip creation and installation, but activate it in each new terminal. The examples leave thread counts unspecified and do not require CPU affinity. Installed model-library defaults apply; configure resources explicitly only when needed for your machine.
 
 ### 1.2 Launch an example from its own folder
 
-On Linux Bash, run the complete block below from the repository root. It selects exactly 19 available logical CPUs and stores the log and PID in the repository-root `logs/` folder:
+Both launch blocks below start from the YONOD root, supply `run.yaml` to the first `yonod.py` prompt, and save logs and the PID in the repository-root `logs/` folder.
+
+**Linux Bash — background execution**
 
 ```bash
-source ~/miniconda3/etc/profile.d/conda.sh
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
+export PYTHONUTF8=1
 cd example/random_split
-
-yonod_repo_root="$(cd ../.. && pwd)"
-yonod_cpu_ids="$(python -c 'import os; ids=sorted(os.sched_getaffinity(0)); assert len(ids)>=19, "19 available logical CPUs are required"; print(",".join(map(str, ids[:19])))')"
-if [ -n "$yonod_cpu_ids" ]; then
-  mkdir -p "$yonod_repo_root/logs"
-  nohup setsid bash -lc '
-    source ~/miniconda3/etc/profile.d/conda.sh
-    conda activate yonod
-    cd "$1" || exit 1
-    printf "%s\n" "run.yaml" | taskset --cpu-list "$2" python -u ../../yonod.py
-  ' _ "$PWD" "$yonod_cpu_ids" </dev/null > "$yonod_repo_root/logs/example_random_split_20261113.log" 2>&1 &
-  echo $! > "$yonod_repo_root/logs/example_random_split_20261113.pid"
-else
-  echo "Fewer than 19 logical CPUs are available; task was not started."
-fi
+mkdir -p ../../logs
+printf '%s\n' 'run.yaml' > ../../logs/example_random_split_20261113.stdin.txt
+nohup python -u ../../yonod.py < ../../logs/example_random_split_20261113.stdin.txt > ../../logs/example_random_split_20261113.log 2>&1 &
+echo $! > ../../logs/example_random_split_20261113.pid
 ```
 
-On Windows Conda Prompt, start from the repository root:
+**Windows Conda PowerShell**
 
-```text
+```powershell
 conda activate yonod
-cd example\random_split
-python -u ..\..\yonod.py
+$env:PYTHONUTF8 = "1"
+Set-Location example\random_split
+$yonodLogs = [IO.Path]::GetFullPath((Join-Path $PWD.Path "..\..\logs"))
+New-Item -ItemType Directory -Path $yonodLogs -Force | Out-Null
+$yonodInput = Join-Path $yonodLogs "example_random_split_20261113.stdin.txt"
+"run.yaml" | Set-Content -LiteralPath $yonodInput -Encoding ascii
+$yonodProcess = Start-Process -FilePath (Get-Command python).Source -ArgumentList @("-u", "..\..\yonod.py") -WorkingDirectory $PWD.Path -RedirectStandardInput $yonodInput -RedirectStandardOutput (Join-Path $yonodLogs "example_random_split_20261113.log") -RedirectStandardError (Join-Path $yonodLogs "example_random_split_20261113.stderr.log") -PassThru
+$yonodProcess.Id | Set-Content -LiteralPath (Join-Path $yonodLogs "example_random_split_20261113.pid") -Encoding ascii
 ```
 
-Enter `run.yaml` at the first prompt. The Linux command supplies the same answer through standard input. The public entry point is `yonod.py`; do not pass `--csv`, `--models`, or `--config` as arguments to this interactive entry point.
+Alternatively, activate the environment and enter the example folder, run `python -u ../../yonod.py` on Linux or `python -u ..\..\yonod.py` on Windows, then enter `run.yaml` at the first prompt. The public entry point is `yonod.py`; do not pass `--csv`, `--models`, or `--config` as arguments to this interactive entry point.
 
-**Run one task at a time.** Wait for the current task to finish before starting another example. For fixed membership or external testing, enter `example/fixed_split/` or `example/external_test/` and change the log and PID filenames accordingly. All three examples completed full execution and acceptance on Linux. The Windows commands explain usage; they do not establish that every optional backend has been tested on a Windows machine.
+**Run one task at a time.** Wait for the current task to finish before starting another example. For fixed membership or external testing, enter `example/fixed_split/` or `example/external_test/` and change the log and PID filenames accordingly. Saved full-execution acceptance comes from Linux. The Windows commands explain usage; they do not establish that every optional backend has been tested on a Windows machine.
 
 ### 1.3 Check progress and read the report
 
-While still in the random-split example folder:
+While still in the random-split example folder, choose the commands for your operating system. On Windows, standard output and errors are saved separately in `.log` and `.stderr.log`; inspect both.
+
+**Linux Bash**
 
 ```bash
 task_pid="$(cat ../../logs/example_random_split_20261113.pid)"
 ps -p "$task_pid" -o pid,ppid,stat,etime,cmd
-taskset --pid --cpu-list "$task_pid"
 tail -n 60 ../../logs/example_random_split_20261113.log
+```
+
+**Windows Conda PowerShell**
+
+```powershell
+$taskPid = [int](Get-Content ..\..\logs\example_random_split_20261113.pid)
+Get-Process -Id $taskPid -ErrorAction SilentlyContinue
+Get-Content ..\..\logs\example_random_split_20261113.log -Encoding UTF8 -Tail 60
+Get-Content ..\..\logs\example_random_split_20261113.stderr.log -Encoding UTF8 -Tail 60
 ```
 
 After the process exits, inspect the completion messages and saved run records. The ordinary workflow should report `features=ready` and `complete` or `reused` for all three model combinations. Fixed membership should have two successful fold records. External testing should have a complete prediction table and both reports. Run IDs are content-derived; do not match a hard-coded ID.
 
-New results are written to `result/<task_name>/` **inside the current example folder**. Open its HTML file under `report/`. The next section lists the filenames for each protocol.
+New results are written to `result/<task_name>/` **inside the current example folder**. Open its HTML file in a file manager, with `xdg-open <report-path>` on Linux, or with `Invoke-Item <report-path>` in Windows PowerShell. The next section lists the filenames for each protocol.
 
 ## 2. Follow the examples: data, settings, and outputs
 
@@ -166,16 +188,23 @@ Ordinary `all/train` uses KFold. Actual fixed-membership or grouped evaluation r
 
 - Teaching examples: keep `run.yaml` in its own folder. Inputs and `./result/<task_name>/` resolve relative to that file.
 - Research tasks: create an independent YAML under the repository-root `config/` folder. References beginning with `./` there resolve from the repository root. Explicit `../` references and configurations elsewhere resolve from their YAML's directory. Absolute paths remain absolute.
-- Each task's `artifacts.output_dir` should be `outputs.root/feature`, not the task root itself. RF, XGBoost, and LightGBM use `estimator.n_jobs: 19`; AutoGluon uses `fit.num_cpus: 19`. Do not start tasks, encodings, combinations, or folds as separate parallel background jobs.
+- Each task's `artifacts.output_dir` should be `outputs.root/feature`, not the task root itself. Examples omit thread parameters and use installed model-library defaults. To limit resources, explicitly configure RF/XGBoost/LightGBM `estimator.n_jobs` or AutoGluon `fit.num_cpus` for your machine. Do not start tasks, encodings, combinations, or folds as separate parallel background jobs.
 
-For your own random internal-evaluation configuration, copy the format specification from the repository root:
+For your own random internal-evaluation configuration, copy the format specification from the repository root. Linux Bash:
 
 ```bash
 mkdir -p config
 cp example.yaml config/my_reaction.yaml
 ```
 
-In the new file, update the task name, data path and column roles, encodings and models, model budget, split rules, and `./result/my_reaction` with its `feature/` child. The root format example uses 12 synthetic records, two folds, and 10 RF trees with a 19-CPU budget. For research, retain the 19-CPU budget for selected models and determine the scientific question and computation budget yourself. Fixed membership and external testing also require their dedicated fields from the corresponding teaching example; changing only the `protocol` string is insufficient. Continue to supply the edited YAML at the first `yonod.py` prompt.
+Windows Conda PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Path config -Force | Out-Null
+Copy-Item example.yaml config\my_reaction.yaml
+```
+
+In the new file, update the task name, data path and column roles, encodings and models, model budget, split rules, and `./result/my_reaction` with its `feature/` child. The root format example uses 12 synthetic records, two folds, and 10 RF trees; thread counts follow the installed model library. For research, determine the scientific question, model settings, and computation budget yourself. Fixed membership and external testing also require their dedicated fields from the corresponding teaching example; changing only the `protocol` string is insufficient. Continue to supply the edited YAML at the first `yonod.py` prompt.
 
 The parser rejects duplicate keys, aliases, and unknown fields. JSON is not a run configuration. `main.py` is the underlying runtime, not the formal task launcher. `yonod.py` can also collect column roles interactively from a CSV and create settings; configuration locations and task isolation still follow [AGENTS.md](AGENTS.md).
 
@@ -221,9 +250,9 @@ Example-local `result/` folders and the downloadable packages' `completed_run/` 
 
 Read the [data notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) first. Data for the three teaching examples are included in the source. Project distribution entry points are [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) and [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights); they do not replace original provenance and license records.
 
-Run the following from the repository root with `yonod` activated. Install a Hugging Face CLI version compatible with Transformers 4.40:
+The following commands work in Linux Bash and Windows Conda PowerShell from the repository root with `yonod` activated. Install a Hugging Face CLI version compatible with Transformers 4.40:
 
-```bash
+```text
 pip install "huggingface_hub>=0.34,<1.0"
 hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/**" --local-dir dataset
 hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
@@ -239,9 +268,9 @@ The first download command retrieves only the USPTO subdirectory, not all data. 
 | MolMetaLM | Put the model, configuration, and tokenizer from [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base) in `WEIGHTS/MolMetaLM-base/`; see the [upstream project](https://github.com/CSUBioGroup/MolMetaLM) |
 | Chemical VAE | Use a verified conversion manifest under `WEIGHTS/chemical_vae/<asset>/v5/` with its adjacent, hash-matched `encoder_state_dict.pt`; ZINC and `zinc_properties` assets are not interchangeable |
 
-To restore MolMetaLM separately:
+To restore MolMetaLM separately (the same command works on either system):
 
-```bash
+```text
 hf download wudejian789/MolMetaLM-base --local-dir WEIGHTS/MolMetaLM-base
 ```
 

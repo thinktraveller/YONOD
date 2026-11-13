@@ -31,25 +31,23 @@ artifacts:
   output_dir: ./result/example_random_split_20261113/feature
 
 models: [rf, xgb, lightgbm]   # 同一数据、同一划分，比较三种建模方法
+# 未指定线程数时采用所用模型库的默认值；可按本机资源另设 estimator.n_jobs。
 model_params:
   rf:
     estimator:
       n_estimators: 2         # 与历史教学任务相同的小型设置，不是推荐研究参数
-      n_jobs: 19
       random_state: 42
   xgb:
     estimator:
       n_estimators: 2
       max_depth: 2
       learning_rate: 0.1
-      n_jobs: 19
       random_state: 42
   lightgbm:
     estimator:
       n_estimators: 2
       num_leaves: 2
       min_child_samples: 1
-      n_jobs: 19
       random_state: 42
 
 hpo:
@@ -70,4 +68,4 @@ outputs:
     save_train_predictions: false
 
 metadata:
-  notes: "人工教学数据；模型与划分设置对应历史任务diag215_20260929_ordinary_fixed_off_v1；当前配置可从本目录独立启动；结果写入本目录result。"
+  notes: "人工教学数据；结构编码、模型规模与划分来自历史任务diag215_20260929_ordinary_fixed_off_v1；计算线程数采用模型库默认值；当前配置可从本目录独立启动；结果写入本目录result。"

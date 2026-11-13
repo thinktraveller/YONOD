@@ -83,8 +83,12 @@ assert train["yield_percent"].between(0, 100).all()
 
 ## 复核
 
+下述脚本属于本地 `_verify/` 工程支持，不随源码分发；先确认脚本和数据快照存在。实际运行前按[主使用说明](../../README.zh-CN.md)准备环境。
+
+Linux Bash，从仓库根执行；如 Conda 不在 PATH，替换为本机安装位置的 `etc/profile.d/conda.sh`：
+
 ```bash
-source /home/wangzh685/miniconda3/etc/profile.d/conda.sh
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate yonod
 
 # 核对原始 TSV 的字节身份
@@ -99,3 +103,15 @@ python _verify/verify_uspto_standard_csv.py \
   --source-dir dataset/USPTO/corpus \
   --acceptance-dir result/uspto_standard_csv/revalidation_YYYYMMDD
 ```
+
+
+Windows Conda PowerShell，从仓库根执行相同核对（更换本次验收目录名）：
+
+```powershell
+conda activate yonod
+Get-ChildItem dataset/USPTO/corpus/US_patents_*.csv | Get-FileHash -Algorithm SHA256
+python _verify/audit_uspto_csv.py
+python _verify/verify_uspto_standard_csv.py --snapshot dataset/USPTO/corpus --source-dir dataset/USPTO/corpus --acceptance-dir result/uspto_standard_csv/revalidation_YYYYMMDD
+```
+
+Python 中的路径处理相同；文件哈希和终端续行使用各系统命令。本节提供Windows使用方式，未补做Windows实机数据验收。

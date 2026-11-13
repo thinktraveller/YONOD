@@ -1,14 +1,14 @@
 # YONOD Python dependencies (Python 3.9 baseline)
 #
-# PyTorch is installed separately FIRST. The teaching examples work on CPU:
+# PyTorch is installed separately FIRST. The teaching examples work on CPU.
+# These single-line commands work in Linux Bash and Windows Conda PowerShell
+# after activating yonod:
 #
-#     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
-#         --index-url https://download.pytorch.org/whl/cpu
+#     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
 #
 # Alternatively, for a CUDA 12.1 installation use:
 #
-#     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 \
-#         --index-url https://download.pytorch.org/whl/cu121
+#     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu121
 #
 # Then run: pip install -r requirements.txt
 # LightGBM and SciPy are included below for the current examples and reports.

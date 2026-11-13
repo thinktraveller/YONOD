@@ -2,22 +2,32 @@
 
 ## Required development environment
 
-This project is developed on Linux and its required Conda environment is
-`yonod`. Before running Python, tests, or dependency-management commands in a
-Linux shell, activate it with:
+Use the Conda environment `yonod` on both Linux and Windows. The expected
+baseline is Python 3.9. Dependencies are listed in `requirements.txt`;
+PyTorch and optional AutoGluon have separate installation notes in
+`README.md` and `requirements.txt`.
+
+On Linux Bash, initialize and activate Conda in the same shell invocation
+before running Python, tests, or dependency-management commands:
 
 ```bash
-source /home/wangzh685/miniconda3/etc/profile.d/conda.sh
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 ```
 
-Do not assume that the shell used by an agent has already initialized Conda.
-When executing a one-off command, initialize and activate this environment in
-the same shell invocation before calling `python`, `pip`, or test tools.
+Replace `$HOME/miniconda3` with the local Conda installation directory if it
+is different. Do not assume a new shell has initialized Conda.
 
-The expected baseline is Python 3.9. Project dependencies are listed in
-`requirements.txt`; PyTorch and AutoGluon have additional installation notes
-in `README.md` and `requirements.txt`.
+On Windows, open Anaconda PowerShell Prompt, or initialize PowerShell with
+`conda init powershell` and reopen it. Then activate the environment:
+
+```powershell
+conda activate yonod
+```
+
+Plain Conda Prompt supports the foreground `conda`, `pip`, and `python`
+commands, but the Windows background/status examples below require
+PowerShell. Preserve UTF-8 when reading or writing configuration and data.
 
 ## Mandatory modeling-task launch procedure
 
@@ -34,88 +44,96 @@ Every modeling task must follow this order from the repository root:
    final modeling outputs to a path under `derived/`. By default, every
    modeling YAML must generate both HTML and Markdown reports by setting
    `outputs.report_formats: [html, markdown]`.
-   Regardless of task, every modeling YAML must follow the schema-2 structure,
-   field semantics, and path conventions in `example.yaml`; change only
-   task-specific values such as the dataset, selected models, and isolated
-   result paths. `example.yaml` is the sole authoritative YAML specification;
-   README may explain it but must not duplicate a YAML configuration block.
-   Allocate a 19-CPU budget in that YAML for every model that supports it:
-   use `model_params.<model>.estimator.n_jobs: 19` for RF, XGBoost, and
-   LightGBM, and `model_params.autogluon.fit.num_cpus: 19` for AutoGluon.
-   Declare only the sections for models actually selected by `models`.
-2. In the shell that will run the task, initialize Conda and activate the
-   `yonod` environment.
-3. Start the task through the `yonod.py` main script. When the first prompt is
-   shown, provide the already-created YAML path; the script validates it and
-   launches the configured modeling run.
+   Every modeling YAML must follow the schema-2 structure, field semantics,
+   and path conventions in `example.yaml`. This file is the sole authoritative
+   YAML specification; README may explain it but must not duplicate a complete
+   YAML configuration block. Declare only parameters for selected models.
+   Thread counts are optional and machine-dependent: RF/XGBoost/LightGBM use
+   `model_params.<model>.estimator.n_jobs`, and AutoGluon uses
+   `model_params.autogluon.fit.num_cpus`. Leave them unspecified to use the
+   supported installed library's defaults, or explicitly choose resources
+   suitable for the local machine. Do not require a fixed workstation CPU
+   count or CPU affinity in templates, tutorials, or launch validation.
+2. In the shell that will run the task, initialize Conda as appropriate for
+   the platform and activate `yonod`.
+3. Start through `yonod.py`. At the first prompt, provide the already-created
+   YAML path; the script validates it and launches the configured run.
 
-The user-maintained teaching examples under `example/` are a specific
-exception to the root `config/` location: each example has one executable
-`run.yaml`, with input paths relative to its own folder and outputs under
-its own `result/<task_name>/`. From that folder, run `python ../../yonod.py`
-and enter `run.yaml`; no configuration copy is required. Keep the same
-schema-2, 19-CPU, serial-execution, and dual-report requirements. Operational
-logs and PID files remain in the repository-root `logs/` directory. This
-exception does not change the configuration location for research tasks.
+Teaching examples under `example/` are an exception to the root `config/`
+location: each has one executable `run.yaml`, inputs relative to its own
+folder, and outputs under its own `result/<task_name>/`. From that folder,
+run `python ../../yonod.py` on Linux or `python ..\..\yonod.py` on Windows
+and enter `run.yaml`; no configuration copy is required. Keep schema-2,
+serial execution, dual reports, and repository-root `logs/` for operational
+logs and PID files. Research task YAMLs still belong in root `config/`.
 
-Use the 19 CPU cores within one modeling task, but schedule tasks linearly:
-run one task to completion before starting the next. Do not launch multiple
-YONOD runs, descriptors, model combinations, or CV folds as separate
-background jobs merely to consume more cores. This avoids CPU oversubscription
-and makes logs, resource usage, and task status unambiguous.
+Schedule tasks linearly: run one task to completion before starting the
+next. Do not launch multiple YONOD runs, descriptors, model combinations,
+or CV folds as separate background jobs merely to consume more cores.
 
-For example, add the applicable resource declaration to each task YAML:
-
-```yaml
-model_params:
-  rf:
-    estimator:
-      n_jobs: 19
-  xgb:
-    estimator:
-      n_jobs: 19
-  lightgbm:
-    estimator:
-      n_jobs: 19
-  autogluon:
-    fit:
-      num_cpus: 19
-```
-
-For an interactive run, use:
+For a foreground run from the repository root, Linux Bash:
 
 ```bash
-source /home/wangzh685/miniconda3/etc/profile.d/conda.sh
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
+export PYTHONUTF8=1
 python -u yonod.py
 ```
 
-On Linux, modeling tasks must be launched headlessly, with unbuffered verbose
-output captured in a task-specific log under `logs/`. All operational task
-logs and PID files must be placed in `logs/`; do not store them in
-`result/<task_name>/` or elsewhere. Replace the YAML path and task name below;
-`python -u` preserves timely progress output. The `taskset` CPU list must
-contain exactly 19 available logical CPU IDs; the example uses IDs `0` through
-`18`.
+Windows Conda PowerShell:
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = "1"
+python -u .\yonod.py
+```
+
+For unattended runs, use unbuffered output and task-specific logs and PID
+files in root `logs/`. Replace `my_task` and the YAML path below.
+
+Linux Bash, from the repository root:
 
 ```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate yonod
+export PYTHONUTF8=1
 mkdir -p logs
-nohup setsid bash -lc '
-  source /home/wangzh685/miniconda3/etc/profile.d/conda.sh
-  conda activate yonod
-  printf "%s\\n" "config/my_task.yaml" | taskset --cpu-list 0-18 python -u yonod.py
-' </dev/null > logs/my_task.log 2>&1 &
+printf '%s\n' 'config/my_task.yaml' > logs/my_task.stdin.txt
+nohup python -u yonod.py < logs/my_task.stdin.txt > logs/my_task.log 2>&1 &
 echo $! > logs/my_task.pid
 ```
 
-Do not use `main.py --config` as the direct task-launch command in this
-procedure: `yonod.py` is the required entry point and will invoke the
-configuration runtime after validating the YAML.
+Windows Conda PowerShell, from the repository root:
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = "1"
+$yonodLogs = Join-Path $PWD.Path "logs"
+New-Item -ItemType Directory -Path $yonodLogs -Force | Out-Null
+$yonodInput = Join-Path $yonodLogs "my_task.stdin.txt"
+"config/my_task.yaml" | Set-Content -LiteralPath $yonodInput -Encoding ascii
+$yonodProcess = Start-Process -FilePath (Get-Command python).Source -ArgumentList @("-u", "yonod.py") -WorkingDirectory $PWD.Path -RedirectStandardInput $yonodInput -RedirectStandardOutput (Join-Path $yonodLogs "my_task.log") -RedirectStandardError (Join-Path $yonodLogs "my_task.stderr.log") -PassThru
+$yonodProcess.Id | Set-Content -LiteralPath (Join-Path $yonodLogs "my_task.pid") -Encoding ascii
+```
+
+The ASCII stdin files above contain only the shown ASCII YAML paths. For a
+YAML path containing non-ASCII characters in PowerShell, write the input
+without a BOM using `[IO.File]::WriteAllText($yonodInput, "配置路径.yaml`n", [Text.UTF8Encoding]::new($false))`;
+`PYTHONUTF8=1` makes the launcher and its child processes read it consistently.
+Windows captures standard output and standard errors in separate logs;
+inspect both. Keep all operational logs, stdin support files, and PID files
+in root `logs/`, not under modeling results.
+
+Do not use `main.py --config` as the direct task-launch command:
+`yonod.py` is the formal entry point and invokes the runtime after validation.
 
 ## Platform compatibility
 
-Development happens on Linux, but all project changes must remain compatible
-with both Linux and Windows.
+All project changes and current tutorials must support Linux and Windows.
+Label shell-specific commands and give separate Bash and Windows Conda
+PowerShell alternatives for setup, launch, file operations, and status checks.
+Commands that are identical on both systems may be shown once and labeled
+accordingly. Do not infer Windows runtime acceptance from Linux execution.
 
 - Use `pathlib.Path` or `os.path` for paths in Python; never hard-code `/` or
   `\\` as a path separator.
@@ -160,9 +178,10 @@ must be placed in `logs/` (for example, `logs/<task_name>.log` and
 Place all test and validation scripts in the `_verify/` directory.
 
 Run changed code from the repository root with the `yonod` environment active.
-For a lightweight smoke check of the main configuration interface:
+For a lightweight smoke check of the main configuration interface, the same
+command works in Linux Bash and Windows Conda PowerShell after activation:
 
-```bash
+```text
 python main.py --config example.yaml
 ```
 
@@ -185,22 +204,31 @@ outputs, or reference projects unless the task explicitly requires it.
 
 ## Query modeling-task status
 
-Use the PID file created at launch to check whether the headless task is still
-running and to view its latest detailed output:
+Use the PID file from launch to check whether the headless task is still
+running and inspect its detailed output. From the repository root, Linux Bash:
 
 ```bash
 task_pid="$(cat logs/my_task.pid)"
 ps -p "$task_pid" -o pid,ppid,stat,etime,cmd
-taskset --pid --cpu-list "$task_pid"
 tail -n 100 logs/my_task.log
 ```
 
-Once task startup has been confirmed, provide the user with the command block
-above and end the conversation. Do not keep polling, monitoring, or reporting
-unchanged task status; the user can run the commands when they want an update.
-When the user explicitly requests complete end-to-end acceptance of all
-teaching examples, run them serially to completion and verify the saved
-predictions, split membership, metrics, and reports before finishing.
+Windows Conda PowerShell:
+
+```powershell
+$taskPid = [int](Get-Content logs\my_task.pid)
+Get-Process -Id $taskPid -ErrorAction SilentlyContinue
+Get-Content logs\my_task.log -Encoding UTF8 -Tail 100
+Get-Content logs\my_task.stderr.log -Encoding UTF8 -Tail 100
+```
+
+Once task startup has been confirmed, provide the user with the appropriate
+platform's command block and end the conversation. Do not keep polling,
+monitoring, or reporting unchanged status. When complete end-to-end acceptance
+of teaching examples is explicitly requested, run them serially to completion
+and verify saved predictions, split membership, metrics, and reports before
+finishing. Record the actual tested operating system; do not label another
+platform as tested based solely on its documented commands.
 
 <!-- --- project-initializer (managed) START --- -->
 ## Repository layout and collaboration rules
@@ -246,8 +274,9 @@ files changed by the task. Never use `git add .` or `git add -A` in either
 repository. Never commit `.env`, credentials, or files from `_verify/`,
 `config/`, `reference-projects/`, or `backup/`.
 
-```bash
-# Main repository (Bash; replace paths and message for the task)
+```text
+# Git commands below work in Bash and PowerShell; replace paths and message.
+# Main repository
 git status --short
 git add AGENTS.md
 git diff --cached --name-only

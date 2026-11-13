@@ -12,9 +12,12 @@ YONOD 面向化学研究人员，支持比较不同结构数值编码（descript
 
 ### 1.1 获取项目并准备环境
 
-先安装 Git 和 Conda。项目以 Python 3.9 为基线；首次使用：
+先安装 Git 和 Conda，项目以 Python 3.9 为基线。按终端类型选择命令；Linux 示例假定 Conda 安装在 `$HOME/miniconda3`，其他位置请替换该前缀。Windows 打开 **Anaconda PowerShell Prompt**，或先执行 `conda init powershell` 并重启 PowerShell。普通 Conda Prompt 可运行 `conda`、`pip`、`python` 命令，但下面的后台启动和状态查看代码需要 PowerShell。
+
+**Linux Bash：首次安装**
 
 ```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
 git clone https://github.com/thinktraveller/YONOD.git
 cd YONOD
 conda create -n yonod python=3.9 -y
@@ -23,65 +26,84 @@ pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https
 pip install -r requirements.txt
 ```
 
-这里安装的是 CPU 版 PyTorch，足以运行三个教学样例。需要 CUDA 时，按 [requirements.txt](requirements.txt) 中的版本说明选择与本机匹配的 PyTorch 安装源。LightGBM 和 SciPy 已列入 `requirements.txt`，PyTorch 仍需事先单独安装。只有使用 AutoGluon 时才需要额外安装：
+**Windows Conda PowerShell：首次安装**
 
-```bash
+```powershell
+git clone https://github.com/thinktraveller/YONOD.git
+Set-Location YONOD
+conda create -n yonod python=3.9 -y
+conda activate yonod
+pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+```
+
+这里安装的是 CPU 版 PyTorch，足以运行三个教学样例。需要 CUDA 时，按 [requirements.txt](requirements.txt) 中的版本说明选择与本机匹配的 PyTorch 安装源。LightGBM 和 SciPy 已列入 `requirements.txt`，PyTorch 仍需事先单独安装。只有使用 AutoGluon 时才需要额外安装；以下命令适用于已激活环境的 Linux Bash 和 Windows Conda PowerShell：
+
+```text
 pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```
 
-已有 `yonod` 环境可跳过创建和安装。Linux 每个新 shell 都应先初始化并激活 Conda；下面假设安装在 `~/miniconda3`，其他位置请相应修改。Windows 使用 Conda Prompt 激活环境。
+已有 `yonod` 环境可跳过创建和安装；每个新终端仍需激活环境。示例不指定机器线程数，也不要求CPU绑定；按已安装模型库的默认资源设置运行，必要时再根据本机能力显式配置。
 
 ### 1.2 在样例自己的文件夹启动
 
-Linux Bash，在仓库根执行以下完整命令。它选择恰好19个可用逻辑 CPU，并将日志和 PID 保存到仓库根 `logs/`：
+下列两种启动方式都从 YONOD 根目录开始，把 `run.yaml` 送入 `yonod.py` 的首次提示，并将日志与 PID 保存到仓库根 `logs/`。
+
+**Linux Bash：后台运行**
 
 ```bash
-source ~/miniconda3/etc/profile.d/conda.sh
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
+export PYTHONUTF8=1
 cd example/random_split
-
-yonod_repo_root="$(cd ../.. && pwd)"
-yonod_cpu_ids="$(python -c 'import os; ids=sorted(os.sched_getaffinity(0)); assert len(ids)>=19, "19 available logical CPUs are required"; print(",".join(map(str, ids[:19])))')"
-if [ -n "$yonod_cpu_ids" ]; then
-  mkdir -p "$yonod_repo_root/logs"
-  nohup setsid bash -lc '
-    source ~/miniconda3/etc/profile.d/conda.sh
-    conda activate yonod
-    cd "$1" || exit 1
-    printf "%s\n" "run.yaml" | taskset --cpu-list "$2" python -u ../../yonod.py
-  ' _ "$PWD" "$yonod_cpu_ids" </dev/null > "$yonod_repo_root/logs/example_random_split_20261113.log" 2>&1 &
-  echo $! > "$yonod_repo_root/logs/example_random_split_20261113.pid"
-else
-  echo "Fewer than 19 logical CPUs are available; task was not started."
-fi
+mkdir -p ../../logs
+printf '%s\n' 'run.yaml' > ../../logs/example_random_split_20261113.stdin.txt
+nohup python -u ../../yonod.py < ../../logs/example_random_split_20261113.stdin.txt > ../../logs/example_random_split_20261113.log 2>&1 &
+echo $! > ../../logs/example_random_split_20261113.pid
 ```
 
-Windows Conda Prompt，从仓库根执行：
+**Windows Conda PowerShell**
 
-```text
+```powershell
 conda activate yonod
-cd example\random_split
-python -u ..\..\yonod.py
+$env:PYTHONUTF8 = "1"
+Set-Location example\random_split
+$yonodLogs = [IO.Path]::GetFullPath((Join-Path $PWD.Path "..\..\logs"))
+New-Item -ItemType Directory -Path $yonodLogs -Force | Out-Null
+$yonodInput = Join-Path $yonodLogs "example_random_split_20261113.stdin.txt"
+"run.yaml" | Set-Content -LiteralPath $yonodInput -Encoding ascii
+$yonodProcess = Start-Process -FilePath (Get-Command python).Source -ArgumentList @("-u", "..\..\yonod.py") -WorkingDirectory $PWD.Path -RedirectStandardInput $yonodInput -RedirectStandardOutput (Join-Path $yonodLogs "example_random_split_20261113.log") -RedirectStandardError (Join-Path $yonodLogs "example_random_split_20261113.stderr.log") -PassThru
+$yonodProcess.Id | Set-Content -LiteralPath (Join-Path $yonodLogs "example_random_split_20261113.pid") -Encoding ascii
 ```
 
-首次提示输入 `run.yaml`。Linux 命令已通过标准输入提供同一答案。正式入口是 `yonod.py`；不要把 `--csv`、`--models` 或 `--config` 当作这个交互入口的参数。
+也可以在相应环境中进入样例目录，Linux 运行 `python -u ../../yonod.py`，Windows 运行 `python -u ..\..\yonod.py`，然后在首次提示输入 `run.yaml`。正式入口是 `yonod.py`；不要把 `--csv`、`--models` 或 `--config` 当作这个交互入口的参数。
 
-**一次只运行一个任务。** 等当前任务完成后再运行另一个样例；固定名单与外测分别进入 `example/fixed_split/`、`example/external_test/`，同时更换日志和 PID 文件名。三个样例已在 Linux 完整运行并验收；Windows 命令说明用法，不代表所有可选后端都经过 Windows 实机验证。
+**一次只运行一个任务。** 等当前任务完成后再运行另一个样例；固定名单与外测分别进入 `example/fixed_split/`、`example/external_test/`，同时更换日志和 PID 文件名。已保存的完整运行验收来自 Linux；Windows 命令说明操作方式，不代表所有可选后端都经过 Windows 实机验证。
 
 ### 1.3 查看进度与报告
 
-仍在随机样例目录时：
+仍在随机样例目录时，按操作系统选择命令。Windows 的标准输出和错误输出分别保存在 `.log` 与 `.stderr.log`，两者都要查看。
+
+**Linux Bash**
 
 ```bash
 task_pid="$(cat ../../logs/example_random_split_20261113.pid)"
 ps -p "$task_pid" -o pid,ppid,stat,etime,cmd
-taskset --pid --cpu-list "$task_pid"
 tail -n 60 ../../logs/example_random_split_20261113.log
+```
+
+**Windows Conda PowerShell**
+
+```powershell
+$taskPid = [int](Get-Content ..\..\logs\example_random_split_20261113.pid)
+Get-Process -Id $taskPid -ErrorAction SilentlyContinue
+Get-Content ..\..\logs\example_random_split_20261113.log -Encoding UTF8 -Tail 60
+Get-Content ..\..\logs\example_random_split_20261113.stderr.log -Encoding UTF8 -Tail 60
 ```
 
 进程结束后，以日志中的完成状态及运行记录为准：普通流程应看到 `features=ready` 和三个模型组合 `complete` 或 `reused`；固定名单应有两折成功记录；外测应有完整预测表及两种报告。运行编号由内容决定，不应匹配固定编号。
 
-新结果保存在**当前样例目录**的 `result/<任务名>/`。打开其中 `report/` 下的 HTML 报告；各协议的具体文件名见下一节。
+新结果保存在**当前样例目录**的 `result/<任务名>/`。Linux 可用 `xdg-open <报告路径>`，Windows PowerShell 可用 `Invoke-Item <报告路径>`，也可直接在文件管理器打开 HTML；各协议的具体文件名见下一节。
 
 ## 2. 跟着 example 逐步理解数据、设置和输出
 
@@ -166,16 +188,23 @@ tail -n 60 ../../logs/example_random_split_20261113.log
 
 - 教学样例：`run.yaml` 留在自己的文件夹，输入与 `./result/<任务名>/` 均相对它解析。
 - 正式研究：在仓库根 `config/` 新建独立 YAML。该目录内以 `./` 开头的引用按仓库根解析；显式 `../` 和其他位置的配置按 YAML 所在目录解析；绝对路径保持绝对。
-- 所有任务的 `artifacts.output_dir` 应为 `outputs.root/feature`，不能与任务根相同。RF、XGBoost、LightGBM 的 `estimator.n_jobs` 为19；AutoGluon 的 `fit.num_cpus` 为19。任务、编码、组合和折不另开并行后台作业。
+- 所有任务的 `artifacts.output_dir` 应为 `outputs.root/feature`，不能与任务根相同。示例省略线程参数，采用已安装模型库默认值；需要限制资源时，可根据本机能力显式设置 RF/XGBoost/LightGBM 的 `estimator.n_jobs` 或 AutoGluon 的 `fit.num_cpus`。任务、编码、组合和折不另开并行后台作业。
 
-准备自己的随机内测配置，可从仓库根复制格式规范：
+准备自己的随机内测配置，可从仓库根复制格式规范。Linux Bash：
 
 ```bash
 mkdir -p config
 cp example.yaml config/my_reaction.yaml
 ```
 
-在新文件中逐项修改：任务名、数据路径和列用途、编码与模型、模型预算、划分规则，以及 `./result/my_reaction` 和其中的 `feature/`。根格式样例使用12条人工记录、两折和10棵RF树，CPU预算已设为19；正式研究应为所选模型保留19CPU预算，并自行确定科学问题与计算预算。固定名单或外测另需参照对应教学样例补齐专用字段，不能只替换 `protocol` 字符串。修改后仍通过 `yonod.py` 首提示读取该 YAML。
+Windows Conda PowerShell：
+
+```powershell
+New-Item -ItemType Directory -Path config -Force | Out-Null
+Copy-Item example.yaml config\my_reaction.yaml
+```
+
+在新文件中逐项修改：任务名、数据路径和列用途、编码与模型、模型预算、划分规则，以及 `./result/my_reaction` 和其中的 `feature/`。根格式样例使用12条人工记录、两折和10棵RF树，线程数由已安装模型库决定；正式研究应自行确定科学问题、模型与计算预算。固定名单或外测另需参照对应教学样例补齐专用字段，不能只替换 `protocol` 字符串。修改后仍通过 `yonod.py` 首提示读取该 YAML。
 
 解析器拒绝重复键、别名和未知字段。JSON 不是运行配置；`main.py` 是底层运行时，不是正式任务启动入口。`yonod.py` 也可从 CSV 交互收集列用途并生成设置；保存位置和任务隔离仍按 [AGENTS.md](AGENTS.md) 执行。
 
@@ -221,9 +250,9 @@ YONOD/
 
 先看[数据说明](dataset/README.md)和[权重说明](WEIGHTS/README.md)。三个教学样例的数据已随源码提供。项目分发入口是 [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) 和 [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights)，它们不替代原始来源与许可记录。
 
-以下命令在已激活 `yonod` 的仓库根执行；安装兼容 Transformers 4.40 的 Hugging Face CLI：
+以下命令适用于 Linux Bash 和 Windows Conda PowerShell，均在已激活 `yonod` 的仓库根执行；安装兼容 Transformers 4.40 的 Hugging Face CLI：
 
-```bash
+```text
 pip install "huggingface_hub>=0.34,<1.0"
 hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/**" --local-dir dataset
 hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
@@ -239,9 +268,9 @@ hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 | MolMetaLM | [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base)的模型、配置与tokenizer放入 `WEIGHTS/MolMetaLM-base/`；[上游项目](https://github.com/CSUBioGroup/MolMetaLM) |
 | Chemical VAE | 使用 `WEIGHTS/chemical_vae/<资产>/v5/` 的已验证转换manifest及相邻、哈希匹配的 `encoder_state_dict.pt`；ZINC与`zinc_properties`资产不能互换 |
 
-单独恢复 MolMetaLM：
+单独恢复 MolMetaLM（两种系统使用同一命令）：
 
-```bash
+```text
 hf download wudejian789/MolMetaLM-base --local-dir WEIGHTS/MolMetaLM-base
 ```
 

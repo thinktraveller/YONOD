@@ -40,5 +40,14 @@
   "current_reports": {
     "html": "completed_run/report/external_test_report.html",
     "md": "completed_run/report/external_test_report.md"
+  },
+  "resource_policy": {
+    "live_configuration": "CPU thread fields omitted; use installed model-library defaults or configure explicitly for the local machine",
+    "cpu_affinity_required": false,
+    "platform_instructions": [
+      "Linux Bash",
+      "Windows Conda PowerShell"
+    ],
+    "historical_resource_parameters": "Preserved only in frozen evidence; not current defaults"
   }
 }

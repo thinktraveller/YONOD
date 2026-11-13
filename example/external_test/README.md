@@ -2,7 +2,7 @@
 
 本包展示**训练CSV、外测CSV、列名对应关系和来源核查文件怎样配合**。这里有12条训练记录、6条外测记录，所有产率都为人工编造；结构只是形式上的酰胺示例，没有反应条件或实验测量依据。**本包演示外测操作，不构成独立实验来源的科学验证。**
 
-本轮已从本目录读取YAML，完成建立模型、外测预测与报告输出，并通过逐条验收。
+本包已有完整运行与逐条验收记录。当前YAML不固定线程数；实际测试配置版本与平台见 `verification.json`。
 
 ## 文件如何分工
 
@@ -69,25 +69,47 @@
 
 ## 在本文件夹运行
 
-从YONOD根目录进入 `example/external_test/`。不用复制或移动 `run.yaml`；训练表、外测表、来源核查记录和新结果均在本包内。
+从YONOD根目录进入 `example/external_test/`，检查同目录的 [run.yaml](run.yaml)，无需复制或移动设置。输入和新结果保留在本包中；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
 
-Linux Bash按[总操作说明](../README.md)使用后台命令：把示例目录改为 `example/external_test`，日志名和PID名改为 `example_external_test_20261113_selfcontained`。程序入口为 `python -u ../../yonod.py`，首次提示输入 `run.yaml`；日志位于仓库根 `logs/`。保留19线程预算，等其他示例完成后再启动。
+### Linux：Bash
 
-Windows Conda Prompt：
+先初始化本机Conda并激活环境，从YONOD根目录执行以下后台启动块：
 
-```text
-cd example\external_test
+```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate yonod
+export PYTHONUTF8=1
+cd example/external_test
+mkdir -p ../../logs
+printf '%s\n' 'run.yaml' > ../../logs/example_external_test_20261113.stdin.txt
+nohup python -u ../../yonod.py \
+  < ../../logs/example_external_test_20261113.stdin.txt \
+  > ../../logs/example_external_test_20261113.log 2>&1 &
+echo $! > ../../logs/example_external_test_20261113.pid
+```
+
+若 `conda` 尚未加入shell路径，请先用本机安装目录的 `etc/profile.d/conda.sh` 初始化。日志和PID位于仓库根 `logs/`；[总操作说明](../README.md#linuxbash-后台运行)包含按需查询状态的命令。
+
+### Windows：Conda PowerShell
+
+在 Anaconda PowerShell Prompt 或已初始化Conda的PowerShell中，从YONOD根目录执行：
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = '1'
+Set-Location .\example\external_test
 python -u ..\..\yonod.py
 ```
 
-首次提示输入 `run.yaml`。新结果写入本目录的 `result/example_external_test_20261113/`。
+首次提示输入 `run.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
+
+新结果写入本目录的 `result/example_external_test_20261113/`，网页报告为其中的 `report/external_test_report.html`。下载包的 `completed_run/` 保留已完成运行的快照；具体测试配置版本和平台见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
 
 ## 真正完成运行后的报告在哪里
 
 下载包的[本轮网页报告](completed_run/report/external_test_report.html)与[文字报告](completed_run/report/external_test_report.md)保存在 `completed_run/` 完整快照中。重新运行使用同目录YAML，在本包 `result/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
 
-以下路径均相对当前示例文件夹。本轮已完整运行并验收，已生成并检查以下结果：
+以下路径均相对当前示例文件夹；运行成功后应生成并核对这些结果：
 
 | 路径（相对当前示例目录） | 内容 |
 | --- | --- |

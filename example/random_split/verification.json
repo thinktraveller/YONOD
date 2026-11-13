@@ -1,34 +1,14 @@
 {
   "status": "passed",
   "example": "random_split",
-  "tested_at_utc": "2026-11-13T04:58:57.160524+00:00",
+  "tested_at_utc": "2026-11-13T16:46:14.937070+00:00",
   "launch": {
     "working_directory": ".",
     "command": "python ../../yonod.py",
     "first_input": "run.yaml",
     "return_code": 0,
-    "cpu_ids": [
-      0,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-      17,
-      18
-    ],
-    "config_sha256": "ac3f0ee8ec4439d1f71ffedc65e71fe0b8e34010228c4ca1386e55e7ec22413c",
+    "resource_policy": "model_library_defaults_no_affinity_override",
+    "config_sha256": "b8a14a8f3e3620d532698174b8a7b1931fd77bc70309978e92d91a3c6e342075",
     "launcher_source_sha256": "715942484d466dfe84438553a3e5ca7c222996ab7f5ff9bcdd8919861555a76b"
   },
   "environment": {
@@ -59,14 +39,14 @@
       "rf fold 1 r2 independently recalculated",
       "rf fold 1 rmse independently recalculated",
       "rf fold 1 mae independently recalculated",
-      "rf fold actually used the declared 19-thread estimator budget 1",
+      "rf omitted thread counts use installed-library defaults 1",
       "rf saved model file checksum valid 1",
       "rf heldout membership matches seed42 fold 2",
       "rf fold size and structure dimension correct 2",
       "rf fold 2 r2 independently recalculated",
       "rf fold 2 rmse independently recalculated",
       "rf fold 2 mae independently recalculated",
-      "rf fold actually used the declared 19-thread estimator budget 2",
+      "rf omitted thread counts use installed-library defaults 2",
       "rf saved model file checksum valid 2",
       "xgb run complete",
       "xgb expected fold/sample counts",
@@ -80,14 +60,14 @@
       "xgb fold 1 r2 independently recalculated",
       "xgb fold 1 rmse independently recalculated",
       "xgb fold 1 mae independently recalculated",
-      "xgb fold actually used the declared 19-thread estimator budget 1",
+      "xgb omitted thread counts use installed-library defaults 1",
       "xgb saved model file checksum valid 1",
       "xgb heldout membership matches seed42 fold 2",
       "xgb fold size and structure dimension correct 2",
       "xgb fold 2 r2 independently recalculated",
       "xgb fold 2 rmse independently recalculated",
       "xgb fold 2 mae independently recalculated",
-      "xgb fold actually used the declared 19-thread estimator budget 2",
+      "xgb omitted thread counts use installed-library defaults 2",
       "xgb saved model file checksum valid 2",
       "lightgbm run complete",
       "lightgbm expected fold/sample counts",
@@ -101,14 +81,14 @@
       "lightgbm fold 1 r2 independently recalculated",
       "lightgbm fold 1 rmse independently recalculated",
       "lightgbm fold 1 mae independently recalculated",
-      "lightgbm fold actually used the declared 19-thread estimator budget 1",
+      "lightgbm omitted thread counts use installed-library defaults 1",
       "lightgbm saved model file checksum valid 1",
       "lightgbm heldout membership matches seed42 fold 2",
       "lightgbm fold size and structure dimension correct 2",
       "lightgbm fold 2 r2 independently recalculated",
       "lightgbm fold 2 rmse independently recalculated",
       "lightgbm fold 2 mae independently recalculated",
-      "lightgbm fold actually used the declared 19-thread estimator budget 2",
+      "lightgbm omitted thread counts use installed-library defaults 2",
       "lightgbm saved model file checksum valid 2",
       "new html report generated",
       "new html report identifies this run rather than the historical demo",
@@ -125,7 +105,7 @@
         "rmse": 0.2650943228362312,
         "mae": 0.22249999999999992,
         "mae_percentage_points": 22.249999999999993,
-        "run_id": "train-255d17b4d79594a1c7fc"
+        "run_id": "train-be5392e3f72508fdbc35"
       },
       {
         "model": "xgb",
@@ -134,7 +114,7 @@
         "rmse": 0.21750832509157852,
         "mae": 0.18480516890684762,
         "mae_percentage_points": 18.48051689068476,
-        "run_id": "train-b03bd61d318975db5739"
+        "run_id": "train-10efd31e00b37f87ff08"
       },
       {
         "model": "lightgbm",
@@ -143,7 +123,7 @@
         "rmse": 0.224373955348587,
         "mae": 0.18951999986544252,
         "mae_percentage_points": 18.95199998654425,
-        "run_id": "train-1032ca46ad135691fc13"
+        "run_id": "train-d872bceeb7635e3dbb54"
       }
     ],
     "n_predictions": 36,
@@ -155,6 +135,6 @@
   },
   "data_status": "synthetic_not_measured",
   "platform_tested": "Linux",
-  "logs": "../../logs/example_random_split_20261113_selfcontained.log",
+  "logs": "../../logs/example_random_split_portable_20261114.log",
   "snapshot_note": "Saved outputs for inspection. A fresh run creates result/<task> and does not reuse completed_run. Snapshot model portability has not been tested."
 }

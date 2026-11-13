@@ -52,10 +52,12 @@ from .paper_exact_pipeline import (
 from ..models.autogluon_model import AutoGluonYieldModel
 
 
+# This legacy runner follows AutoGluonYieldModel's conservative single-CPU
+# default.  Schema-2 runs instead preserve omitted library parameters.
 PAPER_EXACT_AUTOGLOON_PARAMS: dict[str, Any] = {
     "time_limit": 300,
     "presets": "medium_quality",
-    "num_cpus": 19,
+    "num_cpus": 1,
     "random_state": 42,
 }
 PAPER_EXACT_EXPECTED_FOLDS_PER_DESCRIPTOR = 25
@@ -450,7 +452,7 @@ def run_autogluon_for_material(
     feature_ids: Optional[Sequence[str]] = None,
     time_limit: int = 300,
     presets: str = "medium_quality",
-    num_cpus: int = 19,
+    num_cpus: int = 1,
     random_state: int = 42,
     cleanup: bool = True,
     overwrite: bool = False,
@@ -888,7 +890,7 @@ def write_paper_exact_autogluon_launch_materials(
     stamp: str = PAPER_EXACT_STAMP,
     time_limit: int = 300,
     presets: str = "medium_quality",
-    num_cpus: int = 19,
+    num_cpus: int = 1,
     random_state: int = 42,
     cleanup: bool = True,
     overwrite: bool = False,
@@ -989,7 +991,7 @@ def run_paper_exact_autogluon_matrix(
     overwrite: bool = False,
     time_limit: int = 300,
     presets: str = "medium_quality",
-    num_cpus: int = 19,
+    num_cpus: int = 1,
     random_state: int = 42,
     cleanup: bool = True,
     require_rf_alignment: bool = True,

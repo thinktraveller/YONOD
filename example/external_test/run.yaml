@@ -31,11 +31,11 @@ artifacts:
   output_dir: ./result/example_external_test_20261113/feature
 
 models: [rf]
+# 未指定线程数时采用所用模型库的默认值；可按本机资源另设 estimator.n_jobs。
 model_params:
   rf:
     estimator:
       n_estimators: 10        # 开始外测前固定；小型教学预算
-      n_jobs: 19
       random_state: 42
 
 hpo:

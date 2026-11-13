@@ -304,8 +304,6 @@ class FrozenExternalTestConfig:
                 raise FrozenExternalTestError("冻结外部测试禁止 model_params.{0}.fit；训练只接受 X_train/y_train".format(model))
             if "early_stopping" in model_config.runtime:
                 raise FrozenExternalTestError("冻结外部测试不支持外部测试参与 early stopping；请先建立独立的训练内层协议")
-            if model in {"rf", "xgb", "lightgbm"} and model_config.estimator.get("n_jobs") != 19:
-                raise FrozenExternalTestError("model_params.{0}.estimator.n_jobs 必须为 19".format(model))
             resolved[model] = model_config
         return resolved
 

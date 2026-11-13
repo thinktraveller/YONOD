@@ -2,7 +2,7 @@
 
 这是供化学研究人员阅读的完整示例入口。建议先用浏览器打开 [index.html](index.html)，再按下面顺序看文件。
 
-**数据是12条人工构造的流程测试记录，不是实验测量数据。** 分子结构文本用于演示输入格式，不表示这两列分子一定能发生合理反应。本页保留同一批数据、同一模型与随机划分设置的历史实际计算输出，供对照来源。本轮已用本目录YAML完整运行并验收，新增结果与历史报告分开保存。
+**数据是12条人工构造的流程测试记录，不是实验测量数据。** 分子结构文本用于演示输入格式，不表示这两列分子一定能发生合理反应。本页保留同一批数据、同一结构编码、模型规模与随机划分的历史实际计算输出，供对照来源。当前YAML不固定线程数，历史报告保留当时参数；最新验收配置版本与平台见 `verification.json`。
 
 本轮下载快照：[网页报告](completed_run/report/report.html) · [文字报告](completed_run/report/report.md)。快照保存在 `completed_run/`，重新运行仍写入独立的 `result/example_random_split_20261113/`。
 
@@ -55,7 +55,7 @@
 | `descriptors` | `morgan`，两列按固定顺序合并 | 用结构片段数值编码（Morgan fingerprint）表达两列分子 |
 | `models` | `rf`、`xgb`、`lightgbm` | 分别比较三种建模方法 |
 | `model_params.*.estimator.n_estimators` | 均为 `2` | 这是低成本流程演示，设置很小，不用于追求化学预测表现 |
-| `model_params.*.estimator.n_jobs` | 均为 `19` | 线程预算；不表示建了19个模型，也不是反应数量 |
+| `model_params.*.estimator.n_jobs` | 未声明 | 使用各模型库默认值；需要时按本机资源另设，不是模型或反应的数量 |
 | `hpo.enabled` | `false` | 不自动比较和筛选模型设置；更不表示优化反应条件 |
 | `evaluation.protocol` | `outer_kfold` | 执行随机分批轮换内测 |
 | `evaluation.n_splits` | `2` | 分成两份，轮流留一份测试 |
@@ -114,20 +114,40 @@ R²比较模型与统一使用该测试结果均值预测的表现。负值表�
 
 ## 在本文件夹运行
 
-1. 从YONOD根目录进入 `example/random_split/`，检查数据和同目录的 [run.yaml](run.yaml)，无需复制设置。
-2. Linux按[总操作说明](../README.md)使用后台命令，激活 `yonod` 环境并绑定19个可用逻辑CPU，通过 `python -u ../../yonod.py` 启动，首次提示输入 `run.yaml`。日志与PID位于根 `logs/example_random_split_20261113_selfcontained.log` 和 `.pid`。
-3. 新结果写入本目录的 `result/example_random_split_20261113/`；网页与文字报告为其中的 `report/report.html` 和 `report/report.md`。本轮已完整运行并验收，最终完成状态以运行记录为准。
+从YONOD根目录进入 `example/random_split/`，检查同目录的 [run.yaml](run.yaml)，无需复制或移动设置。输入和新结果保留在本包中；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
 
-Windows Conda Prompt从YONOD根目录执行：
+### Linux：Bash
 
-```text
-cd example\random_split
+先初始化本机Conda并激活环境，从YONOD根目录执行以下后台启动块：
+
+```bash
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate yonod
+export PYTHONUTF8=1
+cd example/random_split
+mkdir -p ../../logs
+printf '%s\n' 'run.yaml' > ../../logs/example_random_split_20261113.stdin.txt
+nohup python -u ../../yonod.py \
+  < ../../logs/example_random_split_20261113.stdin.txt \
+  > ../../logs/example_random_split_20261113.log 2>&1 &
+echo $! > ../../logs/example_random_split_20261113.pid
+```
+
+若 `conda` 尚未加入shell路径，请先用本机安装目录的 `etc/profile.d/conda.sh` 初始化。日志和PID位于仓库根 `logs/`；[总操作说明](../README.md#linuxbash-后台运行)包含按需查询状态的命令。
+
+### Windows：Conda PowerShell
+
+在 Anaconda PowerShell Prompt 或已初始化Conda的PowerShell中，从YONOD根目录执行：
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = '1'
+Set-Location .\example\random_split
 python -u ..\..\yonod.py
 ```
 
-首次提示输入 `run.yaml`。每次只运行一个示例。
+首次提示输入 `run.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
 
-本目录的历史数据、报告、图片和预测证据保留原字节；`evidence/`中的历史YAML仅用于追溯原计算，不是本轮的任务入口。下载压缩包附本轮完整输出；源码克隆后自行运行生成包内 `result/`。
+新结果写入本目录的 `result/example_random_split_20261113/`，网页报告为其中的 `report/report.html`。下载包的 `completed_run/` 保留已完成运行的快照；具体测试配置版本和平台见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
 
-本轮逐条验收记录：[verification.json](verification.json)。
+本目录的历史数据、报告、图片和预测证据保留原字节；`evidence/`中的历史YAML仅用于追溯原计算，不是当前任务入口。下载压缩包附完整输出；源码克隆后自行运行生成包内 `result/`。
