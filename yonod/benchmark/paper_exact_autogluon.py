@@ -2,7 +2,7 @@
 """AutoGluon runner for YieldMaster paper-exact 5x5 manifests.
 
 This module intentionally consumes the immutable materials produced by
-``paper_exact_pipeline`` instead of the ordinary ``main.py`` path.  The goal is
+``paper_exact_pipeline`` instead of the ordinary ``run_modeling.py`` path.  The goal is
 not a faster shortcut; it is an auditable runner where RF and AutoGluon share
 one population manifest and one 5 repeats x 5 folds split manifest.
 """

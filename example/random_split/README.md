@@ -151,3 +151,8 @@ python -u ..\..\yonod.py
 新结果写入本目录的 `result/example_random_split_20261113/`，网页报告为其中的 `report/report.html`。下载包的 `completed_run/` 保留已完成运行的快照；具体测试配置版本和平台见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
 
 本目录的历史数据、报告、图片和预测证据保留原字节；`evidence/`中的历史YAML仅用于追溯原计算，不是当前任务入口。下载压缩包附完整输出；源码克隆后自行运行生成包内 `result/`。
+
+
+### 生成其他任务的配置
+
+本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；普通运行器现名为run_modeling.py，历史运行记录中的旧名不改写。

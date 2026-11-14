@@ -1,33 +1,17 @@
-"""YONOD 通用入口（向导 + CLI 合并版）。
+"""YONOD schema-2 modeling runtime for features, training, and reports.
 
-双击或不带参数运行时启动交互向导；带 --csv 等参数直接进入 CLI pipeline。
+Formal task launches enter through ``yonod.py`` after a YAML has been saved
+and validated. This script is the ordinary ``features``/``train``/``all``
+execution backend and a direct configuration-interface smoke entrypoint::
 
-交互向导用法
-------------
-    python main.py
+    python run_modeling.py --config example.yaml
 
-CLI 用法示例
-------------
-    # 显式指定标签列和 SMILES 列：
-    python main.py --csv 数据集/酰胺缩合数据集.csv --label-col yield --smiles-cols Reactant1 Reactant2
+Use ``generate_yaml_config.py`` to prepare data and generate a standard YAML
+without running models. JSON run configurations are rejected; JSON audit,
+manifest, and recovery outputs remain legitimate modeling evidence.
 
-    # ECC 数据集（2 SMILES 列 + 温度辅助列）：
-    python main.py --csv 数据集/镍催化偶联数据集/Raw_Dataset.csv \\
-        --smiles-cols Ligand_SMILES Product_SMILES \\
-        --numeric-cols "Temp (K)" \\
-        --label-col "ddG" --task-name ECC
-
-    # 仅跑 morgan × rf（快速冒烟）：
-    python main.py --csv ... --smiles-cols ... --label-col ... --descriptors morgan --models rf
-
-输出（默认到 results/<task-name>建模报告/）
-----------------------------------------------
-  descriptors/<name>.npz   可复用的描述符矩阵、样本映射与配置元数据
-  docs/metrics_summary.csv   所有 (描述符, 模型) 组合的指标
-  docs/descriptor_status.csv 描述符生成、复用与失败状态
-  docs/run_<timestamp>.log   控制台镜像日志
-  pictures/*.png             散点图与训练时间图
-  report/report.{html,md}    最终报告
+The legacy direct-CSV CLI remains available for compatibility. With no
+arguments this runtime prints usage; it does not start the dataset wizard.
 """
 
 from __future__ import annotations
@@ -739,7 +723,7 @@ def _resolve_static_feature_columns(
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="YONOD 通用化入口：CSV → 特征 → 模型评估",
+        description="YONOD 建模执行后端：schema-2 YAML → 特征 / 训练 / 报告；正式任务从 yonod.py 启动",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     # Schema-2 YAML is the only executable configuration surface.  Retain a
@@ -890,7 +874,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.json is not None:
         print(
             "[error] JSON 已不再是可执行运行配置。请参照 example.yaml "
-            "创建 schema-2 YAML，然后使用 python main.py --config <新YAML>。",
+            "创建 schema-2 YAML，然后通过 python yonod.py 的首提示提供新 YAML 路径。",
             file=sys.stderr,
         )
         return 1
@@ -1499,20 +1483,22 @@ def _print_usage() -> None:
     print()
     print("使用方法:")
     print()
-    print("  场景A: 完整向导流程（首次使用推荐）")
-    print("    python yonod.py")
+    print("  场景A: 仅生成标准 YAML 配置（不启动建模）")
+    print("    python generate_yaml_config.py")
     print()
-    print("  场景B: 使用 schema-2 YAML 配置建模（向导生成的配置）")
-    print("    python main.py --config path/to/project_run.yaml")
+    print("  正式启动任务：python yonod.py，然后在首提示输入 YAML 路径")
+    print()
+    print("  场景B: 普通运行后端 / 配置接口 smoke（通常由 yonod.py 调用）")
+    print("    python run_modeling.py --config path/to/project_run.yaml")
     print()
     print("    旧 JSON 不能直接运行；请参照 example.yaml 创建 schema-2 YAML")
     print()
     print("  场景C: 传统CLI模式（直接指定参数）")
-    print("    python main.py --csv data.csv --label-col yield \\")
+    print("    python run_modeling.py --csv data.csv --label-col yield \\")
     print("        --smiles-cols R1 R2 --descriptors morgan --models xgb")
     print()
     print("更多帮助:")
-    print("    python main.py --help")
+    print("    python run_modeling.py --help")
     print()
 
 

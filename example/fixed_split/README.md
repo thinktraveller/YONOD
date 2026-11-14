@@ -100,3 +100,8 @@ python -u ..\..\yonod.py
 先检查两折都完成，再看预测误差。R²（决定系数）不是正确率；MAE（平均绝对误差）在本例0–1产率单位下乘100后，才是产率百分点。固定名单本身不保证模型好，也不自动证明未见底物预测能力。
 
 本轮逐条验收记录：[verification.json](verification.json)。
+
+
+### 生成其他任务的配置
+
+本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；普通运行器现名为run_modeling.py，历史运行记录中的旧名不改写。

@@ -157,6 +157,37 @@ The ZIP packages include `completed_run/` as a reference snapshot of completed o
 
 [example.yaml](example.yaml) is the sole complete format specification. This page explains fields without duplicating a YAML template. The three teaching `run.yaml` files show concrete tasks.
 
+### Three entry scripts
+
+| Script | Role |
+| --- | --- |
+| `generate_yaml_config.py` | Generate and validate a standard schema-2 YAML interactively from a CSV; save `config/<task_name>.yaml` without starting modeling |
+| `yonod.py` | Formal task launcher; read the prepared YAML at the first prompt and dispatch the selected protocol |
+| `run_modeling.py` | Ordinary `features`/`train`/`all` configuration runtime invoked by the launcher; also used for the documented engineering smoke check |
+
+### Generate a YAML from your own CSV
+
+Start from the repository root. Linux Bash:
+
+```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate yonod
+export PYTHONUTF8=1
+python -u generate_yaml_config.py
+```
+
+Windows Conda PowerShell:
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = "1"
+python -u .\generate_yaml_config.py
+```
+
+Enter the CSV path at the first prompt, then complete the column-role, encoding, model, and task questions. The generator saves the validated configuration directly to the root `config/<task_name>.yaml`; no configuration copy is needed. It may save normalized/prepared CSVs and invalid-input reports under the isolated `result/<task_name>/feature/docs/` while collecting roles. Generation does not compute descriptors, fit models, predict, or launch a run. Supplying an existing YAML to the generator validates it and returns without running it.
+
+Review the generated YAML and its input/output paths, then start `python -u yonod.py` on Linux or `python -u .\yonod.py` on Windows and enter that `config/<task_name>.yaml` path. The three teaching examples already supply their own `run.yaml`, so they do not need this generation step.
+
 | Field | Meaning and usage |
 | --- | --- |
 | `schema_version` | Currently `"2.0"` |
@@ -190,7 +221,7 @@ Ordinary `all/train` uses KFold. Actual fixed-membership or grouped evaluation r
 - Research tasks: create an independent YAML under the repository-root `config/` folder. References beginning with `./` there resolve from the repository root. Explicit `../` references and configurations elsewhere resolve from their YAML's directory. Absolute paths remain absolute.
 - Each task's `artifacts.output_dir` should be `outputs.root/feature`, not the task root itself. Examples omit thread parameters and use installed model-library defaults. To limit resources, explicitly configure RF/XGBoost/LightGBM `estimator.n_jobs` or AutoGluon `fit.num_cpus` for your machine. Do not start tasks, encodings, combinations, or folds as separate parallel background jobs.
 
-For your own random internal-evaluation configuration, copy the format specification from the repository root. Linux Bash:
+To edit a configuration manually instead of using the generator, copy the format specification from the repository root. Linux Bash:
 
 ```bash
 mkdir -p config
@@ -206,7 +237,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 In the new file, update the task name, data path and column roles, encodings and models, model budget, split rules, and `./result/my_reaction` with its `feature/` child. The root format example uses 12 synthetic records, two folds, and 10 RF trees; thread counts follow the installed model library. For research, determine the scientific question, model settings, and computation budget yourself. Fixed membership and external testing also require their dedicated fields from the corresponding teaching example; changing only the `protocol` string is insufficient. Continue to supply the edited YAML at the first `yonod.py` prompt.
 
-The parser rejects duplicate keys, aliases, and unknown fields. JSON is not a run configuration. `main.py` is the underlying runtime, not the formal task launcher. `yonod.py` can also collect column roles interactively from a CSV and create settings; configuration locations and task isolation still follow [AGENTS.md](AGENTS.md).
+The parser rejects duplicate keys, aliases, and unknown fields. Executable run configurations must be schema-2 YAML, not JSON; JSON audit files, manifests, and other evidence remain valid for their documented purposes. Use `generate_yaml_config.py` to prepare settings, `yonod.py` to launch a task, and `run_modeling.py` only for its ordinary-runtime and engineering-check roles. Configuration locations and task isolation still follow [AGENTS.md](AGENTS.md).
 
 ### Available encodings and models
 
@@ -221,8 +252,9 @@ HPO is supported only through the integrated RF/XGBoost/LightGBM search workflow
 ```text
 YONOD/
 ├── README.md / README.zh-CN.md  English default entry and Chinese guide
-├── yonod.py                    Public interactive launcher
-├── main.py                     Ordinary configuration runtime
+├── generate_yaml_config.py     Generate and validate schema-2 YAML without modeling
+├── yonod.py                    Formal interactive task launcher
+├── run_modeling.py             Ordinary configuration runtime
 ├── example.yaml                Complete schema-2 format and minimal smoke test
 ├── requirements.txt            Base dependencies; PyTorch and others are installed separately
 ├── LICENSE                     Repository license

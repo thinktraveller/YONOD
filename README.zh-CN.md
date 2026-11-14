@@ -157,6 +157,37 @@ Get-Content ..\..\logs\example_random_split_20261113.stderr.log -Encoding UTF8 -
 
 [example.yaml](example.yaml) 是唯一完整格式规范；本页解释字段，不复制另一套 YAML 模板。三个教学 `run.yaml` 展示具体任务如何填写。
 
+### 三个入口脚本分别做什么
+
+| 脚本 | 职责 |
+| --- | --- |
+| `generate_yaml_config.py` | 从CSV交互生成并校验标准schema-2 YAML，保存到 `config/<任务名>.yaml`，完成后不启动建模 |
+| `yonod.py` | 正式任务启动入口；首次提示读取准备好的YAML，并分派相应协议 |
+| `run_modeling.py` | 由正式入口调用的普通 `features`/`train`/`all` 配置运行时，也用于文档指定的工程smoke检查 |
+
+### 从自己的CSV生成YAML
+
+在仓库根目录启动。Linux Bash：
+
+```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate yonod
+export PYTHONUTF8=1
+python -u generate_yaml_config.py
+```
+
+Windows Conda PowerShell：
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = "1"
+python -u .\generate_yaml_config.py
+```
+
+首次提示输入CSV路径，随后回答列用途、编码、模型和任务信息。生成器将校验后的配置直接保存到根 `config/<任务名>.yaml`，不用再复制配置。收集列用途时，可以在独立的 `result/<任务名>/feature/docs/` 保存规范化/准备后的CSV和无效输入报告；生成阶段不计算描述符、不拟合、不预测，也不启动任务。向生成器提供已有YAML时，只做校验并返回。
+
+检查生成YAML及其输入输出路径后，Linux运行 `python -u yonod.py`，Windows运行 `python -u .\yonod.py`，在首次提示输入刚生成的 `config/<任务名>.yaml`。三个教学包已经提供各自的 `run.yaml`，不需要重新生成。
+
 | 字段 | 含义与使用要点 |
 | --- | --- |
 | `schema_version` | 当前为 `"2.0"` |
@@ -190,7 +221,7 @@ Get-Content ..\..\logs\example_random_split_20261113.stderr.log -Encoding UTF8 -
 - 正式研究：在仓库根 `config/` 新建独立 YAML。该目录内以 `./` 开头的引用按仓库根解析；显式 `../` 和其他位置的配置按 YAML 所在目录解析；绝对路径保持绝对。
 - 所有任务的 `artifacts.output_dir` 应为 `outputs.root/feature`，不能与任务根相同。示例省略线程参数，采用已安装模型库默认值；需要限制资源时，可根据本机能力显式设置 RF/XGBoost/LightGBM 的 `estimator.n_jobs` 或 AutoGluon 的 `fit.num_cpus`。任务、编码、组合和折不另开并行后台作业。
 
-准备自己的随机内测配置，可从仓库根复制格式规范。Linux Bash：
+也可以不用生成器，手工从仓库根复制格式规范再编辑。Linux Bash：
 
 ```bash
 mkdir -p config
@@ -206,7 +237,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 在新文件中逐项修改：任务名、数据路径和列用途、编码与模型、模型预算、划分规则，以及 `./result/my_reaction` 和其中的 `feature/`。根格式样例使用12条人工记录、两折和10棵RF树，线程数由已安装模型库决定；正式研究应自行确定科学问题、模型与计算预算。固定名单或外测另需参照对应教学样例补齐专用字段，不能只替换 `protocol` 字符串。修改后仍通过 `yonod.py` 首提示读取该 YAML。
 
-解析器拒绝重复键、别名和未知字段。JSON 不是运行配置；`main.py` 是底层运行时，不是正式任务启动入口。`yonod.py` 也可从 CSV 交互收集列用途并生成设置；保存位置和任务隔离仍按 [AGENTS.md](AGENTS.md) 执行。
+解析器拒绝重复键、别名和未知字段。可执行运行配置必须使用schema-2 YAML，不能用JSON代替；JSON审计文件、manifest及其他证据仍按各自用途使用。用 `generate_yaml_config.py` 准备设置，`yonod.py` 启动正式任务，`run_modeling.py` 承担普通运行时与工程检查职责；保存位置和任务隔离仍按 [AGENTS.md](AGENTS.md) 执行。
 
 ### 可用编码与模型
 
@@ -221,8 +252,9 @@ HPO 仅支持 RF/XGBoost/LightGBM 的已接入搜索流程，搜索只发生在�
 ```text
 YONOD/
 ├── README.md / README.zh-CN.md  英文默认入口与中文说明
+├── generate_yaml_config.py     只生成并校验schema-2 YAML，不建模
 ├── yonod.py                    正式交互启动入口
-├── main.py                     普通配置运行时
+├── run_modeling.py             普通配置运行时
 ├── example.yaml                完整schema-2格式规范与最小测试
 ├── requirements.txt            基础依赖；PyTorch等单独安装
 ├── LICENSE                     本项目许可证

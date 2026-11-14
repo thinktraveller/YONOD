@@ -1,6 +1,8 @@
 # 可直接复制的 schema-2 YAML 示例。此文件使用仓库内的小型 fixture，
 # 仅运行 Morgan × RF 的 2-fold smoke；项目规模实验应另存配置和输出目录。
-# 正式任务：另存为 config/<task_name>.yaml，经 yonod.py 首提示提供该路径。
+# 自有CSV：在仓库根运行 python generate_yaml_config.py，只准备数据与配置，
+# 直接保存 config/<task_name>.yaml；确认后经 yonod.py 首提示提供该路径。
+# 手工配置：另存为 config/<task_name>.yaml；run_modeling.py 是普通运行时。
 # 教学示例：在 example/<示例>/ 启动；Linux 用 python ../../yonod.py，
 # Windows Conda PowerShell 用 python ..\..\yonod.py；首提示输入 run.yaml。
 schema_version: "2.0"

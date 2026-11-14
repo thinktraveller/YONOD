@@ -9,7 +9,8 @@ YONOD 数据集输入向导 (Dataset Input Wizard)
 3. 生成规范数据集(固定列顺序，写入 feature/docs/)
 4. 生成列映射文件(记录原始列名→角色→新列名的对应关系)
 5. 生成非法输入报告(Markdown格式，写入 report/)
-6. 选择已接入主建模流程的模型并生成配置；完成后可自动调用 main.py 建模
+6. 生成经校验的 schema-2 YAML；正式启动可调用 run_modeling.py 建模
+7. generate_yaml_config.py 复用本向导的仅生成模式，不计算描述符或建立模型
 
 作者: YONOD构建专家
 版本: v1.1
@@ -48,14 +49,14 @@ def _create_project_output_layout(project_folder: str) -> Dict[str, str]:
     return layout
 
 
-def step1_collect_basic_info() -> Dict:
+def step1_collect_basic_info(*, config_generation_only: bool = False) -> Dict:
     """
     步骤1: 收集基本信息
 
     收集信息:
     1. 数据集路径或配置文件路径(必选)
        - CSV文件: 进入向导流程,需收集项目名称和文件夹
-       - schema-2 YAML 文件: 直接返回,在 main.py 中验证并启动建模
+       - schema-2 YAML 文件: 返回后校验；仅生成模式不启动建模
     2. 项目名称(仅CSV模式必选)
     3. 项目文件夹位置(仅CSV模式,可选,默认为 result/<项目名称>)
 
@@ -116,6 +117,25 @@ def step1_collect_basic_info() -> Dict:
             break
         else:
             print("[X] 项目名称只能包含英文字母、数字、下划线、短横杠")
+
+    if config_generation_only:
+        repository = Path(__file__).resolve().parent
+        destination = repository / 'config' / f'{project_name}.yaml'
+        project_folder = repository / 'result' / project_name
+        if destination.exists():
+            raise FileExistsError(f"任务配置已存在，请使用新的项目名称：{destination}")
+        if project_folder.exists() and any(project_folder.iterdir()):
+            raise FileExistsError(f"任务目录已有内容，请使用新的项目名称：{project_folder}")
+        project_folder.mkdir(parents=True, exist_ok=True)
+        layout = _create_project_output_layout(str(project_folder))
+        print(f"[OK] 仅生成模式：YAML 将写入 {destination}")
+        print(f"     数据准备文件：{layout['docs']}")
+        return {
+            'dataset_path': dataset_path,
+            'is_config_file': False,
+            'project_name': project_name,
+            'project_folder': str(project_folder),
+        }
 
     # 3. 输入项目文件夹位置(默认为 result/<项目名称>)
     default_folder = os.path.join('result', project_name)
@@ -1229,7 +1249,8 @@ def step3_3_generate_normalized_dataset(
     df: pd.DataFrame,
     all_column_configs: List[Dict],
     project_folder: str,
-    project_name: str
+    project_name: str,
+    sample_id_col: Optional[str] = None,
 ) -> str:
     """
     步骤3.3: 生成规范数据集(改进版: 两次扫描)
@@ -1247,6 +1268,16 @@ def step3_3_generate_normalized_dataset(
         str: 规范数据集文件路径
     """
     print("\n生成规范数据集...")
+
+    if sample_id_col is not None:
+        if sample_id_col not in df.columns:
+            raise ValueError(f"原始数据集缺少 sample ID 列：{sample_id_col}")
+        ids = df[sample_id_col]
+        normalized_ids = ids.astype(str).str.strip()
+        if ids.isna().any() or normalized_ids.eq('').any() or normalized_ids.duplicated().any():
+            raise ValueError("原始 sample ID 必须唯一且非空")
+        if any(config['origin_name'] == sample_id_col for config in all_column_configs):
+            raise ValueError("sample ID 不能同时作为目标或模型输入列")
 
     # 汇总所有非法行
     all_invalid_rows = set()
@@ -1347,12 +1378,19 @@ def step3_3_generate_normalized_dataset(
     for config in role_groups['label']:
         final_columns.append(config['name'])
 
+    if sample_id_col is not None:
+        if sample_id_col in final_columns:
+            raise ValueError("规范数据集的角色列名与 sample ID 列冲突")
+        final_columns.insert(0, sample_id_col)
+
     # 第二次扫描: 填充数据
     normalized_rows = []
 
     for row_idx in valid_row_indices:
         row_data = df.iloc[row_idx]
         normalized_row = {col: '' for col in final_columns}  # 初始化为空字符串
+        if sample_id_col is not None:
+            normalized_row[sample_id_col] = df[sample_id_col].iloc[row_idx]
 
         # 填充 reactant（按用户指定的名称单独处理每个列）
         for config in role_groups['reactant']:
@@ -1438,7 +1476,8 @@ def step3_orchestrate(
     df: pd.DataFrame,
     all_configs: List[Dict],
     project_folder: str,
-    project_name: str
+    project_name: str,
+    sample_id_col: Optional[str] = None,
 ) -> Dict[str, Optional[str]]:
     """
     步骤3总调度函数: 生成规范数据集与非法输入排除报告
@@ -1471,7 +1510,7 @@ def step3_orchestrate(
         print("\n[OK] 无非法输入，所有数据行均有效")
 
     normalized_path = step3_3_generate_normalized_dataset(
-        df, all_configs, project_folder, project_name
+        df, all_configs, project_folder, project_name, sample_id_col=sample_id_col
     )
 
     print("\n" + "=" * 60)
@@ -2112,14 +2151,17 @@ def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
     return fixed_path
 
 
-def select_stable_sample_id(normalized_dataset_path: str) -> str:
+def select_stable_sample_id(normalized_dataset_path: str, *, preserve_text: bool = False) -> str:
     """Require a user-declared unique ID before a schema-2 run is written.
 
     The old wizard silently relied on a row position.  A row position is not a
     portable artifact identity, so schema-2 deliberately makes this a visible
     selection and verifies uniqueness against the normalized population.
     """
-    frame = pd.read_csv(normalized_dataset_path)
+    frame = pd.read_csv(
+        normalized_dataset_path,
+        **({'dtype': str, 'keep_default_na': False} if preserve_text else {}),
+    )
     if frame.empty:
         raise ValueError("规范数据集为空，无法声明稳定 sample ID")
     columns = list(frame.columns)
@@ -2165,6 +2207,22 @@ def _canonical_wizard_models(selected_models: List[str]) -> List[str]:
     return result
 
 
+def _config_path_reference(target: Path, config_folder: Path) -> str:
+    """Keep paths YAML-relative, or absolute across Windows drive boundaries."""
+    target = target.resolve()
+    repository = Path(__file__).resolve().parent
+    if config_folder.resolve() == repository / 'config':
+        try:
+            return './' + target.relative_to(repository).as_posix()
+        except ValueError:
+            pass
+    try:
+        return Path(os.path.relpath(target, config_folder.resolve())).as_posix()
+    except ValueError:
+        # Windows cannot relativize paths on different drives.
+        return target.as_posix()
+
+
 def save_config_file(
     project_folder: str,
     project_name: str,
@@ -2176,6 +2234,7 @@ def save_config_file(
     metadata: Dict,
     report_formats: List[str],
     sample_id_col: str,
+    config_output_path: Optional[str] = None,
 ) -> str:
     """
     保存 schema-2 YAML 运行配置。
@@ -2191,6 +2250,7 @@ def save_config_file(
         metadata: 元信息字典
         report_formats: 报告格式列表
         sample_id_col: 已在规范数据集中验证的唯一稳定 ID 列
+        config_output_path: 可选生成目标；指定时拒绝覆盖已有配置
 
     Returns:
         str: 配置文件路径
@@ -2303,7 +2363,13 @@ def save_config_file(
     if not isinstance(sample_id_col, str) or not sample_id_col.strip():
         raise ValueError("schema-2 向导配置必须显式提供唯一的 sample_id_col")
     try:
-        id_frame = pd.read_csv(effective_dataset_path, usecols=[sample_id_col.strip()])
+        id_frame = pd.read_csv(
+            effective_dataset_path, usecols=[sample_id_col.strip()],
+            **(
+                {'dtype': {sample_id_col.strip(): str}, 'keep_default_na': False}
+                if config_output_path is not None else {}
+            ),
+        )
     except Exception as exc:
         raise ValueError(f"无法读取或定位 sample_id_col {sample_id_col!r}：{exc}") from exc
     if id_frame.empty:
@@ -2312,14 +2378,35 @@ def save_config_file(
     normalized_ids = ids.astype(str).str.strip()
     if ids.isna().any() or (normalized_ids == "").any() or normalized_ids.duplicated().any():
         raise ValueError("sample_id_col 必须在规范数据集中为唯一且非空的稳定 ID")
+    if config_output_path is not None:
+        inferred_ids = pd.read_csv(effective_dataset_path, usecols=[sample_id_col.strip()])[sample_id_col.strip()]
+        if inferred_ids.isna().any() or inferred_ids.astype(str).tolist() != ids.astype(str).tolist():
+            raise ValueError(
+                "当前建模读取规则会改变 sample ID 文本（如 001 或 NA）；"
+                "未发布 YAML。请事先明确准备带非数字前缀的稳定文本 ID（如 record-001），"
+                "并保留原 ID 的对应关系。"
+            )
 
-    # The config lives under ``feature/docs/`` beside the normalized CSV.  Store all
-    # path references relative to that owning YAML so the project is movable.
-    config_path = Path(project_folder) / "feature" / "docs" / f"{project_name}_run.yaml"
+    # The dedicated generator publishes research YAML in root config/; the
+    # existing launcher wizard keeps its prior default destination.
+    config_path = (
+        Path(config_output_path).resolve() if config_output_path is not None
+        else Path(project_folder) / "feature" / "docs" / f"{project_name}_run.yaml"
+    )
+    if config_output_path is not None and config_path.exists():
+        raise FileExistsError(f"拒绝覆盖已有配置：{config_path}")
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    dataset_reference = os.path.relpath(
-        Path(effective_dataset_path).resolve(), config_path.parent.resolve()
-    ).replace(os.sep, "/")
+    dataset_reference = _config_path_reference(Path(effective_dataset_path), config_path.parent)
+    output_reference = _config_path_reference(Path(project_folder), config_path.parent)
+    artifact_reference = _config_path_reference(Path(project_folder) / 'feature', config_path.parent)
+    if config_output_path is not None:
+        forbidden_id_roles = [column_roles['label']]
+        for role in ('reactants', 'products', 'others', 'conditions', 'categoricals'):
+            forbidden_id_roles.extend(column_roles[role])
+        for descriptor in descriptor_configs:
+            forbidden_id_roles.extend(descriptor.get('columns', []))
+        if sample_id_col.strip() in forbidden_id_roles:
+            raise ValueError("sample ID 不能同时作为目标、模型输入或描述符列")
 
     # New wizard configs intentionally do not recreate the old hidden model
     # defaults.  Omitted `model_params` reach the installed libraries as their
@@ -2335,14 +2422,14 @@ def save_config_file(
             'column_roles': column_roles,
         },
         'descriptors': descriptor_configs,
-        'artifacts': {'output_dir': '..'},
+        'artifacts': {'output_dir': artifact_reference},
         'models': _canonical_wizard_models(selected_models),
         'model_params': {},
         'evaluation': {
             'protocol': 'outer_kfold', 'n_splits': 5, 'n_repeats': 1,
             'shuffle': True, 'seed': 42,
         },
-        'outputs': {'root': '../..', 'report_formats': list(report_formats)},
+        'outputs': {'root': output_reference, 'report_formats': list(report_formats)},
         'metadata': {
             'origin_dataset_path': dataset_path,
             'wizard_column_mapping': column_mapping,
@@ -2351,7 +2438,7 @@ def save_config_file(
     }
 
     # Validate exactly as the public runtime will before publishing.  An
-    # invalid wizard output must never become a delayed main.py failure.
+    # invalid wizard output must never become a delayed run_modeling.py failure.
     temporary = config_path.with_name(f".{config_path.stem}.tmp{config_path.suffix}")
     try:
         temporary.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding='utf-8')
@@ -2385,7 +2472,7 @@ def step9_auto_launch_modeling(config_path: str) -> bool:
     config_path = str(Path(config_path).resolve())
 
     # 构建等效命令
-    main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
+    main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_modeling.py')
     cmd_str = f'"{sys.executable}" "{main_script}" --config "{config_path}"'
 
     print("\n是否立即启动建模?")
@@ -2396,7 +2483,7 @@ def step9_auto_launch_modeling(config_path: str) -> bool:
     user_input = input("\n选择 [Y/n]: ").strip().lower()
 
     if user_input in ('', 'y', 'yes'):
-        print("\n[启动] 正在调用 main.py 进行建模...")
+        print("\n[启动] 正在调用 run_modeling.py 进行建模...")
         print("=" * 60)
 
         # 构建命令
@@ -2470,18 +2557,21 @@ def validate_config_file(config_path: str) -> bool:
         return False
 
 
-def main():
+def main(*, generate_only: bool = False):
     """
-    主函数:运行数据集输入向导
+    运行共享向导；generate_only 仅准备数据和生成/校验 YAML，绝不启动建模。
     """
     print("\n" + "=" * 60)
-    print("YONOD 数据集输入向导 v1.0")
+    print("YONOD YAML 配置生成向导" if generate_only else "YONOD 数据集输入向导 v1.0")
     print("=" * 60)
     print("\n欢迎使用YONOD数据集输入向导!")
     print("本向导将引导您完成数据集的配置和规范化。")
 
     # 步骤1: 收集基本信息
-    basic_info = step1_collect_basic_info()
+    basic_info = (
+        step1_collect_basic_info(config_generation_only=True)
+        if generate_only else step1_collect_basic_info()
+    )
 
     # 如果是 schema-2 YAML 配置文件，验证后在本入口分派运行时。
     if basic_info['is_config_file']:
@@ -2493,9 +2583,12 @@ def main():
         print("=" * 60)
 
         if validate_config_file(str(config_path)):
+            if generate_only:
+                print("\n[完成] YAML 配置验证通过；仅生成入口不启动描述符计算、训练或预测。")
+                return 0
             print("\n[OK] 配置文件有效,直接启动建模")
 
-            # Strict benchmarks are deliberately not routed through main.py:
+            # Strict benchmarks are deliberately not routed through run_modeling.py:
             # they require a manifest-defined external-fold plan plus SQLite
             # recovery state, not the ordinary outer_kfold service.  The
             # interactive YAML path remains the mandatory public launcher.
@@ -2525,7 +2618,7 @@ def main():
                 return 1
 
             # 构建命令
-            main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
+            main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_modeling.py')
             cmd = [sys.executable, main_script, '--config', str(config_path)]
             cmd_str = f'"{sys.executable}" "{main_script}" --config "{config_path}"'
 
@@ -2558,6 +2651,17 @@ def main():
     print("加载数据集...")
     print("=" * 60)
     df = load_and_preview_dataset(basic_info['dataset_path'])
+    source_sample_id = None
+    if generate_only:
+        print("\n稳定 sample ID 仅用于记录对齐；该列不会作为目标或模型输入。")
+        source_sample_id = select_stable_sample_id(basic_info['dataset_path'], preserve_text=True)
+        # Preserve identifiers as written (e.g. 001 or NA), independently of
+        # numerical/SMILES inference used to preview the other source columns.
+        source_ids = pd.read_csv(
+            basic_info['dataset_path'], usecols=[source_sample_id],
+            dtype={source_sample_id: str}, keep_default_na=False,
+        )
+        df[source_sample_id] = source_ids[source_sample_id]
 
     print("\n" + "=" * 60)
     print("步骤1完成!")
@@ -2567,7 +2671,8 @@ def main():
     print("\n接下来将进入步骤2: 逐列声明列角色和名称")
     input("按回车键继续...")
 
-    all_configs = step2_orchestrate(df)
+    role_frame = df.drop(columns=[source_sample_id]) if source_sample_id is not None else df
+    all_configs = step2_orchestrate(role_frame)
 
     print("\n" + "=" * 60)
     print("步骤2完成!")
@@ -2587,7 +2692,8 @@ def main():
         df,
         all_configs,
         basic_info['project_folder'],
-        basic_info['project_name']
+        basic_info['project_name'],
+        sample_id_col=source_sample_id,
     )
 
     print("\n" + "=" * 60)
@@ -2645,7 +2751,7 @@ def main():
         basic_info['project_name']
     )
 
-    stable_sample_id = select_stable_sample_id(output_paths['normalized_dataset'])
+    stable_sample_id = source_sample_id or select_stable_sample_id(output_paths['normalized_dataset'])
 
     # 保存配置文件
     config_path = save_config_file(
@@ -2659,6 +2765,10 @@ def main():
         metadata=metadata,
         report_formats=report_formats,
         sample_id_col=stable_sample_id,
+        config_output_path=(
+            str(Path(__file__).resolve().parent / 'config' / f"{basic_info['project_name']}.yaml")
+            if generate_only else None
+        ),
     )
 
     # 输出最终总结
@@ -2687,6 +2797,11 @@ def main():
         print(f"  - DOI: {metadata['doi']}")
     if metadata['notes']:
         print(f"  - 备注: {metadata['notes']}")
+
+    if generate_only:
+        print("\n[完成] 标准 schema-2 YAML 已生成并校验；未计算描述符、建立模型或执行预测。")
+        print("需要运行时，请启动 yonod.py 并在首次提示提供上述 YAML 路径。")
+        return 0
 
     # 步骤9: 询问是否自动启动建模
     step9_auto_launch_modeling(config_path)

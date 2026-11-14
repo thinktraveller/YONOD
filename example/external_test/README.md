@@ -121,3 +121,8 @@ python -u ..\..\yonod.py
 R²（决定系数）不是预测正确率；MAE（平均绝对误差）在本例0–1产率表示下乘100才是百分点。人工小样例只用于检查操作流程，不能据其分数评价真实化学预测效果。
 
 本轮逐条验收记录：[verification.json](verification.json)。
+
+
+### 生成其他任务的配置
+
+本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；普通运行器现名为run_modeling.py，历史运行记录中的旧名不改写。

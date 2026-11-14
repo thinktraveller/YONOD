@@ -124,8 +124,47 @@ Windows captures standard output and standard errors in separate logs;
 inspect both. Keep all operational logs, stdin support files, and PID files
 in root `logs/`, not under modeling results.
 
-Do not use `main.py --config` as the direct task-launch command:
-`yonod.py` is the formal entry point and invokes the runtime after validation.
+Do not use `run_modeling.py --config` as the formal task-launch command:
+`yonod.py` is the formal entry point and invokes the ordinary runtime after
+validation, or dispatches a dedicated benchmark protocol.
+
+## Standard YAML generation
+
+The entry scripts have distinct roles: `generate_yaml_config.py` prepares
+standard schema-2 configurations, `yonod.py` validates and launches tasks,
+and `run_modeling.py` executes the ordinary `features`/`train`/`all` runtime.
+The direct runtime command in Verification is an engineering smoke exception,
+not a replacement for the formal modeling-task launch procedure.
+
+For a new CSV, start the dedicated generator from the repository root.
+Linux Bash:
+
+```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate yonod
+export PYTHONUTF8=1
+python -u generate_yaml_config.py
+```
+
+Windows Conda PowerShell:
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = "1"
+python -u .\generate_yaml_config.py
+```
+
+Complete its column-role, encoding, model, and task questions. The generator
+saves a validated `config/<task_name>.yaml` directly; no YAML copy is needed.
+It may write normalized/prepared CSVs and invalid-input reports under the
+isolated `result/<task_name>/feature/docs/`, but must not calculate descriptors,
+fit models, predict, or automatically launch a modeling task. Existing YAML
+input is validated only. Review the saved YAML, then launch `yonod.py` and
+provide that path at the first prompt. Teaching `run.yaml` files are already
+prepared and do not need to pass through the generator.
+
+Executable run configurations use schema-2 YAML. JSON audit records and
+manifests remain supported evidence formats; they are not run configurations.
 
 ## Platform compatibility
 
@@ -178,11 +217,11 @@ must be placed in `logs/` (for example, `logs/<task_name>.log` and
 Place all test and validation scripts in the `_verify/` directory.
 
 Run changed code from the repository root with the `yonod` environment active.
-For a lightweight smoke check of the main configuration interface, the same
+For a lightweight smoke check of the ordinary configuration runtime, the same
 command works in Linux Bash and Windows Conda PowerShell after activation:
 
 ```text
-python main.py --config example.yaml
+python run_modeling.py --config example.yaml
 ```
 
 `example.yaml` is intentionally a small, deterministic smoke configuration:

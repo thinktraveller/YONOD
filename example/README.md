@@ -123,3 +123,27 @@ Windows不使用Bash的 `source`、`nohup`、`ps` 或输入重定向写法。路
 留出反应的内测预测汇总（out-of-fold prediction，OOF）来自未学习该条记录的相应模型；外测则每个组合只用训练表建立一次模型。R²不是“预测正确率”；0–1产率尺度上的平均绝对误差（MAE）乘100才是产率百分点。人工小样例的评分用于学习操作与读报告，不用于推荐真实化学预测模型。
 
 逐条验收记录：[随机划分](random_split/verification.json) · [固定名单](fixed_split/verification.json) · [外测](external_test/verification.json)。固定名单报告中的平均逐折指标与随机包汇总留出预测的指标口径不同，不直接跨路线比较分数。
+
+
+## 为自己的数据生成标准YAML
+
+以上三个包已经包含run.yaml，无需重新生成。新研究任务可在主仓根使用[generate_yaml_config.py](../generate_yaml_config.py)；它只生成或校验schema-2 YAML，配置直接保存到config/<任务名>.yaml。原main.py实际是普通建模运行器，现名为run_modeling.py；统一启动仍为yonod.py。
+
+Linux Bash（从主仓根）：
+
+```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate yonod
+export PYTHONUTF8=1
+python -u generate_yaml_config.py
+```
+
+Windows Conda PowerShell（从主仓根）：
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = '1'
+python -u generate_yaml_config.py
+```
+
+首提示提供CSV后，显式选择稳定记录编号、列用途、编码和模型；生成标准YAML后退出，不计算描述符、训练或预测。CSV整理所需的规范表和排除记录可写入隔离任务目录，属于准备文件。若提供已有YAML，只验证并退出。真正执行时再运行python yonod.py，在首提示输入生成的config路径。JSON审计文件和历史运行清单仍是合法证据，不作为可执行运行配置。
