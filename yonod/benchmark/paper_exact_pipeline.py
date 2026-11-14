@@ -1,6 +1,6 @@
 """Paper-exact YieldMaster material generation and RF alignment.
 
-This module is deliberately separate from the ordinary ``run_modeling.py`` path.  It
+This module is deliberately separate from the ordinary ``features``/``train``/``all`` runtime.  It
 builds immutable, hash-audited inputs for the YieldSmarter paper protocol and
 reruns only the RF baseline against the accepted paper-native reference files.
 The long-running AutoGluon stage can later consume the same population and

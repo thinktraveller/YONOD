@@ -127,7 +127,7 @@ Windows不使用Bash的 `source`、`nohup`、`ps` 或输入重定向写法。路
 
 ## 为自己的数据生成标准YAML
 
-以上三个包已经包含run.yaml，无需重新生成。新研究任务可在主仓根使用[generate_yaml_config.py](../generate_yaml_config.py)；它只生成或校验schema-2 YAML，配置直接保存到config/<任务名>.yaml。原main.py实际是普通建模运行器，现名为run_modeling.py；统一启动仍为yonod.py。
+以上三个包已经包含run.yaml，无需重新生成。新研究任务可在主仓根使用[generate_yaml_config.py](../generate_yaml_config.py)；它只生成或校验schema-2 YAML，配置直接保存到config/<任务名>.yaml。生成配置和执行任务分别由两个脚本负责：generate_yaml_config.py生成配置，yonod.py校验并执行已有YAML。
 
 Linux Bash（从主仓根）：
 

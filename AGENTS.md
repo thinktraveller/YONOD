@@ -119,22 +119,23 @@ $yonodProcess.Id | Set-Content -LiteralPath (Join-Path $yonodLogs "my_task.pid")
 The ASCII stdin files above contain only the shown ASCII YAML paths. For a
 YAML path containing non-ASCII characters in PowerShell, write the input
 without a BOM using `[IO.File]::WriteAllText($yonodInput, "配置路径.yaml`n", [Text.UTF8Encoding]::new($false))`;
-`PYTHONUTF8=1` makes the launcher and its child processes read it consistently.
+`PYTHONUTF8=1` makes the launcher read it consistently.
 Windows captures standard output and standard errors in separate logs;
 inspect both. Keep all operational logs, stdin support files, and PID files
 in root `logs/`, not under modeling results.
 
-Do not use `run_modeling.py --config` as the formal task-launch command:
-`yonod.py` is the formal entry point and invokes the ordinary runtime after
-validation, or dispatches a dedicated benchmark protocol.
+`yonod.py` is the task launcher and modeling runtime. It validates the saved
+YAML and executes the ordinary stages or dispatches a dedicated benchmark
+protocol. Keep the interactive YAML launch procedure above for formal tasks;
+the explicit `--config` command below is the engineering smoke interface.
 
 ## Standard YAML generation
 
-The entry scripts have distinct roles: `generate_yaml_config.py` prepares
-standard schema-2 configurations, `yonod.py` validates and launches tasks,
-and `run_modeling.py` executes the ordinary `features`/`train`/`all` runtime.
-The direct runtime command in Verification is an engineering smoke exception,
-not a replacement for the formal modeling-task launch procedure.
+The two entry scripts have distinct roles: `generate_yaml_config.py` prepares
+and validates standard schema-2 configurations without modeling; `yonod.py`
+validates the prepared YAML and runs `features`/`train`/`all` or a dedicated
+benchmark protocol. With no arguments, `yonod.py` prompts for an existing YAML
+path. Use the generator first when starting from a new CSV.
 
 For a new CSV, start the dedicated generator from the repository root.
 Linux Bash:
@@ -221,7 +222,7 @@ For a lightweight smoke check of the ordinary configuration runtime, the same
 command works in Linux Bash and Windows Conda PowerShell after activation:
 
 ```text
-python run_modeling.py --config example.yaml
+python yonod.py --config example.yaml
 ```
 
 `example.yaml` is intentionally a small, deterministic smoke configuration:

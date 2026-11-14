@@ -1,2811 +1,1510 @@
-"""
-YONOD 数据集输入向导 (Dataset Input Wizard)
+"""YONOD modeling entrypoint for standard schema-2 YAML.
 
-完全重构的数据集输入与建模配置流程,采用向导式、逐列声明的交互方式。
+With no arguments, prompt for an already-saved YAML and execute its ordinary
+features/train/all stage or dedicated benchmark protocol. The same dispatcher
+supports ``python yonod.py --config example.yaml`` for engineering checks.
 
-核心功能:
-1. 逐列声明列角色(标签、反应物SMILES、产物SMILES、其他组分SMILES、条件数值)
-2. 合法性检验(SMILES合法性、数值合法性)
-3. 生成规范数据集(固定列顺序，写入 feature/docs/)
-4. 生成列映射文件(记录原始列名→角色→新列名的对应关系)
-5. 生成非法输入报告(Markdown格式，写入 report/)
-6. 生成经校验的 schema-2 YAML；正式启动可调用 run_modeling.py 建模
-7. generate_yaml_config.py 复用本向导的仅生成模式，不计算描述符或建立模型
+Use ``generate_yaml_config.py`` to prepare data and generate a standard YAML
+without running models. JSON run configurations are rejected; JSON audit,
+manifest, and recovery outputs remain legitimate modeling evidence.
 
-作者: YONOD构建专家
-版本: v1.1
-日期: 2026-09-03
+The legacy direct-CSV CLI remains available for compatibility.
 """
 
-import os
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import hashlib
+import json
 import re
-import subprocess
 import sys
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Set
-from datetime import datetime
+import time
+import threading
 from pathlib import Path
+from typing import Any, Dict, List, Optional, TextIO
 
-import yaml
-from rdkit import Chem
-from rdkit import RDLogger
+import numpy as np
+import pandas as pd
+# The YAML ``features`` stage must remain usable in an environment that does
+# not carry training dependencies.  Legacy direct-CSV helpers still require
+# sklearn when they are actually called.
+try:
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    from sklearn.model_selection import KFold
+    from sklearn.preprocessing import StandardScaler
+except ImportError:  # pragma: no cover - depends on the active environment
+    mean_absolute_error = mean_squared_error = r2_score = KFold = StandardScaler = None  # type: ignore[assignment]
 
-# 静默RDKit警告信息
-RDLogger.DisableLog('rdApp.*')
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
-def _create_project_output_layout(project_folder: str) -> Dict[str, str]:
-    """Create the stable output layout for a newly configured project."""
-    layout = {
-        'feature': os.path.join(project_folder, 'feature'),
-        'runs': os.path.join(project_folder, 'runs'),
-        'docs': os.path.join(project_folder, 'feature', 'docs'),
-        'pictures': os.path.join(project_folder, 'pictures'),
-        'report': os.path.join(project_folder, 'report'),
-    }
-    for path in layout.values():
-        os.makedirs(path, exist_ok=True)
-    return layout
-
-
-def step1_collect_basic_info(*, config_generation_only: bool = False) -> Dict:
-    """
-    步骤1: 收集基本信息
-
-    收集信息:
-    1. 数据集路径或配置文件路径(必选)
-       - CSV文件: 进入向导流程,需收集项目名称和文件夹
-       - schema-2 YAML 文件: 返回后校验；仅生成模式不启动建模
-    2. 项目名称(仅CSV模式必选)
-    3. 项目文件夹位置(仅CSV模式,可选,默认为 result/<项目名称>)
-
-    Returns:
-        dict: {
-            'dataset_path': str,
-            'is_config_file': bool,
-            'project_name': str,      # YAML 模式时为None
-            'project_folder': str     # YAML 模式时为None
-        }
-    """
-    print("=" * 60)
-    print("步骤1: 指定数据集/配置文件")
-    print("=" * 60)
-
-    # 1. 输入数据集路径或配置文件路径
-    dataset_path = None
-    is_config_file = False
-
-    while True:
-        file_path = input("\n请输入数据集路径(CSV)或配置文件路径(schema-2 YAML): ").strip()
-
-        if not os.path.exists(file_path):
-            print("[X] 文件不存在,请重新输入")
-            continue
-
-        if file_path.endswith('.csv'):
-            print(f"[OK] CSV数据集文件: {file_path}")
-            dataset_path = file_path
-            is_config_file = False
-            break
-        elif file_path.lower().endswith(('.yaml', '.yml')):
-            print(f"[OK] YAML配置文件: {file_path}")
-            dataset_path = file_path
-            is_config_file = True
-            # YAML 模式: 立即返回,不再收集项目名称和文件夹。
-            return {
-                'dataset_path': dataset_path,
-                'is_config_file': True,
-                'project_name': None,
-                'project_folder': None
-            }
-        elif file_path.lower().endswith('.json'):
-            print("[X] JSON 已不再是可执行运行配置；请参照 example.yaml 创建 schema-2 YAML。")
-        else:
-            print("[X] 文件格式不支持,请输入 CSV 或 schema-2 YAML 文件")
-
-    # CSV模式: 继续收集项目名称和文件夹
-    print("\n" + "=" * 60)
-    print("步骤1(续): 设置项目名称和项目文件夹")
-    print("=" * 60)
-
-    # 2. 输入项目名称
-    while True:
-        project_name = input("\n请输入项目名称(仅英文字母、数字、下划线、短横杠): ").strip()
-        if re.match(r'^[a-zA-Z0-9_-]+$', project_name):
-            print(f"[OK] 项目名称: {project_name}")
-            break
-        else:
-            print("[X] 项目名称只能包含英文字母、数字、下划线、短横杠")
-
-    if config_generation_only:
-        repository = Path(__file__).resolve().parent
-        destination = repository / 'config' / f'{project_name}.yaml'
-        project_folder = repository / 'result' / project_name
-        if destination.exists():
-            raise FileExistsError(f"任务配置已存在，请使用新的项目名称：{destination}")
-        if project_folder.exists() and any(project_folder.iterdir()):
-            raise FileExistsError(f"任务目录已有内容，请使用新的项目名称：{project_folder}")
-        project_folder.mkdir(parents=True, exist_ok=True)
-        layout = _create_project_output_layout(str(project_folder))
-        print(f"[OK] 仅生成模式：YAML 将写入 {destination}")
-        print(f"     数据准备文件：{layout['docs']}")
-        return {
-            'dataset_path': dataset_path,
-            'is_config_file': False,
-            'project_name': project_name,
-            'project_folder': str(project_folder),
-        }
-
-    # 3. 输入项目文件夹位置(默认为 result/<项目名称>)
-    default_folder = os.path.join('result', project_name)
-    print(f"\n请输入项目文件夹位置(默认: {default_folder})")
-
-    while True:
-        user_input = input(f"项目文件夹 [{default_folder}]: ").strip()
-        project_folder = user_input if user_input else default_folder
-
-        if os.path.isdir(project_folder) or not os.path.exists(project_folder):
-            os.makedirs(project_folder, exist_ok=True)
-            layout = _create_project_output_layout(project_folder)
-            print(f"[OK] 项目文件夹: {project_folder}")
-            print(f"     文档: {layout['docs']}")
-            print(f"     图片: {layout['pictures']}")
-            print(f"     报告: {layout['report']}")
-            break
-        else:
-            print("[X] 路径无效或不是文件夹")
-
-    return {
-        'dataset_path': dataset_path,
-        'is_config_file': is_config_file,
-        'project_name': project_name,
-        'project_folder': project_folder
-    }
+from yonod.universal.csv_loader import load_csv_with_roles
+from yonod.universal.feature_builder import build_universal_features
+from yonod.universal.descriptor_artifact import (
+    descriptor_artifact_path,
+    load_descriptor_artifact,
+    prepare_descriptor_artifact,
+)
+from yonod.descriptors.base import split_multi_smiles
+from yonod.descriptors.registry import (
+    FeatureRegistryError,
+    FeatureSpec,
+    available_feature_names,
+    normalise_feature_specs,
+)
 
 
-def _precheck_csv_format(file_path: str, encoding: str = 'utf-8') -> List[Dict]:
-    """
-    预检查 CSV 文件格式，检测字段数不一致的行
+def _run_schema2_config(config_path: Path, requested_stage: Optional[str]) -> int:
+    """Dispatch the public schema-2 YAML interface without legacy JSON state."""
+    from yonod.config.loader import ConfigLoadError, load_run_config
+    from yonod.pipeline.features import FeatureServiceError, run_features
+    from yonod.pipeline.training import TrainingServiceError, run_all, run_train
+    from yonod.pipeline.reporting import ReportServiceError, rebuild_schema2_summary_report
+    from yonod.pipeline.training import _result_root
 
-    Args:
-        file_path: CSV 文件路径
-        encoding: 文件编码
-
-    Returns:
-        list: 问题行列表，每个元素为 {'line_num': int, 'expected': int, 'actual': int, 'content': str}
-    """
-    import csv
-
-    bad_lines = []
+    def _reports(runs: Any) -> None:
+        """Best-effort post-processing: one report covers all successful runs."""
+        completed = [run.run_dir for run in runs if run.status in {"complete", "reused"}]
+        if not completed:
+            return
+        try:
+            report = rebuild_schema2_summary_report(completed, output_root=_result_root(loaded, loaded.effective))
+            rendered = [str(path) for path in (report.html_path, report.markdown_path) if path]
+            print(f"[report] 最终汇总（{len(completed)} 个组合）: {', '.join(rendered) or 'disabled by outputs.report_formats'}")
+        except ReportServiceError as exc:
+            print(f"[warn] 最终报告生成失败（训练结果仍有效）：{exc}", file=sys.stderr)
 
     try:
-        with open(file_path, 'r', encoding=encoding, newline='') as f:
-            reader = csv.reader(f)
-            header = next(reader, None)
-            if header is None:
-                return []
-
-            expected_fields = len(header)
-
-            for line_num, row in enumerate(reader, start=2):  # 从第2行开始（第1行是表头）
-                # 电子表格有时会把尾部空行写为 `,,,,`。这些记录不含实际数据，
-                # 即使分隔符数量与表头不一致也不应当作为格式错误报告。
-                if not row or all(not field.strip() for field in row):
-                    continue
-
-                actual_fields = len(row)
-                if actual_fields != expected_fields:
-                    # 截断过长的内容，避免输出过多
-                    content_preview = ','.join(row)
-                    if len(content_preview) > 100:
-                        content_preview = content_preview[:100] + '...'
-                    bad_lines.append({
-                        'line_num': line_num,
-                        'expected': expected_fields,
-                        'actual': actual_fields,
-                        'content': content_preview
-                    })
-
-    except UnicodeDecodeError:
-        # 编码问题会在后续处理中捕获
-        pass
-
-    return bad_lines
-
-
-def _find_delimiter_only_empty_rows(file_path: str, encoding: str) -> List[int]:
-    """返回仅含逗号和空白字符的记录在文件中的零基行号。"""
-    empty_row_indices = []
-
-    with open(file_path, 'r', encoding=encoding, newline='') as f:
-        for row_index, line in enumerate(f):
-            if row_index == 0:
-                continue
-
-            stripped_line = line.strip()
-            if ',' in stripped_line and not stripped_line.strip(',').strip():
-                empty_row_indices.append(row_index)
-
-    return empty_row_indices
-
-
-def load_and_preview_dataset(dataset_path: str) -> pd.DataFrame:
-    """
-    加载数据集并展示基本信息
-
-    Args:
-        dataset_path: 数据集文件路径
-
-    Returns:
-        pd.DataFrame: 原始数据集
-
-    Raises:
-        UnicodeDecodeError: 如果CSV文件编码不是UTF-8
-        pd.errors.ParserError: 如果CSV格式错误且无法恢复
-    """
-    # 尝试的编码列表
-    encodings_to_try = ['utf-8', 'gbk', 'latin1']
-
-    df = None
-    used_encoding = None
-    parser_error = None
-    delimiter_only_empty_rows = []
-
-    for encoding in encodings_to_try:
-        try:
-            delimiter_only_empty_rows = _find_delimiter_only_empty_rows(dataset_path, encoding)
-            # 首先尝试严格模式读取
-            df = pd.read_csv(
-                dataset_path,
-                encoding=encoding,
-                skiprows=delimiter_only_empty_rows or None
+        loaded = load_run_config(config_path)
+        stage = str(loaded.effective["stage"])
+        if requested_stage is not None and requested_stage != stage:
+            raise ConfigLoadError(
+                f"--stage={requested_stage!r} 与 YAML 声明的 stage={stage!r} 不一致；"
+                "请修改 YAML 后重新运行，避免 CLI 隐式改变实验身份"
             )
-            used_encoding = encoding
-            if encoding != 'utf-8':
-                print(f"[OK] 使用 {encoding.upper()} 编码成功读取")
-            break
+        if stage == "benchmark":
+            # Dedicated benchmark adapters enforce their own split/recovery
+            # contracts. Never send them through the ordinary KFold services.
+            try:
+                protocol = str(loaded.effective.get("evaluation", {}).get("protocol", ""))
+                if protocol == "frozen_train_external_test":
+                    from yonod.benchmark.frozen_external import FrozenExternalTestConfig, run_frozen_external_test
 
-        except UnicodeDecodeError:
-            # 编码不匹配，尝试下一个
-            if encoding != encodings_to_try[-1]:
-                print(f"[!] {encoding.upper()} 编码读取失败，尝试其他编码...")
-            continue
+                    FrozenExternalTestConfig.from_file(config_path)
+                    return int(run_frozen_external_test(config_path))
+                from yonod.benchmark.config import BenchmarkConfig
+                from yonod.benchmark.runner import run_benchmark
 
-        except pd.errors.ParserError as e:
-            parser_error = e
-            used_encoding = encoding
-            break
+                BenchmarkConfig.from_file(config_path)
+                return int(run_benchmark(config_path))
+            except Exception as exc:
+                print(f"[error] benchmark 运行失败：{exc}", file=sys.stderr)
+                return 1
+        if stage == "features":
+            result = run_features(config_path)
+            print(f"[features] status={result.status} status_manifest={result.status_manifest_path}")
+            for item in result.features:
+                print(f"  - {item.feature_id}: {item.status} {item.manifest_path or item.reason}")
+            return 0 if result.status in {"ready", "partial"} else 2
+        if stage == "train":
+            runs = run_train(config_path)
+            for run in runs:
+                print(f"[train] {run.feature_id} × {run.model}: {run.status} {run.manifest_path}")
+            _reports(runs)
+            return 0 if all(run.status in {"complete", "reused"} for run in runs) else 2
+        if stage == "all":
+            result = run_all(config_path)
+            print(f"[all] features={result.feature_status} status_manifest={result.feature_status_path}")
+            for run in result.training_runs:
+                print(f"  - {run.feature_id} × {run.model}: {run.status} {run.manifest_path}")
+            _reports(result.training_runs)
+            return 0 if all(run.status in {"complete", "reused"} for run in result.training_runs) else 2
+        raise ConfigLoadError(f"不支持的 stage：{stage!r}")
+    except (ConfigLoadError, FeatureServiceError, TrainingServiceError, FileNotFoundError, ValueError) as exc:
+        print(f"[error] YAML 运行配置失败：{exc}", file=sys.stderr)
+        return 1
 
-    # 如果所有编码都失败（UnicodeDecodeError）
-    if df is None and parser_error is None:
-        raise UnicodeDecodeError(
-            'utf-8', b'', 0, 1,
-            f"无法使用 {', '.join(encodings_to_try)} 编码读取文件"
+# New features are selectable but are intentionally not silently added to an
+# existing task when the user accepts the legacy default grid.
+_DEFAULT_DESCRIPTOR_NAMES = ["morgan", "maccs", "fisd", "molmetalm", "maf", "rdkit2d", "drfp"]
+_DESCRIPTOR_NAMES = list(available_feature_names())
+_MODEL_NAMES = ["xgb", "rf", "svm", "autogluon", "lightgbm"]
+
+DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent / "results"
+
+_CSV_COLUMNS = [
+    "task_name", "feature_id", "descriptor", "lifecycle", "model",
+    "n_smiles_cols", "n_numeric_cols",
+    "n_samples", "n_total", "coverage", "feature_dim",
+    "cv", "evaluation_protocol", "expected_folds", "completed_folds",
+    "oof_complete", "oof_n_observed", "oof_n_total",
+    "r2_mean", "r2_std", "rmse_mean", "rmse_std", "mae_mean", "mae_std",
+    "train_time_s", "predict_time_s", "device",
+    "holdout_frac", "autogluon_time_limit", "autogluon_presets",
+    "autogluon_num_cpus", "autogluon_seed_policy",
+]
+
+# ─────────────────────────────────────── 日志 ──────────────────────────────── #
+
+class _Tee:
+    """同时写入 stdout 和日志文件，每行前缀时间戳。"""
+
+    def __init__(self, fh: TextIO) -> None:
+        self.fh = fh
+        self._real_stdout: TextIO = sys.__stdout__ if sys.__stdout__ is not None else sys.stdout
+        self._bol = True
+
+    def write(self, data: str) -> int:
+        if not data:
+            return 0
+        chunks: List[str] = []
+        for ch in data:
+            if self._bol and ch != "\n":
+                chunks.append(_dt.datetime.now().strftime("[%H:%M:%S] "))
+                self._bol = False
+            chunks.append(ch)
+            if ch == "\n":
+                self._bol = True
+        out = "".join(chunks)
+        self._real_stdout.write(out)
+        self.fh.write(out)
+        self.fh.flush()
+        return len(data)
+
+    def flush(self) -> None:
+        self._real_stdout.flush()
+        self.fh.flush()
+
+
+class _Heartbeat:
+    def __init__(self, interval: float, label: str) -> None:
+        self.interval = interval
+        self.label = label
+        self._stop = threading.Event()
+        self._t0 = 0.0
+
+    def start(self) -> None:
+        self._t0 = time.time()
+        self._stop.clear()
+        t = threading.Thread(target=self._loop, daemon=True)
+        t.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self.interval):
+            print(f"  [hb] {self.label} still running, {time.time()-self._t0:.0f}s", flush=True)
+
+
+# ─────────────────────────────────── 模型工厂 ──────────────────────────────── #
+
+def _make_model(model_name: str, args: argparse.Namespace) -> Any:
+    if model_name == "xgb":
+        from yonod.models.xgb_model import XGBYieldModel
+        return XGBYieldModel()
+    if model_name == "rf":
+        from yonod.models.rf_model import RFYieldModel
+        return RFYieldModel(
+            n_jobs=args.rf_n_jobs,
+            n_estimators=args.rf_n_estimators,
+            max_depth=args.rf_max_depth,
         )
-
-    # 处理 ParserError：CSV 格式问题
-    if parser_error is not None:
-        print(f"\n[!] CSV 格式错误: {parser_error}")
-        print("\n正在分析问题行...")
-
-        # 预检查找出问题行
-        bad_lines = _precheck_csv_format(dataset_path, used_encoding)
-
-        if bad_lines:
-            print(f"\n[!] 发现 {len(bad_lines)} 行字段数不一致:")
-            print("-" * 70)
-            # 最多显示前 10 行问题
-            for i, bl in enumerate(bad_lines[:10]):
-                print(f"  行 {bl['line_num']}: 期望 {bl['expected']} 个字段，实际 {bl['actual']} 个")
-                print(f"       内容预览: {bl['content']}")
-            if len(bad_lines) > 10:
-                print(f"  ... 还有 {len(bad_lines) - 10} 行问题未显示")
-            print("-" * 70)
-
-            print("\n[?] 常见原因及修复建议:")
-            print("  1. 字段内容包含未转义的逗号 → 用引号包裹该字段")
-            print("  2. 引号不匹配（如单独的引号） → 检查并修复引号配对")
-            print("  3. 数据行被意外换行 → 检查该行是否被拆分到多行")
-            print("  4. 使用了错误的分隔符 → 确认使用逗号作为分隔符")
-
-        # 尝试使用宽松模式读取
-        print("\n[!] 尝试跳过问题行继续读取...")
-
-        try:
-            # pandas >= 1.3.0 使用 on_bad_lines 参数
-            df = pd.read_csv(
-                dataset_path,
-                encoding=used_encoding,
-                skiprows=delimiter_only_empty_rows or None,
-                on_bad_lines='warn'  # 'skip' 静默跳过，'warn' 显示警告
-            )
-            skipped_count = len(bad_lines) if bad_lines else 0
-            print(f"[OK] 已跳过 {skipped_count} 行问题数据，成功读取剩余数据")
-            print(f"[!] 警告: 跳过的行不会参与后续处理，请在源文件中修复问题行")
-
-        except TypeError:
-            # pandas < 1.3.0 使用旧参数
-            try:
-                df = pd.read_csv(
-                    dataset_path,
-                    encoding=used_encoding,
-                    skiprows=delimiter_only_empty_rows or None,
-                    error_bad_lines=False,
-                    warn_bad_lines=True
-                )
-                skipped_count = len(bad_lines) if bad_lines else 0
-                print(f"[OK] 已跳过 {skipped_count} 行问题数据，成功读取剩余数据")
-                print(f"[!] 警告: 跳过的行不会参与后续处理，请在源文件中修复问题行")
-
-            except Exception as fallback_error:
-                # 无法恢复，抛出原始错误
-                print(f"\n[X] 无法自动修复 CSV 格式问题")
-                print(f"    请手动检查并修复上述问题行后重试")
-                raise parser_error from fallback_error
-
-        except Exception as fallback_error:
-            # 无法恢复，抛出原始错误
-            print(f"\n[X] 无法自动修复 CSV 格式问题: {fallback_error}")
-            print(f"    请手动检查并修复上述问题行后重试")
-            raise parser_error from fallback_error
-
-    if delimiter_only_empty_rows:
-        print(f"[OK] 已忽略 {len(delimiter_only_empty_rows)} 行仅包含分隔符的空记录")
-
-    print(f"\n数据集基本信息:")
-    print(f"  总行数: {len(df)}")
-    print(f"  总列数: {len(df.columns)}")
-
-    # 检查是否有重复列名
-    duplicate_cols = df.columns[df.columns.duplicated()].tolist()
-    if duplicate_cols:
-        print(f"\n[!] 警告: 数据集存在重复列名，Pandas 已自动添加后缀: {duplicate_cols}")
-
-    print(f"\n列序号和列名称:")
-    for idx, col in enumerate(df.columns):
-        print(f"  [{idx}] {col}")
-
-    return df
-
-
-# ==================== 步骤2: 逐列声明列角色和名称 ====================
-
-def step2_select_columns(df: pd.DataFrame) -> List[int]:
-    """
-    步骤2.1: 从原始数据集中选择需要的列
-
-    Args:
-        df: 原始数据集DataFrame
-
-    Returns:
-        list: 选中的列索引列表
-    """
-    print("\n" + "=" * 60)
-    print("步骤2.1: 选择需要的列")
-    print("=" * 60)
-    print("当前所有列:")
-    for idx, col in enumerate(df.columns):
-        print(f"  [{idx}] {col}")
-
-    print("\n请输入需要的列序号,用逗号分隔(例如: 0,1,3,5)")
-    print("或直接回车选择全部列")
-
-    while True:
-        user_input = input("列序号: ").strip()
-
-        if user_input == '':
-            selected_indices = list(range(len(df.columns)))
-            break
-
-        try:
-            selected_indices = [int(x.strip()) for x in user_input.split(',')]
-            # 验证索引有效性
-            if all(0 <= idx < len(df.columns) for idx in selected_indices):
-                break
-            else:
-                print("[X] 存在无效的列序号,请重新输入")
-        except ValueError:
-            print("[X] 输入格式错误,请使用逗号分隔的数字")
-
-    selected_columns = [df.columns[idx] for idx in selected_indices]
-    print(f"\n[OK] 已选择 {len(selected_columns)} 列:")
-    for idx, col in zip(selected_indices, selected_columns):
-        print(f"  [{idx}] {col}")
-
-    return selected_indices
-
-
-def validate_numeric_column(df: pd.DataFrame, col_idx: int) -> Set[int]:
-    """
-    验证数值列,返回非法行索引集合
-
-    非法情况:
-    1. 非数值值
-    2. 空值(NaN)
-
-    Returns:
-        set: 非法行索引集合
-    """
-    column = df.iloc[:, col_idx]
-    invalid_rows = set()
-
-    for idx, value in enumerate(column):
-        # 检查空值
-        if pd.isna(value):
-            invalid_rows.add(idx)
-            continue
-
-        # 去除方括号包裹（如果存在）
-        test_value = value
-        if isinstance(value, str) and len(value) >= 2 and value[0] == '[' and value[-1] == ']':
-            test_value = value[1:-1]
-
-        # 去除英文引号包裹（如果存在）
-        if isinstance(test_value, str) and len(test_value) >= 2:
-            if (test_value[0] == '"' and test_value[-1] == '"') or \
-               (test_value[0] == "'" and test_value[-1] == "'"):
-                test_value = test_value[1:-1]
-
-        # 检查是否为数值
-        try:
-            float(test_value)
-        except (ValueError, TypeError):
-            invalid_rows.add(idx)
-
-    return invalid_rows
-
-
-def validate_numeric_column_allow_empty(df: pd.DataFrame, col_idx: int) -> Set[int]:
-    """
-    验证数值列(允许空值),返回非法行索引集合
-
-    非法情况: 非数值值(但空值允许)
-    """
-    column = df.iloc[:, col_idx]
-    invalid_rows = set()
-
-    for idx, value in enumerate(column):
-        if pd.isna(value):
-            continue  # 空值允许
-
-        # 去除方括号包裹（如果存在）
-        test_value = value
-        if isinstance(value, str) and len(value) >= 2 and value[0] == '[' and value[-1] == ']':
-            test_value = value[1:-1]
-
-        # 去除英文引号包裹（如果存在）
-        if isinstance(test_value, str) and len(test_value) >= 2:
-            if (test_value[0] == '"' and test_value[-1] == '"') or \
-               (test_value[0] == "'" and test_value[-1] == "'"):
-                test_value = test_value[1:-1]
-
-        try:
-            float(test_value)
-        except (ValueError, TypeError):
-            invalid_rows.add(idx)
-
-    return invalid_rows
-
-
-def validate_smiles_column(df: pd.DataFrame, col_idx: int, allow_empty: bool = False) -> Set[int]:
-    """
-    验证SMILES列,返回非法行索引集合
-
-    Args:
-        df: 数据集
-        col_idx: 列索引
-        allow_empty: 是否允许空值(others列允许,reactant/product列不允许)
-
-    非法情况:
-    1. 非法SMILES(RDKit无法解析)
-    2. 空值(如果allow_empty=False)
-
-    Returns:
-        set: 非法行索引集合
-    """
-    column = df.iloc[:, col_idx]
-    invalid_rows = set()
-
-    for idx, value in enumerate(column):
-        # 检查空值
-        if pd.isna(value) or str(value).strip() == '':
-            if not allow_empty:
-                invalid_rows.add(idx)
-            continue
-
-        # 将值转为字符串
-        smiles_str = str(value).strip()
-
-        # 去除英文引号包裹（如果存在）
-        if len(smiles_str) >= 2:
-            if (smiles_str[0] == '"' and smiles_str[-1] == '"') or \
-               (smiles_str[0] == "'" and smiles_str[-1] == "'"):
-                smiles_str = smiles_str[1:-1].strip()
-
-        # 规范化处理: 将逗号替换为点号(符合RDKit标准)
-        # 数据集中可能使用逗号表示离子对,需转换为标准格式
-        smiles_normalized = smiles_str.replace(',', '.')
-
-        # 两级验证策略:
-        # 1. 先尝试直接解析完整SMILES(支持离子对和多分子体系)
-        mol = Chem.MolFromSmiles(smiles_normalized)
-        if mol is not None:
-            continue  # 直接解析成功,跳过分隔符拆分
-
-        # 2. 直接解析失败时,尝试按分隔符拆分验证
-        separators = ['.', ' ', ';']
-        molecules = [smiles_normalized]  # 默认当作单个分子
-
-        for sep in separators:
-            if sep in smiles_normalized:
-                molecules = [s.strip() for s in smiles_normalized.split(sep) if s.strip()]
-                break
-
-        # 验证每个分子
-        for mol_smiles in molecules:
-            mol = Chem.MolFromSmiles(mol_smiles)
-            if mol is None:
-                invalid_rows.add(idx)
-                break
-
-    return invalid_rows
-
-
-def validate_product_column(df: pd.DataFrame, col_idx: int) -> Set[int]:
-    """
-    验证产物列,返回非法行索引集合
-
-    产物列特殊要求:
-    1. 不能为空
-    2. 必须是合法SMILES
-    3. 允许点号(用于离子对,如[O-].[Na+])
-    4. 不允许分号、空格等非标准分隔符
-
-    注: 验证前会自动将逗号替换为点号以符合RDKit标准
-    """
-    column = df.iloc[:, col_idx]
-    invalid_rows = set()
-
-    for idx, value in enumerate(column):
-        # 检查空值
-        if pd.isna(value) or str(value).strip() == '':
-            invalid_rows.add(idx)
-            continue
-
-        smiles_str = str(value).strip()
-
-        # 去除英文引号包裹（如果存在）
-        if len(smiles_str) >= 2:
-            if (smiles_str[0] == '"' and smiles_str[-1] == '"') or \
-               (smiles_str[0] == "'" and smiles_str[-1] == "'"):
-                smiles_str = smiles_str[1:-1].strip()
-
-        # 规范化处理: 将逗号替换为点号(符合RDKit标准)
-        smiles_normalized = smiles_str.replace(',', '.')
-
-        # 检查是否含有非法分隔符(分号、空格)
-        # 允许点号(用于离子对或多分子产物,由用户判断是否合理)
-        if any(sep in smiles_normalized for sep in [';', ' ']):
-            invalid_rows.add(idx)
-            continue
-
-        # 验证SMILES(支持离子型产物如[O-].[Na+])
-        mol = Chem.MolFromSmiles(smiles_normalized)
-        if mol is None:
-            invalid_rows.add(idx)
-
-    return invalid_rows
-
-
-def step2_2_declare_label_column(df: pd.DataFrame, available_columns: List[int], used_names: Set[str]) -> Dict:
-    """
-    步骤2.2: 声明标签列(label)
-
-    Args:
-        df: 原始数据集
-        available_columns: 可用列索引列表
-        used_names: 已使用的列名称集合
-
-    Returns:
-        dict: {'origin_idx': int, 'origin_name': str, 'role': 'label', 'name': str, 'invalid_rows': set}
-    """
-    print("\n" + "=" * 60)
-    print("步骤2.2: 声明标签列(label)")
-    print("=" * 60)
-    print("可选列:")
-    for idx in available_columns:
-        print(f"  [{idx}] {df.columns[idx]}")
-
-    # 选择列
-    while True:
-        try:
-            col_idx = int(input("请输入标签列序号(只能选择1列): ").strip())
-            if col_idx in available_columns:
-                break
-            else:
-                print("[X] 该列不在可选列表中")
-        except ValueError:
-            print("[X] 请输入有效的数字")
-
-    origin_name = df.columns[col_idx]
-
-    # 输入列名称
-    default_name = 'yield'
-    print(f"\n请为此列指定名称(默认: {default_name})")
-    print("列名称只能包含英文字母、数字、下划线、连字符")
-
-    while True:
-        name = input(f"列名称[{default_name}]: ").strip() or default_name
-
-        # 验证名称格式
-        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
-            print("[X] 列名称只能包含英文、数字、下划线、连字符")
-            continue
-
-        # 验证名称唯一性
-        if name in used_names:
-            print(f"[X] 列名称'{name}'已被使用,请使用其他名称")
-            continue
-
-        break
-
-    # 合法性检验: 排除非数值和空值
-    invalid_rows = validate_numeric_column(df, col_idx)
-
-    print(f"\n[OK] 标签列配置完成:")
-    print(f"  原始列名: {origin_name}")
-    print(f"  新列名: {name}")
-    print(f"  非法行数: {len(invalid_rows)}")
-
-    used_names.add(name)
-    available_columns.remove(col_idx)
-
-    return {
-        'origin_idx': col_idx,
-        'origin_name': origin_name,
-        'role': 'label',
-        'name': name,
-        'invalid_rows': invalid_rows
-    }
-
-
-def step2_3_declare_reactant_columns(df: pd.DataFrame, available_columns: List[int], used_names: Set[str]) -> List[Dict]:
-    """
-    步骤2.3: 声明反应物SMILES列(可多列)
-
-    Returns:
-        list[dict]: 每个dict包含 origin_idx, origin_name, role='reactant', name, invalid_rows
-    """
-    print("\n" + "=" * 60)
-    print("步骤2.3: 声明反应物SMILES列")
-    print("=" * 60)
-
-    reactant_columns = []
-
-    while True:
-        if not available_columns:
-            print("可选列已全部声明完毕")
-            break
-
-        print("\n当前可选列:")
-        for idx in available_columns:
-            print(f"  [{idx}] {df.columns[idx]}")
-
-        user_input = input("\n请输入反应物列序号(多列用逗号分隔,直接回车结束): ").strip()
-
-        if not user_input:
-            break
-
-        try:
-            col_indices = [int(x.strip()) for x in user_input.split(',')]
-
-            # 验证有效性
-            if not all(idx in available_columns for idx in col_indices):
-                print("[X] 存在无效的列序号")
-                continue
-
-            # 为每列声明名称
-            for col_idx in col_indices:
-                origin_name = df.columns[col_idx]
-                default_name = 'reactant'
-
-                print(f"\n为列 [{col_idx}] {origin_name} 指定名称(默认: {default_name})")
-
-                while True:
-                    name = input(f"列名称[{default_name}]: ").strip() or default_name
-
-                    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
-                        print("[X] 列名称只能包含英文、数字、下划线、连字符")
-                        continue
-
-                    if name in used_names:
-                        print(f"[X] 列名称'{name}'已被使用")
-                        continue
-
-                    break
-
-                # 合法性检验: 排除非法SMILES和空值
-                invalid_rows = validate_smiles_column(df, col_idx, allow_empty=False)
-
-                print(f"[OK] 非法行数: {len(invalid_rows)}")
-
-                reactant_columns.append({
-                    'origin_idx': col_idx,
-                    'origin_name': origin_name,
-                    'role': 'reactant',
-                    'name': name,
-                    'invalid_rows': invalid_rows
-                })
-
-                used_names.add(name)
-                available_columns.remove(col_idx)
-
-        except ValueError:
-            print("[X] 输入格式错误")
-
-    print(f"\n[OK] 共声明 {len(reactant_columns)} 个反应物列")
-    return reactant_columns
-
-
-def step2_4_declare_product_column(df: pd.DataFrame, available_columns: List[int], used_names: Set[str]) -> Dict:
-    """
-    步骤2.4: 声明产物SMILES列(必须且只能1列)
-
-    关键要求:
-    - 每个单元格只能包含一个独立的SMILES(不含分隔符)
-
-    Returns:
-        dict: origin_idx, origin_name, role='product', name, invalid_rows
-    """
-    print("\n" + "=" * 60)
-    print("步骤2.4: 声明产物SMILES列")
-    print("=" * 60)
-    print("[!] 产物列要求: 每个单元格只能包含一个独立的SMILES")
-    print("    不允许含有分隔符(点号.、分号;、逗号,)")
-    print()
-
-    print("可选列:")
-    for idx in available_columns:
-        print(f"  [{idx}] {df.columns[idx]}")
-
-    # 选择列
-    while True:
-        try:
-            col_idx = int(input("请输入产物列序号(只能选择1列): ").strip())
-            if col_idx in available_columns:
-                break
-            else:
-                print("[X] 该列不在可选列表中")
-        except ValueError:
-            print("[X] 请输入有效的数字")
-
-    origin_name = df.columns[col_idx]
-    default_name = 'product'
-
-    print(f"\n请为此列指定名称(默认: {default_name})")
-
-    while True:
-        name = input(f"列名称[{default_name}]: ").strip() or default_name
-
-        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
-            print("[X] 列名称只能包含英文、数字、下划线、连字符")
-            continue
-
-        if name in used_names:
-            print(f"[X] 列名称'{name}'已被使用")
-            continue
-
-        break
-
-    # 合法性检验: 排除非法SMILES、空值、含分隔符的SMILES
-    invalid_rows = validate_product_column(df, col_idx)
-
-    print(f"\n[OK] 产物列配置完成:")
-    print(f"  原始列名: {origin_name}")
-    print(f"  新列名: {name}")
-    print(f"  非法行数: {len(invalid_rows)}")
-
-    used_names.add(name)
-    available_columns.remove(col_idx)
-
-    return {
-        'origin_idx': col_idx,
-        'origin_name': origin_name,
-        'role': 'product',
-        'name': name,
-        'invalid_rows': invalid_rows
-    }
-
-
-def suggest_others_name(origin_name: str) -> str:
-    """
-    根据原始列名推荐智能命名
-
-    规则:
-    - 包含'溶剂'/'solvent' → 'solvent'
-    - 包含'催化'/'catalyst' → 'catalyst'
-    - 包含'试剂'/'reagent' → 'reagent'
-    - 包含'碱'/'base' → 'base'
-    - 否则返回原始列名
-    """
-    origin_lower = origin_name.lower()
-
-    if '溶剂' in origin_name or 'solvent' in origin_lower:
-        return 'solvent'
-    elif '催化' in origin_name or 'catalyst' in origin_lower:
-        return 'catalyst'
-    elif '试剂' in origin_name or 'reagent' in origin_lower:
-        return 'reagent'
-    elif '碱' in origin_name or 'base' in origin_lower:
-        return 'base'
-    else:
-        return origin_name
-
-
-def step2_5_declare_others_columns(df: pd.DataFrame, available_columns: List[int], used_names: Set[str]) -> List[Dict]:
-    """
-    步骤2.5: 声明其他组分SMILES列(可多列)
-
-    特点:
-    - 允许空值
-    - 提供智能命名建议(solvent、catalyst、reagent、base)
-
-    Returns:
-        list[dict]: 每个dict包含 origin_idx, origin_name, role='others', name, invalid_rows
-    """
-    print("\n" + "=" * 60)
-    print("步骤2.5: 声明其他组分SMILES列")
-    print("=" * 60)
-    print("常用名称建议: solvent(溶剂)、catalyst(催化剂)、reagent(试剂)、base(碱)")
-    print()
-
-    others_columns = []
-
-    while True:
-        if not available_columns:
-            print("可选列已全部声明完毕")
-            break
-
-        print("\n当前可选列:")
-        for idx in available_columns:
-            print(f"  [{idx}] {df.columns[idx]}")
-
-        user_input = input("\n请输入其他组分列序号(多列用逗号分隔,直接回车结束): ").strip()
-
-        if not user_input:
-            break
-
-        try:
-            col_indices = [int(x.strip()) for x in user_input.split(',')]
-
-            if not all(idx in available_columns for idx in col_indices):
-                print("[X] 存在无效的列序号")
-                continue
-
-            for col_idx in col_indices:
-                origin_name = df.columns[col_idx]
-
-                # 智能命名建议
-                suggested_name = suggest_others_name(origin_name)
-                default_name = origin_name  # 默认依然是原始列名
-
-                print(f"\n为列 [{col_idx}] {origin_name} 指定名称")
-                print(f"  默认: {default_name}")
-                if suggested_name != default_name:
-                    print(f"  建议: {suggested_name} (可复制)")
-
-                while True:
-                    name = input(f"列名称[{default_name}]: ").strip() or default_name
-
-                    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
-                        print("[X] 列名称只能包含英文、数字、下划线、连字符")
-                        continue
-
-                    if name in used_names:
-                        print(f"[X] 列名称'{name}'已被使用")
-                        continue
-
-                    break
-
-                # 合法性检验: 排除非法SMILES,但允许空值
-                invalid_rows = validate_smiles_column(df, col_idx, allow_empty=True)
-
-                print(f"[OK] 非法行数: {len(invalid_rows)}")
-
-                others_columns.append({
-                    'origin_idx': col_idx,
-                    'origin_name': origin_name,
-                    'role': 'others',
-                    'name': name,
-                    'invalid_rows': invalid_rows
-                })
-
-                used_names.add(name)
-                available_columns.remove(col_idx)
-
-        except ValueError:
-            print("[X] 输入格式错误")
-
-    print(f"\n[OK] 共声明 {len(others_columns)} 个其他组分列")
-    return others_columns
-
-
-def suggest_condition_name(origin_name: str) -> str:
-    """根据原始列名推荐智能命名"""
-    origin_lower = origin_name.lower()
-
-    if '温度' in origin_name or 'temp' in origin_lower:
-        return 'temperature'
-    elif '压力' in origin_name or 'pressure' in origin_lower:
-        return 'pressure'
-    elif '时间' in origin_name or 'time' in origin_lower:
-        return 'time'
-    else:
-        return origin_name
-
-
-def step2_6_declare_condition_columns(df: pd.DataFrame, available_columns: List[int], used_names: Set[str]) -> List[Dict]:
-    """
-    步骤2.6: 声明条件数值列(可多列)
-
-    特点:
-    - 允许空值
-    - 提供智能命名建议(temperature、pressure、time)
-
-    Returns:
-        list[dict]: 每个dict包含 origin_idx, origin_name, role='condition', name, invalid_rows
-    """
-    print("\n" + "=" * 60)
-    print("步骤2.6: 声明条件数值列")
-    print("=" * 60)
-    print("常用名称建议: temperature(温度)、pressure(压力)、time(时间)")
-    print()
-
-    condition_columns = []
-
-    while True:
-        if not available_columns:
-            print("可选列已全部声明完毕")
-            break
-
-        print("\n当前可选列:")
-        for idx in available_columns:
-            print(f"  [{idx}] {df.columns[idx]}")
-
-        user_input = input("\n请输入条件数值列序号(多列用逗号分隔,直接回车结束): ").strip()
-
-        if not user_input:
-            break
-
-        try:
-            col_indices = [int(x.strip()) for x in user_input.split(',')]
-
-            if not all(idx in available_columns for idx in col_indices):
-                print("[X] 存在无效的列序号")
-                continue
-
-            for col_idx in col_indices:
-                origin_name = df.columns[col_idx]
-
-                # 智能命名建议
-                suggested_name = suggest_condition_name(origin_name)
-                default_name = origin_name
-
-                print(f"\n为列 [{col_idx}] {origin_name} 指定名称")
-                print(f"  默认: {default_name}")
-                if suggested_name != default_name:
-                    print(f"  建议: {suggested_name} (可复制)")
-
-                while True:
-                    name = input(f"列名称[{default_name}]: ").strip() or default_name
-
-                    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
-                        print("[X] 列名称只能包含英文、数字、下划线、连字符")
-                        continue
-
-                    if name in used_names:
-                        print(f"[X] 列名称'{name}'已被使用")
-                        continue
-
-                    break
-
-                # 合法性检验: 排除非数值,但允许空值
-                invalid_rows = validate_numeric_column_allow_empty(df, col_idx)
-
-                print(f"[OK] 非法行数: {len(invalid_rows)}")
-
-                condition_columns.append({
-                    'origin_idx': col_idx,
-                    'origin_name': origin_name,
-                    'role': 'condition',
-                    'name': name,
-                    'invalid_rows': invalid_rows
-                })
-
-                used_names.add(name)
-                available_columns.remove(col_idx)
-
-        except ValueError:
-            print("[X] 输入格式错误")
-
-    print(f"\n[OK] 共声明 {len(condition_columns)} 个条件数值列")
-    return condition_columns
-
-
-def step2_orchestrate(df: pd.DataFrame) -> List[Dict]:
-    """
-    步骤2总调度函数: 逐列声明列角色和名称
-
-    Returns:
-        list[dict]: 所有列的配置列表
-    """
-    # 2.1 选择需要的列
-    selected_indices = step2_select_columns(df)
-    available_columns = selected_indices.copy()
-    used_names = set()
-
-    all_configs = []
-
-    # 2.2 声明标签列(必须)
-    label_config = step2_2_declare_label_column(df, available_columns, used_names)
-    all_configs.append(label_config)
-
-    # 2.3 声明反应物SMILES列(可选)
-    reactant_configs = step2_3_declare_reactant_columns(df, available_columns, used_names)
-    all_configs.extend(reactant_configs)
-
-    # 2.4 声明产物SMILES列(必须)
-    product_config = step2_4_declare_product_column(df, available_columns, used_names)
-    all_configs.append(product_config)
-
-    # 2.5 声明其他组分SMILES列(可选)
-    others_configs = step2_5_declare_others_columns(df, available_columns, used_names)
-    all_configs.extend(others_configs)
-
-    # 2.6 声明条件数值列(可选)
-    condition_configs = step2_6_declare_condition_columns(df, available_columns, used_names)
-    all_configs.extend(condition_configs)
-
-    # 汇总统计
-    print("\n" + "=" * 60)
-    print("步骤2完成! 列声明汇总:")
-    print("=" * 60)
-    print(f"  标签列: 1")
-    print(f"  反应物SMILES列: {len(reactant_configs)}")
-    print(f"  产物SMILES列: 1")
-    print(f"  其他组分SMILES列: {len(others_configs)}")
-    print(f"  条件数值列: {len(condition_configs)}")
-    print(f"  总计: {len(all_configs)} 列")
-
-    # 计算总非法行数
-    all_invalid_rows = set()
-    for config in all_configs:
-        all_invalid_rows.update(config['invalid_rows'])
-
-    print(f"\n  合法性检验: 共发现 {len(all_invalid_rows)} 个非法行")
-
-    return all_configs
-
-
-# ==================== 步骤3: 生成规范数据集与非法输入排除报告 ====================
-
-def split_smiles(smiles_str: str) -> List[str]:
-    """
-    拆分包含多个SMILES的字符串
-
-    支持的分隔符: , ; 空格
-    优先级：逗号 > 分号 > 空格
-
-    注意：
-    - 点号 (.) 是 SMILES 标准的组分分隔符（用于离子对、溶剂化合物等），
-      不应被拆分，否则会破坏合法的多组分 SMILES 结构
-    - 方括号 [ ] 是 SMILES 原子标记符号（如 [Na+]），不会被去除
-
-    特殊处理：
-    - 拆分后的每个元素，如果首末均为引号（单引号或双引号），去除引号
-
-    Args:
-        smiles_str: SMILES字符串（可能包含多个分子）
-
-    Returns:
-        list: SMILES列表
-    """
-    # 去除首尾空白
-    smiles_str = smiles_str.strip()
-
-    # 注意：不再去除首尾方括号，因为方括号在 SMILES 中是原子标记符号（如 [Na+]），
-    # 去除会破坏离子型 SMILES 的结构（如 [O-].[Na+] 会被错误处理为 O-].[Na+）
-
-    # 按优先级尝试分隔符（移除点号以避免破坏离子型 SMILES）
-    separators = [',', ';', ' ']
-
-    for sep in separators:
-        if sep in smiles_str:
-            parts = [s.strip() for s in smiles_str.split(sep) if s.strip()]
-            # 过滤掉纯分隔符的残留（如空格分隔时可能有'.', ',', ';'残留）
-            parts = [p for p in parts if p not in ['.', ',', ';', ' ']]
-            if parts:  # 确保有有效部分
-                # 对每个元素去除引号（如果首末均为引号）
-                cleaned_parts = []
-                for part in parts:
-                    part = part.strip()
-                    # 检测并去除双引号
-                    if part.startswith('"') and part.endswith('"') and len(part) >= 2:
-                        part = part[1:-1]
-                    # 检测并去除单引号
-                    elif part.startswith("'") and part.endswith("'") and len(part) >= 2:
-                        part = part[1:-1]
-                    cleaned_parts.append(part.strip())
-                return cleaned_parts
-
-    # 无分隔符,单个SMILES（仍需处理引号）
-    single_smiles = smiles_str.strip()
-    # 检测并去除双引号
-    if single_smiles.startswith('"') and single_smiles.endswith('"') and len(single_smiles) >= 2:
-        single_smiles = single_smiles[1:-1]
-    # 检测并去除单引号
-    elif single_smiles.startswith("'") and single_smiles.endswith("'") and len(single_smiles) >= 2:
-        single_smiles = single_smiles[1:-1]
-
-    return [single_smiles.strip()]
-
-
-def step3_1_generate_invalid_report(
-    df: pd.DataFrame,
-    all_column_configs: List[Dict],
-    project_folder: str,
-    project_name: str
-) -> Optional[str]:
-    """
-    步骤3.1: 生成非法输入排除报告(Markdown格式)
-
-    Args:
-        df: 原始数据集
-        all_column_configs: 所有列的配置列表(每个元素是dict,包含invalid_rows)
-        project_folder: 项目文件夹路径
-        project_name: 项目名称
-
-    Returns:
-        str: 报告文件路径(如果生成),否则返回None
-    """
-    # 汇总所有非法行
-    all_invalid_rows = set()
-    for config in all_column_configs:
-        all_invalid_rows.update(config['invalid_rows'])
-
-    if not all_invalid_rows:
-        print("\n[OK] 无非法输入,跳过报告生成")
-        return None
-
-    print(f"\n生成非法输入排除报告... 共 {len(all_invalid_rows)} 行")
-
-    report_path = os.path.join(project_folder, 'report', f"{project_name}_invalid_report.md")
-    os.makedirs(os.path.dirname(report_path), exist_ok=True)
-
-    with open(report_path, 'w', encoding='utf-8') as f:
-        f.write(f"# {project_name} 非法输入排除报告\n\n")
-        f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        f.write("---\n\n")
-
-        # 第一部分: 汇总信息
-        f.write("## 一、排除行汇总\n\n")
-        f.write(f"**总计排除行数:** {len(all_invalid_rows)}\n\n")
-
-        # 按行索引排序
-        sorted_invalid_rows = sorted(all_invalid_rows)
-
-        # 为每行标注在哪些步骤出现非法值
-        row_error_map = {}  # {row_idx: [column_configs]}
-        for row_idx in sorted_invalid_rows:
-            row_error_map[row_idx] = []
-            for config in all_column_configs:
-                if row_idx in config['invalid_rows']:
-                    row_error_map[row_idx].append(config)
-
-        f.write("| 行号 | 出现非法值的列 |\n")
-        f.write("|------|----------------|\n")
-        for row_idx in sorted_invalid_rows:
-            error_cols = [cfg['origin_name'] for cfg in row_error_map[row_idx]]
-            f.write(f"| {row_idx} | {', '.join(error_cols)} |\n")
-
-        f.write("\n---\n\n")
-
-        # 第二部分: 逐行详细信息
-        f.write("## 二、排除行详细信息\n\n")
-
-        for row_idx in sorted_invalid_rows:
-            f.write(f"### 行 {row_idx}\n\n")
-
-            # 提取该行数据
-            row_data = df.iloc[row_idx]
-
-            # 生成表格
-            f.write("| 列名 | 值 |\n")
-            f.write("|------|----|\n")
-
-            for config in all_column_configs:
-                col_name = config['origin_name']
-                col_value = row_data[col_name]
-
-                # 如果该列在此行非法,加粗
-                if row_idx in config['invalid_rows']:
-                    col_value_str = f"**{col_value}**"
-                else:
-                    col_value_str = str(col_value)
-
-                f.write(f"| {col_name} | {col_value_str} |\n")
-
-            # 标注非法值位置
-            error_cols = [cfg['origin_name'] for cfg in row_error_map[row_idx]]
-            f.write(f"\n**非法值所在列:** {', '.join(error_cols)}\n\n")
-            f.write("---\n\n")
-
-    print(f"[OK] 报告已生成: {report_path}")
-    return report_path
-
-
-def step3_3_generate_normalized_dataset(
-    df: pd.DataFrame,
-    all_column_configs: List[Dict],
-    project_folder: str,
-    project_name: str,
-    sample_id_col: Optional[str] = None,
-) -> str:
-    """
-    步骤3.3: 生成规范数据集(改进版: 两次扫描)
-
-    第一次扫描: 确定每类SMILES的最大列数
-    第二次扫描: 填充数据
-
-    Args:
-        df: 原始数据集
-        all_column_configs: 所有列的配置列表
-        project_folder: 项目文件夹路径
-        project_name: 项目名称
-
-    Returns:
-        str: 规范数据集文件路径
-    """
-    print("\n生成规范数据集...")
-
-    if sample_id_col is not None:
-        if sample_id_col not in df.columns:
-            raise ValueError(f"原始数据集缺少 sample ID 列：{sample_id_col}")
-        ids = df[sample_id_col]
-        normalized_ids = ids.astype(str).str.strip()
-        if ids.isna().any() or normalized_ids.eq('').any() or normalized_ids.duplicated().any():
-            raise ValueError("原始 sample ID 必须唯一且非空")
-        if any(config['origin_name'] == sample_id_col for config in all_column_configs):
-            raise ValueError("sample ID 不能同时作为目标或模型输入列")
-
-    # 汇总所有非法行
-    all_invalid_rows = set()
-    for config in all_column_configs:
-        all_invalid_rows.update(config['invalid_rows'])
-
-    valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
-
-    if all_invalid_rows:
-        print(f"  跳过 {len(all_invalid_rows)} 个非法行")
-
-    # 按角色分组
-    role_groups = {
-        'reactant': [],
-        'others': [],
-        'condition': [],
-        'product': [],
-        'label': []
-    }
-
-    for config in all_column_configs:
-        role_groups[config['role']].append(config)
-
-    # 第一次扫描: 确定每个列名的最大 SMILES 数量
-    max_reactant_count = {}  # {reactant_name: max_count}
-    max_others_count = {}  # {others_name: max_count}
-
-    for row_idx in valid_row_indices:
-        row_data = df.iloc[row_idx]
-
-        # 统计每个 reactant 列的最大 SMILES 数量（保留用户指定的名称）
-        for config in role_groups['reactant']:
-            col_name = config['origin_name']
-            new_name = config['name']
-            value = row_data[col_name]
-            if pd.notna(value) and str(value).strip():
-                smiles_parts = split_smiles(str(value))
-                if new_name not in max_reactant_count:
-                    max_reactant_count[new_name] = 0
-                max_reactant_count[new_name] = max(max_reactant_count[new_name], len(smiles_parts))
-
-        # 统计others
-        for config in role_groups['others']:
-            col_name = config['origin_name']
-            new_name = config['name']
-            value = row_data[col_name]
-            if pd.notna(value) and str(value).strip():
-                smiles_parts = split_smiles(str(value))
-                if new_name not in max_others_count:
-                    max_others_count[new_name] = 0
-                max_others_count[new_name] = max(max_others_count[new_name], len(smiles_parts))
-
-    for name, count in max_reactant_count.items():
-        print(f"  最大{name}数量: {count}")
-    for name, count in max_others_count.items():
-        print(f"  最大{name}数量: {count}")
-
-    # 构建最终列名列表(按顺序)
-    final_columns = []
-
-    # reactant列（保留用户指定的名称）
-    for config in role_groups['reactant']:
-        name = config['name']
-        if name in max_reactant_count:
-            count = max_reactant_count[name]
-            if count == 1:
-                final_columns.append(name)
-            else:
-                for i in range(count):
-                    final_columns.append(f'{name}-{i+1}')
-        else:
-            # 如果所有行都为空，仍然保留一列
-            final_columns.append(name)
-
-    # others列
-    for config in role_groups['others']:
-        name = config['name']
-        if name in max_others_count:
-            count = max_others_count[name]
-            if count == 1:
-                final_columns.append(name)
-            else:
-                for i in range(count):
-                    final_columns.append(f'{name}-{i+1}')
-        else:
-            # 如果所有行都为空,仍然保留一列
-            final_columns.append(name)
-
-    # condition列
-    for config in role_groups['condition']:
-        final_columns.append(config['name'])
-
-    # product列
-    for config in role_groups['product']:
-        final_columns.append(config['name'])
-
-    # label列
-    for config in role_groups['label']:
-        final_columns.append(config['name'])
-
-    if sample_id_col is not None:
-        if sample_id_col in final_columns:
-            raise ValueError("规范数据集的角色列名与 sample ID 列冲突")
-        final_columns.insert(0, sample_id_col)
-
-    # 第二次扫描: 填充数据
-    normalized_rows = []
-
-    for row_idx in valid_row_indices:
-        row_data = df.iloc[row_idx]
-        normalized_row = {col: '' for col in final_columns}  # 初始化为空字符串
-        if sample_id_col is not None:
-            normalized_row[sample_id_col] = df[sample_id_col].iloc[row_idx]
-
-        # 填充 reactant（按用户指定的名称单独处理每个列）
-        for config in role_groups['reactant']:
-            col_name = config['origin_name']
-            new_name = config['name']
-            value = row_data[col_name]
-
-            if pd.notna(value) and str(value).strip():
-                smiles_parts = split_smiles(str(value))
-                if len(smiles_parts) == 1:
-                    if new_name in normalized_row:
-                        normalized_row[new_name] = smiles_parts[0]
-                else:
-                    for i, smiles in enumerate(smiles_parts):
-                        col_name_indexed = f'{new_name}-{i+1}'
-                        if col_name_indexed in normalized_row:
-                            normalized_row[col_name_indexed] = smiles
-
-        # 填充others
-        for config in role_groups['others']:
-            col_name = config['origin_name']
-            new_name = config['name']
-            value = row_data[col_name]
-
-            if pd.notna(value) and str(value).strip():
-                smiles_parts = split_smiles(str(value))
-                if len(smiles_parts) == 1:
-                    if new_name in normalized_row:
-                        normalized_row[new_name] = smiles_parts[0]
-                else:
-                    for i, smiles in enumerate(smiles_parts):
-                        col_name_indexed = f'{new_name}-{i+1}'
-                        if col_name_indexed in normalized_row:
-                            normalized_row[col_name_indexed] = smiles
-
-        # 填充condition
-        for config in role_groups['condition']:
-            col_name = config['origin_name']
-            new_name = config['name']
-            value = row_data[col_name]
-            normalized_row[new_name] = value if pd.notna(value) else ''
-
-        # 填充product
-        for config in role_groups['product']:
-            col_name = config['origin_name']
-            new_name = config['name']
-            value = row_data[col_name]
-            normalized_row[new_name] = str(value).strip() if pd.notna(value) else ''
-
-        # 填充label
-        for config in role_groups['label']:
-            col_name = config['origin_name']
-            new_name = config['name']
-            value = row_data[col_name]
-            normalized_row[new_name] = value if pd.notna(value) else ''
-
-        normalized_rows.append(normalized_row)
-
-    # 转换为DataFrame(按final_columns顺序)
-    normalized_df = pd.DataFrame(normalized_rows, columns=final_columns)
-
-    # 将NaN替换为空字符串（确保空值显示为空字符串而非NaN）
-    normalized_df = normalized_df.fillna('')
-
-    # 保存
-    normalized_path = os.path.join(project_folder, 'feature', 'docs', f"{project_name}_normalized_dataset.csv")
-    os.makedirs(os.path.dirname(normalized_path), exist_ok=True)
-    normalized_df.to_csv(normalized_path, index=False, encoding='utf-8')
-
-    print(f"[OK] 规范数据集已生成: {normalized_path}")
-    print(f"  有效行数: {len(normalized_df)}")
-    print(f"  总列数: {len(normalized_df.columns)}")
-    print("\n列名预览:")
-    if len(final_columns) <= 10:
-        print(f"  {', '.join(final_columns)}")
-    else:
-        print(f"  {', '.join(final_columns[:10])}...")
-
-    return normalized_path
-
-
-def step3_orchestrate(
-    df: pd.DataFrame,
-    all_configs: List[Dict],
-    project_folder: str,
-    project_name: str,
-    sample_id_col: Optional[str] = None,
-) -> Dict[str, Optional[str]]:
-    """
-    步骤3总调度函数: 生成规范数据集与非法输入排除报告
-
-    Returns:
-        dict: {
-            'invalid_report': str | None,
-            'column_mapping': str,
-            'normalized_dataset': str | None
-        }
-    """
-    print("\n" + "=" * 60)
-    print("步骤3: 生成规范数据集与非法输入排除报告")
-    print("=" * 60)
-
-    # 汇总所有非法行
-    all_invalid_rows = set()
-    for config in all_configs:
-        all_invalid_rows.update(config['invalid_rows'])
-
-    # 3.1 生成非法输入报告(如果有非法输入)
-    invalid_report_path = step3_1_generate_invalid_report(
-        df, all_configs, project_folder, project_name
-    )
-
-    # 3.2 生成规范数据集（无论是否有非法行，都生成规范数据集以保证列名一致性）
-    if all_invalid_rows:
-        print(f"\n[INFO] 检测到 {len(all_invalid_rows)} 行非法输入，将被排除")
-    else:
-        print("\n[OK] 无非法输入，所有数据行均有效")
-
-    normalized_path = step3_3_generate_normalized_dataset(
-        df, all_configs, project_folder, project_name, sample_id_col=sample_id_col
-    )
-
-    print("\n" + "=" * 60)
-    print("步骤3完成!")
-    print("=" * 60)
-
-    return {
-        'invalid_report': invalid_report_path,
-        'normalized_dataset': normalized_path
-    }
-
-
-# ============================================================================
-# 步骤4: 指定描述符
-# ============================================================================
-
-def step4_select_descriptors():
-    """
-    展示所有可用描述符,让用户选择
-
-    Returns:
-        list: 选中的描述符名称列表
-    """
-    print("\n" + "=" * 60)
-    print("步骤4: 指定描述符")
-    print("=" * 60)
-
-    descriptors = {
-        'morgan': '横向拼接,可编辑参与列和拼接顺序',
-        'mfp': '逐列拼接的 Morgan count fingerprint（默认 radius=3、1024维）',
-        'ohe': '类别 one-hot；只在每个 CV 训练折拟合，不生成全数据描述符',
-        'maccs': '横向拼接,可编辑参与列和拼接顺序',
-        'rdkit2d': '横向拼接,可编辑参与列和拼接顺序',
-        'fisd': '横向拼接,可编辑参与列和拼接顺序',
-        'molmetalm': '横向拼接,可编辑参与列和拼接顺序',
-        'maf': '逐点加和,可编辑参与列',
-        'drfp': '固定反应模式(reactant→product),可编辑额外加入反应物的others列'
-    }
-
-    print("\n可用描述符:")
-    for idx, (name, desc) in enumerate(descriptors.items(), 1):
-        print(f"  [{idx}] {name}: {desc}")
-
-    print("\n请选择描述符(输入序号,用逗号分隔,如: 1,2,5)")
-    print("或直接回车选择全部描述符")
-
-    while True:
-        user_input = input("描述符序号: ").strip()
-
-        if user_input == '':
-            # Keep the historical default grid stable: MFP/OHE are opt-in so
-            # a user who simply presses Enter does not unexpectedly add a
-            # count fingerprint or a high-cardinality categorical baseline.
-            selected = [
-                'morgan', 'maccs', 'rdkit2d', 'fisd', 'molmetalm', 'maf', 'drfp'
-            ]
-            break
-
-        try:
-            indices = [int(x.strip()) for x in user_input.split(',')]
-            if all(1 <= idx <= len(descriptors) for idx in indices):
-                selected = [list(descriptors.keys())[i-1] for i in indices]
-                break
-            else:
-                print("[X] 存在无效的序号")
-        except ValueError:
-            print("[X] 输入格式错误")
-
-    print(f"\n[OK] 已选择 {len(selected)} 个描述符: {', '.join(selected)}")
-    return selected
-
-
-def step4_configure_descriptor(descriptor_name, all_column_configs):
-    """
-    配置单个描述符的嵌入方式
-
-    Args:
-        descriptor_name: 描述符名称
-        all_column_configs: 所有列的配置列表(用于展示可选列)
-
-    Returns:
-        dict: {
-            'descriptor': str,
-            'mode': 'concat' | 'sum' | 'reaction',
-            'columns': list,  # 参与嵌入的列(按顺序)
-            'extra_reactants': list  # 仅DRFP使用,额外加入反应物的others列
-        }
-    """
-    print(f"\n配置描述符: {descriptor_name}")
-
-    # 获取所有SMILES列(reactant, others, product)
-    smiles_columns = [
-        cfg for cfg in all_column_configs
-        if cfg['role'] in ['reactant', 'others', 'product']
-    ]
-
-    print("\n当前所有SMILES列:")
-    for idx, cfg in enumerate(smiles_columns):
-        print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
-
-    if descriptor_name in ['morgan', 'mfp', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
-        # 横向拼接模式
-        print("\n该描述符为横向拼接模式")
-        print("默认顺序: reactant -> others -> product")
-        print("您可以:")
-        print("  1. 使用默认顺序")
-        print("  2. 自定义参与列和顺序(输入列序号,用逗号分隔)")
-
-        choice = input("选择(1/2): ").strip()
-
-        if choice == '1':
-            # 使用默认顺序
-            columns = []
-            # 按角色顺序添加
-            for role in ['reactant', 'others', 'product']:
-                for cfg in all_column_configs:
-                    if cfg['role'] == role:
-                        columns.append(cfg['name'])
-        else:
-            # 自定义顺序
-            print("\n请输入列序号(用逗号分隔,顺序即为拼接顺序):")
-            while True:
-                user_input = input("列序号: ").strip()
-                try:
-                    indices = [int(x.strip()) for x in user_input.split(',')]
-                    if all(0 <= idx < len(smiles_columns) for idx in indices):
-                        columns = [smiles_columns[i]['name'] for i in indices]
-                        break
-                    else:
-                        print("[X] 存在无效的序号")
-                except ValueError:
-                    print("[X] 输入格式错误")
-
-        print(f"[OK] 拼接顺序: {' -> '.join(columns)}")
-
-        result = {
-            'id': descriptor_name,
-            'descriptor': descriptor_name,
-            'mode': 'concat',
-            'columns': columns
-        }
-        if descriptor_name == 'mfp':
-            print("\nMFP 使用 Morgan count fingerprint（与二值 morgan 不同）。")
-            while True:
-                radius_text = input("Morgan 半径 [3]: ").strip() or "3"
-                bits_text = input("每组分维度 [1024]: ").strip() or "1024"
-                try:
-                    radius, fp_size = int(radius_text), int(bits_text)
-                    if radius < 0 or fp_size < 8:
-                        raise ValueError
-                    result['params'] = {
-                        'radius': radius, 'fp_size': fp_size, 'profile': 'standard'
-                    }
-                    break
-                except ValueError:
-                    print("[X] 半径必须 >= 0，维度必须 >= 8")
-        return result
-
-    elif descriptor_name == 'ohe':
-        category_columns = [cfg for cfg in all_column_configs if cfg['role'] != 'label']
-        if not category_columns:
-            raise ValueError("OHE 需要至少一个非标签类别列")
-        print("\nOHE 不会生成全数据描述符：每个 CV 训练折将单独拟合类别表。")
-        print("请选择有序类别列（通常为反应物、其他组分或离散条件）：")
-        for idx, cfg in enumerate(category_columns):
-            print(f"  [{idx}] {cfg['name']} (角色: {cfg['role']})")
-        while True:
-            user_input = input("列序号（逗号分隔）: ").strip()
-            try:
-                indices = [int(value.strip()) for value in user_input.split(',')]
-                if not indices or not all(0 <= index < len(category_columns) for index in indices):
-                    raise ValueError
-                if len(set(indices)) != len(indices):
-                    print("[X] 列不能重复")
-                    continue
-                columns = [category_columns[index]['name'] for index in indices]
-                break
-            except ValueError:
-                print("[X] 请输入至少一个有效且不重复的列序号")
-        print("缺失值策略：1) as_category（默认） 2) zero_block 3) error")
-        policy_map = {'': 'as_category', '1': 'as_category', '2': 'zero_block', '3': 'error'}
-        while True:
-            policy = policy_map.get(input("选择 [1]: ").strip())
-            if policy:
-                break
-            print("[X] 请输入 1、2 或 3")
-        return {
-            'id': 'ohe',
-            'descriptor': 'ohe', 'mode': 'concat', 'columns': columns,
-            'params': {'missing_policy': policy, 'dtype': 'float32', 'handle_unknown': 'ignore'},
-        }
-
-    elif descriptor_name == 'maf':
-        # 逐点加和模式
-        print("\n该描述符为逐点加和模式,不存在拼接顺序")
-        print("请选择参与嵌入的列(输入列序号,用逗号分隔):")
-
-        while True:
-            user_input = input("列序号: ").strip()
-            try:
-                indices = [int(x.strip()) for x in user_input.split(',')]
-                if all(0 <= idx < len(smiles_columns) for idx in indices):
-                    columns = [smiles_columns[i]['name'] for i in indices]
-                    break
-                else:
-                    print("[X] 存在无效的序号")
-            except ValueError:
-                print("[X] 输入格式错误")
-
-        print(f"[OK] 参与加和的列: {', '.join(columns)}")
-
-        return {
-            'id': descriptor_name,
-            'descriptor': descriptor_name,
-            'mode': 'sum',
-            'columns': columns
-        }
-
-    elif descriptor_name == 'drfp':
-        # 固定反应模式
-        print("\n该描述符为固定反应模式: reactant -> product")
-        print("您可以选择将某些others列加入到reactant中(如催化剂)")
-
-        # 列出所有others列
-        others_columns = [cfg for cfg in all_column_configs if cfg['role'] == 'others']
-
-        if not others_columns:
-            print("  无可选的others列")
-            extra_reactants = []
-        else:
-            print("\n可选的others列:")
-            for idx, cfg in enumerate(others_columns):
-                print(f"  [{idx}] {cfg['name']}")
-
-            user_input = input("请输入要加入reactant的others列序号(用逗号分隔,直接回车跳过): ").strip()
-
-            if user_input:
-                try:
-                    indices = [int(x.strip()) for x in user_input.split(',')]
-                    extra_reactants = [others_columns[i]['name'] for i in indices if 0 <= i < len(others_columns)]
-                except ValueError:
-                    print("[X] 输入格式错误,跳过")
-                    extra_reactants = []
-            else:
-                extra_reactants = []
-
-        if extra_reactants:
-            print(f"[OK] 额外加入反应物的列: {', '.join(extra_reactants)}")
-        else:
-            print("[OK] 使用默认reactant列")
-
-        return {
-            'id': descriptor_name,
-            'descriptor': descriptor_name,
-            'mode': 'reaction',
-            'extra_reactants': extra_reactants
-        }
-
-
-def generate_default_descriptor_config(descriptor_name, all_column_configs):
-    """
-    为单个描述符生成默认配置
-
-    Args:
-        descriptor_name: 描述符名称
-        all_column_configs: 所有列的配置列表
-
-    Returns:
-        dict: 描述符配置字典
-    """
-    if descriptor_name in ['morgan', 'mfp', 'maccs', 'rdkit2d', 'fisd', 'molmetalm']:
-        # concat模式: 按 reactant → others → product 顺序
-        columns = []
-        for role in ['reactant', 'others', 'product']:
-            for cfg in all_column_configs:
-                if cfg['role'] == role:
-                    columns.append(cfg['name'])
-
-        result = {
-            'id': descriptor_name,
-            'descriptor': descriptor_name,
-            'mode': 'concat',
-            'columns': columns
-        }
-        if descriptor_name == 'mfp':
-            result['params'] = {'radius': 3, 'fp_size': 1024, 'profile': 'standard'}
-        return result
-
-    elif descriptor_name == 'maf':
-        # sum模式: 包含所有SMILES列
-        columns = [
-            cfg['name'] for cfg in all_column_configs
-            if cfg['role'] in ['reactant', 'others', 'product']
-        ]
-
-        return {
-            'id': descriptor_name,
-            'descriptor': descriptor_name,
-            'mode': 'sum',
-            'columns': columns
-        }
-
-    elif descriptor_name == 'drfp':
-        # reaction模式: extra_reactants为空
-        return {
-            'id': descriptor_name,
-            'descriptor': descriptor_name,
-            'mode': 'reaction',
-            'extra_reactants': []
-        }
-
-    else:
-        raise ValueError(f"未知的描述符: {descriptor_name}")
-
-
-def display_descriptor_configs_summary(descriptor_configs):
-    """
-    以表格形式展示所有描述符的配置摘要
-
-    Args:
-        descriptor_configs: 描述符配置列表
-    """
-    print("\n" + "=" * 80)
-    print("描述符配置摘要")
-    print("=" * 80)
-
-    # 表头
-    print(f"{'序号':<6}{'描述符':<15}{'模式':<12}{'配置详情':<45}")
-    print("-" * 80)
-
-    # 表内容
-    for idx, config in enumerate(descriptor_configs, 1):
-        desc_name = config['descriptor']
-        mode = config['mode']
-
-        if mode == 'concat':
-            # 横向拼接模式: 显示列顺序
-            columns_str = ' → '.join(config['columns'])
-            if desc_name == 'ohe':
-                policy = config.get('params', {}).get('missing_policy', 'as_category')
-                columns_str = f"训练折 OHE: {columns_str}（缺失={policy}）"
-            elif desc_name == 'mfp':
-                params = config.get('params', {})
-                columns_str = (
-                    f"count r={params.get('radius', 3)}, d={params.get('fp_size', 1024)}: "
-                    + columns_str
-                )
-            if len(columns_str) > 45:
-                columns_str = columns_str[:42] + '...'
-        elif mode == 'sum':
-            # 加和模式: 显示参与列数量
-            columns_str = f"加和 {len(config['columns'])} 列: {', '.join(config['columns'])}"
-            if len(columns_str) > 45:
-                columns_str = f"加和 {len(config['columns'])} 列"
-        elif mode == 'reaction':
-            # 反应模式: 显示额外反应物
-            extra = config.get('extra_reactants', [])
-            if extra:
-                columns_str = f"reactant+{', '.join(extra)} → product"
-            else:
-                columns_str = "reactant → product"
-        else:
-            columns_str = "未知模式"
-
-        print(f"{idx:<6}{desc_name:<15}{mode:<12}{columns_str:<45}")
-
-    print("=" * 80)
-
-
-def select_descriptor_to_edit(descriptor_configs):
-    """
-    让用户选择要编辑的描述符
-
-    Args:
-        descriptor_configs: 描述符配置列表
-
-    Returns:
-        int or None: 要编辑的描述符索引(0-based),若用户选择完成则返回None
-    """
-    print("\n请选择要编辑的描述符(输入序号),或输入 'done' 使用当前配置:")
-
-    while True:
-        user_input = input("序号 (或 'done'): ").strip()
-
-        if user_input.lower() == 'done':
-            return None
-
-        try:
-            idx = int(user_input)
-            if 1 <= idx <= len(descriptor_configs):
-                return idx - 1  # 返回0-based索引
-            else:
-                print(f"[X] 无效的序号,请输入 1-{len(descriptor_configs)}")
-        except ValueError:
-            print("[X] 输入格式错误,请输入数字或 'done'")
-
-
-def step4_orchestrate(all_column_configs):
-    """
-    步骤4总控函数(默认配置 + 可选编辑模式)
-
-    Args:
-        all_column_configs: 所有列的配置列表
-
-    Returns:
-        list: 所有描述符的配置列表
-    """
-    # 4.1 选择描述符
-    selected_descriptors = step4_select_descriptors()
-
-    # 4.2 自动生成所有描述符的默认配置
-    descriptor_configs = []
-    for desc_name in selected_descriptors:
-        # OHE must never receive an implicit set of all strings: make the
-        # user identify the categorical inputs before a YAML can be written.
-        config = (
-            step4_configure_descriptor(desc_name, all_column_configs)
-            if desc_name == 'ohe'
-            else generate_default_descriptor_config(desc_name, all_column_configs)
+    if model_name == "svm":
+        from yonod.models.svm_model import SVMYieldModel
+        sub = args.svm_subsample if args.svm_subsample > 0 else None
+        return SVMYieldModel(subsample_n=sub)
+    if model_name == "autogluon":
+        from yonod.models.autogluon_model import AutoGluonYieldModel
+        return AutoGluonYieldModel(
+            time_limit=int(getattr(args, "autogluon_time_limit", 300)),
+            presets=str(getattr(args, "autogluon_presets", "medium_quality")),
+            num_cpus=int(getattr(args, "autogluon_num_cpus", 1)),
         )
-        descriptor_configs.append(config)
-
-    # 4.3 显示配置摘要
-    display_descriptor_configs_summary(descriptor_configs)
-
-    # 4.4 询问是否编辑
-    print("\n是否需要编辑某个描述符的配置? (y/N)")
-    choice = input("选择 [N]: ").strip().lower()
-
-    if choice not in ['y', 'yes']:
-        print("\n[OK] 使用默认配置")
-        return descriptor_configs
-
-    # 4.5 循环编辑流程
-    while True:
-        # 选择要编辑的描述符
-        edit_idx = select_descriptor_to_edit(descriptor_configs)
-
-        if edit_idx is None:
-            # 用户选择完成编辑
-            print("\n[OK] 配置完成!")
-            break
-
-        # 编辑选中的描述符
-        desc_name = descriptor_configs[edit_idx]['descriptor']
-        print(f"\n正在编辑描述符: {desc_name}")
-
-        # 调用原有的配置函数
-        new_config = step4_configure_descriptor(desc_name, all_column_configs)
-        descriptor_configs[edit_idx] = new_config
-
-        # 显示更新后的配置摘要
-        display_descriptor_configs_summary(descriptor_configs)
-
-    return descriptor_configs
+    if model_name == "lightgbm":
+        from yonod.models.lightgbm_model import LightGBMYieldModel
+        return LightGBMYieldModel()
+    raise ValueError(f"未知模型名称 {model_name!r}")
 
 
-# ============================================================================
-# 步骤5-8: 其他配置项
-# ============================================================================
+# ──────────────────────────── 外层折指标汇总 ─────────────────────────────── #
 
-def step5_select_models():
-    """
-    选择建模模型
-
-    Returns:
-        list: 选中的模型名称列表
-    """
-    print("\n" + "=" * 60)
-    print("步骤5: 指定建模模型")
-    print("=" * 60)
-
-    models = [
-        ('XGBoost', '梯度提升树回归'),
-        ('Random Forest', '随机森林回归'),
-        ('SVM', '支持向量回归'),
-        ('AutoGluon', '自动化集成建模'),
-        ('LightGBM', 'CPU 梯度提升树回归基线（需安装可选 lightgbm 依赖）'),
-    ]
-
-    print("\n可用模型:")
-    for idx, (model, description) in enumerate(models, 1):
-        print(f"  [{idx}] {model}: {description}")
-
-    print("\n请选择模型(输入序号,用逗号分隔,如: 1,2,4)")
-    print("或直接回车选择全部模型")
-
-    while True:
-        user_input = input("模型序号: ").strip()
-
-        if user_input == '':
-            selected = [model for model, _ in models]
-            break
-
-        try:
-            indices = [int(x.strip()) for x in user_input.split(',')]
-            if all(1 <= idx <= len(models) for idx in indices):
-                selected = [models[i-1][0] for i in indices]
-                break
-            else:
-                print("[X] 存在无效的序号")
-        except ValueError:
-            print("[X] 输入格式错误")
-
-    print(f"\n[OK] 已选择 {len(selected)} 个模型: {', '.join(selected)}")
-    return selected
-
-
-def step6_dataset_metadata():
-    """
-    收集数据集元信息
-
-    Returns:
-        dict: {
-            'repo_url': str,
-            'doi': str,
-            'notes': str
-        }
-    """
-    print("\n" + "=" * 60)
-    print("步骤6: 补充数据集信息")
-    print("=" * 60)
-
-    repo_url = input("项目地址(可选): ").strip()
-    doi = input("文献DOI(可选): ").strip()
-    notes = input("备注(可选): ").strip()
-
-    metadata = {
-        'repo_url': repo_url,
-        'doi': doi,
-        'notes': notes
+def _fold_metric_result(
+    *,
+    r2s: List[float],
+    rmses: List[float],
+    maes: List[float],
+    started_at: float,
+    predict_time_s: float,
+    device: str,
+    oof: np.ndarray,
+    y: np.ndarray,
+    cv: int,
+    fold_metadata: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Summarise externally defined folds with one canonical metrics shape."""
+    result: Dict[str, Any] = {
+        "r2_mean": float(np.mean(r2s)),
+        "r2_std": float(np.std(r2s)),
+        "rmse_mean": float(np.mean(rmses)),
+        "rmse_std": float(np.std(rmses)),
+        "mae_mean": float(np.mean(maes)),
+        "mae_std": float(np.std(maes)),
+        "train_time_s": float(time.time() - started_at),
+        "predict_time_s": float(predict_time_s),
+        "device": device,
+        "evaluation_protocol": "outer_kfold",
+        "expected_folds": int(cv),
+        "completed_folds": int(len(r2s)),
+        "oof_pred": oof,
+        "oof_y_true": y,
     }
-
-    print("\n[OK] 元信息已记录")
-    return metadata
-
-
-def step7_select_report_format():
-    """
-    选择报告输出格式
-
-    Returns:
-        list: 选中的格式列表
-    """
-    print("\n" + "=" * 60)
-    print("步骤7: 选择报告输出格式")
-    print("=" * 60)
-
-    formats = ['Markdown', 'HTML']
-
-    print("\n可用格式:")
-    for idx, fmt in enumerate(formats, 1):
-        print(f"  [{idx}] {fmt}")
-
-    print("\n请选择输出格式(输入序号,用逗号分隔,如: 1,3)")
-    print("或直接回车选择全部格式")
-
-    while True:
-        user_input = input("格式序号: ").strip()
-
-        if user_input == '':
-            selected = formats
-            break
-
-        try:
-            indices = [int(x.strip()) for x in user_input.split(',')]
-            if all(1 <= idx <= len(formats) for idx in indices):
-                selected = [formats[i-1] for i in indices]
-                break
-            else:
-                print("[X] 存在无效的序号")
-        except ValueError:
-            print("[X] 输入格式错误")
-
-    print(f"\n[OK] 已选择输出格式: {', '.join(selected)}")
-    return selected
-
-
-def step8_confirm_and_generate(df, all_invalid_rows, project_folder, project_name):
-    """
-    展示最终配置,生成修复后数据集(可选)
-
-    Args:
-        df: 原始数据集
-        all_invalid_rows: 所有非法行的索引集合
-        project_folder: 项目文件夹
-        project_name: 项目名称
-
-    Returns:
-        str: 修复后数据集文件路径(如果生成),否则返回None
-    """
-    print("\n" + "=" * 60)
-    print("步骤8: 确认配置并生成修复后数据集")
-    print("=" * 60)
-
-    print("\n是否生成修复后数据集(删除非法行)?")
-    print("  1. 是,生成修复后数据集")
-    print("  2. 否,仅保留原始数据集")
-
-    choice = input("选择 [2]: ").strip()
-
-    if choice == '1':
-        print("\n[OK] 将生成修复后数据集(删除非法行)")
-        fixed_path = generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name)
-        return fixed_path
-    else:
-        print("\n[OK] 不生成修复后数据集")
-        return None
-
-
-def generate_fixed_dataset(df, all_invalid_rows, project_folder, project_name):
-    """
-    生成修复后数据集(删除非法行)
-
-    Args:
-        df: 原始数据集
-        all_invalid_rows: 所有非法行的索引集合
-        project_folder: 项目文件夹
-        project_name: 项目名称
-
-    Returns:
-        str: 修复后数据集文件路径
-    """
-    print("\n生成修复后数据集...")
-
-    valid_row_indices = [i for i in range(len(df)) if i not in all_invalid_rows]
-    fixed_df = df.iloc[valid_row_indices]
-
-    fixed_path = os.path.join(project_folder, 'feature', 'docs', f"{project_name}_fixed_dataset.csv")
-    os.makedirs(os.path.dirname(fixed_path), exist_ok=True)
-    fixed_df.to_csv(fixed_path, index=False, encoding='utf-8')
-
-    print(f"[OK] 修复后数据集已生成: {fixed_path}")
-    print(f"  原始行数: {len(df)}")
-    print(f"  删除行数: {len(all_invalid_rows)}")
-    print(f"  剩余行数: {len(fixed_df)}")
-
-    return fixed_path
-
-
-def select_stable_sample_id(normalized_dataset_path: str, *, preserve_text: bool = False) -> str:
-    """Require a user-declared unique ID before a schema-2 run is written.
-
-    The old wizard silently relied on a row position.  A row position is not a
-    portable artifact identity, so schema-2 deliberately makes this a visible
-    selection and verifies uniqueness against the normalized population.
-    """
-    frame = pd.read_csv(
-        normalized_dataset_path,
-        **({'dtype': str, 'keep_default_na': False} if preserve_text else {}),
-    )
-    if frame.empty:
-        raise ValueError("规范数据集为空，无法声明稳定 sample ID")
-    columns = list(frame.columns)
-    print("\n请选择稳定 sample ID 列（该列必须非空且唯一；不能使用隐含行号）：")
-    for index, column in enumerate(columns, start=1):
-        print(f"  [{index}] {column}")
-    while True:
-        value = input("sample ID 列序号或列名: ").strip()
-        if value.isdigit() and 1 <= int(value) <= len(columns):
-            column = columns[int(value) - 1]
-        elif value in columns:
-            column = value
-        else:
-            print("[X] 请输入显示的列序号或完整列名")
-            continue
-        series = frame[column]
-        if series.isna().any():
-            print(f"[X] {column!r} 包含空值，不能作为稳定 sample ID")
-            continue
-        ids = series.astype(str).str.strip()
-        if (ids == "").any() or ids.duplicated().any():
-            print(f"[X] {column!r} 含空值或重复值，不能作为稳定 sample ID")
-            continue
-        print(f"[OK] stable sample ID: {column}")
-        return column
-
-
-def _canonical_wizard_models(selected_models: List[str]) -> List[str]:
-    aliases = {
-        "xgboost": "xgb", "random forest": "rf", "svm": "svm",
-        "autogluon": "autogluon", "lightgbm": "lightgbm",
-    }
-    result: List[str] = []
-    for value in selected_models:
-        normalized = aliases.get(str(value).strip().lower())
-        if normalized is None:
-            raise ValueError(f"向导选择了不受支持的模型：{value!r}")
-        if normalized in result:
-            raise ValueError(f"向导模型选择重复：{value!r}")
-        result.append(normalized)
-    if not result:
-        raise ValueError("至少要选择一个模型")
+    if fold_metadata:
+        result["fold_metadata"] = fold_metadata
+        first = fold_metadata[0]
+        if "time_limit" in first:
+            result["autogluon_time_limit"] = first.get("time_limit")
+        if "presets" in first:
+            result["autogluon_presets"] = first.get("presets")
+        if "num_cpus" in first:
+            result["autogluon_num_cpus"] = first.get("num_cpus")
+        if "random_state_policy" in first:
+            result["autogluon_seed_policy"] = first.get("random_state_policy")
     return result
 
 
-def _config_path_reference(target: Path, config_folder: Path) -> str:
-    """Keep paths YAML-relative, or absolute across Windows drive boundaries."""
-    target = target.resolve()
-    repository = Path(__file__).resolve().parent
-    if config_folder.resolve() == repository / 'config':
-        try:
-            return './' + target.relative_to(repository).as_posix()
-        except ValueError:
-            pass
-    try:
-        return Path(os.path.relpath(target, config_folder.resolve())).as_posix()
-    except ValueError:
-        # Windows cannot relativize paths on different drives.
-        return target.as_posix()
+# ──────────────────────────── 带数值列的 CV 循环 ───────────────────────────── #
 
+def _cv_with_numeric(
+    model_name: str,
+    model: Any,
+    X_smiles: np.ndarray,
+    X_numeric: np.ndarray,
+    y: np.ndarray,
+    cv: int,
+    svm_subsample: Optional[int],
+) -> Dict[str, Any]:
+    """KFold CV with numeric preprocessing fitted inside each train fold."""
+    kf = KFold(n_splits=cv, shuffle=True, random_state=42)
+    r2s, rmses, maes = [], [], []
+    oof = np.full(len(y), np.nan, dtype=np.float64)
+    started = time.time()
+    predict_time_s = 0.0
+    device = "cpu"
+    fold_metadata: List[Dict[str, Any]] = []
 
-def save_config_file(
-    project_folder: str,
-    project_name: str,
-    dataset_path: str,
-    normalized_dataset_path: Optional[str],
-    all_column_configs: List[Dict],
-    descriptor_configs: List[Dict],
-    selected_models: List[str],
-    metadata: Dict,
-    report_formats: List[str],
-    sample_id_col: str,
-    config_output_path: Optional[str] = None,
-) -> str:
-    """
-    保存 schema-2 YAML 运行配置。
+    for fold_idx, (tr, te) in enumerate(kf.split(X_smiles), start=1):
+        scaler = StandardScaler()
+        X_num_tr = scaler.fit_transform(X_numeric[tr])
+        X_num_te = scaler.transform(X_numeric[te])
+        X_tr = np.hstack([X_smiles[tr], X_num_tr])
+        X_te = np.hstack([X_smiles[te], X_num_te])
+        y_tr, y_te = y[tr], y[te]
 
-    Args:
-        project_folder: 项目文件夹路径
-        project_name: 项目名称
-        dataset_path: 原始数据集路径
-        normalized_dataset_path: 规范数据集路径（可能为None）
-        all_column_configs: 所有列的配置列表
-        descriptor_configs: 描述符配置列表
-        selected_models: 选中的模型列表
-        metadata: 元信息字典
-        report_formats: 报告格式列表
-        sample_id_col: 已在规范数据集中验证的唯一稳定 ID 列
-        config_output_path: 可选生成目标；指定时拒绝覆盖已有配置
-
-    Returns:
-        str: 配置文件路径
-    """
-    # 确定要使用的数据集路径（优先使用规范数据集）
-    if normalized_dataset_path:
-        effective_dataset_path = normalized_dataset_path
-    else:
-        effective_dataset_path = dataset_path
-
-    # 构建列角色信息：读取规范数据集的实际列名
-    column_roles = {
-        'label': None,
-        'reactants': [],
-        'products': [],
-        'others': [],
-        'conditions': [],
-        # OHE columns are also declared on the FeatureSpec. This duplicate
-        # role-level list keeps the exported run configuration self-describing for tools that
-        # inspect column roles before parsing feature declarations.
-        'categoricals': list(dict.fromkeys(
-            column
-            for descriptor in descriptor_configs
-            if descriptor.get('descriptor') == 'ohe'
-            for column in descriptor.get('columns', [])
-        )),
-    }
-
-    if normalized_dataset_path:
-        # 读取规范数据集的实际列名
-        normalized_df = pd.read_csv(normalized_dataset_path, nrows=0)
-        actual_columns = normalized_df.columns.tolist()
-
-        # 从列配置中提取每个角色对应的基础名称（用户声明的名称）
-        reactant_base_names = set()
-        product_base_names = set()
-        others_base_names = set()
-        condition_base_names = set()
-
-        for cfg in all_column_configs:
-            role = cfg['role']
-            base_name = cfg['name']
-
-            if role == 'label':
-                column_roles['label'] = base_name
-            elif role == 'reactant':
-                reactant_base_names.add(base_name)
-            elif role == 'product':
-                product_base_names.add(base_name)
-            elif role == 'others':
-                others_base_names.add(base_name)
-            elif role == 'condition':
-                condition_base_names.add(base_name)
-
-        # 遍历规范数据集的实际列名，按角色分类
-        for col in actual_columns:
-            # 跳过 label 列
-            if col == column_roles['label']:
-                continue
-
-            # 判断是否为 reactant 列（基于用户声明的名称匹配）
-            matched_reactant = False
-            for base_name in reactant_base_names:
-                if col == base_name or col.startswith(f'{base_name}-'):
-                    column_roles['reactants'].append(col)
-                    matched_reactant = True
-                    break
-
-            if matched_reactant:
-                continue
-
-            # 判断是否为 product 列
-            if col in product_base_names:
-                column_roles['products'].append(col)
-            # 判断是否为 condition 列
-            elif col in condition_base_names:
-                column_roles['conditions'].append(col)
-            # 判断是否为 others 列
-            else:
-                # others 列可能是 base_name 或 base_name-1, base_name-2, ...
-                for base_name in others_base_names:
-                    if col == base_name or col.startswith(f'{base_name}-'):
-                        column_roles['others'].append(col)
-                        break
-    else:
-        # 如果没有规范数据集，使用原始列名（向后兼容）
-        for cfg in all_column_configs:
-            role = cfg['role']
-            name = cfg['name']
-            if role == 'label':
-                column_roles['label'] = name
-            elif role == 'reactant':
-                column_roles['reactants'].append(name)
-            elif role == 'product':
-                column_roles['products'].append(name)
-            elif role == 'others':
-                column_roles['others'].append(name)
-            elif role == 'condition':
-                column_roles['conditions'].append(name)
-
-    # 构建列映射数组（人类可读格式）
-    column_mapping = []
-    for cfg in all_column_configs:
-        column_mapping.append({
-            'origin_name': cfg['origin_name'],
-            'role': cfg['role'],
-            'new_name': cfg['name']
-        })
-
-    if not isinstance(sample_id_col, str) or not sample_id_col.strip():
-        raise ValueError("schema-2 向导配置必须显式提供唯一的 sample_id_col")
-    try:
-        id_frame = pd.read_csv(
-            effective_dataset_path, usecols=[sample_id_col.strip()],
-            **(
-                {'dtype': {sample_id_col.strip(): str}, 'keep_default_na': False}
-                if config_output_path is not None else {}
-            ),
+        prediction, device, model_metadata = _fit_predict_explicit_fold(
+            model_name,
+            args=argparse.Namespace(),
+            X_train=X_tr,
+            y_train=y_tr,
+            X_valid=X_te,
+            fold_index=fold_idx,
+            svm_subsample=svm_subsample,
+            model_instance=model,
+            context={"evaluation_protocol": "outer_kfold", "outer_seed": 42},
         )
-    except Exception as exc:
-        raise ValueError(f"无法读取或定位 sample_id_col {sample_id_col!r}：{exc}") from exc
-    if id_frame.empty:
-        raise ValueError("规范数据集为空，无法写入 schema-2 运行配置")
-    ids = id_frame[sample_id_col.strip()]
-    normalized_ids = ids.astype(str).str.strip()
-    if ids.isna().any() or (normalized_ids == "").any() or normalized_ids.duplicated().any():
-        raise ValueError("sample_id_col 必须在规范数据集中为唯一且非空的稳定 ID")
-    if config_output_path is not None:
-        inferred_ids = pd.read_csv(effective_dataset_path, usecols=[sample_id_col.strip()])[sample_id_col.strip()]
-        if inferred_ids.isna().any() or inferred_ids.astype(str).tolist() != ids.astype(str).tolist():
-            raise ValueError(
-                "当前建模读取规则会改变 sample ID 文本（如 001 或 NA）；"
-                "未发布 YAML。请事先明确准备带非数字前缀的稳定文本 ID（如 record-001），"
-                "并保留原 ID 的对应关系。"
-            )
+        oof[te] = prediction
+        r2s.append(float(r2_score(y_te, prediction)))
+        rmses.append(float(np.sqrt(mean_squared_error(y_te, prediction))))
+        maes.append(float(mean_absolute_error(y_te, prediction)))
+        if model_metadata:
+            fold_metadata.append(model_metadata)
+            predict_time_s += float(model_metadata.get("predict_time_s", 0.0))
 
-    # The dedicated generator publishes research YAML in root config/; the
-    # existing launcher wizard keeps its prior default destination.
-    config_path = (
-        Path(config_output_path).resolve() if config_output_path is not None
-        else Path(project_folder) / "feature" / "docs" / f"{project_name}_run.yaml"
+    return _fold_metric_result(
+        r2s=r2s,
+        rmses=rmses,
+        maes=maes,
+        started_at=started,
+        predict_time_s=predict_time_s,
+        device=device,
+        oof=oof,
+        y=y,
+        cv=cv,
+        fold_metadata=fold_metadata or None,
     )
-    if config_output_path is not None and config_path.exists():
-        raise FileExistsError(f"拒绝覆盖已有配置：{config_path}")
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    dataset_reference = _config_path_reference(Path(effective_dataset_path), config_path.parent)
-    output_reference = _config_path_reference(Path(project_folder), config_path.parent)
-    artifact_reference = _config_path_reference(Path(project_folder) / 'feature', config_path.parent)
-    if config_output_path is not None:
-        forbidden_id_roles = [column_roles['label']]
-        for role in ('reactants', 'products', 'others', 'conditions', 'categoricals'):
-            forbidden_id_roles.extend(column_roles[role])
-        for descriptor in descriptor_configs:
-            forbidden_id_roles.extend(descriptor.get('columns', []))
-        if sample_id_col.strip() in forbidden_id_roles:
-            raise ValueError("sample ID 不能同时作为目标、模型输入或描述符列")
-
-    # New wizard configs intentionally do not recreate the old hidden model
-    # defaults.  Omitted `model_params` reach the installed libraries as their
-    # documented defaults; the one-time migration tool handles legacy runs
-    # that require historical effective values instead.
-    config = {
-        'schema_version': '2.0',
-        'project_name': project_name,
-        'stage': 'all',
-        'dataset': {
-            'path': dataset_reference,
-            'sample_id_col': sample_id_col.strip(),
-            'column_roles': column_roles,
-        },
-        'descriptors': descriptor_configs,
-        'artifacts': {'output_dir': artifact_reference},
-        'models': _canonical_wizard_models(selected_models),
-        'model_params': {},
-        'evaluation': {
-            'protocol': 'outer_kfold', 'n_splits': 5, 'n_repeats': 1,
-            'shuffle': True, 'seed': 42,
-        },
-        'outputs': {'root': output_reference, 'report_formats': list(report_formats)},
-        'metadata': {
-            'origin_dataset_path': dataset_path,
-            'wizard_column_mapping': column_mapping,
-            'legacy_metadata': metadata,
-        },
-    }
-
-    # Validate exactly as the public runtime will before publishing.  An
-    # invalid wizard output must never become a delayed run_modeling.py failure.
-    temporary = config_path.with_name(f".{config_path.stem}.tmp{config_path.suffix}")
-    try:
-        temporary.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding='utf-8')
-        from yonod.config.loader import load_run_config
-        load_run_config(temporary)
-        os.replace(temporary, config_path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
-
-    print(f"[OK] 配置文件已生成: {config_path}")
-    return str(config_path)
 
 
-def step9_auto_launch_modeling(config_path: str) -> bool:
+# ────────────────────────── 配置文件读取 ──────────────────────────────────── #
+
+_MODEL_NAME_MAP = {
+    'XGBoost': 'xgb',
+    'Random Forest': 'rf',
+    'SVM': 'svm',
+    'AutoGluon': 'autogluon',
+    'LightGBM': 'lightgbm',
+    # 小写版本（向后兼容）
+    'xgboost': 'xgb',
+    'random forest': 'rf',
+    'svm': 'svm',
+    'autogluon': 'autogluon',
+    'lightgbm': 'lightgbm',
+}
+
+
+def _map_model_name(display_name: str) -> str:
+    """将显示名称映射为内部模型标识符。"""
+    return _MODEL_NAME_MAP.get(display_name, display_name.lower())
+
+
+def _model_params_for(config: Dict[str, Any], internal_name: str) -> Dict[str, Any]:
+    """Return model_params for either internal or display model keys."""
+    raw = config.get('model_params', {})
+    if not isinstance(raw, dict):
+        return {}
+    candidate_keys = [internal_name]
+    candidate_keys.extend(
+        display_name for display_name, mapped in _MODEL_NAME_MAP.items()
+        if mapped == internal_name
+    )
+    lowered = {str(key).strip().lower(): key for key in raw}
+    for key in candidate_keys:
+        if key in raw and isinstance(raw[key], dict):
+            return dict(raw[key])
+        matched = lowered.get(str(key).strip().lower())
+        if matched is not None and isinstance(raw[matched], dict):
+            return dict(raw[matched])
+    return {}
+
+
+def load_config_from_json(config_path: Path, csv_override: Optional[Path] = None) -> Dict[str, Any]:
     """
-    步骤9: 询问是否自动启动建模
+    从 JSON 配置文件加载配置。
 
     Args:
         config_path: 配置文件路径
+        csv_override: 可选的CSV数据集路径，用于覆盖默认路径
 
     Returns:
-        bool: 是否成功启动建模
+        配置字典
+
+    Raises:
+        FileNotFoundError: 配置文件不存在
+        json.JSONDecodeError: JSON 格式错误
+        ValueError: 配置文件缺少必要字段或数据集不存在
     """
-    print("\n" + "=" * 60)
-    print("步骤9: 启动建模")
-    print("=" * 60)
+    if not config_path.exists():
+        raise FileNotFoundError(f"配置文件不存在: {config_path}")
 
-    # Resolve in the caller's directory before the child switches to the
-    # repository root. Dataset/output references still belong to this YAML.
-    config_path = str(Path(config_path).resolve())
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
 
-    # 构建等效命令
-    main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_modeling.py')
-    cmd_str = f'"{sys.executable}" "{main_script}" --config "{config_path}"'
+    # 验证必要字段（移除 dataset_path 检查）
+    required_fields = ['project_name', 'column_roles', 'descriptors', 'models']
+    missing = [f for f in required_fields if f not in config]
+    if missing:
+        raise ValueError(f"配置文件缺少必要字段: {missing}")
 
-    print("\n是否立即启动建模?")
-    print(f"\n等效命令: {cmd_str}")
-    print("\n  Y - 是，立即启动")
-    print("  n - 否，稍后手动执行")
+    # 验证 column_roles 结构
+    column_roles = config.get('column_roles', {})
+    if 'label' not in column_roles or not column_roles['label']:
+        raise ValueError("配置文件中 column_roles.label 不能为空")
 
-    user_input = input("\n选择 [Y/n]: ").strip().lower()
+    # 构造数据集路径
+    project_name = config['project_name']
+    config_dir = config_path.parent
 
-    if user_input in ('', 'y', 'yes'):
-        print("\n[启动] 正在调用 run_modeling.py 进行建模...")
-        print("=" * 60)
-
-        # 构建命令
-        cmd = [sys.executable, main_script, '--config', config_path]
-
-        try:
-            # 使用 subprocess 调用，实时输出
-            result = subprocess.run(
-                cmd,
-                check=False,
-                cwd=os.path.dirname(os.path.abspath(__file__))
-            )
-
-            if result.returncode == 0:
-                print("\n[完成] 建模任务已成功完成!")
-                return True
-            else:
-                print(f"\n[警告] 建模任务返回码: {result.returncode}")
-                return False
-
-        except Exception as e:
-            print(f"\n[错误] 启动建模失败: {e}")
-            print(f"\n您可以稍后手动执行以下命令:")
-            print(f"  {cmd_str}")
-            return False
+    if csv_override is not None:
+        # 使用用户指定的数据集路径
+        dataset_path = csv_override
     else:
-        print("\n[跳过] 已跳过自动建模")
-        print(f"\n您可以稍后手动执行以下命令:")
-        print(f"  {cmd_str}")
-        return False
+        # 使用命名约定: <project_name>_normalized_dataset.csv
+        dataset_path = config_dir / f"{project_name}_normalized_dataset.csv"
+
+    # 检查数据集是否存在
+    if not dataset_path.exists():
+        raise FileNotFoundError(
+            f"数据集文件不存在: {dataset_path}\n"
+            f"请确保数据集文件位于配置文件同级目录下，且文件名为: {project_name}_normalized_dataset.csv\n"
+            f"或使用 --csv 参数指定数据集路径"
+        )
+
+    # 将数据集路径添加到配置中（供后续使用）
+    config['_dataset_path'] = dataset_path
+
+    return config
 
 
-def validate_config_file(config_path: str) -> bool:
+def config_to_args(config: Dict[str, Any], config_path: Path) -> argparse.Namespace:
     """
-    验证 schema-2 YAML 配置文件是否可由公开运行入口加载。
+    将配置字典转换为 argparse.Namespace 对象。
 
     Args:
-        config_path: 配置文件路径
+        config: 从 JSON 加载的配置字典
+        config_path: 配置文件路径（用于解析相对路径）
 
     Returns:
-        bool: 是否为有效 schema-2 YAML 配置
+        argparse.Namespace 对象，与 parse_args() 返回值兼容
     """
+    column_roles = config['column_roles']
+
+    # 构建 SMILES 列列表
+    smiles_cols = []
+    reactant_cols = column_roles.get('reactants', [])
+    product_cols = column_roles.get('products', [])
+    other_cols = column_roles.get('others', [])
+
+    # 按角色顺序拼接
+    smiles_cols = reactant_cols + product_cols + other_cols
+
+    # 使用 load_config_from_json 中设置的数据集路径
+    dataset_path = config['_dataset_path']
+
+    # 规范化公开 feature declaration。旧的静态 descriptor JSON 仍可直接
+    # 使用；OHE 会被标记为 fold_transform，不能落入全局 artifact 阶段。
+    descriptor_configs = config.get('descriptors', [])
     try:
-        from yonod.config.contracts import resolve_config_path
-        from yonod.config.loader import load_run_config
+        feature_specs = normalise_feature_specs(
+            descriptor_configs,
+            label_col=str(column_roles['label']),
+        )
+    except FeatureRegistryError as exc:
+        raise ValueError(f"descriptors 配置无效：{exc}") from exc
+    descriptors = [spec.descriptor for spec in feature_specs]
 
-        loaded = load_run_config(Path(config_path))
-        # ``stage: benchmark`` has additional protocol invariants that are
-        # intentionally stricter than the generic schema.  Validate its
-        # adapter before printing a successful public-entrypoint verdict, so
-        # an ordinary outer_kfold YAML never looks launchable here.
-        if loaded.effective['stage'] == 'benchmark':
-            protocol = str(loaded.effective.get('evaluation', {}).get('protocol', ''))
-            if protocol == 'frozen_train_external_test':
-                from yonod.benchmark.frozen_external import FrozenExternalTestConfig
-                FrozenExternalTestConfig.from_file(loaded.path)
-            else:
-                from yonod.benchmark.config import BenchmarkConfig
-                BenchmarkConfig.from_file(loaded.path)
-        dataset_path = resolve_config_path(loaded.path, loaded.effective['dataset']['path'])
-        if not dataset_path.is_file():
-            print(f"[X] YAML 所引用的数据集不存在: {dataset_path}")
-            return False
-        print("[OK] 配置文件验证通过")
-        print(f"    项目名称: {loaded.effective['project_name']}")
-        print(f"    阶段: {loaded.effective['stage']}")
-        print(f"    数据集: {dataset_path}")
-        return True
-    except Exception as e:
-        print(f"[X] 配置文件验证失败: {e}")
-        return False
+    configured_categoricals = list(column_roles.get('categoricals', []) or [])
+    for spec in feature_specs:
+        if spec.lifecycle == "fold_transform":
+            configured_categoricals.extend(spec.columns)
+    categorical_cols = list(dict.fromkeys(configured_categoricals)) or None
 
+    # 解析模型列表（映射显示名称）
+    models_raw = config.get('models', [])
+    models = [_map_model_name(m) for m in models_raw]
 
-def main(*, generate_only: bool = False):
-    """
-    运行共享向导；generate_only 仅准备数据和生成/校验 YAML，绝不启动建模。
-    """
-    print("\n" + "=" * 60)
-    print("YONOD YAML 配置生成向导" if generate_only else "YONOD 数据集输入向导 v1.0")
-    print("=" * 60)
-    print("\n欢迎使用YONOD数据集输入向导!")
-    print("本向导将引导您完成数据集的配置和规范化。")
+    # 过滤无效模型
+    valid_models = {'xgb', 'rf', 'svm', 'autogluon', 'lightgbm'}
+    models = [m for m in models if m in valid_models]
 
-    # 步骤1: 收集基本信息
-    basic_info = (
-        step1_collect_basic_info(config_generation_only=True)
-        if generate_only else step1_collect_basic_info()
+    # 解析元信息
+    metadata = config.get('metadata', {})
+    ag_params = _model_params_for(config, 'autogluon')
+
+    # 解析输出格式
+    report_formats = config.get('report_formats', ['HTML', 'Markdown'])
+    output_format = 'both'
+    if 'HTML' in report_formats and 'Markdown' not in report_formats:
+        output_format = 'html'
+    elif 'Markdown' in report_formats and 'HTML' not in report_formats:
+        output_format = 'md'
+
+    # 解析输出目录
+    project_name = config.get('project_name', dataset_path.stem)
+    # 向导将 JSON 与规范化 CSV 放在 <项目目录>/docs/；运行产物则应回到
+    # 项目根目录下的 docs/、pictures/、report/ 三个固定子目录。旧版根级
+    # JSON 保持以其所在目录为输出根，避免移动已有运行结果。
+    output_dir = config_path.parent.parent if config_path.parent.name == "docs" else config_path.parent
+
+    args = argparse.Namespace(
+        csv=dataset_path,
+        label_col=column_roles['label'],
+        smiles_cols=smiles_cols if smiles_cols else None,
+        numeric_cols=column_roles.get('conditions', []) or None,
+        categorical_cols=categorical_cols,
+        reactant_cols=reactant_cols if reactant_cols else None,
+        product_cols=product_cols if product_cols else None,
+        other_cols=other_cols if other_cols else None,
+        task_name=project_name,
+        descriptors=descriptors if descriptors else _DEFAULT_DESCRIPTOR_NAMES,
+        models=models if models else _MODEL_NAMES,
+        output_dir=output_dir,
+        cv=5,
+        nrows=None,
+        append=False,
+        log_file=None,
+        heartbeat=30.0,
+        svm_subsample=8000,
+        rf_n_jobs=-1,
+        rf_n_estimators=300,
+        rf_max_depth=None,
+        mfp_radius=3,
+        mfp_fp_size=1024,
+        autogluon_time_limit=int(ag_params.get('time_limit', 300)),
+        autogluon_presets=str(ag_params.get('presets', 'medium_quality')),
+        autogluon_num_cpus=int(ag_params.get('num_cpus', 1)),
+        ohe_cols=None,
+        ohe_missing_policy="as_category",
+        dataset_citation=metadata.get('doi'),
+        dataset_url=metadata.get('repo_url'),
+        dataset_notes=metadata.get('notes'),
+        output_format=output_format,
+        # 新增：保存原始配置供后续使用
+        _config=config,
+        _config_path=config_path,
+        json=config_path,
+        config=config_path,
+        # 新增：保留完整的描述符配置列表（包含 columns 和 mode）
+        _descriptor_configs=[spec.to_dict() for spec in feature_specs],
+        _feature_specs=feature_specs,
     )
 
-    # 如果是 schema-2 YAML 配置文件，验证后在本入口分派运行时。
-    if basic_info['is_config_file']:
-        # Keep the caller's YAML identity when the ordinary runtime changes
-        # working directory to the repository root.
-        config_path = Path(basic_info['dataset_path']).resolve()
-        print("\n" + "=" * 60)
-        print("检测到 schema-2 YAML 配置文件，验证中...")
-        print("=" * 60)
+    return args
 
-        if validate_config_file(str(config_path)):
-            if generate_only:
-                print("\n[完成] YAML 配置验证通过；仅生成入口不启动描述符计算、训练或预测。")
-                return 0
-            print("\n[OK] 配置文件有效,直接启动建模")
 
-            # Strict benchmarks are deliberately not routed through run_modeling.py:
-            # they require a manifest-defined external-fold plan plus SQLite
-            # recovery state, not the ordinary outer_kfold service.  The
-            # interactive YAML path remains the mandatory public launcher.
-            try:
-                from yonod.config.loader import load_run_config
-                effective = load_run_config(config_path).effective
-                stage = str(effective['stage'])
-                if stage == 'benchmark':
-                    protocol = str(effective.get('evaluation', {}).get('protocol', ''))
-                    if protocol == 'frozen_train_external_test':
-                        from yonod.benchmark.frozen_external import run_frozen_external_test
+# ────────────────────────── 描述符列解析 ──────────────────────────────────── #
 
-                        print("\n[启动] 正在通过 yonod.py 运行 frozen_train_external_test...")
-                        result_code = run_frozen_external_test(config_path)
-                    else:
-                        from yonod.benchmark.runner import run_benchmark
+def _resolve_descriptor_columns(
+    desc_config: Dict[str, Any],
+    all_smiles_cols: List[str],
+    smiles_roles: Dict[str, List[str]],
+) -> List[str]:
+    """
+    将描述符配置中的列名解析为规范化 CSV 中的实际列名。
 
-                        print("\n[启动] 正在通过 yonod.py 运行 manifest_outer_cv strict benchmark...")
-                        result_code = run_benchmark(config_path)
-                    if result_code == 0:
-                        print("\n[完成] 严格 benchmark 已成功完成!")
-                    else:
-                        print(f"\n[警告] 严格 benchmark 返回码: {result_code}")
-                    return result_code
-            except Exception as exc:
-                print(f"\n[错误] 启动严格 benchmark 失败: {exc}")
-                return 1
+    配置中的列名可能是：
+      - 用户声明的基础名称（如 'reactant', 'catalyst'）
+      - 规范化后的实际列名（如 'reactant-1', 'catalyst-1'）
 
-            # 构建命令
-            main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_modeling.py')
-            cmd = [sys.executable, main_script, '--config', str(config_path)]
-            cmd_str = f'"{sys.executable}" "{main_script}" --config "{config_path}"'
+    本函数负责将基础名称展开为所有匹配的实际列名。
 
-            print(f"\n执行命令: {cmd_str}")
-            print("=" * 60)
+    Args:
+        desc_config: 单个描述符配置字典，包含 'descriptor', 'mode', 'columns' 等
+        all_smiles_cols: 规范化 CSV 中的所有 SMILES 列名
+        smiles_roles: 列角色映射 {'reactant': [...], 'product': [...], 'other': [...]}
 
-            try:
-                # 使用 subprocess 调用，实时输出
-                result = subprocess.run(
-                    cmd,
-                    check=False,
-                    cwd=os.path.dirname(os.path.abspath(__file__))
-                )
+    Returns:
+        解析后的实际列名列表
+    """
+    mode = desc_config.get('mode', 'concat')
+    desc_name = desc_config.get('descriptor', '')
 
-                if result.returncode == 0:
-                    print("\n[完成] 建模任务已成功完成!")
-                else:
-                    print(f"\n[警告] 建模任务返回码: {result.returncode}")
-                return result.returncode
+    # DRFP 使用 reaction 模式，固定使用 reactant + product
+    if mode == 'reaction' or desc_name.lower() == 'drfp':
+        # 基础列 = reactant + product
+        base_cols = smiles_roles.get('reactant', []) + smiles_roles.get('product', [])
+        # 额外加入的 others 列
+        extra_reactants = desc_config.get('extra_reactants', [])
+        if extra_reactants:
+            # 展开 extra_reactants 中的基础名称
+            for base_name in extra_reactants:
+                matched = _expand_base_name(base_name, all_smiles_cols)
+                base_cols.extend(matched)
+        return base_cols
 
-            except Exception as e:
-                print(f"\n[错误] 启动建模失败: {e}")
-                return 1
+    # concat 或 sum 模式：从配置的 columns 中解析
+    config_columns = desc_config.get('columns', [])
+
+    if not config_columns:
+        # 如果没有指定 columns，使用默认的全部列
+        return all_smiles_cols
+
+    # 展开每个配置的列名
+    resolved = []
+    for col_name in config_columns:
+        matched = _expand_base_name(col_name, all_smiles_cols)
+        if matched:
+            resolved.extend(matched)
         else:
-            print("\n[X] 配置文件无效,请检查文件格式和内容")
-            return 1
+            # 如果没有匹配到，可能是精确列名，直接添加（如果存在）
+            if col_name in all_smiles_cols:
+                resolved.append(col_name)
+            else:
+                print(f"[warn] 描述符配置中的列名 '{col_name}' 未在数据集中找到，已跳过", file=sys.stderr)
 
-    # CSV文件流程: 加载并展示数据集
-    print("\n" + "=" * 60)
-    print("加载数据集...")
-    print("=" * 60)
-    df = load_and_preview_dataset(basic_info['dataset_path'])
-    source_sample_id = None
-    if generate_only:
-        print("\n稳定 sample ID 仅用于记录对齐；该列不会作为目标或模型输入。")
-        source_sample_id = select_stable_sample_id(basic_info['dataset_path'], preserve_text=True)
-        # Preserve identifiers as written (e.g. 001 or NA), independently of
-        # numerical/SMILES inference used to preview the other source columns.
-        source_ids = pd.read_csv(
-            basic_info['dataset_path'], usecols=[source_sample_id],
-            dtype={source_sample_id: str}, keep_default_na=False,
-        )
-        df[source_sample_id] = source_ids[source_sample_id]
+    return resolved
 
-    print("\n" + "=" * 60)
-    print("步骤1完成!")
-    print("=" * 60)
 
-    # 步骤2: 逐列声明列角色和名称
-    print("\n接下来将进入步骤2: 逐列声明列角色和名称")
-    input("按回车键继续...")
+def _expand_base_name(base_name: str, all_cols: List[str]) -> List[str]:
+    """
+    将基础名称展开为所有匹配的实际列名。
 
-    role_frame = df.drop(columns=[source_sample_id]) if source_sample_id is not None else df
-    all_configs = step2_orchestrate(role_frame)
+    例如：
+      - 'reactant' -> ['reactant-1', 'reactant-2', ...]
+      - 'catalyst' -> ['catalyst'] 或 ['catalyst-1', 'catalyst-2', ...]
+      - 'reactant-1' -> ['reactant-1']（精确匹配）
 
-    print("\n" + "=" * 60)
-    print("步骤2完成!")
-    print("=" * 60)
+    Args:
+        base_name: 基础名称或精确列名
+        all_cols: 所有可用的列名
 
-    # 步骤3: 生成规范数据集与非法输入排除报告
-    print("\n接下来将进入步骤3: 生成规范数据集与非法输入排除报告")
-    input("按回车键继续...")
+    Returns:
+        匹配的列名列表
+    """
+    matched = []
 
-    # 收集所有非法行索引(在步骤3之前需要完成)
-    all_invalid_rows = set()
-    for cfg in all_configs:
-        if 'invalid_rows' in cfg:
-            all_invalid_rows.update(cfg['invalid_rows'])
+    # 精确匹配
+    if base_name in all_cols:
+        return [base_name]
 
-    output_paths = step3_orchestrate(
-        df,
-        all_configs,
-        basic_info['project_folder'],
-        basic_info['project_name'],
-        sample_id_col=source_sample_id,
-    )
+    # 模式匹配：base_name-N
+    for col in all_cols:
+        if col == base_name:
+            matched.append(col)
+        elif col.startswith(f"{base_name}-"):
+            # 验证后缀是数字
+            suffix = col[len(base_name) + 1:]
+            if suffix.isdigit():
+                matched.append(col)
 
-    print("\n" + "=" * 60)
-    print("步骤3完成!")
-    print("=" * 60)
-
-    # 步骤4: 指定描述符
-    print("\n接下来将进入步骤4: 指定描述符")
-    input("按回车键继续...")
-
-    descriptor_configs = step4_orchestrate(all_configs)
-
-    print("\n" + "=" * 60)
-    print("步骤4完成!")
-    print("=" * 60)
-
-    # 步骤5: 选择建模模型
-    print("\n接下来将进入步骤5: 选择建模模型")
-    input("按回车键继续...")
-
-    selected_models = step5_select_models()
-
-    print("\n" + "=" * 60)
-    print("步骤5完成!")
-    print("=" * 60)
-
-    # 步骤6: 补充数据集元信息
-    print("\n接下来将进入步骤6: 补充数据集元信息")
-    input("按回车键继续...")
-
-    metadata = step6_dataset_metadata()
-
-    print("\n" + "=" * 60)
-    print("步骤6完成!")
-    print("=" * 60)
-
-    # 步骤7: 选择报告输出格式
-    print("\n接下来将进入步骤7: 选择报告输出格式")
-    input("按回车键继续...")
-
-    report_formats = step7_select_report_format()
-
-    print("\n" + "=" * 60)
-    print("步骤7完成!")
-    print("=" * 60)
-
-    # 步骤8: 确认配置并生成修复后数据集
-    print("\n接下来将进入步骤8: 确认配置并生成修复后数据集")
-    input("按回车键继续...")
-
-    fixed_dataset_path = step8_confirm_and_generate(
-        df,
-        all_invalid_rows,
-        basic_info['project_folder'],
-        basic_info['project_name']
-    )
-
-    stable_sample_id = source_sample_id or select_stable_sample_id(output_paths['normalized_dataset'])
-
-    # 保存配置文件
-    config_path = save_config_file(
-        project_folder=basic_info['project_folder'],
-        project_name=basic_info['project_name'],
-        dataset_path=basic_info['dataset_path'],
-        normalized_dataset_path=output_paths['normalized_dataset'],
-        all_column_configs=all_configs,
-        descriptor_configs=descriptor_configs,
-        selected_models=selected_models,
-        metadata=metadata,
-        report_formats=report_formats,
-        sample_id_col=stable_sample_id,
-        config_output_path=(
-            str(Path(__file__).resolve().parent / 'config' / f"{basic_info['project_name']}.yaml")
-            if generate_only else None
-        ),
-    )
-
-    # 输出最终总结
-    print("\n" + "=" * 60)
-    print("数据准备完成!")
-    print("=" * 60)
-    print("\n生成的文件:")
-    if output_paths['invalid_report']:
-        print(f"  - 非法输入报告: {output_paths['invalid_report']}")
-    if output_paths['normalized_dataset']:
-        print(f"  - 规范数据集: {output_paths['normalized_dataset']}")
-    else:
-        print("  - 规范数据集: 无需生成（原始数据集无非法值）")
-    if fixed_dataset_path:
-        print(f"  - 修复后数据集: {fixed_dataset_path}")
-    print(f"  - 配置文件: {config_path}")
-    print("    (列映射信息已嵌入 metadata.wizard_column_mapping 字段)")
-
-    print("\n配置汇总:")
-    print(f"  - 描述符: {', '.join([cfg['descriptor'] for cfg in descriptor_configs])}")
-    print(f"  - 模型: {', '.join(selected_models)}")
-    print(f"  - 报告格式: {', '.join(report_formats)}")
-    if metadata['repo_url']:
-        print(f"  - 项目地址: {metadata['repo_url']}")
-    if metadata['doi']:
-        print(f"  - DOI: {metadata['doi']}")
-    if metadata['notes']:
-        print(f"  - 备注: {metadata['notes']}")
-
-    if generate_only:
-        print("\n[完成] 标准 schema-2 YAML 已生成并校验；未计算描述符、建立模型或执行预测。")
-        print("需要运行时，请启动 yonod.py 并在首次提示提供上述 YAML 路径。")
+    # 按数字后缀排序
+    def sort_key(c: str) -> int:
+        if '-' in c:
+            suffix = c.rsplit('-', 1)[-1]
+            if suffix.isdigit():
+                return int(suffix)
         return 0
 
-    # 步骤9: 询问是否自动启动建模
-    step9_auto_launch_modeling(config_path)
+    matched.sort(key=sort_key)
+    return matched
 
+
+def _get_descriptor_config(
+    desc_name: str,
+    descriptor_configs: Optional[List[Dict[str, Any]]],
+) -> Optional[Dict[str, Any]]:
+    """
+    根据描述符名称查找对应的配置。
+
+    Args:
+        desc_name: 描述符名称
+        descriptor_configs: 描述符配置列表
+
+    Returns:
+        匹配的配置字典，或 None
+    """
+    if not descriptor_configs:
+        return None
+
+    for cfg in descriptor_configs:
+        if cfg.get('descriptor', '').lower() == desc_name.lower():
+            return cfg
+
+    return None
+
+
+def _feature_specs_for_args(args: argparse.Namespace, *, label_col: str) -> list[FeatureSpec]:
+    """Return one validated public feature declaration per requested candidate.
+
+    JSON configuration reaches this function through ``_feature_specs``.  CLI
+    flags are converted to the same schema so neither MFP parameters nor OHE
+    lifecycle rules can bypass configuration/artifact auditing.
+    """
+    configured = getattr(args, "_feature_specs", None)
+    if configured is not None:
+        return list(configured)
+
+    declarations: list[dict[str, Any]] = []
+    for descriptor in args.descriptors:
+        item: dict[str, Any] = {"id": descriptor, "descriptor": descriptor}
+        if descriptor == "drfp":
+            item["mode"] = "reaction"
+        elif descriptor == "maf":
+            item["mode"] = "sum"
+        else:
+            item["mode"] = "concat"
+        if descriptor == "mfp":
+            item["params"] = {
+                "radius": int(args.mfp_radius),
+                "fp_size": int(args.mfp_fp_size),
+                "profile": "standard",
+            }
+        elif descriptor == "ohe":
+            if not args.ohe_cols:
+                raise FeatureRegistryError(
+                    "选择 ohe 时必须提供 --ohe-cols COL [COL ...]；"
+                    "OHE 不会自动猜测类别列。"
+                )
+            item["columns"] = list(args.ohe_cols)
+            item["params"] = {
+                "missing_policy": args.ohe_missing_policy,
+                "dtype": "float32",
+                "handle_unknown": "ignore",
+            }
+        declarations.append(item)
+    return normalise_feature_specs(declarations, label_col=label_col)
+
+
+def _resolve_static_feature_columns(
+    spec: FeatureSpec,
+    all_smiles_cols: List[str],
+    smiles_roles: Dict[str, List[str]],
+) -> List[str]:
+    """Resolve old base-name shorthand while preserving declared order."""
+    if spec.lifecycle != "static_descriptor":
+        raise ValueError("只有静态特征可以解析 SMILES 列")
+    return _resolve_descriptor_columns(spec.to_dict(), all_smiles_cols, smiles_roles)
+
+
+# ────────────────────────────── argparse ──────────────────────────────────── #
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="YONOD 建模入口：schema-2 YAML → 特征 / 训练 / 报告；无参数时提示输入已保存的 YAML 路径",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    # Schema-2 YAML is the only executable configuration surface.  Retain a
+    # hidden --json token solely to give old commands an actionable migration
+    # message, never to deserialize or execute their contents.
+    p.add_argument("--json", type=Path, default=None, help=argparse.SUPPRESS)
+    p.add_argument("--config", type=Path, default=None,
+                   help="schema-2 YAML 配置文件（.yaml/.yml）")
+    p.add_argument("--stage", choices=["features", "train", "all", "benchmark"], default=None,
+                   help="可选一致性检查；必须与 YAML 的 stage 完全相同")
+
+    # Direct-CSV exploratory path only; durable configuration runs use YAML.
+    p.add_argument("--csv", type=Path, default=None,
+                   help="传统直接运行的输入 CSV 路径（schema-2 YAML 不接受此覆盖）")
+    p.add_argument("--label-col", default=None, help="标签列名")
+    p.add_argument("--smiles-cols", nargs="+", default=None, help="SMILES 列名（传统模式必填，三分类模式可省略）")
+    p.add_argument("--numeric-cols", nargs="+", default=None, help="数值辅助列名（可选）")
+    p.add_argument(
+        "--categorical-cols", nargs="+", default=None,
+        help="显式保留的类别列（供 OHE 使用；可与 SMILES 列重叠）",
+    )
+
+    # 新增：三分类模式参数
+    p.add_argument("--reactant-cols", nargs="+", default=None, help="反应物 SMILES 列名（三分类模式）")
+    p.add_argument("--product-cols", nargs="+", default=None, help="产物 SMILES 列名（三分类模式）")
+    p.add_argument("--other-cols", nargs="+", default=None, help="其他参与者 SMILES 列名（三分类模式，可选）")
+
+    p.add_argument("--task-name", default=None, help="任务名称（报告标题，默认 CSV 文件名去后缀）")
+    p.add_argument(
+        "--descriptors", nargs="+", default=_DEFAULT_DESCRIPTOR_NAMES,
+        choices=_DESCRIPTOR_NAMES,
+        help="选用特征（mfp 为计数 Morgan；ohe 在每个 CV 训练折拟合）",
+    )
+    p.add_argument(
+        "--models", nargs="+", default=_MODEL_NAMES,
+        choices=_MODEL_NAMES, help="选用模型"
+    )
+    p.add_argument(
+        "--output-dir", type=Path, default=None,
+        help="结果根目录（内含 docs/、pictures/、report/）",
+    )
+    p.add_argument("--cv", type=int, default=5, help="K-Fold 的 K 值")
+    p.add_argument("--nrows", type=int, default=None, help="仅读取前 N 行（调试用）")
+    p.add_argument("--append", action="store_true", help="追加写入 docs/metrics_summary.csv")
+    p.add_argument(
+        "--log-file", type=Path, default=None,
+        help="日志文件名（始终写入 <output-dir>/docs/）",
+    )
+    p.add_argument("--heartbeat", type=float, default=30.0, help="心跳打印间隔（秒，0 禁用）")
+    p.add_argument("--svm-subsample", type=int, default=8000, help="SVM 子采样数量")
+    p.add_argument("--rf-n-jobs", type=int, default=-1)
+    p.add_argument("--rf-n-estimators", type=int, default=300)
+    p.add_argument("--rf-max-depth", type=int, default=None)
+    p.add_argument("--autogluon-time-limit", type=int, default=300, help="AutoGluon 每个外层折的 time_limit")
+    p.add_argument("--autogluon-presets", default="medium_quality", help="AutoGluon presets 参数")
+    p.add_argument("--autogluon-num-cpus", type=int, default=1, help="AutoGluon 每个外层折可用 CPU 数")
+    p.add_argument("--mfp-radius", type=int, default=3, help="MFP 的 Morgan 半径")
+    p.add_argument("--mfp-fp-size", type=int, default=1024, help="MFP 每组分的 count 指纹维度")
+    p.add_argument(
+        "--ohe-cols", nargs="+", default=None,
+        help="OHE 的有序类别列；选择 ohe 时必填",
+    )
+    p.add_argument(
+        "--ohe-missing-policy", choices=["as_category", "zero_block", "error"],
+        default="as_category", help="OHE 对缺失类别的处理策略",
+    )
+    p.add_argument("--dataset-citation", default=None, metavar="TEXT",
+                   help="数据集文献来源（可选，显示在报告中）")
+    p.add_argument("--dataset-url", default=None, metavar="URL",
+                   help="数据集开源地址（可选，显示在报告中）")
+    p.add_argument("--dataset-notes", default=None, metavar="TEXT",
+                   help="数据集备注（可选，显示在报告中）")
+    p.add_argument(
+        "--output-format", choices=["html", "md", "both"], default="both",
+        help="报告输出格式：html / md / both（默认 both，同时生成 HTML 和 Markdown）",
+    )
+    return p.parse_args(argv)
+
+
+# ────────────────────────────── 辅助函数 ──────────────────────────────────── #
+
+def _resolve_output_dir(csv_path: Path, task_name: str, override: Optional[Path]) -> Path:
+    if override is not None:
+        return override
+    return DEFAULT_RESULTS_ROOT / f"{task_name}建模报告"
+
+
+def _print_table(rows: List[dict]) -> None:
+    if not rows:
+        return
+    df = pd.DataFrame(rows)
+    cols = [c for c in ["feature_id", "descriptor", "lifecycle", "model", "feature_dim", "n_samples",
+                        "r2_mean", "r2_std", "rmse_mean", "mae_mean", "train_time_s"]
+            if c in df.columns]
+    pd.set_option("display.float_format", lambda v: f"{v:.4f}")
+    print()
+    print(df[cols].to_string(index=False))
+
+
+def _save_metrics(rows: List[dict], out_dir: Path, append: bool) -> Path:
+    csv_path = out_dir / "metrics_summary.csv"
+    df = pd.DataFrame(rows)
+    existing_cols = [c for c in _CSV_COLUMNS if c in df.columns]
+    df = df[existing_cols]
+    if append and csv_path.exists():
+        old = pd.read_csv(csv_path)
+        df = pd.concat([old, df], ignore_index=True)
+    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    return csv_path
+
+
+def _save_descriptor_status(rows: List[dict], docs_dir: Path) -> Path:
+    """Persist the complete descriptor-stage audit table for this invocation."""
+    columns = [
+        "feature_id", "descriptor", "lifecycle", "status", "stage", "artifact_path", "n_total",
+        "n_valid", "feature_dim", "feature_dim_min", "feature_dim_max", "completed_folds",
+        "skipped_model_count", "reason",
+    ]
+    frame = pd.DataFrame(rows, columns=columns)
+    path = docs_dir / "descriptor_status.csv"
+    frame.to_csv(path, index=False, encoding="utf-8-sig")
+    return path
+
+
+def _create_output_layout(out_dir: Path) -> tuple[Path, Path, Path]:
+    """Create the user-facing output contract without touching old artefacts."""
+    docs_dir = out_dir / "docs"
+    pictures_dir = out_dir / "pictures"
+    report_dir = out_dir / "report"
+    for directory in (docs_dir, pictures_dir, report_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    return docs_dir, pictures_dir, report_dir
+
+
+def _log_path_in_docs(log_file: Optional[Path], docs_dir: Path) -> Path:
+    """Keep generated logs in docs/, including when a legacy path is supplied."""
+    if log_file is None:
+        return docs_dir / f"run_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    return docs_dir / log_file.name
+
+
+# ─────────────────────────────────── main ─────────────────────────────────── #
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """CLI pipeline 入口：解析参数 → 加载数据 → 描述符×模型 grid → 输出报告。"""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments:
+        print("YONOD 建模入口：请输入已保存的标准 schema-2 YAML 配置。")
+        print("新 CSV 请先通过 generate_yaml_config.py 生成配置。")
+        try:
+            supplied = input("\n请输入配置文件路径(schema-2 YAML): ").strip()
+        except (EOFError, OSError) as exc:
+            print(f"[error] 无法读取 YAML 路径：{exc}", file=sys.stderr)
+            return 1
+        if not supplied or Path(supplied).suffix.lower() not in {".yaml", ".yml"}:
+            print("[error] 请提供 .yaml/.yml 配置；CSV 请先使用 generate_yaml_config.py，JSON 不能作为运行配置。", file=sys.stderr)
+            return 1
+        # Resolve against the caller's folder, including folder-local teaching
+        # packages. Keep this identity throughout all in-process dispatch.
+        config_path = Path(supplied).resolve()
+        print(f"\n[启动] YAML 配置: {config_path}")
+        return _run_schema2_config(config_path, None)
+
+    args = parse_args(arguments)
+
+    if args.json is not None:
+        print(
+            "[error] JSON 已不再是可执行运行配置。请参照 example.yaml "
+            "创建 schema-2 YAML，然后通过 python yonod.py 的首提示提供新 YAML 路径。",
+            file=sys.stderr,
+        )
+        return 1
+    if args.config is not None:
+        return _run_schema2_config(args.config.resolve(), args.stage)
+
+    # Direct CSV flags remain an exploratory convenience path; all durable
+    # configuration-driven runs must enter through --config YAML above.
+    if args.csv is None:
+        print("[error] 请指定 --config <schema-2.yaml>，或提供传统 --csv 参数。", file=sys.stderr)
+        return 1
+    if args.label_col is None:
+        print("[error] 请指定 --label-col 参数，或使用 --config YAML。", file=sys.stderr)
+        return 1
+
+    try:
+        feature_specs = _feature_specs_for_args(args, label_col=str(args.label_col))
+    except FeatureRegistryError as exc:
+        print(f"[error] 特征配置错误: {exc}", file=sys.stderr)
+        return 1
+    args._feature_specs = feature_specs
+    if args.ohe_cols:
+        args.categorical_cols = list(dict.fromkeys((args.categorical_cols or []) + list(args.ohe_cols)))
+
+    # 检查数据集文件是否存在
+    if args.csv is not None and not args.csv.exists():
+        print(f"[error] CSV 不存在: {args.csv}", file=sys.stderr)
+        return 1
+
+    # 验证 SMILES 列参数：必须指定 --smiles-cols 或三分类参数
+    if not args.smiles_cols and not (args.reactant_cols or args.product_cols):
+        print(
+            "[error] 请指定 --smiles-cols 参数，或使用三分类模式（--reactant-cols + --product-cols）。",
+            file=sys.stderr
+        )
+        return 1
+
+    # 验证 DRFP 描述符与列角色分类的依赖关系
+    if any(spec.descriptor == "drfp" for spec in feature_specs):
+        if not args.reactant_cols or not args.product_cols:
+            print(
+                "[error] DRFP 描述符需要列角色分类，请同时指定 --reactant-cols 和 --product-cols 参数。",
+                file=sys.stderr
+            )
+            return 1
+
+    task_name = args.task_name or args.csv.stem
+    out_dir = _resolve_output_dir(args.csv, task_name, args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    docs_dir, pictures_dir, report_dir = _create_output_layout(out_dir)
+
+    log_path = _log_path_in_docs(args.log_file, docs_dir)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    previous_stdout = sys.stdout
+    log_fh = open(log_path, "w", encoding="utf-8", buffering=1)
+    sys.stdout = _Tee(log_fh)
+
+    print(f"[init] 任务：{task_name}")
+    print(f"[init] CSV：{args.csv}  nrows={args.nrows or 'all'}")
+    print(f"[init] 输出目录：{out_dir}")
+    print(f"[init] 文档：{docs_dir}  图片：{pictures_dir}  报告：{report_dir}")
+    if args.log_file is not None and args.log_file != Path(args.log_file.name):
+        print(f"[init] 已将 --log-file 规范为 docs 内文件名：{log_path.name}")
+
+    dataset = load_csv_with_roles(
+        csv_path=args.csv,
+        smiles_cols=args.smiles_cols,
+        numeric_cols=args.numeric_cols or [],
+        categorical_cols=args.categorical_cols or [],
+        label_col=args.label_col,
+        reactant_cols=args.reactant_cols,
+        product_cols=args.product_cols,
+        other_cols=args.other_cols,
+        nrows=args.nrows,
+    )
+    df = dataset.df
+    smiles_cols = dataset.smiles_cols
+    numeric_cols = dataset.numeric_cols
+    label_col = dataset.label_col
+    smiles_roles = dataset.smiles_roles
+
+    # 打印角色信息
+    if smiles_roles['reactant'] or smiles_roles['product']:
+        print("\n[INFO] SMILES 列角色分类：")
+        print(f"  反应物列: {', '.join(smiles_roles['reactant'])}")
+        print(f"  产物列: {', '.join(smiles_roles['product'])}")
+        if smiles_roles['other']:
+            print(f"  其他参与者列: {', '.join(smiles_roles['other'])}")
+    else:
+        print("\n[INFO] 使用传统模式（所有 SMILES 列等价）")
+
+    print(
+        f"[load] n_rows={len(df)}  "
+        f"SMILES列={smiles_cols}  "
+        f"数值列={numeric_cols or '无'}  "
+        f"标签列='{label_col}'"
+    )
+    print(
+        "[grid] 特征={0}  模型={1}  cv={2}".format(
+            ["{0}:{1}".format(spec.id, spec.lifecycle) for spec in feature_specs],
+            args.models, args.cv,
+        )
+    )
+
+    svm_sub = args.svm_subsample if args.svm_subsample > 0 else None
+
+    rows: List[dict] = []
+    descriptor_statuses: List[dict] = []
+    descriptors_dir = out_dir / "descriptors"
+    descriptors_dir.mkdir(parents=True, exist_ok=True)
+    total = len(feature_specs) * len(args.models)
+    done = 0
+    sample_ids = [str(value) for value in df.index]
+    sample_id_array = np.asarray(sample_ids, dtype=str)
+    prepared_features: Dict[str, Dict[str, Any]] = {}
+    status_by_id: Dict[str, Dict[str, Any]] = {}
+
+    print("\n[phase 1/2] 预计算静态特征；按折特征将在建模阶段拟合")
+    for spec in feature_specs:
+        if spec.lifecycle == "fold_transform":
+            missing = [column for column in spec.columns if column not in df.columns]
+            state_root = out_dir / "fold_transformers" / spec.id
+            status = {
+                "feature_id": spec.id,
+                "descriptor": spec.descriptor,
+                "lifecycle": spec.lifecycle,
+                "status": "deferred" if not missing else "failed",
+                "stage": "fold_transform" if not missing else "validate",
+                "artifact_path": str(state_root),
+                "n_total": len(df), "n_valid": len(df), "feature_dim": None,
+                "feature_dim_min": None, "feature_dim_max": None, "completed_folds": 0,
+                "skipped_model_count": len(args.models) if missing else 0,
+                "reason": (
+                    "每个 CV 训练折单独 fit；不会生成全数据 OHE artifact"
+                    if not missing else "OHE 类别列不存在：{0}".format(", ".join(missing))
+                ),
+            }
+            descriptor_statuses.append(status)
+            status_by_id[spec.id] = status
+            if not missing:
+                prepared_features[spec.id] = {"spec": spec, "state_root": state_root}
+                print("[feature:deferred] {0}: OHE 将在每个训练折拟合，列={1}".format(
+                    spec.id, ", ".join(spec.columns)
+                ))
+            else:
+                print("[feature:failed] {0}: {1}".format(spec.id, status["reason"]), file=sys.stderr)
+            continue
+
+        print("\n[feature] 准备静态特征: {0} ({1}) ...".format(spec.id, spec.descriptor))
+        desc_smiles_cols = _resolve_static_feature_columns(spec, smiles_cols, smiles_roles)
+        desc_smiles_roles = {
+            'reactant': [c for c in desc_smiles_cols if c in smiles_roles.get('reactant', [])],
+            'product': [c for c in desc_smiles_cols if c in smiles_roles.get('product', [])],
+            'other': [c for c in desc_smiles_cols if c in smiles_roles.get('other', [])],
+        }
+        feature_config = {"params": dict(spec.params), "feature_spec": spec.to_dict()}
+        artifact_path = descriptor_artifact_path(descriptors_dir, spec.id)
+        try:
+            preparation = prepare_descriptor_artifact(
+                descriptors_dir,
+                descriptor=spec.descriptor,
+                feature_id=spec.id,
+                smiles_cols=list(desc_smiles_cols),
+                df=df,
+                smiles_roles=desc_smiles_roles,
+                mode=spec.mode,
+                descriptor_config=feature_config,
+                sample_ids=sample_ids,
+                sample_id_name="dataframe_index_after_label_filter",
+                compute=build_universal_features,
+            )
+            prepared_features[spec.id] = {
+                "spec": spec, "preparation": preparation,
+                "smiles_cols": list(desc_smiles_cols), "mode": spec.mode,
+            }
+            status = {
+                "feature_id": spec.id, "descriptor": spec.descriptor, "lifecycle": spec.lifecycle,
+                "status": preparation.status, "stage": "precompute",
+                "artifact_path": str(preparation.path), "n_total": preparation.n_total,
+                "n_valid": preparation.n_valid, "feature_dim": preparation.feature_dim,
+                "feature_dim_min": preparation.feature_dim, "feature_dim_max": preparation.feature_dim,
+                "completed_folds": None, "skipped_model_count": 0, "reason": preparation.reason,
+            }
+            descriptor_statuses.append(status)
+            status_by_id[spec.id] = status
+            print("[feature:{0}] {1}: n_valid={2}/{3}  feature_dim={4}  file={5}".format(
+                preparation.status, spec.id, preparation.n_valid, preparation.n_total,
+                preparation.feature_dim, preparation.path,
+            ))
+        except Exception as exc:
+            status = {
+                "feature_id": spec.id, "descriptor": spec.descriptor, "lifecycle": spec.lifecycle,
+                "status": "failed", "stage": "precompute", "artifact_path": str(artifact_path),
+                "n_total": len(df), "n_valid": None, "feature_dim": None,
+                "feature_dim_min": None, "feature_dim_max": None, "completed_folds": 0,
+                "skipped_model_count": len(args.models), "reason": f"{type(exc).__name__}: {exc}",
+            }
+            descriptor_statuses.append(status)
+            status_by_id[spec.id] = status
+            print("[feature:failed] {0}: {1}".format(spec.id, status["reason"]), file=sys.stderr)
+
+    status_path = _save_descriptor_status(descriptor_statuses, docs_dir)
+    print(f"\n[save] 描述符状态已保存: {status_path}")
+    print("\n[phase 2/2] 从 descriptors/ 文件读取特征并开始建模")
+
+    for spec in feature_specs:
+        context = prepared_features.get(spec.id)
+        if context is None:
+            done += len(args.models)
+            print("[skip] {0}: 特征阶段失败，跳过 {1} 个模型".format(spec.id, len(args.models)))
+            continue
+        if spec.lifecycle == "static_descriptor":
+            preparation = context["preparation"]
+            desc_smiles_cols = context["smiles_cols"]
+            try:
+                artifact = load_descriptor_artifact(
+                    preparation.path,
+                    expected_descriptor_config=preparation.descriptor_config,
+                    expected_dataset_fingerprint=preparation.dataset_fingerprint,
+                    expected_sample_ids=np.asarray(sample_ids, dtype=np.str_),
+                )
+            except Exception as exc:
+                status = status_by_id[spec.id]
+                status.update({"status": "failed", "stage": "load", "skipped_model_count": len(args.models),
+                               "reason": f"{type(exc).__name__}: {exc}"})
+                done += len(args.models)
+                print("[feature:failed] {0} 建模前读取失败: {1}".format(spec.id, status["reason"]), file=sys.stderr)
+                continue
+            X_smiles = artifact.X_smiles
+            mask = artifact.valid_mask
+            X_numeric = df[numeric_cols].to_numpy(dtype=np.float32)[mask] if numeric_cols else None
+            y = df[label_col].to_numpy(dtype=np.float64)[mask]
+            input_columns = desc_smiles_cols
+            print("[feature:loaded] {0}: n_valid={1}  X.shape={2}".format(
+                spec.id, int(mask.sum()), X_smiles.shape
+            ))
+        else:
+            X_smiles = None
+            X_numeric = None
+            mask = np.ones(len(df), dtype=bool)
+            y = df[label_col].to_numpy(dtype=np.float64)
+            input_columns = list(spec.columns)
+
+        for model_name in args.models:
+            done += 1
+            label = f"{spec.id} x {model_name} ({done}/{total})"
+            print(f"[eval] 开始: {label}")
+
+            hb = _Heartbeat(interval=args.heartbeat, label=label)
+            if args.heartbeat > 0:
+                hb.start()
+
+            try:
+                if spec.lifecycle == "fold_transform":
+                    metrics = _cv_with_ohe_feature(
+                        spec=spec, frame=df, sample_ids=sample_id_array, numeric_cols=numeric_cols,
+                        y=y, model_name=model_name, args=args,
+                        state_root=context["state_root"], svm_subsample=svm_sub,
+                    )
+                else:
+                    model = _make_model(model_name, args)
+                    if X_numeric is None:
+                        metrics = model.cross_validate(X_smiles, y, cv=args.cv)
+                    else:
+                        metrics = _cv_with_numeric(
+                            model_name, model, X_smiles, X_numeric, y,
+                            cv=args.cv, svm_subsample=svm_sub,
+                        )
+            except Exception as exc:
+                print(f"[error] {label} 失败: {exc}", file=sys.stderr)
+                hb.stop()
+                continue
+            finally:
+                hb.stop()
+
+            metrics.setdefault("evaluation_protocol", "outer_kfold")
+            metrics.setdefault("expected_folds", args.cv)
+            metrics.setdefault("completed_folds", args.cv)
+            metrics.setdefault("rmse_std", np.nan)
+            metrics.setdefault("mae_std", np.nan)
+            metrics.setdefault("predict_time_s", np.nan)
+
+            row: dict = {
+                "task_name":     task_name,
+                "feature_id":    spec.id,
+                "descriptor":    spec.descriptor,
+                "lifecycle":     spec.lifecycle,
+                "model":         model_name,
+                "n_smiles_cols": len(input_columns),
+                "n_numeric_cols":len(numeric_cols),
+                "n_samples":     int(mask.sum()),
+                "n_total":       int(len(mask)),
+                "coverage":      float(mask.sum() / max(len(mask), 1)),
+                "feature_dim":   (
+                    int(X_smiles.shape[1]) + (X_numeric.shape[1] if X_numeric is not None else 0)
+                    if X_smiles is not None else int(metrics["fold_transform_summary"]["output_dim_max"]) + len(numeric_cols)
+                ),
+                "cv":            args.cv,
+            }
+            oof_pred   = metrics.get("oof_pred")
+            oof_y_true = metrics.get("oof_y_true")
+            oof_n_total = int(len(oof_y_true)) if oof_y_true is not None else int(mask.sum())
+            oof_n_observed = 0
+            oof_complete = False
+            if oof_pred is not None and oof_y_true is not None:
+                try:
+                    pred_arr = np.asarray(oof_pred, dtype=np.float64)
+                    true_arr = np.asarray(oof_y_true, dtype=np.float64)
+                    same_shape = pred_arr.shape == true_arr.shape
+                    finite_pred = np.isfinite(pred_arr)
+                    finite_true = np.isfinite(true_arr)
+                    oof_n_observed = int(finite_pred.sum())
+                    oof_complete = bool(
+                        same_shape
+                        and pred_arr.ndim == 1
+                        and true_arr.ndim == 1
+                        and len(pred_arr) == oof_n_total
+                        and oof_n_observed == oof_n_total
+                        and finite_true.all()
+                    )
+                except (TypeError, ValueError):
+                    oof_n_observed = 0
+                    oof_complete = False
+            metrics.setdefault("oof_complete", oof_complete)
+            metrics.setdefault("oof_n_observed", oof_n_observed)
+            metrics.setdefault("oof_n_total", oof_n_total)
+            for k, v in metrics.items():
+                if k not in ("oof_pred", "oof_y_true"):
+                    row[k] = v
+
+            rows.append(row)
+            if spec.lifecycle == "fold_transform":
+                summary = metrics["fold_transform_summary"]
+                status_by_id[spec.id].update({
+                    "status": "completed", "stage": "fold_transform",
+                    "feature_dim": summary["output_dim_max"],
+                    "feature_dim_min": summary["output_dim_min"],
+                    "feature_dim_max": summary["output_dim_max"],
+                    "completed_folds": summary["completed_folds"],
+                    "reason": "每个 CV 训练折独立拟合；状态已保存并完成加载校验",
+                })
+            print(
+                f"[done] {label}  "
+                f"R²={row.get('r2_mean', float('nan')):.4f}  "
+                f"RMSE={row.get('rmse_mean', float('nan')):.4f}  "
+                f"t={row.get('train_time_s', 0):.1f}s"
+            )
+
+            if oof_pred is not None and oof_y_true is not None:
+                try:
+                    from yonod.plot import plot_scatter
+                    valid = ~np.isnan(oof_pred)
+                    if valid.sum() >= 2:
+                        plot_scatter(
+                            oof_y_true[valid], oof_pred[valid],
+                            spec.id, model_name,
+                            pictures_dir,
+                        )
+                except Exception as _exc:
+                    print(f"[warn] 散点图生成失败 ({label}): {_exc}", file=sys.stderr)
+
+    _print_table(rows)
+    status_path = _save_descriptor_status(descriptor_statuses, docs_dir)
+    if rows:
+        csv_out = _save_metrics(rows, docs_dir, args.append)
+        print(f"\n[save] 指标已保存: {csv_out}")
+    else:
+        print("\n[warn] 无有效结果，docs/metrics_summary.csv 未写入", file=sys.stderr)
+
+    task_info = {
+        "task_name":        task_name,
+        "csv_path":         args.csv,
+        "project_folder":   str(out_dir),
+        "n_samples":        rows[0].get("n_samples", "—") if rows else len(df),
+        "smiles_cols":      smiles_cols,
+        "numeric_cols":     numeric_cols or "（无）",
+        "label_col":        label_col,
+        "n_combinations":   len(rows),
+        "dataset_citation": args.dataset_citation,
+        "dataset_url":      args.dataset_url,
+        "dataset_notes":    args.dataset_notes,
+        "descriptors":      [spec.to_dict() for spec in feature_specs],
+        "descriptor_statuses": descriptor_statuses,
+        "descriptor_status_path": str(status_path),
+    }
+    if hasattr(args, '_config') and args._config:
+        task_info["column_mapping"] = args._config.get("column_mapping", [])
+        task_info["origin_dataset_path"] = args._config.get("origin_dataset_path")
+        task_info["dataset_path"] = str(args.csv)
+    if hasattr(args, '_config_path') and args._config_path:
+        task_info["config_path"] = str(args._config_path)
+    metrics_df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=_CSV_COLUMNS)
+    fmt = args.output_format
+
+    if fmt in ("html", "both"):
+        try:
+            from yonod.universal.report import generate_report
+            report_path = generate_report(metrics_df, task_info, out_dir)
+            print(f"[report] HTML 报告已生成: {report_path}")
+        except Exception as exc:
+            print(f"[warn] HTML 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
+
+    if fmt in ("md", "both"):
+        try:
+            from yonod.universal.report import generate_markdown_report
+            md_path = generate_markdown_report(metrics_df, task_info, out_dir)
+            print(f"[report] Markdown 报告已生成: {md_path}")
+        except Exception as exc:
+            print(f"[warn] Markdown 报告生成失败（不影响指标 CSV）: {exc}", file=sys.stderr)
+
+    print(f"[done] 全部完成。日志: {log_path}")
+    sys.stdout.flush()
+    sys.stdout = previous_stdout
+    log_fh.close()
+    return 0
+
+
+def _stable_hash(value: Any) -> str:
+    """Hash an audit payload without relying on process-local object IDs."""
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _fit_predict_explicit_fold(
+    model_name: str,
+    args: argparse.Namespace,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_valid: np.ndarray,
+    *,
+    fold_index: int,
+    svm_subsample: Optional[int],
+    model_instance: Optional[Any] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> tuple[np.ndarray, str, Dict[str, Any]]:
+    """Fit a supported model for one externally defined CV fold."""
+    model = model_instance or _make_model(model_name, args)
+    if model_name == "autogluon":
+        prediction, metadata = model.fit_predict_fold(
+            X_train,
+            y_train,
+            X_valid,
+            fold_index=fold_index,
+            context=context or {"evaluation_protocol": "outer_kfold", "outer_seed": 42},
+        )
+        return np.asarray(prediction, dtype=np.float64), "cpu", metadata
+    if model_name in {"rf", "xgb", "lightgbm"}:
+        estimator = model._build()
+        estimator.fit(X_train, y_train)
+    elif model_name == "svm":
+        train_index = np.arange(len(X_train))
+        if svm_subsample and svm_subsample < len(train_index):
+            rng = np.random.default_rng(seed=fold_index)
+            train_index = rng.choice(train_index, size=svm_subsample, replace=False)
+        estimator = model._build(n_features=X_train.shape[1], n_train=len(train_index))
+        estimator.fit(X_train[train_index], y_train[train_index])
+    else:  # Keep this exhaustive if a future CLI model is added.
+        raise ValueError(f"显式 CV 尚未支持模型 {model_name!r}")
+    return np.asarray(estimator.predict(X_valid), dtype=np.float64), str(getattr(model, "device", "cpu")), {}
+
+
+def _cv_with_ohe_feature(
+    *,
+    spec: FeatureSpec,
+    frame: pd.DataFrame,
+    sample_ids: np.ndarray,
+    numeric_cols: List[str],
+    y: np.ndarray,
+    model_name: str,
+    args: argparse.Namespace,
+    state_root: Path,
+    svm_subsample: Optional[int],
+) -> Dict[str, Any]:
+    """Run ordinary KFold CV with a strictly train-fold-local OHE encoder.
+
+    This intentionally does not call a model adapter's convenience
+    ``cross_validate`` method: those methods own their own split loop and
+    would make it impossible to prove which samples taught the OHE vocabulary.
+    """
+    if spec.lifecycle != "fold_transform" or spec.descriptor != "ohe":
+        raise ValueError("_cv_with_ohe_feature 仅接受 OHE fold_transform")
+    from yonod.descriptors.ohe import OHEFeature
+    if len(y) < args.cv:
+        raise ValueError("样本数必须不少于 cv 折数")
+    component_frame = frame.loc[:, list(spec.columns)]
+    numeric = frame.loc[:, numeric_cols].to_numpy(dtype=np.float32) if numeric_cols else None
+    if numeric is not None and not np.isfinite(numeric).all():
+        raise ValueError("数值辅助列包含 NaN 或 inf，无法在 OHE CV 中安全缩放")
+
+    state_root.mkdir(parents=True, exist_ok=True)
+    dataset_hash = _stable_hash({
+        "sample_ids": sample_ids.tolist(),
+        "columns": list(spec.columns),
+        "records": component_frame.where(pd.notna(component_frame), None).to_dict(orient="records"),
+    })
+    splitter = KFold(n_splits=args.cv, shuffle=True, random_state=42)
+    oof = np.full(len(y), np.nan, dtype=np.float64)
+    r2s: List[float] = []
+    rmses: List[float] = []
+    maes: List[float] = []
+    audits: List[Dict[str, Any]] = []
+    started = time.time()
+    predict_time_s = 0.0
+    device = "cpu"
+
+    for fold_index, (train_idx, valid_idx) in enumerate(splitter.split(component_frame), start=1):
+        transformer = OHEFeature(
+            spec.columns,
+            missing_policy=str(spec.params["missing_policy"]),
+            dtype=str(spec.params["dtype"]),
+            handle_unknown=str(spec.params["handle_unknown"]),
+        )
+        transformer.fit(component_frame.iloc[train_idx], sample_ids=sample_ids[train_idx])
+        X_train = transformer.transform(component_frame.iloc[train_idx], partition="train")
+        X_valid = transformer.transform(component_frame.iloc[valid_idx], partition="valid")
+        if numeric is not None:
+            scaler = StandardScaler()
+            X_train = np.hstack([X_train, scaler.fit_transform(numeric[train_idx])])
+            X_valid = np.hstack([X_valid, scaler.transform(numeric[valid_idx])])
+
+        metadata = transformer.metadata()
+        context = {
+            "feature_id": spec.id,
+            "feature_spec_hash": spec.schema_hash,
+            "dataset_hash": dataset_hash,
+            "split_hash": _stable_hash({
+                "cv": int(args.cv), "seed": 42, "repeat": 1, "fold": fold_index,
+                "train_sample_ids": sample_ids[train_idx].tolist(),
+                "valid_sample_ids": sample_ids[valid_idx].tolist(),
+            }),
+            "repeat": 1,
+            "fold": fold_index,
+            "train_sample_ids_hash": metadata["train_sample_ids_hash"],
+        }
+        fold_dir = state_root / "repeat-01" / f"fold-{fold_index:02d}"
+        transformer.save(fold_dir, context=context)
+        # Read the freshly persisted state back immediately. This checks the
+        # atomic state/metadata contract without refitting on validation rows.
+        OHEFeature.load(fold_dir, expected_context=context)
+
+        prediction, device, model_metadata = _fit_predict_explicit_fold(
+            model_name, args, X_train, y[train_idx], X_valid,
+            fold_index=fold_index, svm_subsample=svm_subsample,
+            context={"evaluation_protocol": "outer_kfold", "outer_seed": 42},
+        )
+        if not np.isfinite(prediction).all():
+            raise ValueError(f"OHE 第 {fold_index} 折模型预测包含 NaN 或 inf")
+        if model_metadata:
+            predict_time_s += float(model_metadata.get("predict_time_s", 0.0))
+        oof[valid_idx] = prediction
+        r2s.append(float(r2_score(y[valid_idx], prediction)))
+        rmses.append(float(np.sqrt(mean_squared_error(y[valid_idx], prediction))))
+        maes.append(float(mean_absolute_error(y[valid_idx], prediction)))
+        audits.append({
+            "fold": fold_index,
+            "state_directory": str(fold_dir),
+            "output_dim": int(metadata["output_dim"]),
+            "categories_hash": metadata["categories_hash"],
+            "train_sample_ids_hash": metadata["train_sample_ids_hash"],
+            "valid_unseen_count": int(metadata["valid_unseen_count"]),
+            "valid_missing_count": int(metadata["valid_missing_count"]),
+            "model_metadata": model_metadata or None,
+        })
+
+    summary = {
+        "feature_id": spec.id,
+        "descriptor": spec.descriptor,
+        "lifecycle": spec.lifecycle,
+        "feature_spec_hash": spec.schema_hash,
+        "dataset_hash": dataset_hash,
+        "fit_scope": "train_only_per_fold",
+        "completed_folds": len(audits),
+        "output_dim_min": min(item["output_dim"] for item in audits),
+        "output_dim_max": max(item["output_dim"] for item in audits),
+        "folds": audits,
+    }
+    (state_root / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    result = _fold_metric_result(
+        r2s=r2s,
+        rmses=rmses,
+        maes=maes,
+        started_at=started,
+        predict_time_s=predict_time_s,
+        device=device,
+        oof=oof,
+        y=y,
+        cv=args.cv,
+        fold_metadata=[item["model_metadata"] for item in audits if item.get("model_metadata")],
+    )
+    result["fold_transform_summary"] = summary
+    return result
+
+
+# ─────────────────────────────── 入口 ────────────────────────────────────── #
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -104,4 +104,4 @@ python -u ..\..\yonod.py
 
 ### 生成其他任务的配置
 
-本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；普通运行器现名为run_modeling.py，历史运行记录中的旧名不改写。
+本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；yonod.py同时承担任务启动与建模执行，历史运行记录中的旧名保留其日期语境。

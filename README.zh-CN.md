@@ -157,13 +157,12 @@ Get-Content ..\..\logs\example_random_split_20261113.stderr.log -Encoding UTF8 -
 
 [example.yaml](example.yaml) 是唯一完整格式规范；本页解释字段，不复制另一套 YAML 模板。三个教学 `run.yaml` 展示具体任务如何填写。
 
-### 三个入口脚本分别做什么
+### 两个入口脚本分别做什么
 
 | 脚本 | 职责 |
 | --- | --- |
 | `generate_yaml_config.py` | 从CSV交互生成并校验标准schema-2 YAML，保存到 `config/<任务名>.yaml`，完成后不启动建模 |
-| `yonod.py` | 正式任务启动入口；首次提示读取准备好的YAML，并分派相应协议 |
-| `run_modeling.py` | 由正式入口调用的普通 `features`/`train`/`all` 配置运行时，也用于文档指定的工程smoke检查 |
+| `yonod.py` | 任务启动与建模运行器；首次提示读取准备好的YAML，执行普通 `features`/`train`/`all` 阶段或分派相应benchmark协议 |
 
 ### 从自己的CSV生成YAML
 
@@ -237,7 +236,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 在新文件中逐项修改：任务名、数据路径和列用途、编码与模型、模型预算、划分规则，以及 `./result/my_reaction` 和其中的 `feature/`。根格式样例使用12条人工记录、两折和10棵RF树，线程数由已安装模型库决定；正式研究应自行确定科学问题、模型与计算预算。固定名单或外测另需参照对应教学样例补齐专用字段，不能只替换 `protocol` 字符串。修改后仍通过 `yonod.py` 首提示读取该 YAML。
 
-解析器拒绝重复键、别名和未知字段。可执行运行配置必须使用schema-2 YAML，不能用JSON代替；JSON审计文件、manifest及其他证据仍按各自用途使用。用 `generate_yaml_config.py` 准备设置，`yonod.py` 启动正式任务，`run_modeling.py` 承担普通运行时与工程检查职责；保存位置和任务隔离仍按 [AGENTS.md](AGENTS.md) 执行。
+解析器拒绝重复键、别名和未知字段。可执行运行配置必须使用schema-2 YAML，不能用JSON代替；JSON审计文件、manifest及其他证据仍按各自用途使用。用 `generate_yaml_config.py` 准备设置，`yonod.py` 校验并执行保存好的YAML。不带参数时，运行器提示输入已有YAML路径；从CSV准备配置请先使用生成器。工程smoke接口为 `python yonod.py --config example.yaml`；保存位置和任务隔离仍按 [AGENTS.md](AGENTS.md) 执行。
 
 ### 可用编码与模型
 
@@ -253,8 +252,7 @@ HPO 仅支持 RF/XGBoost/LightGBM 的已接入搜索流程，搜索只发生在�
 YONOD/
 ├── README.md / README.zh-CN.md  英文默认入口与中文说明
 ├── generate_yaml_config.py     只生成并校验schema-2 YAML，不建模
-├── yonod.py                    正式交互启动入口
-├── run_modeling.py             普通配置运行时
+├── yonod.py                    交互式YAML启动入口与建模运行器
 ├── example.yaml                完整schema-2格式规范与最小测试
 ├── requirements.txt            基础依赖；PyTorch等单独安装
 ├── LICENSE                     本项目许可证
