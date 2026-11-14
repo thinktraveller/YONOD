@@ -27,7 +27,7 @@ Read [beginner content](#beginner-content) to install and complete a first run, 
 - YONOD does not generate product structures, explain reaction mechanisms or automatically choose the best laboratory conditions.
 - If you use product structures as inputs, those structures must be known when you make predictions.
 
-The included teaching data run on a CPU without pretrained model weights. You can try them before preparing your own dataset.
+The included first-use examples run on a CPU without pretrained model weights. Use them as smoke tests before preparing your own dataset.
 
 ### Install YONOD
 
@@ -75,7 +75,7 @@ python -m pip install -r requirements.txt
 - If you already installed the `yonod` environment, activate it instead of creating it again.
 
 - Install PyTorch before the other requirements.
-- The commands above use CPU PyTorch; the three teaching examples need no GPU.
+- The commands above use CPU PyTorch; the three first-use examples need no GPU.
 - LightGBM and SciPy are included in [requirements.txt](requirements.txt).
 - CUDA installation notes are also in that file; choose the PyTorch package for your hardware using the [official version instructions](https://pytorch.org/get-started/previous-versions/).
 
@@ -95,7 +95,22 @@ python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports
 
 ### Complete your first run
 
-#### 1. Look at the teaching files
+#### What is a smoke test?
+
+A smoke test runs the main steps on a small dataset to catch obvious installation, configuration or workflow failures. The included first-use examples mainly serve as smoke tests. They check the selected path through:
+
+- The installation and dependencies needed by that example.
+- Loading its input data and saved configuration.
+- Calculating the selected molecular features.
+- Fitting the selected models and producing predictions.
+- Writing the prediction files and both HTML and Markdown reports.
+
+- After the run, open the report as described below and confirm that you can view it.
+- A pass means that the example ran and produced its expected outputs in the tested environment; a high prediction score is not required.
+- It does not establish chemical prediction accuracy, scientific validity or support for every descriptor, model and workflow.
+- The artificial data's low scores and negative R² remain visible so you can inspect those outputs during first use.
+
+#### 1. Look at the first-use files
 
 Open [the data table](example/random_split/dataset/reactions.csv) and [its settings](example/random_split/run.yaml). A CSV is a text table; SMILES is a text representation of a molecular structure.
 
@@ -105,7 +120,7 @@ Open [the data table](example/random_split/dataset/reactions.csv) and [its setti
 | `yield` | Reference yield on a scale from 0 to 1; `0.10` means 10% |
 | `reactant_1_smiles`, `reactant_2_smiles` | The two molecular structures used as model inputs |
 
-- All 12 records and their yields are artificial teaching values, not experimental measurements.
+- All 12 records and their yields are artificial values for first-use smoke tests, not experimental measurements.
 - The molecular combinations illustrate the file format and do not establish that these are chemically valid reactions.
 
 - The prepared `run.yaml` selects Morgan fingerprints and three models: Random Forest (`rf`), XGBoost (`xgb`) and LightGBM (`lightgbm`).
@@ -180,7 +195,7 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 
 - Training scores describe the records used to fit the model; use held-out or external scores to assess prediction.
 - The examples retain low scores and negative R².
-- They teach the workflow without establishing performance on real chemistry or recommending a model.
+- Their main purpose is to smoke-test workflow execution; these scores do not establish performance on real chemistry or recommend a model.
 
 ### If something goes wrong
 
@@ -188,7 +203,7 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 | --- | --- |
 | `conda` is not recognized | Confirm Miniconda is installed. Linux: use the correct `conda.sh` location. Windows: reopen an initialized Conda PowerShell session. |
 | A terminal command gives `SyntaxError` at `>>>` | You are inside Python. Enter `exit()` to return to the terminal, then run the command there. |
-| Python cannot find `yonod.py`, `run.yaml` or `requirements.txt` | Check the current folder. Installation uses the root; the teaching launch uses `example/random_split/`. |
+| Python cannot find `yonod.py`, `run.yaml` or `requirements.txt` | Check the current folder. Installation uses the root; the first-use launch uses `example/random_split/`. |
 | A path contains spaces, or a YAML file cannot be found | Quote paths in shell commands. Check the actual filename, including extensions; a file ending in `.yaml.txt` is a text file with the wrong extension. |
 | `ModuleNotFoundError` | Activate `yonod`, then install the listed requirements there. PyTorch is a separate first installation; AutoGluon is optional. |
 | No product column in the CSV wizard | Prepare a manual YAML from `example.yaml`; the wizard currently requires one product column. |
@@ -341,7 +356,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 - Keep research YAML files under root `config/`.
 - Paths beginning `./` inside those files resolve from the project root.
 - Explicit `../` paths and relative paths in configurations elsewhere resolve from the YAML's folder; absolute paths stay absolute.
-- A teaching `run.yaml` therefore resolves inputs and outputs inside its own package.
+- A first-use `run.yaml` therefore resolves inputs and outputs inside its own package.
 - Use UTF-8 plain text, spaces for indentation, and check that Windows has not added a `.txt` extension.
 
 | `stage` | Execution |
@@ -356,7 +371,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 ### Choose and run an evaluation workflow
 
-- All three examples use artificial teaching records.
+- All three first-use examples use artificial records and mainly serve as smoke tests of their respective workflows.
 - Run them one at a time.
 - Start each command block from the project root; if you are still inside an example, return with `cd ../..` in Bash or `Set-Location ..\..` in PowerShell.
 - At the launcher's first prompt, enter `run.yaml`.
@@ -560,7 +575,7 @@ python -u ..\..\yonod.py
 - If present, `row_count` must match; `physical_dataset_id` controls the source-ID prefix.
 - Prepare and review the audit from the actual data: the adapter verifies declarations and file identity, but does not recalculate the molecular structure intersections for you.
 - Calculate hashes with the same Bash/PowerShell commands above, substituting the external and audit paths, then enter them in the new YAML.
-- Do not copy the teaching audit's zero counts.
+- Do not copy the first-use example audit's zero counts.
 
 - This adapter currently accepts only static descriptors, excludes numeric conditions, OHE, AutoGluon, HPO and external-test early stopping, and does not save the ordinary complete feature/final-model package.
 - It rejects existing external run output before fitting and does not resume or overwrite it; use a new task name and output directory.
@@ -718,7 +733,7 @@ python -u ..\..\yonod.py
 | `benchmark.task_state.backend` | Required value `sqlite` for `stage: benchmark`. |
 | `benchmark.task_state.resumable` | Required value `true` for `stage: benchmark`. The manifest workflow uses task state for audited recovery; the frozen external adapter still refuses existing run output and does not resume it. |
 | `benchmark.population_id`, `benchmark.dataset_id` | Optional nonempty provenance identifiers. They describe the population/data version; their strings do not prove independent origin. |
-| `benchmark.reproduction_protocol` | Optional mapping for dedicated, already-established reproduction behavior. It is not required by these teaching workflows; do not copy archival reproduction settings into a new ordinary task. |
+| `benchmark.reproduction_protocol` | Optional mapping for dedicated, already-established reproduction behavior. It is not required by these first-use workflows; do not copy archival reproduction settings into a new ordinary task. |
 | `outputs.diagnostics.enabled` | Boolean, default enabled for supported models in ordinary/manifest workflows. Current training/held-out diagnostics support `rf`, `xgb`, `lightgbm`; SVM and AutoGluon are recorded as unsupported. Frozen external scoring does not create these paired diagnostics. |
 | `outputs.diagnostics.save_train_predictions` | Boolean, default false; save per-record training predictions for supported diagnostics. It cannot be true with diagnostics disabled. Turning diagnostics off does not turn off normal held-out scoring. |
 
@@ -763,7 +778,7 @@ python -u ..\..\yonod.py
 
 - The ordinary random report scores pooled OOF predictions within each repeat; fixed-membership reports summarize fold metrics.
 - These R² values use different aggregation rules, so do not rank scores across the routes as though the evaluation were identical.
-- Teaching values, low scores and negative R² remain visible; they do not establish performance on real chemistry.
+- Artificial values, low scores and negative R² remain visible; they do not establish performance on real chemistry.
 
 ### Optional models, data and pretrained weights
 
@@ -790,7 +805,7 @@ hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 - The dataset command downloads only `USPTO/`.
 - Some source tables use tabs despite their CSV extension; read their source notes and prepare comma-separated data before using the generator.
 - Complete any access authorization required by the service.
-- Download only the assets you intend to use; the teaching examples already include their inputs.
+- Download only the assets you intend to use; the first-use examples already include their inputs.
 
 | Pretrained encoding | Required assets |
 | --- | --- |
@@ -825,7 +840,7 @@ YONOD/
 ├── generate_yaml_config.py  Prepare and validate YAML without modeling
 ├── example.yaml             Complete schema-2 format and engineering smoke
 ├── requirements.txt         Dependencies; install PyTorch separately first
-├── example/                 Teaching files and their own run.yaml configurations
+├── example/                 First-use examples and their own run.yaml configurations
 │   ├── README.md            Example operating instructions
 │   ├── index.html           Offline browser guide
 │   ├── random_split/        Random-split internal evaluation
@@ -866,7 +881,7 @@ YONOD/
 
 - The root folders `config/`, `result/`, `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/` are excluded from the main Git repository.
 - `project-docs/` has its own Git history in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission.
-- Cloning YONOD does not fetch that repository; the teaching examples work without it.
+- Cloning YONOD does not fetch that repository; the first-use examples work without it.
 
 An ordinary modeling task saves its main outputs in this layout:
 
@@ -886,7 +901,7 @@ result/<task_name>/
 - Frozen external testing also uses `docs/predictions/`, `docs/metrics/` and `report/`; it does not save the ordinary workflow's complete feature and final-model packages.
 - The files available depend on the selected protocol.
 
-- Teaching tasks save new outputs in `example/<package>/result/<task_name>/`, inside their own package.
+- First-use tasks save new outputs in `example/<package>/result/<task_name>/`, inside their own package.
 - Their generated `result/` folders are Git-ignored.
 - The `completed_run/` folders in downloadable ZIPs contain reference snapshots; they are separate from the outputs you generate.
 
@@ -1092,7 +1107,7 @@ These are the 18 names accepted under `model_params.rf.estimator` in the support
 | `bootstrap` | Sample training rows with replacement for each tree; boolean, default `true`. |
 | `max_samples` | Bootstrap row count/fraction or `null`; meaningful with `bootstrap: true`, default `null`. |
 | `oob_score` | Calculate the forest's bootstrap out-of-bag score; default `false`. This does not replace outer-fold evaluation. |
-| `n_jobs` | CPU workers, with library semantics for `null`, positive values and `-1`; omitted by the teaching configurations. |
+| `n_jobs` | CPU workers, with library semantics for `null`, positive values and `-1`; omitted by the first-use configurations. |
 | `random_state` | Integer seed or `null`; library default `null`. This is separate from `evaluation.seed`. |
 | `verbose` | Nonnegative verbosity level; default 0. |
 | `warm_start` | Reuse trees when fitting the same estimator again; default `false`. YONOD constructs a fresh estimator for every fold. |

@@ -33,7 +33,7 @@ YONOD（You Only Need Outstanding Descriptors）用已有化学反应记录建�
 - SMILES 是用字符表示分子结构的方法，例如 `CCO` 表示乙醇。
 - 结构列填写可解析的 SMILES，分子图片、化学名称或 CAS 号不能直接替代它。
 - CSV 是可以用 Excel 打开的文本表格；保存时请选择“CSV UTF-8（逗号分隔）”。
-- 第一次练习可以直接用仓库已有文件。
+- 首次使用可以直接用仓库已有文件，先完成下文的冒烟测试，检查本机能否运行主要流程。
 
 - YONOD 的主要流程需要已有数值参考值来建模和检验。
 - 它不会自动生成产物结构、推导反应机理或寻找最佳实验条件。
@@ -94,7 +94,7 @@ python -m pip install -r requirements.txt
 ```
 
 - 这里先安装 CPU 版 PyTorch，再安装 [requirements.txt](requirements.txt) 中的依赖，包括 LightGBM 和 SciPy。
-- 三个教学样例都可使用 CPU；首次使用无需配置 CUDA。
+- 三个首次使用样例都可使用 CPU；首次使用无需配置 CUDA。
 - 需要 GPU 时，请结合本机驱动查看 [PyTorch 对应版本安装说明](https://pytorch.org/get-started/previous-versions/) 和依赖文件中的 CUDA 12.1 命令。
 
 - 如果已经有可用的 `yonod` 环境，不必重复创建。
@@ -115,12 +115,19 @@ python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports
 
 ### 完成第一次运行
 
+#### 什么是冒烟测试
+
+- 冒烟测试（smoke test）是先用少量数据完整运行一遍主要流程，尽早发现安装、配置或程序衔接中的明显问题。
+- 本项目的首次使用样例主要用于冒烟测试：检查所需依赖能否正常使用、配置和数据能否读取、结构编码能否生成、模型能否训练并保存预测，以及 HTML 和 Markdown 报告能否生成。运行结束后，还需按下文打开报告，确认可以查看。
+- 三个样例都使用小规模人工数据。首次使用先运行下面的随机划分样例；另外两种流程的冒烟测试方法见进阶内容。
+- 测试通过说明当前环境下、本次样例涉及的流程能够运行。它不能证明模型对真实化学数据的预测能力，也没有覆盖所有描述符、模型或操作系统。
+
 #### 看一眼数据和设置
 
 - 先打开[随机划分样例的数据表](example/random_split/dataset/reactions.csv)。
 - 它有12条人工记录：`reaction_id` 是唯一编号，两个 `*_smiles` 列是结构，`yield` 是参考产率。
 - 例如 `0.10` 表示10%。
-- 这些结构搭配和产率仅用于教学，不是实验测量，也不保证代表合理的化学反应。
+- 这些结构搭配和产率是供冒烟测试使用的人工数据，不是实验测量，也不保证代表合理的化学反应。
 
 - 同目录的 [run.yaml](example/random_split/run.yaml) 保存本次设置。
 - YAML 是用缩进组织设置的文本文件，这里已经准备好，第一次运行无需修改。
@@ -186,7 +193,7 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 - 运行结束后，Linux 用 `cd ../..`，Windows PowerShell 用 `Set-Location ..\..` 返回。
 - 需要关闭终端后继续计算时，再参考[后台启动与状态查看说明](example/README.md)；所有操作日志、标准输入文件和 PID 文件统一放在仓库根 `logs/`。
 
-教学包保存的完整运行验收来自 Linux。Windows 命令说明操作方法，尚不能据此认定各后端通过了 Windows 实机验收；请在本机完成安装与运行检查。
+首次使用样例保存的完整运行验收来自 Linux。Windows 命令说明操作方法，尚不能据此认定各后端通过了 Windows 实机验收；请在本机完成安装与运行检查。
 
 ### 怎样读结果
 
@@ -200,7 +207,7 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 | RMSE，均方根误差 | 也与参考值同单位，对较大的偏差更敏感。 |
 | R²，决定系数 | 将预测误差与检验数据均值基线比较，可以为负；它不是“预测正确率”。 |
 
-- 小样例的低分和负 R² 都保留，目的是教你查看结果，不能用来判断某种方法对真实化学问题的预测能力。
+- 小样例的低分和负 R² 都保留，供首次使用时确认报告和逐条预测可以查看；冒烟测试不以分数高低判定是否通过，也不能用来判断某种方法对真实化学问题的预测能力。
 - 随机划分也不保证检验中的底物从未在建模记录中出现；要研究新底物，需要另外设计分组和检查结构重叠。
 
 ### 遇到问题时
@@ -209,7 +216,7 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 | --- | --- |
 | `conda` 无法识别 | Linux先用本机 `conda.sh` 初始化；Windows使用 Anaconda PowerShell Prompt或初始化后重开终端。 |
 | 输入命令后出现 `SyntaxError` | 若提示符是 `>>>`，先输入 `exit()` 退出Python，再在终端运行命令。 |
-| 找不到 `yonod.py` 或 `requirements.txt` | 当前目录是否正确；根目录应能看见这两个文件，教学包启动则使用上面给出的两级上层路径。 |
+| 找不到 `yonod.py` 或 `requirements.txt` | 当前目录是否正确；根目录应能看见这两个文件，首次使用样例启动则使用上面给出的两级上层路径。 |
 | 找不到YAML，或文件名看着正确 | 在文件管理器显示扩展名，确认文件不是 `run.yaml.txt`；核对配置路径相对当前目录的位置。 |
 | 路径中有空格 | 终端命令里用引号包住完整路径；进入程序的路径提示后填写实际路径，不附带启动命令。 |
 | `ModuleNotFoundError` | 是否激活 `yonod`，是否先装 PyTorch再完成依赖安装；安装错误需要先解决，不能跳过后续检查。 |
@@ -281,7 +288,7 @@ python -u .\generate_yaml_config.py
 1. 输入 CSV 路径，给任务取一个新名字，例如 `my_reaction`。名称只用英文字母、数字、下划线或短横杠；已有同名配置或非空结果目录时需换名。
 2. 选择稳定编号列，再依次选择参考值、反应物、产物、其他组分和数值条件列。按当前屏幕列号作答，各步骤的编号可能不同；没有其他组分或数值条件时可按提示回车跳过。
 3. 核对无效行提示。生成器会另存规范化 CSV，并从中排除无效标签或结构等记录；运行前检查排除原因和剩余行数。
-4. 第一次练习在描述符菜单输入 `1` 选择 Morgan；询问是否编辑编码配置时可回车使用默认设置。默认包含选中的反应物、其他组分和产物，需确认这些信息在实际预测时可获得。
+4. 首次使用在描述符菜单输入 `1` 选择 Morgan；询问是否编辑编码配置时可回车使用默认设置。默认包含选中的反应物、其他组分和产物，需确认这些信息在实际预测时可获得。
 5. 在模型菜单输入 `2` 选择 Random Forest。描述符或模型菜单直接回车会选择多种方法，其中有的需要额外权重或依赖，首次不要在这两处留空。
 6. 按需填写网址、DOI 和备注；报告格式回车选择 HTML 与 Markdown。最后可选的“修复后数据集”是额外副本，回车不生成该副本也不会取消已经完成的规范化处理。
 
@@ -333,13 +340,13 @@ Copy-Item example.yaml config\my_reaction.yaml
 - 只声明已选模型的参数。
 - 保存后仍通过 `yonod.py` 首次提示输入配置路径。
 
-原始格式样例使用12条人工记录、两折和10棵RF树，只用于轻量工程检查。研究任务需要按自己的问题确定数据量、模型设置和检验设计。
+原始格式样例使用12条人工记录、两折和10棵RF树，只用于轻量工程冒烟测试。研究任务需要按自己的问题确定数据量、模型设置和检验设计。
 
 ### 配置路径与执行阶段
 
 - 研究 YAML 保存在根 `config/`。
 - 这些文件中以 `./` 开头的路径按项目根解析；显式 `../` 及其他位置配置内的相对路径按 YAML 所在目录解析，绝对路径保持绝对。
-- 教学 `run.yaml` 的输入输出因此留在各自包内。
+- 首次使用样例中，`run.yaml` 的输入输出因此留在各自包内。
 - 配置保存为 UTF-8 纯文本，缩进使用空格；Windows下检查文件没有被另加 `.txt` 后缀。
 
 | `stage` | 执行内容 |
@@ -354,7 +361,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 ### 选择并运行检验方式
 
-- 三个样例都使用人工教学记录。
+- 三个首次使用样例都使用人工记录，主要用于冒烟测试，检查各自流程能否完整运行。
 - 一次只运行一个任务。
 - 每组命令都从项目根目录开始；若仍在上一个样例中，Bash 用 `cd ../..`，PowerShell 用 `Set-Location ..\..` 返回。
 - 运行器首次询问配置路径时，输入 `run.yaml`。
@@ -549,7 +556,7 @@ python -u ..\..\yonod.py
 - 审计文件需要 `candidate_source_sha256`，以及 `exact_canonical_overlap` 中的 `amine`、`acid`、`product` 均为0。
 - 若提供 `row_count`，需与行数一致；`physical_dataset_id` 决定来源编号前缀。
 - 根据实际数据准备审计，并自行检查结构交集；适配器只核对声明及文件身份，不会重新计算分子结构交集。
-- 按上面的 Bash/PowerShell 命令分别对外测和审计文件计算哈希，再填写新 YAML；不能照抄教学审计中的零值。
+- 按上面的 Bash/PowerShell 命令分别对外测和审计文件计算哈希，再填写新 YAML；不能照抄首次使用样例审计中的零值。
 
 - 当前适配器只接受静态描述符，不支持数值条件、OHE、AutoGluon、HPO 或外测早停，不保存普通完整特征/最终模型包。
 - 已有外测运行输出会在拟合前被拒绝，不恢复或覆盖；需新建任务名和输出目录。
@@ -570,7 +577,7 @@ python -u ..\..\yonod.py
 | 9 | `project_name` | 任务名；新任务使用新名字及对应独立输出路径。 |
 | 10 | `stage` | 当前 `all`；按所需流程选择 `features`、`train`、`all` 或 `benchmark`。 |
 | 12 | `dataset` | 数据表与列契约的容器。 |
-| 13 | `dataset.path` | 教学 fixture 的 CSV 路径；改为自己的输入表。 |
+| 13 | `dataset.path` | 冒烟测试的人工数据 CSV 路径；改为自己的输入表。 |
 | 14 | `dataset.sample_id_col` | 稳定、非空、唯一的记录编号列。 |
 | 15 | `dataset.column_roles` | 声明每列用途的容器。 |
 | 16 | `dataset.column_roles.label` | 数值参考目标；建模与评分时必需。 |
@@ -700,7 +707,7 @@ python -u ..\..\yonod.py
 | `benchmark.task_state.backend` | `stage: benchmark` 必须为 `sqlite`。 |
 | `benchmark.task_state.resumable` | `stage: benchmark` 必须为 `true`。固定名单流程用任务状态核对并恢复进度；冻结外测适配器仍拒绝已有运行输出，不恢复该任务。 |
 | `benchmark.population_id`、`benchmark.dataset_id` | 可选非空来源标识，描述记录集合及数据版本；字符串本身不证明来源独立。 |
-| `benchmark.reproduction_protocol` | 为既有专用复现行为保留的可选映射，三个教学流程不需要；新普通任务不要照抄归档复现设置。 |
+| `benchmark.reproduction_protocol` | 为既有专用复现行为保留的可选映射，三个首次使用样例流程不需要；新普通任务不要照抄归档复现设置。 |
 | `outputs.diagnostics.enabled` | 布尔值，在普通/固定名单流程对支持的模型默认启用。当前训练/留出诊断支持 `rf`、`xgb`、`lightgbm`，SVM 和 AutoGluon 记为不支持；冻结外测不生成这类配对诊断。 |
 | `outputs.diagnostics.save_train_predictions` | 布尔值，默认关闭；保存支持诊断的逐条训练预测。诊断关闭时不能为真。关闭诊断不会关闭正常留出评分。 |
 
@@ -741,7 +748,7 @@ python -u ..\..\yonod.py
 - 后台运行和状态查询参照操作说明中的 Bash/PowerShell 命令，日志与 PID保存在根 `logs/`。
 
 - 普通随机报告在每轮汇总 OOF 预测评分，固定名单报告汇总逐折指标，两者 R² 聚合口径不同，不能当作相同评价直接跨路线排名。
-- 教学值、低分和负 R² 均保留，不能据此认定真实化学预测能力。
+- 人工数据值、低分和负 R² 均保留，供首次使用时检查输出，不能据此认定真实化学预测能力。
 
 ### 按需安装可选依赖和资产
 
@@ -752,7 +759,7 @@ python -u ..\..\yonod.py
 python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```
 
-- 三个教学包已含数据且使用 Morgan。
+- 三个首次使用样例已含数据且使用 Morgan。
 - 其他数据与权重可从 [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) 和 [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights) 获取，下载前查看[数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)。
 
 - 以下命令在已激活环境的项目根目录执行，两种系统相同。
@@ -798,9 +805,9 @@ YONOD/
 ├── LICENSE                  项目许可证
 ├── yonod.py                 读取并执行已保存的 YAML
 ├── generate_yaml_config.py  准备数据、生成和校验 YAML，不建模
-├── example.yaml             完整 schema-2 格式与轻量工程样例
+├── example.yaml             完整 schema-2 格式与工程冒烟测试
 ├── requirements.txt         依赖清单；PyTorch 先单独安装
-├── example/                 教学文件及各自的 run.yaml
+├── example/                 首次使用样例及各自的 run.yaml
 │   ├── README.md            样例操作说明
 │   ├── index.html           浏览器离线导览
 │   ├── random_split/        随机划分内测
@@ -841,7 +848,7 @@ YONOD/
 
 - 根目录的 `config/`、`result/`、`logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/` 都不由主仓 Git 跟踪。
 - `project-docs/` 在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) 仓库中维护，访问需要权限，克隆主仓不会自动获取它。
-- 运行教学样例不需要该文档仓库。
+- 运行首次使用样例不需要该文档仓库。
 
 一次普通建模任务的主要结果结构如下：
 
@@ -861,7 +868,7 @@ result/<task_name>/
 - 冻结外测也使用 `docs/predictions/`、`docs/metrics/` 和 `report/`，但不保存普通流程那样完整的特征与最终模型包。
 - 具体文件取决于所选协议。
 
-- 教学任务的新结果位于各自的 `example/<包名>/result/<task_name>/`，生成的 `result/` 不由 Git 跟踪。
+- 首次使用样例的新结果位于各自的 `example/<包名>/result/<task_name>/`，生成的 `result/` 不由 Git 跟踪。
 - 下载 ZIP 中的 `completed_run/` 是参考快照，与自己运行产生的结果分开保存。
 - 参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
 
@@ -874,10 +881,10 @@ result/<task_name>/
 1. 明确新组件的输入类型、输出形状、支持参数、缺失输入处理和协议范围。配置校验与描述符计算、模型执行分开实现。
 2. 添加实现和下文列出的注册、分派位置。可选依赖在被选中时再导入；按需记录库版本和资产身份。
 3. 保留记录编号、有效掩码、列顺序、划分身份、哈希及原子发布规则。需要学习的转换和模型筛选只使用相应训练数据；输入或有效设置改变时，缓存身份也必须改变。
-4. 验证脚本放 `_verify/`，检查无效/空输入、未知参数拒绝、输出对齐、固定种子、训练折隔离、恢复行为和报告路径。先做配置及模拟执行检查，再单独进行会实际训练的 smoke。
+4. 验证脚本放 `_verify/`，检查无效/空输入、未知参数拒绝、输出对齐、固定种子、训练折隔离、恢复行为和报告路径。先做配置及模拟执行检查，再单独进行会实际训练的冒烟测试。
 5. 使用 `pathlib.Path`、UTF-8文件和分系统命令，检查 Linux 与 Windows 路径处理，并记录实际运行的系统。
 
-现有轻量工程检查需先激活 `yonod`，再从项目根目录执行。下面命令在 Linux Bash 与 Windows Conda PowerShell 相同：
+现有轻量工程冒烟测试需先激活 `yonod`，再从项目根目录执行。下面命令在 Linux Bash 与 Windows Conda PowerShell 相同：
 
 ```text
 python yonod.py --config example.yaml
@@ -885,7 +892,7 @@ python yonod.py --config example.yaml
 
 - 该命令会计算 Morgan 编码，并在人工 fixture 上拟合 RF。
 - 测试新描述符或模型前，还应在 `config/` 保存独立 schema-2 YAML、使用唯一任务名，并隔离 `result/<task_name>/` 输出；正式任务仍通过保存YAML后的交互入口启动。
-- smoke通过说明程序能执行，不等于科学有效性或未测试平台的验收。
+- 冒烟测试通过说明本次示例流程能执行，不等于科学有效性或未测试平台的验收。
 
 - 工程支持与备份放 `backup/`，操作日志/PID放根 `logs/`，维护文档放独立 `project-docs/`。
 - 逐项暂存本任务修改的文件，两个发生改动的仓库分别提交；不提交 `_verify/`、`config/`、`backup/` 或外部参考材料。
@@ -1038,7 +1045,7 @@ python yonod.py --config example.yaml
 | `bootstrap` | 每棵树是否有放回抽取训练记录；布尔值，默认 `true`。 |
 | `max_samples` | Bootstrap记录数、比例或 `null`，仅在 `bootstrap: true` 时有意义；默认 `null`。 |
 | `oob_score` | 是否计算bootstrap袋外分数，默认 `false`；不替代外层留出检验。 |
-| `n_jobs` | CPU工作线程，`null`、正数与 `-1` 按库含义处理；教学配置省略此项。 |
+| `n_jobs` | CPU工作线程，`null`、正数与 `-1` 按库含义处理；首次使用样例配置省略此项。 |
 | `random_state` | 整数种子或 `null`；库默认 `null`，与 `evaluation.seed` 分别控制。 |
 | `verbose` | 非负日志等级；默认0。 |
 | `warm_start` | 对同一估计器再次拟合时是否复用旧树；默认 `false`。YONOD每折新建估计器。 |
@@ -1254,6 +1261,6 @@ python yonod.py --config example.yaml
 
 8. 验证脚本放 `_verify/`，检查未知参数拒绝、维度/非有限值、训练内预处理、外层标签隔离、模型保存/预测恢复、Linux/Windows路径。
 
-   - 工程smoke与真实研究任务分开；更新依赖、双语文档和独立文档仓日志，再按两仓实际更改分别提交。
+   - 工程冒烟测试与真实研究任务分开；更新依赖、双语文档和独立文档仓日志，再按两仓实际更改分别提交。
 
 最近一次对照本仓库核对：2026-11-14。
