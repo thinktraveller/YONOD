@@ -1,5 +1,5 @@
 # 随机划分教学示例：12条人工记录，不是实验测量数据。
-# 历史报告保留在example/random_split_test/report/；新结果写入根result/example/random_split_test/。
+# 初始只保留输入数据；结果待运行后写入根result/example/random_split_test/。
 # 从仓库根启动python yonod.py，首提示输入config/example/random_split_test/run.yaml。
 schema_version: "2.0"
 project_name: random_split_test

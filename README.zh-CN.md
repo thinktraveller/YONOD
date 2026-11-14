@@ -162,7 +162,7 @@ python -u .\yonod.py
 config/example/random_split_test/run.yaml
 ```
 
-- 该配置已保存在对应目录，无需复制 YAML，也无需运行 YAML 生成器。
+- 该配置已保存在对应目录；随机划分测试初始只有输入 CSV 和配置，不附带预生成结果，无需复制 YAML 或运行 YAML 生成器。
 - 程序随后校验配置、准备编码并运行模型。
 - 完成时应看到 `features=ready`，以及 `morgan × rf`、`morgan × xgb`、`morgan × lightgbm` 各自的 `complete` 或 `reused`。
 - `reused` 表示程序核对身份后复用了已有结果。
@@ -206,7 +206,7 @@ Invoke-Item .\result\example\random_split_test\report\report.html
 | RMSE，均方根误差 | 也与参考值同单位，对较大的偏差更敏感。 |
 | R²，决定系数 | 将预测误差与检验数据均值基线比较，可以为负；它不是“预测正确率”。 |
 
-- 小样例的低分和负 R² 都保留，供首次使用时确认报告和逐条预测可以查看；冒烟测试不以分数高低判定是否通过，也不能用来判断某种方法对真实化学问题的预测能力。
+- 自己运行生成的报告应保留低分和负 R²，用于核对报告与逐条预测；冒烟测试不以分数高低判定是否通过，也不能用来判断某种方法对真实化学问题的预测能力。
 - 随机划分也不保证检验中的底物从未在建模记录中出现；要研究新底物，需要另外设计分组和检查结构重叠。
 
 ### 遇到问题时
@@ -238,7 +238,7 @@ Invoke-Item .\result\example\random_split_test\report\report.html
 - [其他流程字段与已有特征输入](#其他流程字段与已有特征输入)
 - [根据问题选择要调节的设置](#根据问题选择要调节的设置)
 - [后台运行与状态查看](#后台运行与状态查看)
-- [保存的样例与报告口径](#保存的样例与报告口径)
+- [测试输入与结果报告](#测试输入与结果报告)
 - [按需安装可选依赖和资产](#按需安装可选依赖和资产)
 
 ### 使用自己的 CSV
@@ -414,12 +414,7 @@ python -u .\yonod.py
 
 当前配置的三个模型各使用两棵树，关闭 HPO 与额外训练/留出效果诊断，不指定线程数，采用各模型库默认。这些小设置用于降低冒烟测试成本。
 
-| 折 | 用于建模的编号 | 留出检验的编号 |
-| --- | --- | --- |
-| 1 | 02、04、05、07、08、12 | 01、03、06、09、10、11 |
-| 2 | 01、03、06、09、10、11 | 02、04、05、07、08、12 |
-
-编号省略共同前缀 `smoke-`，可对照[保存的划分表](example/random_split_test/tables/split_assignments.csv)。每条记录恰好留出一次；三个方法各做两折，共六次模型拟合，不是六次独立化学实验。
+运行完成后，将输入 CSV 中的 `reaction_id`、`yield` 与各模型保存的 `runs/run_morgan-<model>/predictions.csv` 对齐，检查两折记录以及生成的两种报告。随机测试的全部结果都由本次运行写入 `result/example/random_split_test/`。
 
 #### 固定名单与分组检验
 
@@ -827,9 +822,9 @@ Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding 
 
 日志、PID 与运行器输入文件统一放在根 `logs/`，模型结果仍位于 `result/example/<测试名>/`。进程结束或出现结果目录不能单独证明成功；还需检查完成状态、逐条预测和两种报告。Linux 命令不能代替 Windows 实机验收。
 
-### 保存的样例与报告口径
+### 测试输入与结果报告
 
-三个测试使用对应的数据、配置和结果目录：
+三个测试使用对应的数据、配置和结果目录。以下报告路径指成功运行后生成的文件：
 
 | 测试名 | 已保存配置 | 输入 | `result/example/` 下的新网页报告 |
 | --- | --- | --- | --- |
@@ -837,29 +832,30 @@ Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding 
 | `fixed_split_test` | [run.yaml](config/example/fixed_split_test/run.yaml) | [CSV](example/fixed_split_test/dataset/reactions.csv)、[角色解释表](example/fixed_split_test/splits/membership_guide.csv)、[正式名单](example/fixed_split_test/splits/fixed_split_manifest.csv) | `fixed_split_test/report/benchmark_report.html` |
 | `external_test` | [run.yaml](config/example/external_test/run.yaml) | [训练 CSV](example/external_test/dataset/train.csv)、[外测 CSV](example/external_test/dataset/external.csv)、[审计](example/external_test/audit/external_audit.json) | `external_test/report/external_test_report.html` |
 
-每份报告的 `report/` 目录同时保存 Markdown `.md` 版。固定名单逐条预测与实际采用的清单分别位于任务的 `docs/predictions/`、`docs/manifests/`；外测逐条预测为 `docs/predictions/morgan__rf.parquet`，完整精度指标为 `docs/metrics/external_test_metrics.csv`。
+随机划分测试只提供输入 CSV 与已准备好的 YAML，不附带报告、分数、图片、预测或已完成运行记录；运行后才会将全部结果写入 `result/example/random_split_test/`。
 
-[随机](example/random_split_test/verification.json)、[固定名单](example/fixed_split_test/verification.json)、[外测](example/external_test/verification.json)验收记录保留历史 Linux 执行。原 `launch` 中的配置哈希对应历史运行，`current_configuration` 记录迁移后配置的静态检查。本次重命名和移位没有重新建模，也不代表 Windows 实机支持；保存报告和清单中的旧任务名保留其来源身份。
+每份生成报告的 `report/` 目录同时保存 Markdown `.md` 版。固定名单逐条预测与实际采用的清单分别位于任务的 `docs/predictions/`、`docs/manifests/`；外测逐条预测为 `docs/predictions/morgan__rf.parquet`，完整精度指标为 `docs/metrics/external_test_metrics.csv`。
 
-#### 阅读保存的随机划分报告
+[固定名单](example/fixed_split_test/verification.json)、[外测](example/external_test/verification.json)验收记录保留历史 Linux 执行。原 `launch` 哈希对应历史配置，`current_configuration` 记录迁移后配置的静态检查；这些记录不代表随机划分测试的新运行，也不代表 Windows 实机支持。
 
-源码中仍可查看[历史 HTML 报告](example/random_split_test/report/report.html)、[Markdown 报告](example/random_split_test/report/report.md)、[指标表](example/random_split_test/tables/metrics.csv)及[来源记录](example/random_split_test/provenance.json)。报告来自 `diag215_20260929_ordinary_fixed_off_v1`；新测试的输出使用 `result/example/random_split_test/`。
+固定名单与外测输入目录暂时保留三份可选追溯文件：
 
-下表从保存的 12 条留出预测核对而来，属于历史人工数据结果，不是重命名后测试的新执行分数：
+| 文件 | 用途 |
+| --- | --- |
+| `provenance.json` | 记录来源身份及配置、路径映射。 |
+| `verification.json` | 记录历史执行与对应的验收范围。 |
+| `checksums.json` | 保存文件 SHA-256，用于核对完整性。 |
 
-| 方法 | R² | RMSE，0–1 产率尺度 | MAE，0–1 产率尺度 | MAE，产率百分点 |
-| --- | ---: | ---: | ---: | ---: |
-| RF | -0.638112 | 0.265094 | 0.222500 | 22.2500 |
-| XGBoost | -0.102794 | 0.217508 | 0.184805 | 18.4805 |
-| LightGBM | -0.173512 | 0.224374 | 0.189520 | 18.9520 |
+YONOD 运行不依赖这三份文件，可以删除，但会失去对应的来源、验收和完整性证据；恢复初始状态的随机划分示例已不再附带它们。外测的 `audit/external_audit.json` 是另一份由 YAML 引用的必需输入，不属于上述三份可选元数据。
 
-先看任务信息，再看结果矩阵、详细指标和散点图。每个点对照一条留出预测与人工参考值，越接近对角线越吻合。保存的 [RF](example/random_split_test/pictures/scatter_morgan_rf_repeat-1.png)、[XGBoost](example/random_split_test/pictures/scatter_morgan_xgb_repeat-1.png)、[LightGBM](example/random_split_test/pictures/scatter_morgan_lightgbm_repeat-1.png) 图均为历史图像；其中“实验值”等轴标题在本例应理解为人工参考值。
+#### 运行后怎样阅读报告
+
+先看任务信息，再看结果矩阵、详细指标和散点图。每个留出点对照一条预测与人工参考值，越接近对角线越吻合。
 
 - 普通随机报告在每轮汇总 OOF 预测评分，固定名单报告汇总逐折指标，R² 聚合口径不同，不能当作相同评价直接跨路线排名。
-- 跨重复标准差为零是因为只有一套完整轮换，不能据此声称稳定或没有不确定性。
-- 旧报告中训练/留出额外诊断的 `disabled` 与诊断完成数为零，不表示正常交叉验证失败；“严格外层 CV”排名标题不能把随机划分变成底物组留出，“SMILES 列”显示为空也不表示未使用结构输入。
-- 历史排名、固定指标阈值和用途建议是原报告用语，不能作为本人工样例或其他化学体系的可靠性标准。MAE 也会受大误差影响；0–1 尺度误差乘以 100 才是产率百分点。
-- 报告与图片保留来源身份；Markdown 需保留配套 `pictures/`，HTML 的公式排版可能请求在线资源。`evidence/` 保存设置、预测和逐折记录，不是完整可重载模型交付。其中的 YAML（包括 `historical_source_config.yaml`）仅追溯历史计算，不是当前入口；原模型路径保留来源语境。完整运行快照转存本地备份，`verification.launch` 保留历史真实执行身份。
+- 一套完整轮换不能证明稳定或没有不确定性，跨重复标准差为零也不能提供这种证据。
+- MAE 与 RMSE 的单位和目标相同。样例采用 0–1 产率尺度，误差乘以 100 才是百分点；MAE 也会受大误差影响。
+- R² 可以为负，也不是预测正确率。人工记录及其生成分数用于检查操作流程，不能代表真实化学预测效果。
 
 ### 按需安装可选依赖和资产
 
@@ -1351,8 +1347,8 @@ YONOD/
 ├── generate_yaml_config.py  准备数据、生成和校验 YAML，不建模
 ├── example.yaml             完整 schema-2 格式与工程冒烟测试
 ├── requirements.txt         依赖清单；PyTorch 先单独安装
-├── example/                 冒烟测试输入和历史证据
-│   ├── random_split_test/   随机划分数据、历史报告和证据
+├── example/                 冒烟测试输入与审计记录
+│   ├── random_split_test/   随机划分输入 CSV
 │   ├── fixed_split_test/    固定名单数据与划分清单
 │   └── external_test/       训练/外测表及来源审计
 ├── yonod/                   Python 源码；下列为主要组件
@@ -1423,7 +1419,6 @@ result/<task_name>/
 
 - 示例的新结果统一位于项目根目录 `result/example/<task_name>/`，每个任务使用独立子目录。
 - 推荐自己的配置放在根 `config/<task_name>.yaml`，结果放在 `result/<task_name>/`；两个示例子目录之外的配置和结果均由 Git 忽略。
-- 以往完整运行快照保存在本地工程备份中；当前测试不依赖下载归档或这些快照。
 - 参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
 
 ## 致谢

@@ -155,7 +155,7 @@ The program asks `请输入配置文件路径(schema-2 YAML):` (enter the config
 config/example/random_split_test/run.yaml
 ```
 
-The configuration is already saved at this path. No YAML copy or generator is needed. Run one task at a time, waiting for it to finish before starting another.
+The configuration is already saved at this path. The random-split test starts with its input CSV and configuration only; no pregenerated results are included. No YAML copy or generator is needed. Run one task at a time, waiting for it to finish before starting another.
 
 #### 3. Check completion and open the report
 
@@ -193,7 +193,7 @@ Invoke-Item .\result\example\random_split_test\report\report.html
 | R², coefficient of determination | Error compared with using the evaluation data's mean as a reference. It can be negative and is not a percentage of correct predictions. |
 
 - Training scores describe the records used to fit the model; use held-out or external scores to assess prediction.
-- The examples retain low scores and negative R².
+- Retain low scores and negative R² in the reports you generate.
 - Their main purpose is to smoke-test workflow execution; these scores do not establish performance on real chemistry or recommend a model.
 
 ### If something goes wrong
@@ -226,7 +226,7 @@ Invoke-Item .\result\example\random_split_test\report\report.html
 - [Additional workflow fields and artifact inputs](#additional-workflow-fields-and-artifact-inputs)
 - [Choose what to adjust](#choose-what-to-adjust)
 - [Run in the background and check status](#run-in-the-background-and-check-status)
-- [Saved examples and reports](#saved-examples-and-reports)
+- [Test inputs and output reports](#test-inputs-and-output-reports)
 - [Optional models, data and pretrained weights](#optional-models-data-and-pretrained-weights)
 
 ### Use your own reaction table
@@ -425,13 +425,7 @@ The CSV has no product, numerical-condition or categorical-input columns. Its se
 
 The prepared configuration uses two trees per model, disables HPO and extra training/held-out diagnostics, and leaves thread counts to each library. These small settings keep the smoke test inexpensive.
 
-| Fold | Training IDs | Held-out IDs |
-| --- | --- | --- |
-| 1 | 02, 04, 05, 07, 08, 12 | 01, 03, 06, 09, 10, 11 |
-| 2 | 01, 03, 06, 09, 10, 11 | 02, 04, 05, 07, 08, 12 |
-
-The IDs omit the common `smoke-` prefix. [Saved split assignments](example/random_split_test/tables/split_assignments.csv) show this arrangement. Each record is held out once; three methods across two folds give six model fits, not six independent chemical experiments.
-
+After execution, compare `reaction_id` and `yield` in the input CSV with each model's saved `runs/run_morgan-<model>/predictions.csv`. Check the two fold records and both generated reports under `result/example/random_split_test/`. All random-test results are created by that run.
 
 #### Fixed membership and grouped evaluation
 
@@ -860,9 +854,9 @@ Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding 
 
 These commands keep logs, PID files and launcher input in root `logs/`; all model outputs remain under `result/example/<test_name>/`. A stopped process or an existing directory alone does not prove success: inspect final statuses, saved predictions and both reports. The Linux commands do not provide Windows runtime acceptance.
 
-### Saved examples and reports
+### Test inputs and output reports
 
-The three tests use matching input, configuration and result directories:
+The three tests use matching input, configuration and result directories. The paths below identify files created after a successful run:
 
 | Test | Prepared configuration | Inputs | New report under `result/example/` |
 | --- | --- | --- | --- |
@@ -870,29 +864,30 @@ The three tests use matching input, configuration and result directories:
 | `fixed_split_test` | [run.yaml](config/example/fixed_split_test/run.yaml) | [CSV](example/fixed_split_test/dataset/reactions.csv), [membership guide](example/fixed_split_test/splits/membership_guide.csv), [manifest](example/fixed_split_test/splits/fixed_split_manifest.csv) | `fixed_split_test/report/benchmark_report.html` |
 | `external_test` | [run.yaml](config/example/external_test/run.yaml) | [training CSV](example/external_test/dataset/train.csv), [external CSV](example/external_test/dataset/external.csv), [audit](example/external_test/audit/external_audit.json) | `external_test/report/external_test_report.html` |
 
-Each report also has a Markdown `.md` version in the same `report/` folder. Fixed-membership predictions and the executed manifest are under the task's `docs/predictions/` and `docs/manifests/`; external predictions are `docs/predictions/morgan__rf.parquet`, with full-precision scores in `docs/metrics/external_test_metrics.csv`.
+The random-split test includes only its input CSV and prepared YAML; no reports, scores, figures, predictions or completed-run records are supplied. Running it creates all outputs under `result/example/random_split_test/`.
 
-The [random](example/random_split_test/verification.json), [fixed-membership](example/fixed_split_test/verification.json) and [external](example/external_test/verification.json) verification records retain earlier Linux executions. Their original `launch` configuration hash identifies that historical run; `current_configuration` records the relocated configuration's static checks. Renaming and relocating these tests has not rerun them or established Windows runtime support. The dated task names inside saved reports and manifests remain part of their provenance.
+Each generated report also has a Markdown `.md` version in the same `report/` folder. Fixed-membership predictions and the executed manifest are under the task's `docs/predictions/` and `docs/manifests/`; external predictions are `docs/predictions/morgan__rf.parquet`, with full-precision scores in `docs/metrics/external_test_metrics.csv`.
 
-#### Inspect the saved random-split report
+The [fixed-membership](example/fixed_split_test/verification.json) and [external](example/external_test/verification.json) verification records retain earlier Linux executions. Their original `launch` hash identifies that historical configuration; `current_configuration` records the relocated configuration's static checks. These records do not describe a new random-split run or establish Windows runtime support.
 
-The [historical HTML report](example/random_split_test/report/report.html), [Markdown report](example/random_split_test/report/report.md), [metric table](example/random_split_test/tables/metrics.csv) and [provenance record](example/random_split_test/provenance.json) remain readable in the source checkout. The report comes from `diag215_20260929_ordinary_fixed_off_v1`; new test outputs use `result/example/random_split_test/`.
+The fixed-membership and external-test input folders retain three optional metadata files:
 
-These scores were checked from the 12 saved held-out predictions; they are historical artificial-data results, not scores from a new execution of the renamed test:
+| File | Purpose |
+| --- | --- |
+| `provenance.json` | Records source identity and configuration/path mappings. |
+| `verification.json` | Records historical execution and the scope of its checks. |
+| `checksums.json` | Stores file SHA-256 values for integrity checks. |
 
-| Method | R² | RMSE, 0–1 yield scale | MAE, 0–1 yield scale | MAE, yield percentage points |
-| --- | ---: | ---: | ---: | ---: |
-| RF | -0.638112 | 0.265094 | 0.222500 | 22.2500 |
-| XGBoost | -0.102794 | 0.217508 | 0.184805 | 18.4805 |
-| LightGBM | -0.173512 | 0.224374 | 0.189520 | 18.9520 |
+YONOD does not need these three files to run. They can be deleted, but their source, acceptance and integrity evidence is then lost; the reset random-split example no longer includes them. The external test's `audit/external_audit.json` is separate: its YAML references it as a required input, so it is not one of these optional metadata files.
 
-Read task information first, then the result matrix, detailed metrics and scatter plots. Each point compares a held-out prediction with its artificial reference value; a point nearer the diagonal is closer. The saved [RF](example/random_split_test/pictures/scatter_morgan_rf_repeat-1.png), [XGBoost](example/random_split_test/pictures/scatter_morgan_xgb_repeat-1.png) and [LightGBM](example/random_split_test/pictures/scatter_morgan_lightgbm_repeat-1.png) plots are copied historical figures; any “experimental” axis wording means the artificial reference values here.
+#### Read a report after the run
+
+Read task information first, then the result matrix, detailed metrics and scatter plots. Each held-out point compares a prediction with its artificial reference value; a point nearer the diagonal is closer.
 
 - The ordinary random report scores pooled OOF predictions within each repeat; fixed-membership reports summarize fold metrics. Their R² aggregation differs, so do not rank workflows as though they used the same evaluation.
-- A zero across-repeat standard deviation reflects the single complete repeat; it does not establish stability or absence of uncertainty.
-- In the old report, disabled training/held-out diagnostics and their zero diagnostic count do not indicate failed normal CV. The “strict outer CV” ranking title does not turn this random split into substrate-group holdout, and the unfilled “SMILES columns” display does not mean structures were unused.
-- Historical ranking labels, fixed score thresholds and application suggestions are report text, not validated reliability standards for this artificial example or another chemical system. MAE is still affected by large errors; 0–1 errors become percentage points only after multiplication by 100.
-- The report and its images retain their source identity. The Markdown report uses its accompanying `pictures/`; the HTML may request an online formula-rendering resource. `evidence/` contains settings, predictions and fold records, not a complete reloadable model delivery. Its YAMLs, including `historical_source_config.yaml`, identify historical calculations and are not current launch configurations; their original model paths remain provenance text. Complete-run snapshots are kept in local backups, while `verification.launch` retains the historical execution identity.
+- One complete repeat does not establish stability or absence of uncertainty. A zero across-repeat standard deviation cannot provide that evidence.
+- MAE and RMSE use the target's units. For the examples' 0–1 yield scale, multiplying an error by 100 gives percentage points; MAE can still be affected by large errors.
+- R² can be negative and is not prediction accuracy. Artificial records and their generated scores test the operating path, not performance on real chemistry.
 
 ### Optional models, data and pretrained weights
 
@@ -1402,8 +1397,8 @@ YONOD/
 ├── generate_yaml_config.py  Prepare and validate YAML without modeling
 ├── example.yaml             Complete schema-2 format and engineering smoke
 ├── requirements.txt         Dependencies; install PyTorch separately first
-├── example/                 Smoke-test inputs and historical evidence
-│   ├── random_split_test/   Random-split data, reports and evidence
+├── example/                 Smoke-test inputs and audit records
+│   ├── random_split_test/   Random-split input CSV
 │   ├── fixed_split_test/    Fixed-membership data and split lists
 │   └── external_test/       Training/test tables and provenance audit
 ├── yonod/                   Python implementation; main components below
@@ -1474,7 +1469,6 @@ result/<task_name>/
 
 - Example tasks save new outputs in the project-root `result/example/<task_name>/`, with one folder per task.
 - We recommend keeping your own configurations in `config/<task_name>.yaml` and results under `result/<task_name>/`; both are Git-ignored outside the example subfolders.
-- Earlier complete-run snapshots are kept in local engineering backups; the current tests do not depend on download archives or those snapshots.
 
 ## Acknowledgments
 
