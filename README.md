@@ -284,28 +284,76 @@ The dataset command downloads only `USPTO/`. Some source tables use tabs despite
 
 A configuration, tokenizer or manifest alone does not supply the binary weights. Chemical VAE uses the frozen PyTorch encoder's raw `z_mean_sample`; it does not train a VAE or load a decoder/property head, and ordinary execution does not need TensorFlow/Keras. See the [weight notes](WEIGHTS/README.md) and [Chemical VAE loader](yonod/descriptors/chemical_vae.py).
 
-## Where files belong
+## Project structure
+
+The main files and folders are shown below. Local task folders appear when you prepare or run a task; they may be absent from a fresh clone.
 
 ```text
 YONOD/
+├── README.md                English user guide
+├── README.zh-CN.md          Chinese user guide
+├── AGENTS.md                Development and directory conventions
+├── LICENSE                  Project license
 ├── yonod.py                 Launch and execute a saved YAML
 ├── generate_yaml_config.py  Prepare and validate YAML without modeling
 ├── example.yaml             Complete schema-2 format and engineering smoke
 ├── requirements.txt         Dependencies; install PyTorch separately first
-├── example/                 Teaching files, offline guide and download packages
-├── yonod/                   Implementation
+├── example/                 Teaching files and their own run.yaml configurations
+│   ├── README.md            Example operating instructions
+│   ├── index.html           Offline browser guide
+│   ├── random_split/        Random-split internal evaluation
+│   ├── fixed_split/         Evaluation using saved membership lists
+│   ├── external_test/       Separate training and external-test tables
+│   └── archives/            Downloadable example packages
+├── yonod/                   Python implementation; main subpackages below
+│   ├── config/              YAML loading, validation and path resolution
+│   ├── descriptors/         Molecular and categorical encodings
+│   ├── features/            Data preparation and numerical-condition processing
+│   ├── models/              Regression-model adapters
+│   ├── pipeline/            Ordinary feature, training, prediction and reporting stages
+│   ├── benchmark/           Dedicated fixed-membership and external-test workflows
+│   ├── splits/              Grouping and membership manifests
+│   ├── artifacts/           Feature-package storage and integrity checks
+│   ├── hpo/                 Model-parameter search within training data
+│   └── universal/           Shared CSV-reading and feature-building components
 ├── dataset/                 Data and source notes
 ├── WEIGHTS/                 Optional pretrained assets
 ├── config/                  Local research YAMLs
 ├── result/                  Separate folders for research-task outputs
+│   └── <task_name>/         All outputs belonging to one research task
 ├── logs/                    Operational logs and PID files
 ├── _verify/                 Local validation scripts
 ├── backup/                  Backups and engineering support
 ├── reference-projects/      External reference material
 └── project-docs/            Independent documentation repository
+    ├── goal.md              Project goals
+    ├── project-plan.md      Development plan
+    ├── buildlog.md          Change and verification records
+    ├── teach.md             Learning notes
+    └── docs/                Other maintained project documentation
 ```
 
-The last seven local working folders are excluded from the main repository. `project-docs/` has its own Git history; extra engineering notes live in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission. You do not need that repository for the teaching examples.
+For everyday use, start with the two root scripts, [example.yaml](example.yaml) and [example/](example/). The [dataset notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) explain the inputs and optional assets.
+
+The root folders `config/`, `result/`, `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/` are excluded from the main Git repository. `project-docs/` has its own Git history in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission. Cloning YONOD does not fetch that repository; the teaching examples work without it.
+
+An ordinary modeling task saves its main outputs in this layout:
+
+```text
+result/<task_name>/
+├── feature/                         Encodings and feature records
+├── runs/
+│   └── run_<feature_id>-<model>/     One encoding/model combination
+│       ├── predictions.csv          Per-record held-out predictions
+│       ├── fold_metrics.csv         Metrics for each fold
+│       └── run_manifest.yaml        Settings and run record
+├── pictures/                        Report figures
+└── report/                          HTML and Markdown reports
+```
+
+Fixed-membership benchmarks instead organize membership lists, predictions, fold records, metrics and recovery state under `docs/manifests/`, `docs/predictions/`, `docs/folds/`, `docs/metrics/` and `docs/state/` inside the task folder. Frozen external testing also uses `docs/predictions/`, `docs/metrics/` and `report/`; it does not save the ordinary workflow's complete feature and final-model packages. The files available depend on the selected protocol.
+
+Teaching tasks save new outputs in `example/<package>/result/<task_name>/`, inside their own package. Their generated `result/` folders are Git-ignored. The `completed_run/` folders in downloadable ZIPs contain reference snapshots; they are separate from the outputs you generate.
 
 ## If something goes wrong
 

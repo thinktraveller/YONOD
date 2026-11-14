@@ -277,20 +277,76 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 普通 `all/train` 使用 KFold；指定固定成员或分组留出须采用相应 `benchmark` 协议。专用执行器也支持 `repeated_kfold`，因此“strict”一词本身不表示未见底物。当前冻结外测不支持 HPO、OHE、数值条件、AutoGluon或外测早停，不保存可复用最终模型或普通完整特征包，也不能混入 `n_splits`、`n_repeats`、`shuffle`、`grouping`、`split_manifest` 等内测字段。
 
-## 8. 项目文件放在哪里
+## 8. 项目结构
 
-| 位置 | 内容 |
-| --- | --- |
-| `generate_yaml_config.py` / `yonod.py` | 配置生成器 / 建模入口 |
-| [example.yaml](example.yaml) / [example/](example/) | 完整格式规范 / 三个教学包 |
-| `config/` / `result/<task_name>/` | 本地研究配置 / 对应结果，均不由Git跟踪 |
-| `logs/` | 任务操作日志、标准输入文件和PID |
-| [dataset/](dataset/README.md) / [WEIGHTS/](WEIGHTS/README.md) | 数据来源说明 / 可选外部权重 |
-| `yonod/` | 配置、编码、模型、检验和报告源码 |
-| `project-docs/` | 独立文档仓库，主仓克隆不包含它 |
-| `_verify/` / `backup/` / `reference-projects/` | 本地验证脚本 / 备份及工程支持 / 外部参考材料，均不提交 |
+主要文件和目录如下。本地任务目录会在准备或运行任务时建立，刚克隆项目时可能还不存在。
 
-教学包的 `result/` 位于各自包内。更多维护文档在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs)，访问需要权限。参与修改前请阅读 [AGENTS.md](AGENTS.md)，测试脚本放 `_verify/`，项目文档放独立文档仓库。
+```text
+YONOD/
+├── README.md                英文使用指南
+├── README.zh-CN.md          中文使用指南
+├── AGENTS.md                开发与目录约定
+├── LICENSE                  项目许可证
+├── yonod.py                 读取并执行已保存的 YAML
+├── generate_yaml_config.py  准备数据、生成和校验 YAML，不建模
+├── example.yaml             完整 schema-2 格式与轻量工程样例
+├── requirements.txt         依赖清单；PyTorch 先单独安装
+├── example/                 教学文件及各自的 run.yaml
+│   ├── README.md            样例操作说明
+│   ├── index.html           浏览器离线导览
+│   ├── random_split/        随机划分内测
+│   ├── fixed_split/         按固定成员名单检验
+│   ├── external_test/       训练表与外测表分开检验
+│   └── archives/            可下载的样例压缩包
+├── yonod/                   Python 源码；下列为主要子包
+│   ├── config/              YAML 读取、校验与路径解析
+│   ├── descriptors/         分子结构与类别编码
+│   ├── features/            数据准备与数值条件处理
+│   ├── models/              回归模型适配
+│   ├── pipeline/            普通编码、训练、预测与报告流程
+│   ├── benchmark/           固定名单、外测等专用流程
+│   ├── splits/              分组与成员清单
+│   ├── artifacts/           特征包保存与完整性检查
+│   ├── hpo/                 训练数据内的模型参数搜索
+│   └── universal/           CSV 读取与特征拼装等公共组件
+├── dataset/                 数据及来源说明
+├── WEIGHTS/                 可选预训练资产
+├── config/                  本地研究任务 YAML
+├── result/                  研究任务的独立结果目录
+│   └── <task_name>/         同一个研究任务的全部输出
+├── logs/                    操作日志与 PID 文件
+├── _verify/                 本地验证脚本
+├── backup/                  备份与工程支持文件
+├── reference-projects/      外部参考材料
+└── project-docs/            独立文档仓库
+    ├── goal.md              项目目标
+    ├── project-plan.md      开发计划
+    ├── buildlog.md          变更与验证记录
+    ├── teach.md             学习笔记
+    └── docs/                其他维护文档
+```
+
+日常使用先看根目录的两个入口脚本、[example.yaml](example.yaml) 和 [example/](example/)。[数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)分别解释输入来源和可选资产。
+
+根目录的 `config/`、`result/`、`logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/` 都不由主仓 Git 跟踪。`project-docs/` 在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) 仓库中维护，访问需要权限，克隆主仓不会自动获取它。运行教学样例不需要该文档仓库。
+
+一次普通建模任务的主要结果结构如下：
+
+```text
+result/<task_name>/
+├── feature/                         编码及特征记录
+├── runs/
+│   └── run_<feature_id>-<model>/     一个编码与模型组合
+│       ├── predictions.csv          逐条留出预测
+│       ├── fold_metrics.csv         各折指标
+│       └── run_manifest.yaml        配置与运行记录
+├── pictures/                        报告图像
+└── report/                          HTML 与 Markdown 报告
+```
+
+固定名单等 benchmark 将成员名单、预测、逐折记录、指标和恢复状态分别放在任务目录内的 `docs/manifests/`、`docs/predictions/`、`docs/folds/`、`docs/metrics/`、`docs/state/`。冻结外测也使用 `docs/predictions/`、`docs/metrics/` 和 `report/`，但不保存普通流程那样完整的特征与最终模型包。具体文件取决于所选协议。
+
+教学任务的新结果位于各自的 `example/<包名>/result/<task_name>/`，生成的 `result/` 不由 Git 跟踪。下载 ZIP 中的 `completed_run/` 是参考快照，与自己运行产生的结果分开保存。参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
 
 ## 9. 按需安装可选依赖和资产
 
