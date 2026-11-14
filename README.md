@@ -1,20 +1,37 @@
-# YONOD — Numerical Reaction Prediction and Modeling Method Comparison
+# YONOD
 
-**English** · [简体中文](README.zh-CN.md)
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-**You Only Need Outstanding Descriptors.** Start with existing reaction records, convert molecular structures and recorded conditions into model inputs, build models for numerical targets such as yield, and obtain per-record predictions, errors, and traceable reports.
+YONOD (You Only Need Outstanding Descriptors) helps chemistry researchers build and compare models for numerical reaction properties such as yield. You provide a table of reaction records, molecular structures and measured values. YONOD converts the inputs into numbers, trains regression models, and saves predictions and reports showing how well the models predict held-out records.
 
-YONOD helps chemistry researchers compare numerical structure encodings (descriptors) and regression methods. It needs reference values in the data for modeling and evaluation. It does not automatically generate chemical products, infer reaction mechanisms, or find the best experimental conditions for you.
+You can use it without writing Python code. Start the program from a terminal and describe each calculation in a text settings file called YAML. The interactive prompts are currently in Chinese.
 
-## 1. Quick start
+## What can I do with it?
 
-Start with the [random-split teaching example](example/random_split/README.md), then explore fixed membership and external testing. All three examples use synthetic data included in the repository and Morgan encodings. **No pretrained model weights need to be downloaded.**
+- Compare molecular descriptors, which are numerical encodings of structures, and regression models on the same data.
+- Include recorded numerical conditions, such as temperature, or categorical inputs when the selected workflow supports them.
+- Evaluate predictions by random splitting, a saved list of training/test members, or a separate external test table.
+- Inspect per-record predictions, error metrics and HTML reports, with saved settings and run records for tracing the calculation.
 
-### 1.1 Get the project and prepare the environment
+Model training and evaluation need known reference values. YONOD does not generate product structures, explain reaction mechanisms or automatically choose the best laboratory conditions. If you use product structures as inputs, those structures must be known when you make predictions.
 
-Install Git and Conda first. The project baseline is Python 3.9. Choose the commands for your shell. The Linux examples assume Conda is under `$HOME/miniconda3`; replace that prefix with your installation directory. For Windows, open **Anaconda PowerShell Prompt** or a PowerShell session initialized with `conda init powershell` and restarted. Conda Prompt also supports the plain `conda`, `pip`, and `python` commands, but the PowerShell background/status blocks below require PowerShell.
+The included teaching data run on a CPU without pretrained model weights. You can try them before preparing your own dataset.
 
-**Linux Bash — first-time setup**
+## Install YONOD
+
+### Before running commands
+
+Install [Git](https://git-scm.com/downloads) to download the project and [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install) to manage its Python environment. An environment is a separate set of Python packages; this project's environment is named `yonod` and uses Python 3.9.
+
+On Linux, open a Bash terminal. On Windows, open Anaconda PowerShell Prompt, or a PowerShell window where Conda has been initialized. If necessary, run `conda init powershell` from Anaconda Prompt, then close and reopen PowerShell.
+
+Enter the commands one line at a time, pressing Enter after each. They belong in the terminal, not at a Python `>>>` prompt. The project root means the `YONOD` folder containing `yonod.py`, `example.yaml` and `requirements.txt`.
+
+### First-time installation
+
+Choose the block for your system. The Linux block assumes Miniconda is installed in `$HOME/miniconda3`; change that prefix if yours is elsewhere.
+
+Linux Bash:
 
 ```bash
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
@@ -22,151 +39,130 @@ git clone https://github.com/thinktraveller/YONOD.git
 cd YONOD
 conda create -n yonod python=3.9 -y
 conda activate yonod
-pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt
+python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements.txt
 ```
 
-**Windows Conda PowerShell — first-time setup**
+Windows Conda PowerShell:
 
 ```powershell
 git clone https://github.com/thinktraveller/YONOD.git
 Set-Location YONOD
 conda create -n yonod python=3.9 -y
 conda activate yonod
-pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt
+python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements.txt
 ```
 
-These commands install CPU PyTorch, which is sufficient for the three teaching examples. For CUDA, follow the version notes in [requirements.txt](requirements.txt) and choose a PyTorch wheel source appropriate for your machine. LightGBM and SciPy are included in `requirements.txt`; PyTorch must be installed separately first. Install the following only when using AutoGluon; it works in either Linux Bash or Windows Conda PowerShell after environment activation:
+If you already downloaded the project, enter its root folder and skip `git clone` and the following directory-change command. If you already installed the `yonod` environment, activate it instead of creating it again.
+
+Install PyTorch before the other requirements. The commands above use CPU PyTorch; the three teaching examples need no GPU. LightGBM and SciPy are included in [requirements.txt](requirements.txt). CUDA installation notes are also in that file; choose the PyTorch package for your hardware using the [official version instructions](https://pytorch.org/get-started/previous-versions/).
+
+### Check the environment
+
+With `yonod` active, these commands work in both systems:
 
 ```text
-pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
+python --version
+python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports OK')"
 ```
 
-If you already have a `yonod` environment, skip creation and installation, but activate it in each new terminal. The examples leave thread counts unspecified and do not require CPU affinity. Installed model-library defaults apply; configure resources explicitly only when needed for your machine.
+Expect Python 3.9 and `YONOD imports OK`. This checks that the main packages can be imported. Keep the terminal open for the first run. In each new terminal, activate `yonod` again; Linux also needs the `source` line when Conda has not been initialized in that shell.
 
-### 1.2 Launch an example from its own folder
+## Complete your first run
 
-Both launch blocks below start from the YONOD root, supply `run.yaml` to the first `yonod.py` prompt, and save logs and the PID in the repository-root `logs/` folder.
+### 1. Look at the teaching files
 
-**Linux Bash — background execution**
+Open [the data table](example/random_split/dataset/reactions.csv) and [its settings](example/random_split/run.yaml). A CSV is a text table; SMILES is a text representation of a molecular structure.
+
+| Column | Meaning in this example |
+| --- | --- |
+| `reaction_id` | A unique record ID, used to match outputs to inputs |
+| `yield` | Reference yield on a scale from 0 to 1; `0.10` means 10% |
+| `reactant_1_smiles`, `reactant_2_smiles` | The two molecular structures used as model inputs |
+
+All 12 records and their yields are artificial teaching values, not experimental measurements. The molecular combinations illustrate the file format and do not establish that these are chemically valid reactions.
+
+The prepared `run.yaml` selects Morgan fingerprints and three models: Random Forest (`rf`), XGBoost (`xgb`) and LightGBM (`lightgbm`). It divides the records into two groups of six, trains on one group and predicts the other, then swaps their roles. The first full run fits each model twice, for six small fits in total.
+
+### 2. Start the program
+
+Start from the project root. If you just followed the installation steps, you are already there. Keep this terminal open while the calculation runs.
+
+Linux Bash:
 
 ```bash
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/random_split
-mkdir -p ../../logs
-printf '%s\n' 'run.yaml' > ../../logs/example_random_split_20261113.stdin.txt
-nohup python -u ../../yonod.py < ../../logs/example_random_split_20261113.stdin.txt > ../../logs/example_random_split_20261113.log 2>&1 &
-echo $! > ../../logs/example_random_split_20261113.pid
+python -u ../../yonod.py
 ```
 
-**Windows Conda PowerShell**
+Windows Conda PowerShell:
 
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location example\random_split
-$yonodLogs = [IO.Path]::GetFullPath((Join-Path $PWD.Path "..\..\logs"))
-New-Item -ItemType Directory -Path $yonodLogs -Force | Out-Null
-$yonodInput = Join-Path $yonodLogs "example_random_split_20261113.stdin.txt"
-"run.yaml" | Set-Content -LiteralPath $yonodInput -Encoding ascii
-$yonodProcess = Start-Process -FilePath (Get-Command python).Source -ArgumentList @("-u", "..\..\yonod.py") -WorkingDirectory $PWD.Path -RedirectStandardInput $yonodInput -RedirectStandardOutput (Join-Path $yonodLogs "example_random_split_20261113.log") -RedirectStandardError (Join-Path $yonodLogs "example_random_split_20261113.stderr.log") -PassThru
-$yonodProcess.Id | Set-Content -LiteralPath (Join-Path $yonodLogs "example_random_split_20261113.pid") -Encoding ascii
+Set-Location .\example\random_split
+python -u ..\..\yonod.py
 ```
 
-Alternatively, activate the environment and enter the example folder, run `python -u ../../yonod.py` on Linux or `python -u ..\..\yonod.py` on Windows, then enter `run.yaml` at the first prompt. The public entry point is `yonod.py`; do not pass `--csv`, `--models`, or `--config` as arguments to this interactive entry point.
+The program asks `请输入配置文件路径(schema-2 YAML):` (enter the configuration file path). Type the following and press Enter:
 
-**Run one task at a time.** Wait for the current task to finish before starting another example. For fixed membership or external testing, enter `example/fixed_split/` or `example/external_test/` and change the log and PID filenames accordingly. Saved full-execution acceptance comes from Linux. The Windows commands explain usage; they do not establish that every optional backend has been tested on a Windows machine.
+```text
+run.yaml
+```
 
-### 1.3 Check progress and read the report
+This file is already prepared. You do not need to copy it or run the YAML generator first. Run one task at a time, waiting for it to finish before starting another.
 
-While still in the random-split example folder, choose the commands for your operating system. On Windows, standard output and errors are saved separately in `.log` and `.stderr.log`; inspect both.
+### 3. Check completion and open the report
 
-**Linux Bash**
+At the end, look for `features=ready` and a `complete` or `reused` status for each of `morgan × rf`, `morgan × xgb` and `morgan × lightgbm`. In the ordinary workflow, `reused` means matching saved results were available. The `[report]` message prints the report locations. An error message or a missing report needs checking even if the process has ended.
+
+Still in `example/random_split/`, open `result/example_random_split_20261113/report/report.html` in your file manager. On desktop Linux you can also use:
 
 ```bash
-task_pid="$(cat ../../logs/example_random_split_20261113.pid)"
-ps -p "$task_pid" -o pid,ppid,stat,etime,cmd
-tail -n 60 ../../logs/example_random_split_20261113.log
+xdg-open result/example_random_split_20261113/report/report.html
 ```
 
-**Windows Conda PowerShell**
+Windows Conda PowerShell:
 
 ```powershell
-$taskPid = [int](Get-Content ..\..\logs\example_random_split_20261113.pid)
-Get-Process -Id $taskPid -ErrorAction SilentlyContinue
-Get-Content ..\..\logs\example_random_split_20261113.log -Encoding UTF8 -Tail 60
-Get-Content ..\..\logs\example_random_split_20261113.stderr.log -Encoding UTF8 -Tail 60
+Invoke-Item .\result\example_random_split_20261113\report\report.html
 ```
 
-After the process exits, inspect the completion messages and saved run records. The ordinary workflow should report `features=ready` and `complete` or `reused` for all three model combinations. Fixed membership should have two successful fold records. External testing should have a complete prediction table and both reports. Run IDs are content-derived; do not match a hard-coded ID.
+The same folder contains `report.md`, a text report you can read in an editor. Each model's per-record predictions are under `result/example_random_split_20261113/runs/run_morgan-<model>/predictions.csv`, where `<model>` is `rf`, `xgb` or `lightgbm`. Look inside the example folder for these results; the project-root `result/` folder holds research tasks.
 
-New results are written to `result/<task_name>/` **inside the current example folder**. Open its HTML file in a file manager, with `xdg-open <report-path>` on Linux, or with `Invoke-Item <report-path>` in Windows PowerShell. The next section lists the filenames for each protocol.
+### 4. Read the results
 
-## 2. Follow the examples: data, settings, and outputs
+Each record receives a prediction from a model that did not train on that record. These are called out-of-fold (OOF) predictions. Random splitting can still put the same substrate in both training and evaluation records, so it does not establish performance on unseen substrates.
 
-[Offline guide](example/index.html) · [All operating instructions](example/README.md) · [Download all three complete examples](example/archives/all_examples.zip)
-
-All data and yields are **synthetic teaching values, not experimental measurements**. Molecular pairings illustrate the input format and are not claimed to represent real reactions. The saved acceptance records for [random splitting](example/random_split/verification.json), [fixed membership](example/fixed_split/verification.json), and [external testing](example/external_test/verification.json) establish complete workflow execution. They do not establish predictive performance on real chemistry.
-
-### 2.1 Random-split internal evaluation: start with one table
-
-1. Open [reactions.csv](example/random_split/dataset/reactions.csv). Each row is one record: `reaction_id` is its unique ID, `yield` is the reference yield, and the two `*_smiles` columns contain molecular structure strings (SMILES). For example, `yield=0.10` means 10%, not 0.10%.
-2. Open [run.yaml](example/random_split/run.yaml) in the same folder. It selects the two structure columns, Morgan encodings, Random Forest (RF), XGBoost, LightGBM, and random two-fold rotation: use six records for modeling and six for evaluation, then exchange their roles.
-3. Launch this folder's `run.yaml` as described in the quick start. The first complete run performs two folds per model, giving six fits in total; existing results with matching identities can be reused.
-4. Read `result/example_random_split_20261113/report/report.html` or `report.md`. Per-record held-out predictions are stored in `runs/run_morgan-<model>/predictions.csv`.
-
-Each record is predicted once by the corresponding model that did not learn from that record. Combining these predictions gives out-of-fold internal predictions (OOF). Random splitting does not ensure that substrates in the evaluation records were absent from the modeling records.
-
-### 2.2 Fixed-membership internal evaluation: choose evaluation members in advance
-
-1. Read the [data table](example/fixed_split/dataset/reactions.csv) and [role guide](example/fixed_split/splits/membership_guide.csv). `fixed_block` divides the 12 records into two teaching groups of six. The grouping column is not a model input.
-2. Read the [fixed-membership manifest](example/fixed_split/splits/fixed_split_manifest.csv) consumed by the program and [run.yaml](example/fixed_split/run.yaml). Executing the membership plan requires `stage: benchmark` and `manifest_outer_cv`. Fixing a random seed alone does not specify members.
-3. Launch `run.yaml` from `example/fixed_split/`. Fold 1 holds out `block_A`; fold 2 holds out `block_B`. RF is fitted twice.
-4. Read `result/example_fixed_split_20261113/report/benchmark_report.html` or `.md`. The executed membership plan and predictions are saved under `docs/manifests/` and `docs/predictions/`.
-
-The current interface requires at least two folds, with every record held out exactly once per repeat. This example cannot be replaced by a single “eight training records plus four evaluation records” plan. After changing the data, check record IDs, source row indices, members, group separation, and the CSV file's SHA-256 together. See the [fixed-membership instructions](example/fixed_split/README.md). The teaching group names have no substrate or reaction-class meaning.
-
-### 2.3 External testing: separate training and evaluation tables
-
-1. Compare the 12 training records in [train.csv](example/external_test/dataset/train.csv) with the six external records in [external.csv](example/external_test/dataset/external.csv). Column names may differ. The external table also has source IDs and three amine groups.
-2. Inspect `external_test.column_map` in [run.yaml](example/external_test/run.yaml): training column `amine_smiles` maps to external column `external_amine`, with equivalent mappings for the other structure columns. Reference yields are specified separately through training `label` and external `label_col`, not through the structure map.
-3. Check the [source audit file](example/external_test/audit/external_audit.json) and the checksums of the CSV and audit files. For real research, recheck provenance and structural overlap; do not copy the example's zero counts.
-4. Launch `run.yaml` from `example/external_test/`. Model settings are fixed in advance. RF is fitted once on all 12 training records, then predicts the six external records. External reference values are used for final scoring.
-5. Read `result/example_external_test_20261113/report/external_test_report.html` or `.md`. Predictions are in `docs/predictions/morgan__rf.parquet`, and metrics are in `docs/metrics/external_test_metrics.csv`.
-
-This example uses amine, acid, and product structures; in real use, confirm that the target product structure is known at prediction time. The current external adapter requires the audit to declare zero exact canonical structure overlap for amines, acids, and products, and at least two nonempty external groups. Those intersections were actually checked for this example, but synthetic data have no independent experimental source. A separate CSV or zero structural overlap does not automatically establish scientific independence. Predicting values for new structures without reference measurements is a different workflow from this external evaluation. See the [external-test instructions](example/external_test/README.md) for further requirements.
-
-### 2.4 Interpret the results
-
-| Metric or file | How to read it |
+| Metric | What it tells you |
 | --- | --- |
-| MAE, mean absolute error | Same units as the target; on a 0–1 yield scale, `MAE=0.10` means an average difference of 10 percentage points |
-| RMSE, root mean squared error | Same units as the target and more sensitive to large errors |
-| R², coefficient of determination | Compares error against the evaluation data's mean; it can be negative and is not “prediction accuracy” |
-| Training score | Fit to records already learned; it cannot replace held-out or external scores |
-| `verification.json` | Run and file acceptance record for the example, not a predictive-performance guarantee |
+| MAE, mean absolute error | Average size of the prediction error. On this 0 to 1 yield scale, `MAE=0.10` means 10 percentage points. |
+| RMSE, root mean squared error | Error in the same units as the target, with greater weight on large errors. |
+| R², coefficient of determination | Error compared with using the evaluation data's mean as a reference. It can be negative and is not a percentage of correct predictions. |
 
-Random-split reports score pooled OOF predictions within each repeat. Fixed-membership reports summarize fold-level metrics. Their R² aggregation differs, so do not rank methods directly across these workflows. Low scores and negative R² values are retained in all three examples.
+Training scores describe records the model has already learned from; use held-out or external scores to assess prediction. Low scores and negative R² are retained in these examples. Their purpose is to teach the workflow, not to establish performance on real chemistry or recommend a model.
 
-The ZIP packages include `completed_run/` as a reference snapshot of completed outputs. The default `result/` folder is excluded, leaving a fresh output destination after extraction. Runtime folders are not tracked in source Git. With a source-only clone, reports are generated after execution or can be viewed in a downloaded package. The random package's separate `report/` contains a historical report; YAML files under `evidence/` are for historical traceability only.
+## Use your own reaction table
 
-## 3. YAML: specify one computation clearly
+Return to the project root before continuing: use `cd ../..` in Linux Bash or `Set-Location ..\..` in Windows PowerShell if you are still in the example folder.
 
-[example.yaml](example.yaml) is the sole complete format specification. This page explains fields without duplicating a YAML template. The three teaching `run.yaml` files show concrete tasks.
+### Prepare the CSV
 
-### Two entry scripts
+Save a comma-separated CSV with a header row, using UTF-8 encoding. In a spreadsheet editor, use Save As or Export to CSV UTF-8; changing an `.xlsx` filename to `.csv` does not convert it. Structure columns need valid SMILES text, not molecular drawings or reagent names. Each row should be one record, with a stable, nonempty, unique ID. IDs such as `record-001` preserve their meaning through CSV readers; ambiguous values such as `001` or `NA` can be changed by automatic type inference and the generator rejects them when that would happen.
 
-| Script | Role |
-| --- | --- |
-| `generate_yaml_config.py` | Generate and validate a standard schema-2 YAML interactively from a CSV; save `config/<task_name>.yaml` without starting modeling |
-| `yonod.py` | Task launcher and modeling runtime; read the prepared YAML at the first prompt, then run ordinary `features`/`train`/`all` stages or the selected benchmark protocol |
+Check the reference value's meaning and unit. Yield, conversion, LC area ratio and selectivity are different targets. Use one consistent scale, such as 0 to 1 or 0 to 100, and write numbers without a `%` suffix. YONOD does not infer the intended scale or convert it automatically.
 
-### Generate a YAML from your own CSV
+The current interactive generator requires a numerical target and exactly one product SMILES column. You can also select reactant columns, other structure columns and numerical conditions. If your data have no product column, use the manual YAML route below; the runtime itself supports configurations with `products: []`. Whenever product structures are included in the model inputs, they must be available at prediction time.
 
-Start from the repository root. Linux Bash:
+### Generate settings, then run them
+
+From the project root, launch the generator.
+
+Linux Bash:
 
 ```bash
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
@@ -183,44 +179,32 @@ $env:PYTHONUTF8 = "1"
 python -u .\generate_yaml_config.py
 ```
 
-Enter the CSV path at the first prompt, then complete the column-role, encoding, model, and task questions. The generator saves the validated configuration directly to the root `config/<task_name>.yaml`; no configuration copy is needed. It may save normalized/prepared CSVs and invalid-input reports under the isolated `result/<task_name>/feature/docs/` while collecting roles. Generation does not compute descriptors, fit models, predict, or launch a run. Supplying an existing YAML to the generator validates it and returns without running it.
+Follow the displayed prompts in this order:
 
-Review the generated YAML and its input/output paths, then start `python -u yonod.py` on Linux or `python -u .\yonod.py` on Windows and enter that `config/<task_name>.yaml` path. The three teaching examples already supply their own `run.yaml`, so they do not need this generation step.
+1. Enter the CSV path and a new task name, for example `my_reaction`. Use letters, numbers, `_` or `-`; existing configurations and nonempty task folders are protected from overwriting.
+2. Select the stable ID column. It is used for record matching and excluded from the target and model inputs. Then assign the target, reactants, product, other structures and numerical conditions. Follow the indices shown at each prompt; their numbering is not the same in every menu.
+3. Check the invalid-input report and the number of retained records. The generator can exclude rows with invalid inputs, so confirm that the remaining table represents the data you intend to use.
+4. At the descriptor menu, enter `1` for Morgan. Check the displayed input columns, which default to the selected reactants, other structures and product. Press Enter at `选择 [N]:` to retain them, or enter `y` to edit the descriptor configuration. All included structures must be known at prediction time.
+5. At the model menu, enter `2` for Random Forest. Pressing Enter at the descriptor or model menu selects several methods, including ones requiring pretrained weights or optional packages.
+6. Add source/DOI notes if available. At the report-format menu, press Enter to retain both HTML and Markdown. Review the optional cleaned-CSV choice and the generated file paths.
 
-| Field | Meaning and usage |
-| --- | --- |
-| `schema_version` | Currently `"2.0"` |
-| `project_name` | Separate task name, associated with its own output directory |
-| `stage` | Which phase to execute; see the table below |
-| `dataset.path`, `sample_id_col` | Data table and stable ID column; IDs must exist, be nonempty, and be unique |
-| `dataset.column_roles` | Assign target `label`, `reactants`, `products`, other structures `others`, numerical `conditions`, and categorical columns `categoricals` |
-| `dataset.numeric_conditions` | Fit imputation statistics and scaling parameters on the corresponding training fold; unit conversion is declared explicitly in YAML, never guessed |
-| `descriptors` | Encoding candidates; `columns` selects inputs and `mode: concat` joins columns in order. Multiple candidates are not automatically combined into one encoding |
-| `artifacts.output_dir` | The task root's `feature/` child; `train` also needs `artifacts.input_manifest` pointing to verifiable encoding artifacts |
-| `models`, `model_params` | Methods and model settings; declare parameters only for selected models |
-| `evaluation` | Rules for random rotation, fixed/grouped membership, or external testing; fields from different protocols cannot be mixed arbitrarily |
-| `hpo` | Automatic comparison and selection of model settings (hyperparameter optimization), not optimization of reaction conditions; disabled in all three examples |
-| `outputs.root`, `report_formats` | Isolated output root and both `[html, markdown]` reports |
-| `outputs.diagnostics` | Optional comparison of training and held-out performance; disabling diagnostics does not disable ordinary scoring |
-| `benchmark` | Task identity and SQLite recovery state for dedicated protocols; do not copy this section into the ordinary random workflow |
-| `metadata` | Human-readable notes, not model inputs |
+The generator saves `config/my_reaction.yaml` and exits without calculating descriptors, fitting models or predicting. Prepared files stay under `result/my_reaction/`: the normalized CSV is in `feature/docs/`, and an invalid-input report, when needed, is in `report/`. Supplying an existing YAML to the generator only validates it.
 
-| `stage` | Behavior |
-| --- | --- |
-| `features` | Generate or reuse input encodings only; no model is fitted and reference labels may be omitted |
-| `train` | Read encodings through `artifacts.input_manifest`, then fit; missing encodings are not computed automatically |
-| `all` | Prepare encodings, then complete ordinary internal evaluation for available encoding/model combinations |
-| `benchmark` | Execute the dedicated `manifest_outer_cv` or `frozen_train_external_test` workflow |
+Open the saved YAML in a text editor before launching it. The generated ordinary workflow uses five folds, one repeat and random seed 42, with model-library defaults and no HPO. It needs at least five retained records; this is a software minimum, not evidence that a five-record dataset is sufficient for research. Check the split design and calculation budget for your question. Numerical conditions default to rejecting missing values; configure imputation, scaling and explicit unit conversion when needed.
 
-Ordinary `all/train` uses KFold. Actual fixed-membership or grouped evaluation requires `stage: benchmark`; changing a protocol string in the ordinary workflow does not create a membership-manifest executor. The dedicated executor can also use random splitting (`repeated_kfold`), so the word “strict” does not by itself mean unseen substrates.
+With the same environment active and from the project root, run `python -u yonod.py` on Linux or `python -u .\yonod.py` on Windows. At its first prompt, enter:
 
-### Paths, budgets, and your own research tasks
+```text
+config/my_reaction.yaml
+```
 
-- Teaching examples: keep `run.yaml` in its own folder. Inputs and `./result/<task_name>/` resolve relative to that file.
-- Research tasks: create an independent YAML under the repository-root `config/` folder. References beginning with `./` there resolve from the repository root. Explicit `../` references and configurations elsewhere resolve from their YAML's directory. Absolute paths remain absolute.
-- Each task's `artifacts.output_dir` should be `outputs.root/feature`, not the task root itself. Examples omit thread parameters and use installed model-library defaults. To limit resources, explicitly configure RF/XGBoost/LightGBM `estimator.n_jobs` or AutoGluon `fit.num_cpus` for your machine. Do not start tasks, encodings, combinations, or folds as separate parallel background jobs.
+Ordinary reports will be under `result/my_reaction/report/`. The generator prepares settings; `yonod.py` validates and executes those settings.
 
-To edit a configuration manually instead of using the generator, copy the format specification from the repository root. Linux Bash:
+### Prepare YAML manually
+
+Use [example.yaml](example.yaml) as the authoritative complete schema-2 format. To start a separate file from the project root:
+
+Linux Bash:
 
 ```bash
 mkdir -p config
@@ -234,80 +218,115 @@ New-Item -ItemType Directory -Path config -Force | Out-Null
 Copy-Item example.yaml config\my_reaction.yaml
 ```
 
-In the new file, update the task name, data path and column roles, encodings and models, model budget, split rules, and `./result/my_reaction` with its `feature/` child. The root format example uses 12 synthetic records, two folds, and 10 RF trees; thread counts follow the installed model library. For research, determine the scientific question, model settings, and computation budget yourself. Fixed membership and external testing also require their dedicated fields from the corresponding teaching example; changing only the `protocol` string is insufficient. Continue to supply the edited YAML at the first `yonod.py` prompt.
+Choose an unused filename. Edit the copy's task name, data path, ID and column roles, descriptor input columns, model settings and evaluation design. Set `outputs.root` to `./result/my_reaction` and `artifacts.output_dir` to `./result/my_reaction/feature`, retaining `outputs.report_formats: [html, markdown]`. The original file is a two-fold, 12-record Morgan/RF smoke configuration with 10 trees; its settings are not research recommendations. Launch your edited file through the same `yonod.py` prompt.
 
-The parser rejects duplicate keys, aliases, and unknown fields. Executable run configurations must be schema-2 YAML, not JSON; JSON audit files, manifests, and other evidence remain valid for their documented purposes. Use `generate_yaml_config.py` to prepare settings and `yonod.py` to validate and run the saved YAML. With no arguments, the runtime prompts for an existing YAML; CSV preparation belongs to the generator. The engineering smoke interface is `python yonod.py --config example.yaml`. Configuration locations and task isolation still follow [AGENTS.md](AGENTS.md).
+## Understand the main YAML settings
 
-### Available encodings and models
+YAML uses indentation to group settings; use spaces and preserve the structure in [example.yaml](example.yaml). Save it as a plain UTF-8 text file. On Windows, show filename extensions and check that the editor has not saved it as `my_reaction.yaml.txt`. Executable configurations use `schema_version: "2.0"`. JSON audit files and manifests are evidence files, not executable run configurations.
 
-Encodings without neural pretrained weights include `morgan`, `mfp`, `maccs`, `maf`, `rdkit2d`, `drfp`, and categorical encoding `ohe`. `mfp` is a count-based Morgan encoding, not an alias for binary `morgan`. `drfp` has reaction-input constraints. `fisd`, `molmetalm`, and `chemical_vae` need the assets described below. OHE, numerical missing-value handling, and scaling learn only from the corresponding modeling fold; held-out records are only transformed.
+| Setting | Purpose |
+| --- | --- |
+| `project_name` | A unique task name with its own result folder. |
+| `dataset.path`, `sample_id_col`, `column_roles` | The input table, stable record ID and each column's purpose; the target is `label`. |
+| `descriptors` | Structure encodings and their input columns. `mode: concat` joins columns within one descriptor; separate descriptor entries remain separate candidates. |
+| `models`, `model_params` | Selected models and their settings. Declare parameters only for selected models. |
+| `evaluation` | How training and evaluation members are separated. |
+| `hpo` | Optional search for model settings within training data; this does not optimize laboratory conditions. |
+| `outputs` | Isolated result location, report formats and optional training/held-out diagnostics. |
 
-Model identifiers are `rf`, `xgb`, `lightgbm`, `svm`, and `autogluon`. RF/XGBoost/LightGBM use `estimator`, `fit`, and `runtime` sections. SVM additionally has `preprocessing`; AutoGluon uses `predictor`, `fit`, and `runtime`. Omitted parameters use defaults from the supported installed version. Do not infer a run's settings from another version's defaults.
+`stage: all` prepares features and runs ordinary internal evaluation. `features` only prepares encodings; `train` reads existing encodings through `artifacts.input_manifest`. `benchmark` selects a dedicated evaluation protocol. Ordinary `all/train` uses KFold; fixed membership needs `manifest_outer_cv` and a split manifest. The dedicated executor also supports `repeated_kfold`, so "strict" alone does not mean unseen substrates. Changing a protocol name without its required fields does not change a configuration into a valid new workflow.
 
-HPO is supported only through the integrated RF/XGBoost/LightGBM search workflows and operates within the corresponding training data. The current frozen external workflow does not support HPO, OHE, numerical conditions, AutoGluon, or external-test early stopping. It saves neither a reusable final model nor the complete feature artifacts used by the ordinary workflow; it encodes, fits, and scores in memory according to its protocol. External-test configurations must not include internal split fields such as `n_splits`, `n_repeats`, `shuffle`, `grouping`, or `split_manifest`.
+For root `config/` files, paths beginning `./` resolve from the project root. Explicit `../` paths and configurations elsewhere resolve from the YAML file's folder; absolute paths stay absolute. Teaching `run.yaml` files therefore keep inputs and results inside their own package. Give every research task its own `result/<task_name>/`, with features in a subfolder, and keep operational logs and PID files in project-root `logs/`.
 
-## 4. Project structure
+The examples leave CPU thread counts unspecified, using the installed model libraries' defaults. If needed, set RF/XGBoost/LightGBM `model_params.<model>.estimator.n_jobs` or AutoGluon `model_params.autogluon.fit.num_cpus` for your machine. Run tasks, descriptor/model combinations and folds in sequence.
+
+## Try the other evaluation examples
+
+After the first run, open the [offline guide](example/index.html) or [example instructions](example/README.md). Run each package's `run.yaml` from its own folder, using the same launcher pattern as above.
+
+| Example and question | What happens | Report inside that example folder |
+| --- | --- | --- |
+| [Random splitting](example/random_split/README.md): how well do models predict held-out records from my table? | The first-run example compares three models using the same two-fold split. | `result/example_random_split_20261113/report/report.html` |
+| [Fixed membership](example/fixed_split/README.md): how can I hold out members chosen in advance? | A saved manifest chooses the two six-record held-out groups; RF is fitted twice. | `result/example_fixed_split_20261113/report/benchmark_report.html` |
+| [External testing](example/external_test/README.md): how does a fixed model recipe perform on a separate labeled table? | Fixed settings, one fit on 12 training records, predictions and scoring on six external records. | `result/example_external_test_20261113/report/external_test_report.html` |
+
+Fixed membership requires matching IDs, source rows, data checksum and group rules; the current interface needs at least two folds with each record held out once per repeat. The external example maps columns between its two tables and requires provenance/overlap audit information and reference values for scoring. The current adapter requires the audit to declare zero exact canonical structure overlap for amines, acids and products, and at least two nonempty external groups. A separate CSV or zero structural overlap does not prove independent experimental evidence. The external example uses known product structures and artificial values.
+
+The three workflows save different files. Frozen external testing currently excludes HPO, OHE, numerical conditions, AutoGluon and external-test early stopping, and does not save a reusable final model or the ordinary feature bundle. Its YAML must omit internal split fields such as `n_splits`, `n_repeats`, `shuffle`, `grouping` and `split_manifest`. Existing external metrics are protected from overwriting; the ordinary workflow's result reuse does not apply to every protocol. Fixed-fold averages and pooled OOF scores also differ, so do not directly rank scores across the examples.
+
+[Download all three examples](example/archives/all_examples.zip) to inspect saved `completed_run/` snapshots. Source clones generate fresh `result/` folders when run; snapshots and the random example's historical `report/` and `evidence/` are reference material. The saved [random](example/random_split/verification.json), [fixed-membership](example/fixed_split/verification.json) and [external](example/external_test/verification.json) acceptance records document Linux execution. Windows commands are provided, but do not establish Windows runtime acceptance. For unattended runs and progress checks, follow the platform-specific commands in [example/README.md](example/README.md); logs and PID files belong in root `logs/`.
+
+## Optional models, data and pretrained weights
+
+Available models are `rf`, `xgb`, `lightgbm`, `svm` and `autogluon`. Install AutoGluon only when selecting it. With `yonod` active, the following command works in Linux Bash and Windows Conda PowerShell:
 
 ```text
-YONOD/
-├── README.md / README.zh-CN.md  English default entry and Chinese guide
-├── generate_yaml_config.py     Generate and validate schema-2 YAML without modeling
-├── yonod.py                    Interactive YAML launcher and modeling runtime
-├── example.yaml                Complete schema-2 format and minimal smoke test
-├── requirements.txt            Base dependencies; PyTorch and others are installed separately
-├── LICENSE                     Repository license
-├── example/                    Three self-contained teaching examples, guide, and ZIPs
-│   ├── random_split/
-│   ├── fixed_split/
-│   └── external_test/
-├── yonod/                      Configuration, encoding, models, pipelines, reports, and dedicated protocols
-├── dataset/                    Data and provenance notes
-├── WEIGHTS/                    Optional external model assets
-├── config/                     Local research-task YAMLs (Git-ignored)
-├── result/                     Isolated research-task outputs (Git-ignored)
-├── logs/                       All task logs and PIDs (Git-ignored)
-├── project-docs/               Independent documentation Git repository, outside the main repository
-├── _verify/                    Local validation scripts (Git-ignored)
-├── backup/                     Engineering support and historical material (Git-ignored)
-└── reference-projects/         External reference projects (Git-ignored)
+python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```
 
-Example-local `result/` folders and the downloadable packages' `completed_run/` snapshots live inside their respective packages. Specific encoding, model, prediction, and report artifacts depend on the protocol; do not assume that all three workflows save the same model bundles. Additional engineering notes are maintained in the separate [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) repository, which requires access permission. Cloning the main repository does not automatically provide it.
+Encodings without neural pretrained weights include `morgan`, count-based Morgan `mfp`, `maccs`, `maf`, `rdkit2d`, `drfp` and categorical `ohe`. DRFP requires reaction inputs; OHE and numerical preprocessing learn from the corresponding training fold. HPO is integrated for RF, XGBoost and LightGBM.
 
-## 5. External data and model assets
-
-### Data and project-weight distribution
-
-Read the [data notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) first. Data for the three teaching examples are included in the source. Project distribution entry points are [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) and [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights); they do not replace original provenance and license records.
-
-The following commands work in Linux Bash and Windows Conda PowerShell from the repository root with `yonod` activated. Install a Hugging Face CLI version compatible with Transformers 4.40:
+The [dataset notes](dataset/README.md) describe data sources, target definitions and licenses. Additional distribution is available through [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) and [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights). From the root with `yonod` active, these commands work on both systems:
 
 ```text
-pip install "huggingface_hub>=0.34,<1.0"
+python -m pip install "huggingface_hub>=0.34,<1.0"
 hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/**" --local-dir dataset
 hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 ```
 
-The first download command retrieves only the USPTO subdirectory, not all data. Complete any login or access authorization required by the service. Binary weights are Git-ignored. Having configuration, tokenizer, or manifest files does not mean that all model weights are present.
+The dataset command downloads only `USPTO/`. Some source tables use tabs despite their CSV extension; read their source notes and prepare comma-separated data before using the generator. Complete any access authorization required by the service. Download only the assets you intend to use; the teaching examples already include their inputs.
 
-### Optional pretrained encodings
-
-| Encoding | Required assets and location |
+| Pretrained encoding | Required assets |
 | --- | --- |
-| FISD | Put the [upstream weights](https://github.com/KeantChen/FISD/tree/main/model) in `WEIGHTS/FISD/`: `qm_9_mse_model.pth`, `qm_9_cos_model.pth`, and `qm_9_2in1_model.pth` |
-| MolMetaLM | Put the model, configuration, and tokenizer from [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base) in `WEIGHTS/MolMetaLM-base/`; see the [upstream project](https://github.com/CSUBioGroup/MolMetaLM) |
-| Chemical VAE | Use a verified conversion manifest under `WEIGHTS/chemical_vae/<asset>/v5/` with its adjacent, hash-matched `encoder_state_dict.pt`; ZINC and `zinc_properties` assets are not interchangeable |
+| FISD | [Upstream weights](https://github.com/KeantChen/FISD/tree/main/model) in `WEIGHTS/FISD/`: `qm_9_mse_model.pth`, `qm_9_cos_model.pth`, `qm_9_2in1_model.pth`. |
+| MolMetaLM | Model, configuration and tokenizer from [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base) in `WEIGHTS/MolMetaLM-base/`; see the [upstream project](https://github.com/CSUBioGroup/MolMetaLM). |
+| Chemical VAE | A verified v5 conversion manifest under `WEIGHTS/chemical_vae/<asset>/v5/` and its adjacent, hash-matched `encoder_state_dict.pt`. ZINC and `zinc_properties` assets are distinct. |
 
-To restore MolMetaLM separately (the same command works on either system):
+A configuration, tokenizer or manifest alone does not supply the binary weights. Chemical VAE uses the frozen PyTorch encoder's raw `z_mean_sample`; it does not train a VAE or load a decoder/property head, and ordinary execution does not need TensorFlow/Keras. See the [weight notes](WEIGHTS/README.md) and [Chemical VAE loader](yonod/descriptors/chemical_vae.py).
+
+## Where files belong
 
 ```text
-hf download wudejian789/MolMetaLM-base --local-dir WEIGHTS/MolMetaLM-base
+YONOD/
+├── yonod.py                 Launch and execute a saved YAML
+├── generate_yaml_config.py  Prepare and validate YAML without modeling
+├── example.yaml             Complete schema-2 format and engineering smoke
+├── requirements.txt         Dependencies; install PyTorch separately first
+├── example/                 Teaching files, offline guide and download packages
+├── yonod/                   Implementation
+├── dataset/                 Data and source notes
+├── WEIGHTS/                 Optional pretrained assets
+├── config/                  Local research YAMLs
+├── result/                  Separate folders for research-task outputs
+├── logs/                    Operational logs and PID files
+├── _verify/                 Local validation scripts
+├── backup/                  Backups and engineering support
+├── reference-projects/      External reference material
+└── project-docs/            Independent documentation repository
 ```
 
-Chemical VAE uses only raw `z_mean_sample` from a frozen PyTorch encoder. YONOD does not train the VAE or load its decoder or property head. Original HDF5 files, or a manifest alone, cannot substitute for converted weights. TensorFlow/Keras is not required for ordinary execution. See the [loader](yonod/descriptors/chemical_vae.py) for exact constraints.
+The last seven local working folders are excluded from the main repository. `project-docs/` has its own Git history; extra engineering notes live in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission. You do not need that repository for the teaching examples.
 
-Download and configure only the assets you intend to use. External data, weights, and reference projects retain their upstream licenses, citation requirements, and scope of use; the repository license does not override them.
+## If something goes wrong
 
-## 6. License
+| Symptom | Check |
+| --- | --- |
+| `conda` is not recognized | Confirm Miniconda is installed. Linux: use the correct `conda.sh` location. Windows: reopen an initialized Conda PowerShell session. |
+| A terminal command gives `SyntaxError` at `>>>` | You are inside Python. Enter `exit()` to return to the terminal, then run the command there. |
+| Python cannot find `yonod.py`, `run.yaml` or `requirements.txt` | Check the current folder. Installation uses the root; the teaching launch uses `example/random_split/`. |
+| A path contains spaces, or a YAML file cannot be found | Quote paths in shell commands. Check the actual filename, including extensions; a file ending in `.yaml.txt` is a text file with the wrong extension. |
+| `ModuleNotFoundError` | Activate `yonod`, then install the listed requirements there. PyTorch is a separate first installation; AutoGluon is optional. |
+| No product column in the CSV wizard | Prepare a manual YAML from `example.yaml`; the wizard currently requires one product column. |
+| ID or invalid-input error | Check for missing/duplicate IDs, ambiguous ID text and the generator's exclusion report. Keep the original-to-prepared ID mapping. |
+| YAML validation fails | Check indentation, exact field names, paths and the selected protocol. Duplicate keys, aliases and unknown fields are rejected. |
+| You want to rerun with changed data or settings | Use a new task name, YAML and result directory. The generator protects existing tasks; frozen external metrics also reject overwriting. Ordinary matching results may be reused. |
+| Garbled Chinese paths or output | Keep CSV/YAML in UTF-8 and set `PYTHONUTF8=1` as shown for your shell. |
+| A warning appears or the process ends | Read the final statuses and confirm the expected reports exist. Warnings alone do not establish failure or success. |
 
-Repository code and documentation use [CC BY-NC 4.0](LICENSE), requiring attribution and noncommercial use. Third-party data, pretrained weights, and reference code follow their own licenses.
+For a bug report in [project Issues](https://github.com/thinktraveller/YONOD/issues), include your operating system, Python/package versions, the error text and a small shareable example. Remove confidential data and credentials. See [AGENTS.md](AGENTS.md) for development conventions. The engineering smoke interface is `python yonod.py --config example.yaml`; it performs a small modeling run. Formal tasks use the saved-YAML prompt procedure above.
+
+## License
+
+Project code and documentation use [CC BY-NC 4.0](LICENSE), requiring attribution and limiting use to noncommercial purposes. Third-party data, pretrained weights and reference code retain their own licenses and citation requirements.
+
+Last reviewed against this checkout: 2026-11-14.
