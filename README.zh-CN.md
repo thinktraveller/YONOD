@@ -125,12 +125,12 @@ python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports
 
 #### 看一眼数据和设置
 
-- 先打开[随机划分样例的数据表](example/random_split/dataset/reactions.csv)。
+- 先打开[随机划分样例的数据表](example/random_split_test/dataset/reactions.csv)。
 - 它有12条人工记录：`reaction_id` 是唯一编号，两个 `*_smiles` 列是结构，`yield` 是参考产率。
 - 例如 `0.10` 表示10%。
 - 这些结构搭配和产率是供冒烟测试使用的人工数据，不是实验测量，也不保证代表合理的化学反应。
 
-- 同目录的 [run.yaml](example/random_split/run.yaml) 保存本次设置。
+- 本次设置已保存在配置目录中的 [run.yaml](config/example/random_split_test/run.yaml)。
 - YAML 是用缩进组织设置的文本文件，这里已经准备好，运行冒烟测试无需修改。
 - 程序会使用 Morgan 编码，依次运行随机森林（RF）、XGBoost 和 LightGBM；将12条记录分成两份，每次6条建模、6条检验，再交换。
 - 首次完整运行共进行6次拟合。
@@ -145,10 +145,7 @@ Linux Bash：
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/random_split
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell：
@@ -156,19 +153,16 @@ Windows Conda PowerShell：
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\random_split
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 当程序询问 `请输入配置文件路径(schema-2 YAML):` 时，输入下面的文件名并按回车：
 
 ```text
-../../config/example/example_random_split_20261113.yaml
+config/example/random_split_test/run.yaml
 ```
 
-- 上述命令先将模板复制到根 `config/example/`，已有同名配置会保留，无需运行 YAML 生成器。
+- 该配置已保存在对应目录，无需复制 YAML，也无需运行 YAML 生成器。
 - 程序随后校验配置、准备编码并运行模型。
 - 完成时应看到 `features=ready`，以及 `morgan × rf`、`morgan × xgb`、`morgan × lightgbm` 各自的 `complete` 或 `reused`。
 - `reused` 表示程序核对身份后复用了已有结果。
@@ -176,28 +170,27 @@ python -u ..\..\yonod.py
 
 #### 打开报告
 
-- 仍在 `example/random_split/` 目录时，新报告位于 `../../result/example/example_random_split_20261113/report/report.html`。
+- 从项目根目录查找，新报告位于 `result/example/random_split_test/report/report.html`。
 - 在文件管理器找到它，双击用浏览器打开即可。
 - 也可使用下列命令。
 
 Linux Bash（有桌面环境时）：
 
 ```bash
-xdg-open ../../result/example/example_random_split_20261113/report/report.html
+xdg-open result/example/random_split_test/report/report.html
 ```
 
 Windows Conda PowerShell：
 
 ```powershell
-Invoke-Item ..\..\result\example\example_random_split_20261113\report\report.html
+Invoke-Item .\result\example\random_split_test\report\report.html
 ```
 
 - 同目录的 `report.md` 是文字版报告；逐条预测位于任务目录的 `runs/run_morgan-<模型>/predictions.csv`。
 - 这里的 `<模型>` 替换为 `rf`、`xgb` 或 `lightgbm`，不是文件名的一部分。
 
-- 后续步骤从项目根目录开始。
-- 运行结束后，Linux 用 `cd ../..`，Windows PowerShell 用 `Set-Location ..\..` 返回。
-- 需要关闭终端后继续计算时，再参考[后台启动与状态查看说明](example/README.md)；所有操作日志、标准输入文件和 PID 文件统一放在仓库根 `logs/`。
+- 后续步骤仍从项目根目录开始。
+- 需要关闭终端后继续计算时，参考[后台运行与状态查看](#后台运行与状态查看)；所有操作日志、标准输入文件和 PID 文件统一放在仓库根 `logs/`。
 
 首次使用样例保存的完整运行验收来自 Linux。Windows 命令说明操作方法，尚不能据此认定各后端通过了 Windows 实机验收；请在本机完成安装与运行检查。
 
@@ -244,12 +237,13 @@ Invoke-Item ..\..\result\example\example_random_split_20261113\report\report.htm
 - [使用 HPO 搜索模型设置](#使用-hpo-搜索模型设置)
 - [其他流程字段与已有特征输入](#其他流程字段与已有特征输入)
 - [根据问题选择要调节的设置](#根据问题选择要调节的设置)
+- [后台运行与状态查看](#后台运行与状态查看)
 - [保存的样例与报告口径](#保存的样例与报告口径)
 - [按需安装可选依赖和资产](#按需安装可选依赖和资产)
 
 ### 使用自己的 CSV
 
-可直接打开[示例 CSV 数据集](example/random_split/dataset/reactions.csv)，参考列名与记录格式；其中数值是冒烟测试使用的人工数据。
+可直接打开[示例 CSV 数据集](example/random_split_test/dataset/reactions.csv)，参考列名与记录格式；其中数值是冒烟测试使用的人工数据。
 
 #### 先准备数据表
 
@@ -348,9 +342,9 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 ### 配置路径与执行阶段
 
-- 推荐将运行配置统一保存在根 `config/`：研究配置使用 `config/<task_name>.yaml`，示例副本使用 `config/example/<task_name>.yaml`。
-- 这些文件中以 `./` 开头的路径按项目根解析；显式 `../` 及其他位置配置内的相对路径按 YAML 所在目录解析，绝对路径保持绝对。
-- 示例模板使用 `../../example/<包名>/` 输入路径，复制到 `config/example/` 后仍读取同一文件；输出通过 `../../result/example/<task_name>` 保存到项目根目录。
+- 推荐将运行配置统一保存在根 `config/`：研究配置使用 `config/<task_name>.yaml`，三个测试已准备好 `config/example/<测试名>/run.yaml`。
+- 直接位于 `config/` 下的 YAML，以 `./` 开头的路径按项目根解析；显式 `../` 及其他位置配置内的相对路径按 YAML 所在目录解析，绝对路径保持绝对。
+- 嵌套的测试 YAML 使用 `../../../example/<测试名>/` 读取输入，用 `../../../result/example/<测试名>` 将结果保存到项目根目录。
 - 配置保存为 UTF-8 纯文本，缩进使用空格；Windows下检查文件没有被另加 `.txt` 后缀。
 
 | `stage` | 执行内容 |
@@ -368,22 +362,22 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 - 三个首次使用样例都使用人工记录，主要用于冒烟测试，检查各自流程能否完整运行。
 - 一次只运行一个任务。
-- 每组命令都从项目根目录开始；若仍在上一个样例中，Bash 用 `cd ../..`，PowerShell 用 `Set-Location ..\..` 返回。
-- 下列命令将示例配置保存到项目根目录 `config/example/`；运行器首提示输入各例给出的已保存路径。
+- 每组命令都从项目根目录开始。
+- 每个测试都有已准备好的 `config/example/<测试名>/run.yaml`；运行器首提示输入各例给出的完整路径。
 - 以下报告路径均相对项目根目录。
 
 | 你的问题 | 流程与配置 | 怎样分开建模和检验 |
 | --- | --- | --- |
-| 同一张表中，模型对留出记录预测得怎样？ | 普通 `stage: all`、`evaluation.protocol: outer_kfold`；[随机样例](example/random_split/run.yaml) | 各折中的训练行和留出行分开；同一种底物仍可能在两侧出现。 |
-| 怎样执行指定的成员名单或整组留出？ | `stage: benchmark`、`manifest_outer_cv`；[固定名单样例](example/fixed_split/run.yaml) | 采用清单中真实的 `train`/`valid` 成员及分组键。 |
-| 提前固定的建模方案，对另外一张带参考值的表预测得怎样？ | `stage: benchmark`、`frozen_train_external_test`；[外测样例](example/external_test/run.yaml) | 每个组合不使用外测标签拟合和预测，随后才读取标签评分。 |
+| 同一张表中，模型对留出记录预测得怎样？ | 普通 `stage: all`、`evaluation.protocol: outer_kfold`；[随机样例](config/example/random_split_test/run.yaml) | 各折中的训练行和留出行分开；同一种底物仍可能在两侧出现。 |
+| 怎样执行指定的成员名单或整组留出？ | `stage: benchmark`、`manifest_outer_cv`；[固定名单样例](config/example/fixed_split_test/run.yaml) | 采用清单中真实的 `train`/`valid` 成员及分组键。 |
+| 提前固定的建模方案，对另外一张带参考值的表预测得怎样？ | `stage: benchmark`、`frozen_train_external_test`；[外测样例](config/example/external_test/run.yaml) | 每个组合不使用外测标签拟合和预测，随后才读取标签评分。 |
 
 #### 随机划分内测
 
-1. 查看[12行数据表](example/random_split/dataset/reactions.csv)和 [run.yaml](example/random_split/run.yaml)。
+1. 查看[12行数据表](example/random_split_test/dataset/reactions.csv)和 [run.yaml](config/example/random_split_test/run.yaml)。
 
    - 本例使用两列反应物结构、Morgan 编码、RF/XGBoost/LightGBM，进行两折、一轮检验。
-2. 按系统运行下面的命令，在首次提示输入 `../../config/example/example_random_split_20261113.yaml`。
+2. 按系统运行下面的命令，在首次提示输入 `config/example/random_split_test/run.yaml`。
 
 Linux Bash：
 
@@ -391,10 +385,7 @@ Linux Bash：
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/random_split
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell：
@@ -402,15 +393,12 @@ Windows Conda PowerShell：
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\random_split
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 3. 核对 `features=ready`、三个组合的 `complete` 或 `reused` 状态及两种报告。
 
-   - 新 HTML 报告是 `result/example/example_random_split_20261113/report/report.html`；逐条预测位于该任务的 `runs/run_morgan-<model>/predictions.csv`。
+   - 新 HTML 报告是 `result/example/random_split_test/report/report.html`；逐条预测位于该任务的 `runs/run_morgan-<model>/predictions.csv`。
 
 4. 使用自己的 CSV 时，在根 `config/` 生成新配置，或从 [example.yaml](example.yaml) 另存独立副本。
 
@@ -422,13 +410,24 @@ python -u ..\..\yonod.py
 - 普通运行器始终建立 KFold 划分。
 - 只在普通 `all/train` 配置中写 `manifest_outer_cv` 不会导入自己的清单；需要真正固定成员时，使用下一条专用 benchmark 路线。
 
+本表没有产物、数值条件或类别输入列，第二列结构始终为 `CO`；恒定输入不能检验对任意新组分的预测能力。数据表中出现的列不会自动成为模型输入。
+
+当前配置的三个模型各使用两棵树，关闭 HPO 与额外训练/留出效果诊断，不指定线程数，采用各模型库默认。这些小设置用于降低冒烟测试成本。
+
+| 折 | 用于建模的编号 | 留出检验的编号 |
+| --- | --- | --- |
+| 1 | 02、04、05、07、08、12 | 01、03、06、09、10、11 |
+| 2 | 01、03、06、09、10、11 | 02、04、05、07、08、12 |
+
+编号省略共同前缀 `smoke-`，可对照[保存的划分表](example/random_split_test/tables/split_assignments.csv)。每条记录恰好留出一次；三个方法各做两折，共六次模型拟合，不是六次独立化学实验。
+
 #### 固定名单与分组检验
 
-1. 查看[角色解释表](example/fixed_split/splits/membership_guide.csv)、[实际24行清单](example/fixed_split/splits/fixed_split_manifest.csv)和[配置](example/fixed_split/run.yaml)。
+1. 查看[角色解释表](example/fixed_split_test/splits/membership_guide.csv)、[实际24行清单](example/fixed_split_test/splits/fixed_split_manifest.csv)和[配置](config/example/fixed_split_test/run.yaml)。
 
    - 每折列出全部12条记录；第1折留出 `block_A`，第2折留出 `block_B`。
 2. 保持 `stage: benchmark`、`evaluation.protocol: manifest_outer_cv`、分组声明、`evaluation.split_manifest` 与 `benchmark.task_state` 相互一致。
-3. 从项目根目录启动，首提示输入 `../../config/example/example_fixed_split_20261113.yaml`。
+3. 从项目根目录启动，首提示输入 `config/example/fixed_split_test/run.yaml`。
 
 Linux Bash：
 
@@ -436,10 +435,7 @@ Linux Bash：
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/fixed_split
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_fixed_split_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell：
@@ -447,15 +443,12 @@ Windows Conda PowerShell：
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\fixed_split
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_fixed_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_fixed_split_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 4. 核对 RF 两折成功记录。
 
-   - 报告是 `result/example/example_fixed_split_20261113/report/benchmark_report.html`；实际采用的清单和预测在该任务的 `docs/manifests/`、`docs/predictions/`。
+   - 报告是 `result/example/fixed_split_test/report/benchmark_report.html`；实际采用的清单和预测在该任务的 `docs/manifests/`、`docs/predictions/`。
 
 5. 用自己的数据时，先准备稳定编号和分组键，再分配折成员。
 
@@ -467,6 +460,15 @@ python -u ..\..\yonod.py
 - 每折的训练、验证部分均非空，编号全集与数据表一致，同一组的记录不能分散在该折的训练和验证部分，每条记录每轮恰好一次 `valid`。
 - 仅一次“8条训练、4条测试”的名单不能代替这份交叉验证清单。
 - 固定种子或关闭打乱也不能表达任意指定的成员。
+
+这份 CSV 在记录编号、参考产率和两列结构之外增加 `fixed_block`。`reaction_id` 用于对齐名单；`yield` 是 0–1 尺度的人工参考值；`fixed_block` 只控制成员划分，不作为模型输入。
+
+| 折 | `train` 建模成员 | `valid` 留出成员 |
+| --- | --- | --- |
+| 1 | `fixed-07` 至 `fixed-12`（`block_B`） | `fixed-01` 至 `fixed-06`（`block_A`） |
+| 2 | `fixed-01` 至 `fixed-06`（`block_A`） | `fixed-07` 至 `fixed-12`（`block_B`） |
+
+`block_A` 和 `block_B` 只是人工分组，没有底物、实验室或实验批次的化学含义。12 行解释表用 `held_out` 表示留出记录；程序读取的 24 行正式清单只使用 `train` 与 `valid`。固定名单决定哪些记录用于检验，固定模型参数决定怎样建模，两者作用不同。
 
 若没有 `evaluation.split_manifest`，专用执行器会根据 `evaluation.grouping` 生成清单，目前支持五种策略：
 
@@ -518,14 +520,14 @@ Get-FileHash -Algorithm SHA256 -LiteralPath .\dataset\my_reactions.csv
 
 #### 冻结设置后进行外测
 
-1. 查看[12行训练表](example/external_test/dataset/train.csv)、[6行外测表](example/external_test/dataset/external.csv)、[审计文件](example/external_test/audit/external_audit.json)和 [run.yaml](example/external_test/run.yaml)。
+1. 查看[12行训练表](example/external_test/dataset/train.csv)、[6行外测表](example/external_test/dataset/external.csv)、[审计文件](example/external_test/audit/external_audit.json)和 [run.yaml](config/example/external_test/run.yaml)。
 
    - 先固定描述符输入、模型参数和评分方案，再查看外测结果。
 
 2. 保留 `stage: benchmark`、`frozen_train_external_test`、`evaluation.seed` 和完整外测字段。
 
    - 不能混入 `n_splits`、`n_repeats`、`shuffle`、`grouping`、`split_manifest`、`population_manifest`。
-3. 从项目根目录启动，首提示输入 `../../config/example/example_external_test_20261113.yaml`。
+3. 从项目根目录启动，首提示输入 `config/example/external_test/run.yaml`。
 
 Linux Bash：
 
@@ -533,10 +535,7 @@ Linux Bash：
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/external_test
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_external_test_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell：
@@ -544,15 +543,12 @@ Windows Conda PowerShell：
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\external_test
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_external_test_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_external_test_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 4. RF 使用全部12条训练记录拟合一次，再预测6条外测记录。
 
-   - 查看 `result/example/example_external_test_20261113/report/external_test_report.html`，以及该任务根下的 `docs/predictions/morgan__rf.parquet`、`docs/metrics/external_test_metrics.csv`。
+   - 查看 `result/example/external_test/report/external_test_report.html`，以及该任务根下的 `docs/predictions/morgan__rf.parquet`、`docs/metrics/external_test_metrics.csv`。
    - 外测没有交叉验证；保存的分数也不是独立置信区间。
 
 5. 真实任务需另建训练、外测与审计文件，再建立独立根 `config/` YAML 和任务输出目录。
@@ -580,6 +576,30 @@ python -u ..\..\yonod.py
 - 已有外测运行输出会在拟合前被拒绝，不恢复或覆盖；需新建任务名和输出目录。
 - 样例含产物输入，实际预测时须已知目标产物结构。
 - 另存文件、精确结构零重叠，都不能证明独立实验来源或分布独立。
+
+两份 CSV 故意使用不同列名：
+
+| 训练表列 | 外测表列 | 作用 |
+| --- | --- | --- |
+| `amine_smiles` | `external_amine` | 胺结构，由 `column_map` 对应。 |
+| `acid_smiles` | `external_acid` | 酸结构，由 `column_map` 对应。 |
+| `product_smiles` | `external_product` | 预测时已知的产物结构，由 `column_map` 对应。 |
+| `yield` | `measured_yield` | 单独声明的参考目标，不放入结构映射。 |
+| `reaction_id` | `external_id` | 唯一记录编号，不作为分子输入。 |
+| 无 | `source_record_id` | 来源编号，统一以 `teaching-external-v1:` 开头。 |
+| 无 | `amine_group` | 外测的三个胺组，保留给后续分组分析。 |
+
+`measured_yield` 只是演示常见列名，其中仍是人工参考值；`0.22` 表示 22%，本例没有自动百分数换算设置。这条外测评分流程需要参考目标；只有新结构、没有目标值的预测属于另一种操作路径。
+
+本例保存的审计记录给出下列规范化结构计数：
+
+| 角色 | 训练中不同结构数 | 外测中不同结构数 | 完全相同的结构交集 |
+| --- | --- | --- | --- |
+| 胺 | 4 | 3 | 0 |
+| 酸 | 3 | 3 | 0 |
+| 产物 | 12 | 6 | 0 |
+
+本例没有更上游的实测原始表，所以 `candidate_source_sha256` 指向外测 CSV，`physical_dataset_id` 为 `teaching-external-v1`。真实数据需根据实际文件重做来源、重叠与哈希核查；三个小组和零完全结构重叠不能证明独立实验来源。
 
 ### 逐行理解 example.yaml
 
@@ -754,19 +774,92 @@ python -u ..\..\yonod.py
 
 只声明已选模型的参数。更改研究配置时另取任务名并使用独立结果目录。线程设置由本机资源决定，各任务和折仍依次执行。
 
+### 后台运行与状态查看
+
+第一次冒烟测试建议前台运行，便于查看错误。需要退出终端后继续计算时，从项目根目录选择下面一组后台启动命令；将 `test_name` 或 `$testName` 设为 `random_split_test`、`fixed_split_test` 或 `external_test`，等当前任务完成后再启动下一个。
+
+#### Linux Bash
+
+```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate yonod
+export PYTHONUTF8=1
+test_name=random_split_test
+mkdir -p logs
+printf '%s\n' "config/example/$test_name/run.yaml" > "logs/$test_name.stdin.txt"
+nohup python -u yonod.py < "logs/$test_name.stdin.txt" > "logs/$test_name.log" 2>&1 &
+echo $! > "logs/$test_name.pid"
+```
+
+需要时从同一项目根目录查询状态：
+
+```bash
+test_name=random_split_test
+test_pid="$(cat "logs/$test_name.pid")"
+ps -p "$test_pid" -o pid,ppid,stat,etime,cmd
+tail -n 100 "logs/$test_name.log"
+```
+
+#### Windows Conda PowerShell
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = "1"
+$testName = "random_split_test"
+$testLogs = Join-Path $PWD.Path "logs"
+New-Item -ItemType Directory -Path $testLogs -Force | Out-Null
+$testInput = Join-Path $testLogs "$testName.stdin.txt"
+[IO.File]::WriteAllText($testInput, "config/example/$testName/run.yaml`n", [Text.UTF8Encoding]::new($false))
+$testProcess = Start-Process -FilePath (Get-Command python).Source -ArgumentList @("-u", "yonod.py") -WorkingDirectory $PWD.Path -RedirectStandardInput $testInput -RedirectStandardOutput (Join-Path $testLogs "$testName.log") -RedirectStandardError (Join-Path $testLogs "$testName.stderr.log") -PassThru
+$testProcess.Id | Set-Content -LiteralPath (Join-Path $testLogs "$testName.pid") -Encoding ascii
+```
+
+标准输出与错误输出分开保存，查询时检查两份日志：
+
+```powershell
+$testName = "random_split_test"
+$testLogs = Join-Path $PWD.Path "logs"
+$testPid = [int](Get-Content -LiteralPath (Join-Path $testLogs "$testName.pid"))
+Get-Process -Id $testPid -ErrorAction SilentlyContinue
+Get-Content -LiteralPath (Join-Path $testLogs "$testName.log") -Encoding UTF8 -Tail 100
+Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding UTF8 -Tail 100
+```
+
+日志、PID 与运行器输入文件统一放在根 `logs/`，模型结果仍位于 `result/example/<测试名>/`。进程结束或出现结果目录不能单独证明成功；还需检查完成状态、逐条预测和两种报告。Linux 命令不能代替 Windows 实机验收。
+
 ### 保存的样例与报告口径
 
-- [浏览器导览](example/index.html)
-- [操作说明](example/README.md)
-- [下载全部样例](example/archives/all_examples.zip)
+三个测试使用对应的数据、配置和结果目录：
 
-- ZIP 附有 `completed_run/` 参考快照；重新运行的结果统一保存到项目根目录 `result/example/<task_name>/`。
-- 随机包历史 `report/` 和 `evidence/` 用于追溯。
-- [随机](example/random_split/verification.json)、[固定名单](example/fixed_split/verification.json)、[外测](example/external_test/verification.json)验收记录来自 Linux，不代表 Windows 实机验收。
-- 后台运行和状态查询参照操作说明中的 Bash/PowerShell 命令，日志与 PID保存在根 `logs/`。
+| 测试名 | 已保存配置 | 输入 | `result/example/` 下的新网页报告 |
+| --- | --- | --- | --- |
+| `random_split_test` | [run.yaml](config/example/random_split_test/run.yaml) | [12 行 CSV](example/random_split_test/dataset/reactions.csv) | `random_split_test/report/report.html` |
+| `fixed_split_test` | [run.yaml](config/example/fixed_split_test/run.yaml) | [CSV](example/fixed_split_test/dataset/reactions.csv)、[角色解释表](example/fixed_split_test/splits/membership_guide.csv)、[正式名单](example/fixed_split_test/splits/fixed_split_manifest.csv) | `fixed_split_test/report/benchmark_report.html` |
+| `external_test` | [run.yaml](config/example/external_test/run.yaml) | [训练 CSV](example/external_test/dataset/train.csv)、[外测 CSV](example/external_test/dataset/external.csv)、[审计](example/external_test/audit/external_audit.json) | `external_test/report/external_test_report.html` |
 
-- 普通随机报告在每轮汇总 OOF 预测评分，固定名单报告汇总逐折指标，两者 R² 聚合口径不同，不能当作相同评价直接跨路线排名。
-- 人工数据值、低分和负 R² 均保留，供首次使用时检查输出，不能据此认定真实化学预测能力。
+每份报告的 `report/` 目录同时保存 Markdown `.md` 版。固定名单逐条预测与实际采用的清单分别位于任务的 `docs/predictions/`、`docs/manifests/`；外测逐条预测为 `docs/predictions/morgan__rf.parquet`，完整精度指标为 `docs/metrics/external_test_metrics.csv`。
+
+[随机](example/random_split_test/verification.json)、[固定名单](example/fixed_split_test/verification.json)、[外测](example/external_test/verification.json)验收记录保留历史 Linux 执行。原 `launch` 中的配置哈希对应历史运行，`current_configuration` 记录迁移后配置的静态检查。本次重命名和移位没有重新建模，也不代表 Windows 实机支持；保存报告和清单中的旧任务名保留其来源身份。
+
+#### 阅读保存的随机划分报告
+
+源码中仍可查看[历史 HTML 报告](example/random_split_test/report/report.html)、[Markdown 报告](example/random_split_test/report/report.md)、[指标表](example/random_split_test/tables/metrics.csv)及[来源记录](example/random_split_test/provenance.json)。报告来自 `diag215_20260929_ordinary_fixed_off_v1`；新测试的输出使用 `result/example/random_split_test/`。
+
+下表从保存的 12 条留出预测核对而来，属于历史人工数据结果，不是重命名后测试的新执行分数：
+
+| 方法 | R² | RMSE，0–1 产率尺度 | MAE，0–1 产率尺度 | MAE，产率百分点 |
+| --- | ---: | ---: | ---: | ---: |
+| RF | -0.638112 | 0.265094 | 0.222500 | 22.2500 |
+| XGBoost | -0.102794 | 0.217508 | 0.184805 | 18.4805 |
+| LightGBM | -0.173512 | 0.224374 | 0.189520 | 18.9520 |
+
+先看任务信息，再看结果矩阵、详细指标和散点图。每个点对照一条留出预测与人工参考值，越接近对角线越吻合。保存的 [RF](example/random_split_test/pictures/scatter_morgan_rf_repeat-1.png)、[XGBoost](example/random_split_test/pictures/scatter_morgan_xgb_repeat-1.png)、[LightGBM](example/random_split_test/pictures/scatter_morgan_lightgbm_repeat-1.png) 图均为历史图像；其中“实验值”等轴标题在本例应理解为人工参考值。
+
+- 普通随机报告在每轮汇总 OOF 预测评分，固定名单报告汇总逐折指标，R² 聚合口径不同，不能当作相同评价直接跨路线排名。
+- 跨重复标准差为零是因为只有一套完整轮换，不能据此声称稳定或没有不确定性。
+- 旧报告中训练/留出额外诊断的 `disabled` 与诊断完成数为零，不表示正常交叉验证失败；“严格外层 CV”排名标题不能把随机划分变成底物组留出，“SMILES 列”显示为空也不表示未使用结构输入。
+- 历史排名、固定指标阈值和用途建议是原报告用语，不能作为本人工样例或其他化学体系的可靠性标准。MAE 也会受大误差影响；0–1 尺度误差乘以 100 才是产率百分点。
+- 报告与图片保留来源身份；Markdown 需保留配套 `pictures/`，HTML 的公式排版可能请求在线资源。`evidence/` 保存设置、预测和逐折记录，不是完整可重载模型交付。其中的 YAML（包括 `historical_source_config.yaml`）仅追溯历史计算，不是当前入口；原模型路径保留来源语境。完整运行快照转存本地备份，`verification.launch` 保留历史真实执行身份。
 
 ### 按需安装可选依赖和资产
 
@@ -1246,7 +1339,7 @@ python yonod.py --config example.yaml
 
 ## 项目结构
 
-`config/example/` 和 `result/example/` 初始仅含 Git 占位文件，没有任务配置或运行结果；其他本地任务目录会在准备或运行任务时建立。
+三份可执行配置已保存在 `config/example/` 下；对应的 `random_split_test/`、`fixed_split_test/`、`external_test/` 结果目录初始仅含 `.gitkeep`，没有生成结果。其他本地任务目录会在准备或运行任务时建立。
 
 ```text
 YONOD/
@@ -1258,13 +1351,10 @@ YONOD/
 ├── generate_yaml_config.py  准备数据、生成和校验 YAML，不建模
 ├── example.yaml             完整 schema-2 格式与工程冒烟测试
 ├── requirements.txt         依赖清单；PyTorch 先单独安装
-├── example/                 首次使用样例及各自的 run.yaml
-│   ├── README.md            样例操作说明
-│   ├── index.html           浏览器离线导览
-│   ├── random_split/        随机划分内测
-│   ├── fixed_split/         按固定成员名单检验
-│   ├── external_test/       训练表与外测表分开检验
-│   └── archives/            可下载的样例压缩包
+├── example/                 冒烟测试输入和历史证据
+│   ├── random_split_test/   随机划分数据、历史报告和证据
+│   ├── fixed_split_test/    固定名单数据与划分清单
+│   └── external_test/       训练/外测表及来源审计
 ├── yonod/                   Python 源码；下列为主要组件
 │   ├── model_factory.py     schema-2 模型校验与构造
 │   ├── config/              YAML 读取、校验与路径解析
@@ -1280,11 +1370,19 @@ YONOD/
 ├── dataset/                 数据及来源说明
 ├── WEIGHTS/                 可选预训练资产
 ├── config/                  推荐统一存放运行配置
-│   ├── example/             保存示例 YAML；初始为空
+│   ├── example/             已准备好的冒烟测试配置
+│   │   ├── random_split_test/
+│   │   │   └── run.yaml
+│   │   ├── fixed_split_test/
+│   │   │   └── run.yaml
+│   │   └── external_test/
+│   │       └── run.yaml
 │   └── <task_name>.yaml     本地研究任务配置
 ├── result/                  推荐统一存放运行结果
-│   ├── example/             示例输出；初始没有运行结果
-│   │   └── <task_name>/     运行示例时创建
+│   ├── example/             测试输出；初始仅有占位文件
+│   │   ├── random_split_test/
+│   │   ├── fixed_split_test/
+│   │   └── external_test/
 │   └── <task_name>/         同一个研究任务的全部输出
 ├── logs/                    操作日志与 PID 文件
 ├── _verify/                 本地验证脚本
@@ -1325,7 +1423,7 @@ result/<task_name>/
 
 - 示例的新结果统一位于项目根目录 `result/example/<task_name>/`，每个任务使用独立子目录。
 - 推荐自己的配置放在根 `config/<task_name>.yaml`，结果放在 `result/<task_name>/`；两个示例子目录之外的配置和结果均由 Git 忽略。
-- 下载 ZIP 中的 `completed_run/` 是参考快照，与自己运行产生的结果分开保存。
+- 以往完整运行快照保存在本地工程备份中；当前测试不依赖下载归档或这些快照。
 - 参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
 
 ## 致谢

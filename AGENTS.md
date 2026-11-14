@@ -59,19 +59,21 @@ Every modeling task must follow this order from the repository root:
 3. Start through `yonod.py`. At the first prompt, provide the already-created
    YAML path; the script validates it and launches the configured run.
 
-Teaching examples under `example/` each provide a `run.yaml` template. Before
-running one, copy it to the repository-root `config/example/<task_name>.yaml`,
-preserving an existing copy. The template's `../../example/<package>/` input
-paths resolve identically from either location. Outputs belong under the
-repository-root `result/example/<task_name>/` (set
-`outputs.root: ../../result/example/<task_name>` and put feature artifacts in
-its `feature/` subdirectory). From an example folder,
-run `python ../../yonod.py` on Linux or `python ..\..\yonod.py` on Windows
-and enter `../../config/example/<task_name>.yaml`. Keep schema-2,
-serial execution, dual reports, and repository-root `logs/` for operational
-logs and PID files. Research task YAMLs still belong in root `config/`.
-The root `example.yaml` remains the engineering smoke interface and also
-writes under `result/example/`.
+The three smoke tests are `random_split_test`, `fixed_split_test`, and
+`external_test`. Each ships a ready-to-run configuration at
+`config/example/<test_name>/run.yaml`; its inputs live under
+`example/<test_name>/`, and its outputs belong under
+`result/example/<test_name>/`. From these YAML locations, use
+`../../../example/<test_name>/` input paths and
+`outputs.root: ../../../result/example/<test_name>` with feature artifacts
+in its `feature/` subdirectory. Run `python yonod.py` from the repository
+root and enter `config/example/<test_name>/run.yaml` at the first prompt;
+no YAML copy or generation is needed. Keep schema-2, serial execution,
+dual reports, and repository-root `logs/` for operational logs and PID files.
+The project README files contain the test instructions; do not recreate
+duplicate README or index pages under `example/`. Research task YAMLs still
+belong in root `config/`. The root `example.yaml` remains the engineering
+smoke interface and also writes under `result/example/`.
 
 Schedule tasks linearly: run one task to completion before starting the
 next. Do not launch multiple YONOD runs, descriptors, model combinations,
@@ -167,9 +169,9 @@ It may write normalized/prepared CSVs and invalid-input reports under the
 isolated `result/<task_name>/feature/docs/`, but must not calculate descriptors,
 fit models, predict, or automatically launch a modeling task. Existing YAML
 input is validated only. Review the saved YAML, then launch `yonod.py` and
-provide that path at the first prompt. Teaching `run.yaml` templates are
-already prepared: copy them to `config/example/` as described above; they do
-not need to pass through the generator.
+provide that path at the first prompt. The test `run.yaml` files under
+`config/example/<test_name>/` are already prepared and can run directly;
+they do not need to pass through the generator.
 
 Executable run configurations use schema-2 YAML. JSON audit records and
 manifests remain supported evidence formats; they are not run configurations.
@@ -213,8 +215,9 @@ are no longer needed for active work, move them into `backup/`, keeping each
 task's files together so the original run remains identifiable. `backup/` is
 excluded from the main Git repository.
 Recommend the repository-root `result/` for all run outputs. Its `example/`
-subfolder initially contains only a Git placeholder, with no run results;
-each example run creates its own `result/example/<task_name>/`. Research
+subfolder provides `random_split_test/`, `fixed_split_test/`, and
+`external_test/`, initially containing only empty Git placeholders and no
+run results. Each example uses its matching test directory. Research
 tasks use `result/<task_name>/`. For each project run, all result files must
 be contained in that task's designated directory (`result/<task_name>/` for
 research or `result/example/<task_name>/` for examples); do not write loose
@@ -287,8 +290,9 @@ The main project repository stays on `main`. `project-docs/` is a separate Git
 repository that includes its `docs/` subdirectory. The main repository ignores
 `project-docs/`, `_verify/`, `reference-projects/`, and `backup/`.
 Under `config/` and `result/`, only their `example/` subfolders are kept in
-the main repository; all other files and folders are ignored. Each example
-subfolder initially contains only `.gitkeep` to preserve the empty directory.
+the main repository; all other files and folders are ignored. Each contains
+the same three named test subfolders. The configuration subfolders ship
+their `run.yaml`; the result subfolders initially contain only `.gitkeep`.
 
 ### Required directory locations
 

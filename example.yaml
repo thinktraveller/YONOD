@@ -3,8 +3,8 @@
 # 自有CSV：在仓库根运行 python generate_yaml_config.py，只准备数据与配置，
 # 直接保存 config/<task_name>.yaml；确认后经 yonod.py 首提示提供该路径。
 # 手工配置：另存为 config/<task_name>.yaml；yonod.py 校验并执行该配置。
-# 教学示例：先复制 run.yaml 到 config/example/<任务名>.yaml；在 example/<示例>/ 启动，
-# Linux 用 python ../../yonod.py，Windows 用 python ..\..\yonod.py；首提示输入 ../../config/example/<任务名>.yaml。
+# 三种测试YAML直接保存在 config/example/{random_split_test,fixed_split_test,external_test}/run.yaml。
+# 从仓库根启动 python yonod.py；首提示输入所选测试的配置路径，无需复制配置。
 schema_version: "2.0"
 project_name: yonod_schema2_smoke
 stage: all  # features 仅生成编码；train 另需 artifacts.input_manifest；all 先编码后内测。

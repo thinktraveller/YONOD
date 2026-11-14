@@ -1,3 +1,3 @@
-# Fresh runs use root result/example/<task>/; keep legacy local outputs ignored.
+# Fresh tests use root result/example/<test>/; historical runs are archived in backup.
 */result/
 */completed_run/

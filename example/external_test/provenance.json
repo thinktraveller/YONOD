@@ -25,22 +25,19 @@
     }
   },
   "expected_reports_after_run": [
-    "../../result/example/example_external_test_20261113/report/external_test_report.html",
-    "../../result/example/example_external_test_20261113/report/external_test_report.md"
+    "../../result/example/external_test/report/external_test_report.html",
+    "../../result/example/external_test/report/external_test_report.md"
   ],
   "provided_reports": [],
   "scientific_performance_claims": [],
   "configuration": {
-    "path": "run.yaml",
-    "path_base": "example_directory"
+    "path": "../../config/example/external_test/run.yaml",
+    "repository_path": "config/example/external_test/run.yaml",
+    "path_base": "provenance_file_directory"
   },
-  "output_root": "../../result/example/example_external_test_20261113",
+  "output_root": "../../result/example/external_test",
   "verification": "verification.json",
-  "completed_run_snapshot": "completed_run",
-  "current_reports": {
-    "html": "completed_run/report/external_test_report.html",
-    "md": "completed_run/report/external_test_report.md"
-  },
+  "completed_run_snapshot": "../../backup/example_reorganization_20261114/legacy_runs/example_external_test_20261113/completed_run",
   "resource_policy": {
     "live_configuration": "CPU thread fields omitted; use installed model-library defaults or configure explicitly for the local machine",
     "cpu_affinity_required": false,
@@ -51,15 +48,60 @@
     "historical_resource_parameters": "Preserved only in frozen evidence; not current defaults"
   },
   "current_configuration": {
-    "path": "run.yaml",
-    "launch_configuration": "../../config/example/example_external_test_20261113.yaml",
-    "config_sha256": "2c15c9138fcdc956f11553fe2e3fc45a63958a74ed700e109d2f71c13af76608",
-    "path_base": "example_directory",
-    "output_root": "../../result/example/example_external_test_20261113",
-    "repository_output_root": "result/example/example_external_test_20261113",
+    "path": "../../config/example/external_test/run.yaml",
+    "repository_path": "config/example/external_test/run.yaml",
+    "project_name": "external_test",
+    "config_sha256": "e12355aca154b02762208109ac6f26fc5ba6fa570135827ce7f4327028d1f490",
+    "path_base": "metadata_file_directory",
+    "output_root": "../../../result/example/external_test",
+    "repository_output_root": "result/example/external_test",
     "validation_status": "validated_without_modeling",
     "modeling_executed": false,
-    "change": "Input paths now resolve from both example/<package> and config/example; outputs use repository result/example. Input bytes, descriptors, model parameters and evaluation settings are unchanged.",
-    "historical_execution": "The existing launch, status, checks and snapshots describe the earlier configuration hash; this output-path revision has not been rerun."
+    "historical_execution": "The existing launch/status/checks describe the earlier configuration hash and historical task name. This renamed task has not been run.",
+    "output_path_base": "configuration_file_directory"
+  },
+  "historical_layout_before_migration": {
+    "configuration": {
+      "path": "run.yaml",
+      "path_base": "example_directory"
+    },
+    "output_root": "../../result/example/example_external_test_20261113",
+    "completed_run_snapshot": "completed_run",
+    "current_reports": {
+      "html": "completed_run/report/external_test_report.html",
+      "md": "completed_run/report/external_test_report.md"
+    },
+    "expected_reports_after_run": [
+      "../../result/example/example_external_test_20261113/report/external_test_report.html",
+      "../../result/example/example_external_test_20261113/report/external_test_report.md"
+    ]
+  },
+  "record_scope": "Historical completed-task evidence with a separate, statically validated current configuration. Historical task_name and execution fields do not claim this renamed task has run.",
+  "migration": {
+    "date": "2026-11-14",
+    "old_example_directory": "example/external_test",
+    "current_example_directory": "example/external_test",
+    "old_project_name": "example_external_test_20261113",
+    "current_project_name": "external_test",
+    "old_configuration_path": "example/external_test/run.yaml",
+    "current_configuration_path": "config/example/external_test/run.yaml",
+    "old_output_path": "result/example/example_external_test_20261113",
+    "current_output_path": "result/example/external_test",
+    "historical_snapshot_directory": "backup/example_reorganization_20261114/legacy_runs/example_external_test_20261113/completed_run",
+    "historical_snapshot_distribution": "Local ignored backup only; old ZIP distributions were redundant and removed after identity audit.",
+    "previous_current_configuration": {
+      "path": "run.yaml",
+      "launch_configuration": "../../config/example/example_external_test_20261113.yaml",
+      "config_sha256": "2c15c9138fcdc956f11553fe2e3fc45a63958a74ed700e109d2f71c13af76608",
+      "path_base": "example_directory",
+      "output_root": "../../result/example/example_external_test_20261113",
+      "repository_output_root": "result/example/example_external_test_20261113",
+      "validation_status": "validated_without_modeling",
+      "modeling_executed": false,
+      "change": "Input paths now resolve from both example/<package> and config/example; outputs use repository result/example. Input bytes, descriptors, model parameters and evaluation settings are unchanged.",
+      "historical_execution": "The existing launch, status, checks and snapshots describe the earlier configuration hash; this output-path revision has not been rerun."
+    },
+    "protected_bytes": "Inputs, split/audit records, report assets, predictions, models and completed snapshots retain their original SHA-256 values.",
+    "historical_evidence_readme": "Explanatory README documents were consolidated into the project README and removed from example/. Original data, source YAML, predictions and reports remain unchanged."
   }
 }

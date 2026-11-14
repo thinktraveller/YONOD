@@ -113,7 +113,7 @@ A smoke test runs the main steps on a small dataset to catch obvious installatio
 
 #### 1. Look at the smoke-test files
 
-Open [the data table](example/random_split/dataset/reactions.csv) and [its settings](example/random_split/run.yaml). A CSV is a text table; SMILES is a text representation of a molecular structure.
+Open [the data table](example/random_split_test/dataset/reactions.csv) and [its settings](config/example/random_split_test/run.yaml). A CSV is a text table; SMILES is a text representation of a molecular structure.
 
 | Column | Meaning in this example |
 | --- | --- |
@@ -138,10 +138,7 @@ Linux Bash:
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/random_split
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell:
@@ -149,19 +146,16 @@ Windows Conda PowerShell:
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\random_split
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 The program asks `请输入配置文件路径(schema-2 YAML):` (enter the configuration file path). Type the following and press Enter:
 
 ```text
-../../config/example/example_random_split_20261113.yaml
+config/example/random_split_test/run.yaml
 ```
 
-The commands copy the prepared template into `config/example/`, preserving an existing copy. No YAML generator is needed. Run one task at a time, waiting for it to finish before starting another.
+The configuration is already saved at this path. No YAML copy or generator is needed. Run one task at a time, waiting for it to finish before starting another.
 
 #### 3. Check completion and open the report
 
@@ -170,20 +164,20 @@ The commands copy the prepared template into `config/example/`, preserving an ex
 - The `[report]` message prints the report locations.
 - Check any error message or missing report, even after the process ends.
 
-Still in `example/random_split/`, open `../../result/example/example_random_split_20261113/report/report.html` in your file manager. On desktop Linux you can also use:
+From the project root, open `result/example/random_split_test/report/report.html` in your file manager. On desktop Linux you can also use:
 
 ```bash
-xdg-open ../../result/example/example_random_split_20261113/report/report.html
+xdg-open result/example/random_split_test/report/report.html
 ```
 
 Windows Conda PowerShell:
 
 ```powershell
-Invoke-Item ..\..\result\example\example_random_split_20261113\report\report.html
+Invoke-Item .\result\example\random_split_test\report\report.html
 ```
 
 - The same folder contains `report.md`, a text report you can read in an editor.
-- Each model's per-record predictions are under `../../result/example/example_random_split_20261113/runs/run_morgan-<model>/predictions.csv`, where `<model>` is `rf`, `xgb` or `lightgbm`.
+- Each model's per-record predictions are under `result/example/random_split_test/runs/run_morgan-<model>/predictions.csv`, where `<model>` is `rf`, `xgb` or `lightgbm`.
 - All example outputs are under the project-root `result/example/<task_name>/`; each example has its own task folder.
 
 #### 4. Read the results
@@ -208,7 +202,7 @@ Invoke-Item ..\..\result\example\example_random_split_20261113\report\report.htm
 | --- | --- |
 | `conda` is not recognized | Confirm Miniconda is installed. Linux: use the correct `conda.sh` location. Windows: reopen an initialized Conda PowerShell session. |
 | A terminal command gives `SyntaxError` at `>>>` | You are inside Python. Enter `exit()` to return to the terminal, then run the command there. |
-| Python cannot find `yonod.py`, `run.yaml` or `requirements.txt` | Check the current folder. Installation uses the root; the first-use launch uses `example/random_split/`. |
+| Python cannot find `yonod.py`, `run.yaml` or `requirements.txt` | Start from the project root and enter the complete saved path, such as `config/example/random_split_test/run.yaml`. |
 | A path contains spaces, or a YAML file cannot be found | Quote paths in shell commands. Check the actual filename, including extensions; a file ending in `.yaml.txt` is a text file with the wrong extension. |
 | `ModuleNotFoundError` | Activate `yonod`, then install the listed requirements there. PyTorch is a separate first installation; AutoGluon is optional. |
 | No product column in the CSV wizard | Prepare a manual YAML from `example.yaml`; the wizard currently requires one product column. |
@@ -231,14 +225,15 @@ Invoke-Item ..\..\result\example\example_random_split_20261113\report\report.htm
 - [Search model settings with HPO](#search-model-settings-with-hpo)
 - [Additional workflow fields and artifact inputs](#additional-workflow-fields-and-artifact-inputs)
 - [Choose what to adjust](#choose-what-to-adjust)
+- [Run in the background and check status](#run-in-the-background-and-check-status)
 - [Saved examples and reports](#saved-examples-and-reports)
 - [Optional models, data and pretrained weights](#optional-models-data-and-pretrained-weights)
 
 ### Use your own reaction table
 
-Open the [example CSV dataset](example/random_split/dataset/reactions.csv) to see the column names and record layout. Its values are artificial smoke-test data.
+Open the [example CSV dataset](example/random_split_test/dataset/reactions.csv) to see the column names and record layout. Its values are artificial smoke-test data.
 
-Return to the project root before continuing: use `cd ../..` in Linux Bash or `Set-Location ..\..` in Windows PowerShell if you are still in the example folder.
+Run the commands below from the project root, where `yonod.py` and `generate_yaml_config.py` are located.
 
 #### Prepare the CSV
 
@@ -355,10 +350,10 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 ### Configuration paths and execution stages
 
-- We recommend keeping run configurations under root `config/`: research YAMLs in `config/<task_name>.yaml` and example copies in `config/example/<task_name>.yaml`.
-- Paths beginning `./` inside those files resolve from the project root.
+- We recommend keeping run configurations under root `config/`: research YAMLs in `config/<task_name>.yaml` and the three prepared tests in `config/example/<test_name>/run.yaml`.
+- Paths beginning `./` in a YAML directly under `config/` resolve from the project root.
 - Explicit `../` paths and relative paths in configurations elsewhere resolve from the YAML's folder; absolute paths stay absolute.
-- Example templates use `../../example/<package>/` input paths so their copies in `config/example/` resolve the same files; `../../result/example/<task_name>` saves outputs under the project root.
+- Nested test YAMLs resolve relative paths from their own folder: `../../../example/<test_name>/` reads the example inputs, and `../../../result/example/<test_name>` saves their outputs under the project root.
 - Use UTF-8 plain text, spaces for indentation, and check that Windows has not added a `.txt` extension.
 
 | `stage` | Execution |
@@ -376,23 +371,23 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 - All three first-use examples use artificial records and mainly serve as smoke tests of their respective workflows.
 - Run them one at a time.
-- Start each command block from the project root; if you are still inside an example, return with `cd ../..` in Bash or `Set-Location ..\..` in PowerShell.
-- The commands save each example configuration under the project-root `config/example/`. At the first prompt, enter the saved path shown for that example.
+- Start each command block from the project root.
+- Each test has a ready-to-run `config/example/<test_name>/run.yaml`. At the first prompt, enter the saved path shown for that test.
 - Report paths below are relative to the project root.
 
 | Your question | Workflow and configuration | What is kept separate |
 | --- | --- | --- |
-| How well do methods predict held-out records from this table? | Ordinary `stage: all`, `evaluation.protocol: outer_kfold`; [random example](example/random_split/run.yaml) | Training and held-out rows within each fold; repeated substrates can occur on both sides. |
-| How do I enforce selected members or whole groups? | `stage: benchmark`, `manifest_outer_cv`; [fixed-membership example](example/fixed_split/run.yaml) | The actual `train`/`valid` members in a saved manifest and the groups represented by its keys. |
-| How does a recipe fixed in advance perform on another labeled table? | `stage: benchmark`, `frozen_train_external_test`; [external example](example/external_test/run.yaml) | Each combination fits and predicts without external labels, then reads those labels for scoring. |
+| How well do methods predict held-out records from this table? | Ordinary `stage: all`, `evaluation.protocol: outer_kfold`; [random example](config/example/random_split_test/run.yaml) | Training and held-out rows within each fold; repeated substrates can occur on both sides. |
+| How do I enforce selected members or whole groups? | `stage: benchmark`, `manifest_outer_cv`; [fixed-membership example](config/example/fixed_split_test/run.yaml) | The actual `train`/`valid` members in a saved manifest and the groups represented by its keys. |
+| How does a recipe fixed in advance perform on another labeled table? | `stage: benchmark`, `frozen_train_external_test`; [external example](config/example/external_test/run.yaml) | Each combination fits and predicts without external labels, then reads those labels for scoring. |
 
 #### Random-split internal evaluation
 
-1. Inspect [the 12-row CSV](example/random_split/dataset/reactions.csv) and its [run.yaml](example/random_split/run.yaml).
+1. Inspect [the 12-row CSV](example/random_split_test/dataset/reactions.csv) and its [run.yaml](config/example/random_split_test/run.yaml).
 
     - The example uses two reactant columns, Morgan, RF/XGBoost/LightGBM, two folds and one repeat.
 
-2. Run the block for your system and enter `../../config/example/example_random_split_20261113.yaml` when asked.
+2. Run the block for your system and enter `config/example/random_split_test/run.yaml` when asked.
 
 Linux Bash:
 
@@ -400,10 +395,7 @@ Linux Bash:
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/random_split
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell:
@@ -411,15 +403,12 @@ Windows Conda PowerShell:
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\random_split
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 3. Check `features=ready`, all three combinations' `complete` or `reused` statuses, and both reports.
 
-    - The new HTML report is `result/example/example_random_split_20261113/report/report.html`; per-record predictions are under its task's `runs/run_morgan-<model>/predictions.csv`.
+    - The new HTML report is `result/example/random_split_test/report/report.html`; per-record predictions are under its task's `runs/run_morgan-<model>/predictions.csv`.
 
 4. For your own CSV, generate a new root `config/<task_name>.yaml` or edit an independent copy of [example.yaml](example.yaml).
 
@@ -432,15 +421,27 @@ python -u ..\..\yonod.py
 - The ordinary runtime always constructs KFold splits.
 - Merely writing `manifest_outer_cv` in an ordinary `all/train` configuration does not import your manifest; use the dedicated benchmark route below for actual fixed members.
 
+The CSV has no product, numerical-condition or categorical-input columns. Its second structure column is always `CO`; that constant input does not test performance on arbitrary new components. Columns do not become model inputs merely by appearing in the table.
+
+The prepared configuration uses two trees per model, disables HPO and extra training/held-out diagnostics, and leaves thread counts to each library. These small settings keep the smoke test inexpensive.
+
+| Fold | Training IDs | Held-out IDs |
+| --- | --- | --- |
+| 1 | 02, 04, 05, 07, 08, 12 | 01, 03, 06, 09, 10, 11 |
+| 2 | 01, 03, 06, 09, 10, 11 | 02, 04, 05, 07, 08, 12 |
+
+The IDs omit the common `smoke-` prefix. [Saved split assignments](example/random_split_test/tables/split_assignments.csv) show this arrangement. Each record is held out once; three methods across two folds give six model fits, not six independent chemical experiments.
+
+
 #### Fixed membership and grouped evaluation
 
-1. Read the [role guide](example/fixed_split/splits/membership_guide.csv), [actual 24-row manifest](example/fixed_split/splits/fixed_split_manifest.csv) and [configuration](example/fixed_split/run.yaml).
+1. Read the [role guide](example/fixed_split_test/splits/membership_guide.csv), [actual 24-row manifest](example/fixed_split_test/splits/fixed_split_manifest.csv) and [configuration](config/example/fixed_split_test/run.yaml).
 
     - Every fold lists all 12 sample IDs.
     - Fold 1 holds out `block_A`; fold 2 holds out `block_B`.
 
 2. Keep `stage: benchmark`, `evaluation.protocol: manifest_outer_cv`, the declared grouping, `evaluation.split_manifest`, and the `benchmark.task_state` block together.
-3. Launch from the project root, then enter `../../config/example/example_fixed_split_20261113.yaml`.
+3. Launch from the project root, then enter `config/example/fixed_split_test/run.yaml`.
 
 Linux Bash:
 
@@ -448,10 +449,7 @@ Linux Bash:
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/fixed_split
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_fixed_split_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell:
@@ -459,15 +457,12 @@ Windows Conda PowerShell:
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\fixed_split
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_fixed_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_fixed_split_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 4. Check two successful RF fold records.
 
-    - The HTML report is `result/example/example_fixed_split_20261113/report/benchmark_report.html`; the copied manifest and predictions are in that task's `docs/manifests/` and `docs/predictions/`.
+    - The HTML report is `result/example/fixed_split_test/report/benchmark_report.html`; the copied manifest and predictions are in that task's `docs/manifests/` and `docs/predictions/`.
 
 5. For your data, prepare stable IDs and group keys before assigning folds.
 
@@ -480,6 +475,16 @@ python -u ..\..\yonod.py
 - A group must not cross the training/validation boundary, and every sample must be `valid` exactly once per repeat.
 - A one-off eight-training/four-test list cannot replace this CV manifest.
 - Fixed seeds or disabling shuffle do not specify arbitrary selected members.
+
+The CSV adds `fixed_block` to the same ID, reference-yield and two-structure layout. `reaction_id` matches records to the manifest; `yield` is an artificial value on the 0–1 scale. `fixed_block` controls membership and is not a model input.
+
+| Fold | `train` members | `valid` members |
+| --- | --- | --- |
+| 1 | `fixed-07` through `fixed-12` (`block_B`) | `fixed-01` through `fixed-06` (`block_A`) |
+| 2 | `fixed-01` through `fixed-06` (`block_A`) | `fixed-07` through `fixed-12` (`block_B`) |
+
+`block_A` and `block_B` are artificial teaching groups, without chemical or laboratory provenance. The 12-row role guide calls held-out records `held_out`; the executable 24-row manifest uses only `train` and `valid`. Fixed membership specifies which records are held out; fixed model parameters specify how a model is built.
+
 
 When `evaluation.split_manifest` is absent, the dedicated executor creates a manifest from `evaluation.grouping`. This supports five strategies:
 
@@ -532,7 +537,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath .\dataset\my_reactions.csv
 
 #### Frozen external testing
 
-1. Inspect the [12-row training table](example/external_test/dataset/train.csv), [six-row external table](example/external_test/dataset/external.csv), [audit record](example/external_test/audit/external_audit.json) and [run.yaml](example/external_test/run.yaml).
+1. Inspect the [12-row training table](example/external_test/dataset/train.csv), [six-row external table](example/external_test/dataset/external.csv), [audit record](example/external_test/audit/external_audit.json) and [run.yaml](config/example/external_test/run.yaml).
 
     - Freeze descriptor inputs, model parameters and the scoring plan before examining external outcomes.
 
@@ -540,7 +545,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath .\dataset\my_reactions.csv
 
     - Do not include `n_splits`, `n_repeats`, `shuffle`, `grouping`, `split_manifest` or `population_manifest`.
 
-3. Launch from the project root and enter `../../config/example/example_external_test_20261113.yaml`.
+3. Launch from the project root and enter `config/example/external_test/run.yaml`.
 
 Linux Bash:
 
@@ -548,10 +553,7 @@ Linux Bash:
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
-cd example/external_test
-mkdir -p ../../config/example
-cp -n run.yaml ../../config/example/example_external_test_20261113.yaml
-python -u ../../yonod.py
+python -u yonod.py
 ```
 
 Windows Conda PowerShell:
@@ -559,15 +561,12 @@ Windows Conda PowerShell:
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = "1"
-Set-Location .\example\external_test
-New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
-if (-not (Test-Path ..\..\config\example\example_external_test_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_external_test_20261113.yaml }
-python -u ..\..\yonod.py
+python -u .\yonod.py
 ```
 
 4. RF fits once on all 12 training rows and predicts six external rows.
 
-    - Read `result/example/example_external_test_20261113/report/external_test_report.html`, `docs/predictions/morgan__rf.parquet` and `docs/metrics/external_test_metrics.csv` under that task root.
+    - Read `result/example/external_test/report/external_test_report.html`, `docs/predictions/morgan__rf.parquet` and `docs/metrics/external_test_metrics.csv` under that task root.
     - There is no external CV; a saved score is not an independent confidence interval.
 
 5. For a real task, make independent training, external and audit files, then a new root `config/` YAML with new task/output identities.
@@ -597,6 +596,31 @@ python -u ..\..\yonod.py
 - It rejects existing external run output before fitting and does not resume or overwrite it; use a new task name and output directory.
 - The example includes product structure, which must be known at prediction time.
 - Separate files and zero exact structure overlap do not establish independent experimental provenance or distributional independence.
+
+The two CSVs deliberately use different column names:
+
+| Training CSV | External CSV | Role |
+| --- | --- | --- |
+| `amine_smiles` | `external_amine` | Amine structure, mapped by `column_map`. |
+| `acid_smiles` | `external_acid` | Acid structure, mapped by `column_map`. |
+| `product_smiles` | `external_product` | Known product structure, mapped by `column_map`. |
+| `yield` | `measured_yield` | Reference target declared separately from structure mappings. |
+| `reaction_id` | `external_id` | Unique record ID, excluded from the molecular inputs. |
+| None | `source_record_id` | Source record key, prefixed with `teaching-external-v1:`. |
+| None | `amine_group` | Three external amine groups, retained for later grouped analyses. |
+
+Despite its name, `measured_yield` contains artificial reference values. A value of `0.22` means 22%; no automatic percentage conversion is configured. This scored external workflow needs reference targets; predicting structures without targets is a different operating path.
+
+The example's saved audit reports these canonical-structure counts:
+
+| Role | Distinct training structures | Distinct external structures | Exact overlap |
+| --- | --- | --- | --- |
+| Amine | 4 | 3 | 0 |
+| Acid | 3 | 3 | 0 |
+| Product | 12 | 6 | 0 |
+
+Here `candidate_source_sha256` identifies the external CSV because the artificial example has no upstream measured-source table. Its `physical_dataset_id` is `teaching-external-v1`. For a real dataset, recompute source, overlap and hash records from the actual files; three small groups and zero exact overlap do not establish independent experimental evidence.
+
 
 ### Read example.yaml line by line
 
@@ -783,18 +807,92 @@ python -u ..\..\yonod.py
 - Use a new task name and separate output directory for a changed research configuration.
 - Thread settings depend on your machine; tasks and folds still run in sequence.
 
+### Run in the background and check status
+
+Use foreground execution for the first smoke test so you can see errors. For an unattended run, start from the project root and choose only one launch block below. Set `test_name` or `$testName` to `random_split_test`, `fixed_split_test` or `external_test`; wait for that task to finish before starting another.
+
+#### Linux Bash
+
+```bash
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate yonod
+export PYTHONUTF8=1
+test_name=random_split_test
+mkdir -p logs
+printf '%s\n' "config/example/$test_name/run.yaml" > "logs/$test_name.stdin.txt"
+nohup python -u yonod.py < "logs/$test_name.stdin.txt" > "logs/$test_name.log" 2>&1 &
+echo $! > "logs/$test_name.pid"
+```
+
+Check status when needed, from the same project root:
+
+```bash
+test_name=random_split_test
+test_pid="$(cat "logs/$test_name.pid")"
+ps -p "$test_pid" -o pid,ppid,stat,etime,cmd
+tail -n 100 "logs/$test_name.log"
+```
+
+#### Windows Conda PowerShell
+
+```powershell
+conda activate yonod
+$env:PYTHONUTF8 = "1"
+$testName = "random_split_test"
+$testLogs = Join-Path $PWD.Path "logs"
+New-Item -ItemType Directory -Path $testLogs -Force | Out-Null
+$testInput = Join-Path $testLogs "$testName.stdin.txt"
+[IO.File]::WriteAllText($testInput, "config/example/$testName/run.yaml`n", [Text.UTF8Encoding]::new($false))
+$testProcess = Start-Process -FilePath (Get-Command python).Source -ArgumentList @("-u", "yonod.py") -WorkingDirectory $PWD.Path -RedirectStandardInput $testInput -RedirectStandardOutput (Join-Path $testLogs "$testName.log") -RedirectStandardError (Join-Path $testLogs "$testName.stderr.log") -PassThru
+$testProcess.Id | Set-Content -LiteralPath (Join-Path $testLogs "$testName.pid") -Encoding ascii
+```
+
+Check both standard output and the separate error log:
+
+```powershell
+$testName = "random_split_test"
+$testLogs = Join-Path $PWD.Path "logs"
+$testPid = [int](Get-Content -LiteralPath (Join-Path $testLogs "$testName.pid"))
+Get-Process -Id $testPid -ErrorAction SilentlyContinue
+Get-Content -LiteralPath (Join-Path $testLogs "$testName.log") -Encoding UTF8 -Tail 100
+Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding UTF8 -Tail 100
+```
+
+These commands keep logs, PID files and launcher input in root `logs/`; all model outputs remain under `result/example/<test_name>/`. A stopped process or an existing directory alone does not prove success: inspect final statuses, saved predictions and both reports. The Linux commands do not provide Windows runtime acceptance.
+
 ### Saved examples and reports
 
-[Offline guide](example/index.html) · [Operating instructions](example/README.md) · [Download all examples](example/archives/all_examples.zip)
+The three tests use matching input, configuration and result directories:
 
-- The ZIPs include `completed_run/` reference snapshots.
-- New example runs write to the project-root `result/example/<task_name>/`; the random example's historical `report/` and `evidence/` remain reference material.
-- The saved [random](example/random_split/verification.json), [fixed-membership](example/fixed_split/verification.json) and [external](example/external_test/verification.json) verification records document Linux execution, not Windows runtime acceptance.
-- For unattended execution and status checks, use the Bash/PowerShell commands in the example instructions, keeping logs and PIDs in root `logs/`.
+| Test | Prepared configuration | Inputs | New report under `result/example/` |
+| --- | --- | --- | --- |
+| `random_split_test` | [run.yaml](config/example/random_split_test/run.yaml) | [12-row CSV](example/random_split_test/dataset/reactions.csv) | `random_split_test/report/report.html` |
+| `fixed_split_test` | [run.yaml](config/example/fixed_split_test/run.yaml) | [CSV](example/fixed_split_test/dataset/reactions.csv), [membership guide](example/fixed_split_test/splits/membership_guide.csv), [manifest](example/fixed_split_test/splits/fixed_split_manifest.csv) | `fixed_split_test/report/benchmark_report.html` |
+| `external_test` | [run.yaml](config/example/external_test/run.yaml) | [training CSV](example/external_test/dataset/train.csv), [external CSV](example/external_test/dataset/external.csv), [audit](example/external_test/audit/external_audit.json) | `external_test/report/external_test_report.html` |
 
-- The ordinary random report scores pooled OOF predictions within each repeat; fixed-membership reports summarize fold metrics.
-- These R² values use different aggregation rules, so do not rank scores across the routes as though the evaluation were identical.
-- Artificial values, low scores and negative R² remain visible; they do not establish performance on real chemistry.
+Each report also has a Markdown `.md` version in the same `report/` folder. Fixed-membership predictions and the executed manifest are under the task's `docs/predictions/` and `docs/manifests/`; external predictions are `docs/predictions/morgan__rf.parquet`, with full-precision scores in `docs/metrics/external_test_metrics.csv`.
+
+The [random](example/random_split_test/verification.json), [fixed-membership](example/fixed_split_test/verification.json) and [external](example/external_test/verification.json) verification records retain earlier Linux executions. Their original `launch` configuration hash identifies that historical run; `current_configuration` records the relocated configuration's static checks. Renaming and relocating these tests has not rerun them or established Windows runtime support. The dated task names inside saved reports and manifests remain part of their provenance.
+
+#### Inspect the saved random-split report
+
+The [historical HTML report](example/random_split_test/report/report.html), [Markdown report](example/random_split_test/report/report.md), [metric table](example/random_split_test/tables/metrics.csv) and [provenance record](example/random_split_test/provenance.json) remain readable in the source checkout. The report comes from `diag215_20260929_ordinary_fixed_off_v1`; new test outputs use `result/example/random_split_test/`.
+
+These scores were checked from the 12 saved held-out predictions; they are historical artificial-data results, not scores from a new execution of the renamed test:
+
+| Method | R² | RMSE, 0–1 yield scale | MAE, 0–1 yield scale | MAE, yield percentage points |
+| --- | ---: | ---: | ---: | ---: |
+| RF | -0.638112 | 0.265094 | 0.222500 | 22.2500 |
+| XGBoost | -0.102794 | 0.217508 | 0.184805 | 18.4805 |
+| LightGBM | -0.173512 | 0.224374 | 0.189520 | 18.9520 |
+
+Read task information first, then the result matrix, detailed metrics and scatter plots. Each point compares a held-out prediction with its artificial reference value; a point nearer the diagonal is closer. The saved [RF](example/random_split_test/pictures/scatter_morgan_rf_repeat-1.png), [XGBoost](example/random_split_test/pictures/scatter_morgan_xgb_repeat-1.png) and [LightGBM](example/random_split_test/pictures/scatter_morgan_lightgbm_repeat-1.png) plots are copied historical figures; any “experimental” axis wording means the artificial reference values here.
+
+- The ordinary random report scores pooled OOF predictions within each repeat; fixed-membership reports summarize fold metrics. Their R² aggregation differs, so do not rank workflows as though they used the same evaluation.
+- A zero across-repeat standard deviation reflects the single complete repeat; it does not establish stability or absence of uncertainty.
+- In the old report, disabled training/held-out diagnostics and their zero diagnostic count do not indicate failed normal CV. The “strict outer CV” ranking title does not turn this random split into substrate-group holdout, and the unfilled “SMILES columns” display does not mean structures were unused.
+- Historical ranking labels, fixed score thresholds and application suggestions are report text, not validated reliability standards for this artificial example or another chemical system. MAE is still affected by large errors; 0–1 errors become percentage points only after multiplication by 100.
+- The report and its images retain their source identity. The Markdown report uses its accompanying `pictures/`; the HTML may request an online formula-rendering resource. `evidence/` contains settings, predictions and fold records, not a complete reloadable model delivery. Its YAMLs, including `historical_source_config.yaml`, identify historical calculations and are not current launch configurations; their original model paths remain provenance text. Complete-run snapshots are kept in local backups, while `verification.launch` retains the historical execution identity.
 
 ### Optional models, data and pretrained weights
 
@@ -1292,7 +1390,7 @@ Last reviewed against this checkout: 2026-11-14.
 
 ## Project structure
 
-The `config/example/` and `result/example/` folders initially contain only Git placeholders, with no task configurations or run results. Other local task folders appear when you prepare or run a task.
+The three ready-to-run configurations live under `config/example/`. Matching `random_split_test/`, `fixed_split_test/` and `external_test/` result folders initially contain only `.gitkeep`, with no generated outputs. Other local task folders appear when you prepare or run a task.
 
 ```text
 YONOD/
@@ -1304,13 +1402,10 @@ YONOD/
 ├── generate_yaml_config.py  Prepare and validate YAML without modeling
 ├── example.yaml             Complete schema-2 format and engineering smoke
 ├── requirements.txt         Dependencies; install PyTorch separately first
-├── example/                 First-use examples and their own run.yaml configurations
-│   ├── README.md            Example operating instructions
-│   ├── index.html           Offline browser guide
-│   ├── random_split/        Random-split internal evaluation
-│   ├── fixed_split/         Evaluation using saved membership lists
-│   ├── external_test/       Separate training and external-test tables
-│   └── archives/            Downloadable example packages
+├── example/                 Smoke-test inputs and historical evidence
+│   ├── random_split_test/   Random-split data, reports and evidence
+│   ├── fixed_split_test/    Fixed-membership data and split lists
+│   └── external_test/       Training/test tables and provenance audit
 ├── yonod/                   Python implementation; main components below
 │   ├── model_factory.py     Schema-2 model validation and construction
 │   ├── config/              YAML loading, validation and path resolution
@@ -1326,11 +1421,19 @@ YONOD/
 ├── dataset/                 Data and source notes
 ├── WEIGHTS/                 Optional pretrained assets
 ├── config/                  Recommended location for run configurations
-│   ├── example/             Saved example YAMLs; initially empty
+│   ├── example/             Prepared smoke-test configurations
+│   │   ├── random_split_test/
+│   │   │   └── run.yaml
+│   │   ├── fixed_split_test/
+│   │   │   └── run.yaml
+│   │   └── external_test/
+│   │       └── run.yaml
 │   └── <task_name>.yaml     Local research-task configuration
 ├── result/                  Recommended location for all run outputs
-│   ├── example/             Example outputs; initially no run results
-│   │   └── <task_name>/     Created when an example runs
+│   ├── example/             Test outputs; initially only placeholders
+│   │   ├── random_split_test/
+│   │   ├── fixed_split_test/
+│   │   └── external_test/
 │   └── <task_name>/         All outputs belonging to one research task
 ├── logs/                    Operational logs and PID files
 ├── _verify/                 Local validation scripts
@@ -1371,7 +1474,7 @@ result/<task_name>/
 
 - Example tasks save new outputs in the project-root `result/example/<task_name>/`, with one folder per task.
 - We recommend keeping your own configurations in `config/<task_name>.yaml` and results under `result/<task_name>/`; both are Git-ignored outside the example subfolders.
-- The `completed_run/` folders in downloadable ZIPs contain reference snapshots; they are separate from the outputs you generate.
+- Earlier complete-run snapshots are kept in local engineering backups; the current tests do not depend on download archives or those snapshots.
 
 ## Acknowledgments
 

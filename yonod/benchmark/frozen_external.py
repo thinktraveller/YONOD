@@ -619,7 +619,13 @@ def run_frozen_external_test(config_path: Path | str) -> int:
     contract = create_frozen_external_contract(config)
     paths = _layout(config.outputs_root)
     manifest_path = paths["manifests"] / "run_manifest.json"
-    if config.outputs_root.exists() and not manifest_path.exists() and any(config.outputs_root.iterdir()):
+    if config.outputs_root.exists() and not manifest_path.exists() and any(
+        entry.name != ".gitkeep"
+        or entry.is_symlink()
+        or not entry.is_file()
+        or entry.stat().st_size != 0
+        for entry in config.outputs_root.iterdir()
+    ):
         raise FrozenExternalTestError(
             "输出目录已含未识别文件但没有运行清单；拒绝把单次外部测试混入已有产物：{0}"
             .format(config.outputs_root)
