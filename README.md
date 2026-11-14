@@ -580,11 +580,16 @@ python -u .\yonod.py
 | `audit_manifest` | JSON provenance/overlap audit path. |
 | `audit_manifest_sha256` | Exact audit JSON SHA-256. |
 
-- The audit needs `candidate_source_sha256` and `exact_canonical_overlap` with `amine`, `acid` and `product` all zero.
-- If present, `row_count` must match; `physical_dataset_id` controls the source-ID prefix.
-- Prepare and review the audit from the actual data: the adapter verifies declarations and file identity, but does not recalculate the molecular structure intersections for you.
-- Calculate hashes with the same Bash/PowerShell commands above, substituting the external and audit paths, then enter them in the new YAML.
-- Do not copy the first-use example audit's zero counts.
+#### Why the external audit is required
+
+The [external audit](example/external_test/audit/external_audit.json) is a required input to the frozen external workflow. It records the source/data identity, canonical-structure overlap and the fact that these are artificial teaching records without an independent experimental source.
+
+- YAML `external_test.expected_sha256` fixes the external CSV version; `audit_manifest` selects the reviewed JSON and `audit_manifest_sha256` fixes its exact bytes. This keeps the external data and audit versions identifiable.
+- The audit records `candidate_source_sha256`, `physical_dataset_id`, the row count and `exact_canonical_overlap` for amine, acid and product. In this example the candidate source is the external CSV; a real audit may identify an upstream source instead.
+- Before execution, the adapter checks file existence, both YAML-pinned file hashes, required provenance/zero-overlap declarations, the declared row count and the source-ID prefix derived from `physical_dataset_id`. It does not recalculate canonical-structure intersections or establish that the source is experimentally independent.
+- Deleting this file prevents external-test validation. Changing overlap declarations just to pass validation is not an audit; a hash fixes a file version, not the truth of its claims.
+
+When changing training or external records, redo the actual structure/source audit, update the JSON and its hash, and update the external CSV hash in YAML. Calculate hashes with the Bash/PowerShell commands above, using the correct file paths. Do not copy this example's zero counts or artificial-source declarations into a real study. Keep the audit's limits with the results so an unreviewed data version or an unsupported independence claim is not mistaken for the reviewed test population.
 
 - This adapter currently accepts only static descriptors, excludes numeric conditions, OHE, AutoGluon, HPO and external-test early stopping, and does not save the ordinary complete feature/final-model package.
 - It rejects existing external run output before fitting and does not resume or overwrite it; use a new task name and output directory.
@@ -605,7 +610,7 @@ The two CSVs deliberately use different column names:
 
 Despite its name, `measured_yield` contains artificial reference values. A value of `0.22` means 22%; no automatic percentage conversion is configured. This scored external workflow needs reference targets; predicting structures without targets is a different operating path.
 
-The example's saved audit reports these canonical-structure counts:
+The example's audit records these canonical-structure counts:
 
 | Role | Distinct training structures | Distinct external structures | Exact overlap |
 | --- | --- | --- | --- |
@@ -864,21 +869,23 @@ The three tests use matching input, configuration and result directories. The pa
 | `fixed_split_test` | [run.yaml](config/example/fixed_split_test/run.yaml) | [CSV](example/fixed_split_test/dataset/reactions.csv), [membership guide](example/fixed_split_test/splits/membership_guide.csv), [manifest](example/fixed_split_test/splits/fixed_split_manifest.csv) | `fixed_split_test/report/benchmark_report.html` |
 | `external_test` | [run.yaml](config/example/external_test/run.yaml) | [training CSV](example/external_test/dataset/train.csv), [external CSV](example/external_test/dataset/external.csv), [audit](example/external_test/audit/external_audit.json) | `external_test/report/external_test_report.html` |
 
-The random-split test includes only its input CSV and prepared YAML; no reports, scores, figures, predictions or completed-run records are supplied. Running it creates all outputs under `result/example/random_split_test/`.
+All three tests supply inputs and ready-to-run YAMLs without pregenerated output reports, scores or predictions. Each run creates its files under its assigned `result/example/<test_name>/` directory.
 
 Each generated report also has a Markdown `.md` version in the same `report/` folder. Fixed-membership predictions and the executed manifest are under the task's `docs/predictions/` and `docs/manifests/`; external predictions are `docs/predictions/morgan__rf.parquet`, with full-precision scores in `docs/metrics/external_test_metrics.csv`.
 
-The [fixed-membership](example/fixed_split_test/verification.json) and [external](example/external_test/verification.json) verification records retain earlier Linux executions. Their original `launch` hash identifies that historical configuration; `current_configuration` records the relocated configuration's static checks. These records do not describe a new random-split run or establish Windows runtime support.
+The input folders no longer include the optional historical `provenance.json`, `verification.json` or `checksums.json` files. Removing those sidecars does not remove the runtime manifests, predictions or other records generated under the result directory; keep those generated files to verify a completed run. The external test's required `audit/external_audit.json` remains part of its input contract, as explained above.
 
-The fixed-membership and external-test input folders retain three optional metadata files:
+#### Linux acceptance of the three tests
 
-| File | Purpose |
-| --- | --- |
-| `provenance.json` | Records source identity and configuration/path mappings. |
-| `verification.json` | Records historical execution and the scope of its checks. |
-| `checksums.json` | Stores file SHA-256 values for integrity checks. |
+All three saved configurations were run serially through `yonod.py` on Linux with Python 3.9.23. Each exited successfully, and independent acceptance of the saved outputs passed 557 checks. The checks covered record IDs, split membership, 54 prediction rows (36 random-split, 12 fixed-membership and 6 external), recomputed metrics and both report formats. The HTML reports were also opened in Chrome to check their tables and local figures.
 
-YONOD does not need these three files to run. They can be deleted, but their source, acceptance and integrity evidence is then lost; the reset random-split example no longer includes them. The external test's `audit/external_audit.json` is separate: its YAML references it as a required input, so it is not one of these optional metadata files.
+| Test / protocol | Output root during execution | HTML / Markdown reports, relative to that root | Saved predictions, relative to that root |
+| --- | --- | --- | --- |
+| `random_split_test` / `outer_kfold` | `result/example/random_split_test/` | `report/report.html`, `report/report.md` | `runs/run_morgan-<model>/predictions.csv` for RF, XGBoost and LightGBM |
+| `fixed_split_test` / `manifest_outer_cv` | `result/example/fixed_split_test/` | `report/benchmark_report.html`, `report/benchmark_report.md` | `docs/predictions/` for the two folds |
+| `external_test` / `frozen_train_external_test` | `result/example/external_test/` | `report/external_test_report.html`, `report/external_test_report.md` | `docs/predictions/morgan__rf.parquet` |
+
+After acceptance, the complete outputs were archived locally under `backup/three_examples_acceptance_20261114/completed_runs/<test_name>/`, and each source `result/example/<test_name>/` folder was restored to only `.gitkeep`. That local archive is not included in a source clone. Your next run creates results at the original output paths above. Windows commands are documented, but these tests have not been executed on Windows. This is workflow acceptance on artificial data, not evidence of chemical prediction quality.
 
 #### Read a report after the run
 

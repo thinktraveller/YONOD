@@ -192,7 +192,7 @@ Invoke-Item .\result\example\random_split_test\report\report.html
 - 后续步骤仍从项目根目录开始。
 - 需要关闭终端后继续计算时，参考[后台运行与状态查看](#后台运行与状态查看)；所有操作日志、标准输入文件和 PID 文件统一放在仓库根 `logs/`。
 
-首次使用样例保存的完整运行验收来自 Linux。Windows 命令说明操作方法，尚不能据此认定各后端通过了 Windows 实机验收；请在本机完成安装与运行检查。
+Windows 命令说明操作方法，不能据此认定各后端通过了 Windows 实机验收；请在本机完成安装与运行检查。
 
 ### 怎样读结果
 
@@ -562,10 +562,16 @@ python -u .\yonod.py
 | `audit_manifest` | JSON 来源/重叠审计路径。 |
 | `audit_manifest_sha256` | 审计 JSON 的准确 SHA-256。 |
 
-- 审计文件需要 `candidate_source_sha256`，以及 `exact_canonical_overlap` 中的 `amine`、`acid`、`product` 均为0。
-- 若提供 `row_count`，需与行数一致；`physical_dataset_id` 决定来源编号前缀。
-- 根据实际数据准备审计，并自行检查结构交集；适配器只核对声明及文件身份，不会重新计算分子结构交集。
-- 按上面的 Bash/PowerShell 命令分别对外测和审计文件计算哈希，再填写新 YAML；不能照抄首次使用样例审计中的零值。
+#### 外测审计为何必需
+
+[外测审计文件](example/external_test/audit/external_audit.json)是冻结外测流程的必需输入，记录来源与数据身份、规范化结构重叠，以及本例属于人工教学数据、不具有独立实验来源的事实。
+
+- YAML 的 `external_test.expected_sha256` 固定外测 CSV 的版本；`audit_manifest` 指定已审阅的 JSON，`audit_manifest_sha256` 固定其准确字节，用于识别数据与审计版本。
+- 审计记录 `candidate_source_sha256`、`physical_dataset_id`、行数，以及胺、酸、产物的 `exact_canonical_overlap`。本例的候选来源就是外测 CSV；真实研究也可能引用更上游的来源文件。
+- 运行器在执行前检查文件存在、YAML 中固定的两份文件哈希、必需来源与零重叠声明、声明的行数，以及由 `physical_dataset_id` 确定的来源编号前缀；它不自行重算规范化结构交集，也不证明实验来源独立。
+- 删除该文件会使外测校验失败。为通过校验而手改零重叠声明不等于完成审计；哈希只能固定文件版本，不能证明声明真实。
+
+修改训练或外测记录时，应重新核查实际结构与来源，更新审计 JSON 及其哈希，并更新 YAML 中的外测 CSV 哈希。可按上文 Bash/PowerShell 命令计算正确文件的哈希，不能将本例零值或人工来源声明照搬到真实研究。结果中保留审计限制，避免将未经核查的数据版本或没有依据的独立性声明当作已审阅的外测记录。
 
 - 当前适配器只接受静态描述符，不支持数值条件、OHE、AutoGluon、HPO 或外测早停，不保存普通完整特征/最终模型包。
 - 已有外测运行输出会在拟合前被拒绝，不恢复或覆盖；需新建任务名和输出目录。
@@ -586,7 +592,7 @@ python -u .\yonod.py
 
 `measured_yield` 只是演示常见列名，其中仍是人工参考值；`0.22` 表示 22%，本例没有自动百分数换算设置。这条外测评分流程需要参考目标；只有新结构、没有目标值的预测属于另一种操作路径。
 
-本例保存的审计记录给出下列规范化结构计数：
+本例审计记录给出下列规范化结构计数：
 
 | 角色 | 训练中不同结构数 | 外测中不同结构数 | 完全相同的结构交集 |
 | --- | --- | --- | --- |
@@ -832,21 +838,23 @@ Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding 
 | `fixed_split_test` | [run.yaml](config/example/fixed_split_test/run.yaml) | [CSV](example/fixed_split_test/dataset/reactions.csv)、[角色解释表](example/fixed_split_test/splits/membership_guide.csv)、[正式名单](example/fixed_split_test/splits/fixed_split_manifest.csv) | `fixed_split_test/report/benchmark_report.html` |
 | `external_test` | [run.yaml](config/example/external_test/run.yaml) | [训练 CSV](example/external_test/dataset/train.csv)、[外测 CSV](example/external_test/dataset/external.csv)、[审计](example/external_test/audit/external_audit.json) | `external_test/report/external_test_report.html` |
 
-随机划分测试只提供输入 CSV 与已准备好的 YAML，不附带报告、分数、图片、预测或已完成运行记录；运行后才会将全部结果写入 `result/example/random_split_test/`。
+三个测试均提供输入与已准备好的 YAML，不附带预生成的报告、分数或预测；运行后才会将文件写入各自的 `result/example/<测试名>/` 目录。
 
 每份生成报告的 `report/` 目录同时保存 Markdown `.md` 版。固定名单逐条预测与实际采用的清单分别位于任务的 `docs/predictions/`、`docs/manifests/`；外测逐条预测为 `docs/predictions/morgan__rf.parquet`，完整精度指标为 `docs/metrics/external_test_metrics.csv`。
 
-[固定名单](example/fixed_split_test/verification.json)、[外测](example/external_test/verification.json)验收记录保留历史 Linux 执行。原 `launch` 哈希对应历史配置，`current_configuration` 记录迁移后配置的静态检查；这些记录不代表随机划分测试的新运行，也不代表 Windows 实机支持。
+输入目录中已移除可选的历史 `provenance.json`、`verification.json`、`checksums.json`。这些旁证文件的移除不涉及结果目录中运行后生成的 manifest、预测和其他记录；应保留生成文件用于核查完成的任务。外测必需的 `audit/external_audit.json` 仍作为输入保留，作用见上文。
 
-固定名单与外测输入目录暂时保留三份可选追溯文件：
+#### 三个测试的 Linux 实际验收
 
-| 文件 | 用途 |
-| --- | --- |
-| `provenance.json` | 记录来源身份及配置、路径映射。 |
-| `verification.json` | 记录历史执行与对应的验收范围。 |
-| `checksums.json` | 保存文件 SHA-256，用于核对完整性。 |
+本轮在 Linux、Python 3.9.23 中，经 `yonod.py` 串行运行三份已保存配置，全部正常退出；保存结果的独立验收通过 557 项检查，覆盖记录编号、划分成员、54 行预测（随机划分 36 行、固定名单 12 行、外测 6 行）、指标重算和两种报告。另用 Chrome 打开 HTML，检查表格与本地图像。
 
-YONOD 运行不依赖这三份文件，可以删除，但会失去对应的来源、验收和完整性证据；恢复初始状态的随机划分示例已不再附带它们。外测的 `audit/external_audit.json` 是另一份由 YAML 引用的必需输入，不属于上述三份可选元数据。
+| 测试 / 协议 | 执行时的输出根目录 | HTML / Markdown 报告，相对该根目录 | 保存预测，相对该根目录 |
+| --- | --- | --- | --- |
+| `random_split_test` / `outer_kfold` | `result/example/random_split_test/` | `report/report.html`、`report/report.md` | 三模型各自的 `runs/run_morgan-<model>/predictions.csv` |
+| `fixed_split_test` / `manifest_outer_cv` | `result/example/fixed_split_test/` | `report/benchmark_report.html`、`report/benchmark_report.md` | 两折对应的 `docs/predictions/` |
+| `external_test` / `frozen_train_external_test` | `result/example/external_test/` | `report/external_test_report.html`、`report/external_test_report.md` | `docs/predictions/morgan__rf.parquet` |
+
+验收后，完整输出已在本地归档到 `backup/three_examples_acceptance_20261114/completed_runs/<测试名>/`，三个源码 `result/example/<测试名>/` 目录均恢复为仅含 `.gitkeep`。该本地归档不包含在源码克隆中；自己重新运行时，仍在上表的原输出位置生成结果。Windows 只提供命令说明，本轮没有 Windows 实机执行。本次验收证明人工数据流程能运行，不证明真实化学预测效果。
 
 #### 运行后怎样阅读报告
 

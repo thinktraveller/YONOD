@@ -66,4 +66,4 @@ benchmark:
   dataset_id: synthetic_fixed_split_teaching_v1
 
 metadata:
-  notes: "人工教学数据；固定block_A/block_B名单两折轮换；组名没有化学含义；配置保存在config/example/fixed_split_test/run.yaml，从仓库根主入口启动，执行状态见verification.json。"
+  notes: "人工教学数据；固定block_A/block_B名单两折轮换；组名没有化学含义；配置保存在config/example/fixed_split_test/run.yaml，从仓库根主入口启动，执行后在任务结果目录核查报告与运行清单。"
