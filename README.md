@@ -10,7 +10,11 @@ Read [beginner content](#beginner-content) to install and complete a first run, 
 
 ## Beginner content
 
-[What can I do with it?](#what-can-i-do-with-it) · [Install YONOD](#install-yonod) · [Complete your first run](#complete-your-first-run) · [If something goes wrong](#if-something-goes-wrong) · [License](#license)
+- [What can I do with it?](#what-can-i-do-with-it)
+- [Install YONOD](#install-yonod)
+- [Complete your first run](#complete-your-first-run)
+- [If something goes wrong](#if-something-goes-wrong)
+- [License](#license)
 
 ### What can I do with it?
 
@@ -19,7 +23,9 @@ Read [beginner content](#beginner-content) to install and complete a first run, 
 - Evaluate predictions by random splitting, a saved list of training/test members, or a separate external test table.
 - Inspect per-record predictions, error metrics and HTML reports, with saved settings and run records for tracing the calculation.
 
-Model training and evaluation need known reference values. YONOD does not generate product structures, explain reaction mechanisms or automatically choose the best laboratory conditions. If you use product structures as inputs, those structures must be known when you make predictions.
+- Model training and evaluation need known reference values.
+- YONOD does not generate product structures, explain reaction mechanisms or automatically choose the best laboratory conditions.
+- If you use product structures as inputs, those structures must be known when you make predictions.
 
 The included teaching data run on a CPU without pretrained model weights. You can try them before preparing your own dataset.
 
@@ -27,11 +33,16 @@ The included teaching data run on a CPU without pretrained model weights. You ca
 
 #### Before running commands
 
-Install [Git](https://git-scm.com/downloads) to download the project and [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install) to manage its Python environment. An environment is a separate set of Python packages; this project's environment is named `yonod` and uses Python 3.9.
+- Install [Git](https://git-scm.com/downloads) to download the project and [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install) to manage its Python environment.
+- An environment is a separate set of Python packages; this project's environment is named `yonod` and uses Python 3.9.
 
-On Linux, open a Bash terminal. On Windows, open Anaconda PowerShell Prompt, or a PowerShell window where Conda has been initialized. If necessary, run `conda init powershell` from Anaconda Prompt, then close and reopen PowerShell.
+- On Linux, open a Bash terminal.
+- On Windows, open Anaconda PowerShell Prompt, or a PowerShell window where Conda has been initialized.
+- If necessary, run `conda init powershell` from Anaconda Prompt, then close and reopen PowerShell.
 
-Enter the commands one line at a time, pressing Enter after each. They belong in the terminal, not at a Python `>>>` prompt. The project root means the `YONOD` folder containing `yonod.py`, `example.yaml` and `requirements.txt`.
+- Enter the commands one line at a time, pressing Enter after each.
+- They belong in the terminal, not at a Python `>>>` prompt.
+- The project root means the `YONOD` folder containing `yonod.py`, `example.yaml` and `requirements.txt`.
 
 #### First-time installation
 
@@ -60,9 +71,13 @@ python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index
 python -m pip install -r requirements.txt
 ```
 
-If you already downloaded the project, enter its root folder and skip `git clone` and the following directory-change command. If you already installed the `yonod` environment, activate it instead of creating it again.
+- If you already downloaded the project, enter its root folder and skip `git clone` and the following directory-change command.
+- If you already installed the `yonod` environment, activate it instead of creating it again.
 
-Install PyTorch before the other requirements. The commands above use CPU PyTorch; the three teaching examples need no GPU. LightGBM and SciPy are included in [requirements.txt](requirements.txt). CUDA installation notes are also in that file; choose the PyTorch package for your hardware using the [official version instructions](https://pytorch.org/get-started/previous-versions/).
+- Install PyTorch before the other requirements.
+- The commands above use CPU PyTorch; the three teaching examples need no GPU.
+- LightGBM and SciPy are included in [requirements.txt](requirements.txt).
+- CUDA installation notes are also in that file; choose the PyTorch package for your hardware using the [official version instructions](https://pytorch.org/get-started/previous-versions/).
 
 #### Check the environment
 
@@ -73,7 +88,10 @@ python --version
 python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports OK')"
 ```
 
-Expect Python 3.9 and `YONOD imports OK`. This checks that the main packages can be imported. Keep the terminal open for the first run. In each new terminal, activate `yonod` again; Linux also needs the `source` line when Conda has not been initialized in that shell.
+- Expect Python 3.9 and `YONOD imports OK`.
+- This checks that the main packages can be imported.
+- Keep the terminal open for the first run.
+- In each new terminal, activate `yonod` again; Linux also needs the `source` line when Conda has not been initialized in that shell.
 
 ### Complete your first run
 
@@ -87,9 +105,12 @@ Open [the data table](example/random_split/dataset/reactions.csv) and [its setti
 | `yield` | Reference yield on a scale from 0 to 1; `0.10` means 10% |
 | `reactant_1_smiles`, `reactant_2_smiles` | The two molecular structures used as model inputs |
 
-All 12 records and their yields are artificial teaching values, not experimental measurements. The molecular combinations illustrate the file format and do not establish that these are chemically valid reactions.
+- All 12 records and their yields are artificial teaching values, not experimental measurements.
+- The molecular combinations illustrate the file format and do not establish that these are chemically valid reactions.
 
-The prepared `run.yaml` selects Morgan fingerprints and three models: Random Forest (`rf`), XGBoost (`xgb`) and LightGBM (`lightgbm`). It divides the records into two groups of six, trains on one group and predicts the other, then swaps their roles. The first full run fits each model twice, for six small fits in total.
+- The prepared `run.yaml` selects Morgan fingerprints and three models: Random Forest (`rf`), XGBoost (`xgb`) and LightGBM (`lightgbm`).
+- It divides the records into two groups of six, trains on one group and predicts the other, then swaps their roles.
+- The first full run fits each model twice, for six small fits in total.
 
 #### 2. Start the program
 
@@ -124,7 +145,10 @@ This file is already prepared. You do not need to copy it or run the YAML genera
 
 #### 3. Check completion and open the report
 
-At the end, look for `features=ready` and a `complete` or `reused` status for each of `morgan × rf`, `morgan × xgb` and `morgan × lightgbm`. In the ordinary workflow, `reused` means matching saved results were available. The `[report]` message prints the report locations. Check any error message or missing report, even after the process ends.
+- At the end, look for `features=ready` and a `complete` or `reused` status for each of `morgan × rf`, `morgan × xgb` and `morgan × lightgbm`.
+- In the ordinary workflow, `reused` means matching saved results were available.
+- The `[report]` message prints the report locations.
+- Check any error message or missing report, even after the process ends.
 
 Still in `example/random_split/`, open `result/example_random_split_20261113/report/report.html` in your file manager. On desktop Linux you can also use:
 
@@ -138,11 +162,15 @@ Windows Conda PowerShell:
 Invoke-Item .\result\example_random_split_20261113\report\report.html
 ```
 
-The same folder contains `report.md`, a text report you can read in an editor. Each model's per-record predictions are under `result/example_random_split_20261113/runs/run_morgan-<model>/predictions.csv`, where `<model>` is `rf`, `xgb` or `lightgbm`. Look inside the example folder for these results; the project-root `result/` folder holds research tasks.
+- The same folder contains `report.md`, a text report you can read in an editor.
+- Each model's per-record predictions are under `result/example_random_split_20261113/runs/run_morgan-<model>/predictions.csv`, where `<model>` is `rf`, `xgb` or `lightgbm`.
+- Look inside the example folder for these results; the project-root `result/` folder holds research tasks.
 
 #### 4. Read the results
 
-Each record receives a prediction from a model that did not train on that record. These are called out-of-fold (OOF) predictions. Random splitting can still put the same substrate in both training and evaluation records, so it does not establish performance on unseen substrates.
+- Each record receives a prediction from a model that did not train on that record.
+- These are called out-of-fold (OOF) predictions.
+- Random splitting can still put the same substrate in both training and evaluation records, so it does not establish performance on unseen substrates.
 
 | Metric | What it tells you |
 | --- | --- |
@@ -150,7 +178,9 @@ Each record receives a prediction from a model that did not train on that record
 | RMSE, root mean squared error | Error in the same units as the target, with greater weight on large errors. |
 | R², coefficient of determination | Error compared with using the evaluation data's mean as a reference. It can be negative and is not a percentage of correct predictions. |
 
-Training scores describe the records used to fit the model; use held-out or external scores to assess prediction. The examples retain low scores and negative R². They teach the workflow without establishing performance on real chemistry or recommending a model.
+- Training scores describe the records used to fit the model; use held-out or external scores to assess prediction.
+- The examples retain low scores and negative R².
+- They teach the workflow without establishing performance on real chemistry or recommending a model.
 
 ### If something goes wrong
 
@@ -168,15 +198,26 @@ Training scores describe the records used to fit the model; use held-out or exte
 | Garbled Chinese paths or output | Keep CSV/YAML in UTF-8 and set `PYTHONUTF8=1` as shown for your shell. |
 | A warning appears or the process ends | Read the final statuses and confirm the expected reports exist. Warnings alone do not establish failure or success. |
 
-For a bug report in [project Issues](https://github.com/thinktraveller/YONOD/issues), include your operating system, Python/package versions, the error text and a small shareable example. Remove confidential data and credentials.
+- For a bug report in [project Issues](https://github.com/thinktraveller/YONOD/issues), include your operating system, Python/package versions, the error text and a small shareable example.
+- Remove confidential data and credentials.
 
 ### License
 
-Project code and documentation use [CC BY-NC 4.0](LICENSE), requiring attribution and limiting use to noncommercial purposes. Third-party data, pretrained weights and reference code retain their own licenses and citation requirements.
+- Project code and documentation use [CC BY-NC 4.0](LICENSE), requiring attribution and limiting use to noncommercial purposes.
+- Third-party data, pretrained weights and reference code retain their own licenses and citation requirements.
 
 ## Advanced content
 
-[Use your own reaction table](#use-your-own-reaction-table) · [Configuration paths and execution stages](#configuration-paths-and-execution-stages) · [Choose and run an evaluation workflow](#choose-and-run-an-evaluation-workflow) · [Read example.yaml line by line](#read-exampleyaml-line-by-line) · [Adjust numerical conditions](#adjust-numerical-conditions) · [Search model settings with HPO](#search-model-settings-with-hpo) · [Additional workflow fields and artifact inputs](#additional-workflow-fields-and-artifact-inputs) · [Choose what to adjust](#choose-what-to-adjust) · [Saved examples and reports](#saved-examples-and-reports) · [Optional models, data and pretrained weights](#optional-models-data-and-pretrained-weights)
+- [Use your own reaction table](#use-your-own-reaction-table)
+- [Configuration paths and execution stages](#configuration-paths-and-execution-stages)
+- [Choose and run an evaluation workflow](#choose-and-run-an-evaluation-workflow)
+- [Read example.yaml line by line](#read-exampleyaml-line-by-line)
+- [Adjust numerical conditions](#adjust-numerical-conditions)
+- [Search model settings with HPO](#search-model-settings-with-hpo)
+- [Additional workflow fields and artifact inputs](#additional-workflow-fields-and-artifact-inputs)
+- [Choose what to adjust](#choose-what-to-adjust)
+- [Saved examples and reports](#saved-examples-and-reports)
+- [Optional models, data and pretrained weights](#optional-models-data-and-pretrained-weights)
 
 ### Use your own reaction table
 
@@ -184,11 +225,22 @@ Return to the project root before continuing: use `cd ../..` in Linux Bash or `S
 
 #### Prepare the CSV
 
-Save a comma-separated CSV with a header row, using UTF-8 encoding. In a spreadsheet editor, use Save As or Export to CSV UTF-8; changing an `.xlsx` filename to `.csv` does not convert it. Structure columns need valid SMILES text, not molecular drawings or reagent names. Each row should be one record, with a stable, nonempty, unique ID. IDs such as `record-001` stay stable through CSV readers. Automatic type inference can change ambiguous values such as `001` or `NA`; the generator rejects them when that would happen.
+- Save a comma-separated CSV with a header row, using UTF-8 encoding.
+- In a spreadsheet editor, use Save As or Export to CSV UTF-8; changing an `.xlsx` filename to `.csv` does not convert it.
+- Structure columns need valid SMILES text, not molecular drawings or reagent names.
+- Each row should be one record, with a stable, nonempty, unique ID.
+- IDs such as `record-001` stay stable through CSV readers.
+- Automatic type inference can change ambiguous values such as `001` or `NA`; the generator rejects them when that would happen.
 
-Check the reference value's meaning and unit. Yield, conversion, LC area ratio and selectivity are different targets. Use one consistent scale, such as 0 to 1 or 0 to 100, and write numbers without a `%` suffix. YONOD does not infer the intended scale or convert it automatically.
+- Check the reference value's meaning and unit.
+- Yield, conversion, LC area ratio and selectivity are different targets.
+- Use one consistent scale, such as 0 to 1 or 0 to 100, and write numbers without a `%` suffix.
+- YONOD does not infer the intended scale or convert it automatically.
 
-The current interactive generator requires a numerical target and exactly one product SMILES column. You can also select reactant columns, other structure columns and numerical conditions. If your data have no product column, use the manual YAML route below; the runtime itself supports configurations with `products: []`. Whenever product structures are included in the model inputs, they must be available at prediction time.
+- The current interactive generator requires a numerical target and exactly one product SMILES column.
+- You can also select reactant columns, other structure columns and numerical conditions.
+- If your data have no product column, use the manual YAML route below; the runtime itself supports configurations with `products: []`.
+- Whenever product structures are included in the model inputs, they must be available at prediction time.
 
 #### Generate settings, then run them
 
@@ -213,16 +265,44 @@ python -u .\generate_yaml_config.py
 
 Follow the displayed prompts in this order:
 
-1. Enter the CSV path and a new task name, for example `my_reaction`. Use letters, numbers, `_` or `-`; existing configurations and nonempty task folders are protected from overwriting.
-2. Select the stable ID column. It is used for record matching and excluded from the target and model inputs. Then assign the target, reactants, product, other structures and numerical conditions. Follow the indices shown at each prompt; their numbering is not the same in every menu.
-3. Check the invalid-input report and the number of retained records. The generator can exclude rows with invalid inputs, so confirm that the remaining table represents the data you intend to use.
-4. At the descriptor menu, enter `1` for Morgan. Check the displayed input columns, which default to the selected reactants, other structures and product. Press Enter at `选择 [N]:` to retain them, or enter `y` to edit the descriptor configuration. All included structures must be known at prediction time.
-5. At the model menu, enter `2` for Random Forest. Pressing Enter at the descriptor or model menu selects several methods, including ones requiring pretrained weights or optional packages.
-6. Add source/DOI notes if available. At the report-format menu, press Enter to retain both HTML and Markdown. Review the optional cleaned-CSV choice and the generated file paths.
+1. Enter the CSV path and a new task name, for example `my_reaction`.
 
-The generator saves `config/my_reaction.yaml` and exits without calculating descriptors, fitting models or predicting. Prepared files stay under `result/my_reaction/`: the normalized CSV is in `feature/docs/`, and an invalid-input report, when needed, is in `report/`. Supplying an existing YAML to the generator only validates it.
+    - Use letters, numbers, `_` or `-`; existing configurations and nonempty task folders are protected from overwriting.
 
-Open the saved YAML in a text editor before launching it. The generated ordinary workflow uses five folds, one repeat and random seed 42, with model-library defaults and no HPO. It needs at least five retained records; this is a software minimum, not evidence that a five-record dataset is sufficient for research. Check the split design and calculation budget for your question. Numerical conditions default to rejecting missing values; configure imputation, scaling and explicit unit conversion when needed.
+2. Select the stable ID column.
+
+    - It is used for record matching and excluded from the target and model inputs.
+    - Then assign the target, reactants, product, other structures and numerical conditions.
+    - Follow the indices shown at each prompt; their numbering is not the same in every menu.
+
+3. Check the invalid-input report and the number of retained records.
+
+    - The generator can exclude rows with invalid inputs, so confirm that the remaining table represents the data you intend to use.
+
+4. At the descriptor menu, enter `1` for Morgan.
+
+    - Check the displayed input columns, which default to the selected reactants, other structures and product.
+    - Press Enter at `选择 [N]:` to retain them, or enter `y` to edit the descriptor configuration.
+    - All included structures must be known at prediction time.
+
+5. At the model menu, enter `2` for Random Forest.
+
+    - Pressing Enter at the descriptor or model menu selects several methods, including ones requiring pretrained weights or optional packages.
+
+6. Add source/DOI notes if available.
+
+    - At the report-format menu, press Enter to retain both HTML and Markdown.
+    - Review the optional cleaned-CSV choice and the generated file paths.
+
+- The generator saves `config/my_reaction.yaml` and exits without calculating descriptors, fitting models or predicting.
+- Prepared files stay under `result/my_reaction/`: the normalized CSV is in `feature/docs/`, and an invalid-input report, when needed, is in `report/`.
+- Supplying an existing YAML to the generator only validates it.
+
+- Open the saved YAML in a text editor before launching it.
+- The generated ordinary workflow uses five folds, one repeat and random seed 42, with model-library defaults and no HPO.
+- It needs at least five retained records; this is a software minimum, not evidence that a five-record dataset is sufficient for research.
+- Check the split design and calculation budget for your question.
+- Numerical conditions default to rejecting missing values; configure imputation, scaling and explicit unit conversion when needed.
 
 With the same environment active and from the project root, run `python -u yonod.py` on Linux or `python -u .\yonod.py` on Windows. At its first prompt, enter:
 
@@ -250,11 +330,19 @@ New-Item -ItemType Directory -Path config -Force | Out-Null
 Copy-Item example.yaml config\my_reaction.yaml
 ```
 
-Choose an unused filename. Edit the copy's task name, data path, ID and column roles, descriptor input columns, model settings and evaluation design. Set `outputs.root` to `./result/my_reaction` and `artifacts.output_dir` to `./result/my_reaction/feature`, retaining `outputs.report_formats: [html, markdown]`. The original file is a two-fold, 12-record Morgan/RF smoke configuration with 10 trees; its settings are not research recommendations. Launch your edited file through the same `yonod.py` prompt.
+- Choose an unused filename.
+- Edit the copy's task name, data path, ID and column roles, descriptor input columns, model settings and evaluation design.
+- Set `outputs.root` to `./result/my_reaction` and `artifacts.output_dir` to `./result/my_reaction/feature`, retaining `outputs.report_formats: [html, markdown]`.
+- The original file is a two-fold, 12-record Morgan/RF smoke configuration with 10 trees; its settings are not research recommendations.
+- Launch your edited file through the same `yonod.py` prompt.
 
 ### Configuration paths and execution stages
 
-Keep research YAML files under root `config/`. Paths beginning `./` inside those files resolve from the project root. Explicit `../` paths and relative paths in configurations elsewhere resolve from the YAML's folder; absolute paths stay absolute. A teaching `run.yaml` therefore resolves inputs and outputs inside its own package. Use UTF-8 plain text, spaces for indentation, and check that Windows has not added a `.txt` extension.
+- Keep research YAML files under root `config/`.
+- Paths beginning `./` inside those files resolve from the project root.
+- Explicit `../` paths and relative paths in configurations elsewhere resolve from the YAML's folder; absolute paths stay absolute.
+- A teaching `run.yaml` therefore resolves inputs and outputs inside its own package.
+- Use UTF-8 plain text, spaces for indentation, and check that Windows has not added a `.txt` extension.
 
 | `stage` | Execution |
 | --- | --- |
@@ -263,11 +351,15 @@ Keep research YAML files under root `config/`. Paths beginning `./` inside those
 | `all` | Prepare encodings and run ordinary internal evaluation. |
 | `benchmark` | Dispatch a dedicated evaluation adapter with its required fields. |
 
-Each research task uses its own `outputs.root: ./result/<task_name>` and a feature child such as `artifacts.output_dir: ./result/<task_name>/feature`, retaining `outputs.report_formats: [html, markdown]`. Operational logs and PIDs belong in root `logs/`; final modeling outputs belong under the task, not `derived/`.
+- Each research task uses its own `outputs.root: ./result/<task_name>` and a feature child such as `artifacts.output_dir: ./result/<task_name>/feature`, retaining `outputs.report_formats: [html, markdown]`.
+- Operational logs and PIDs belong in root `logs/`; final modeling outputs belong under the task, not `derived/`.
 
 ### Choose and run an evaluation workflow
 
-All three examples use artificial teaching records. Run them one at a time. Start each command block from the project root; if you are still inside an example, return with `cd ../..` in Bash or `Set-Location ..\..` in PowerShell. At the launcher's first prompt, enter `run.yaml`.
+- All three examples use artificial teaching records.
+- Run them one at a time.
+- Start each command block from the project root; if you are still inside an example, return with `cd ../..` in Bash or `Set-Location ..\..` in PowerShell.
+- At the launcher's first prompt, enter `run.yaml`.
 
 | Your question | Workflow and configuration | What is kept separate |
 | --- | --- | --- |
@@ -277,7 +369,10 @@ All three examples use artificial teaching records. Run them one at a time. Star
 
 #### Random-split internal evaluation
 
-1. Inspect [the 12-row CSV](example/random_split/dataset/reactions.csv) and its [run.yaml](example/random_split/run.yaml). The example uses two reactant columns, Morgan, RF/XGBoost/LightGBM, two folds and one repeat.
+1. Inspect [the 12-row CSV](example/random_split/dataset/reactions.csv) and its [run.yaml](example/random_split/run.yaml).
+
+    - The example uses two reactant columns, Morgan, RF/XGBoost/LightGBM, two folds and one repeat.
+
 2. Run the block for your system and enter `run.yaml` when asked.
 
 Linux Bash:
@@ -299,14 +394,28 @@ Set-Location .\example\random_split
 python -u ..\..\yonod.py
 ```
 
-3. Check `features=ready`, all three combinations' `complete` or `reused` statuses, and both reports. The new HTML report is `example/random_split/result/example_random_split_20261113/report/report.html`; per-record predictions are under its task's `runs/run_morgan-<model>/predictions.csv`.
-4. For your own CSV, generate a new root `config/<task_name>.yaml` or edit an independent copy of [example.yaml](example.yaml). Set the ID, label, input columns, methods and isolated outputs. `evaluation.n_splits` is an integer of at least 2; `n_repeats` is at least 1; `shuffle` is a Boolean; `seed` controls shuffling. Each shuffled repeat uses `seed + repeat - 1`. With `shuffle: false`, repeats use the same row partition. The valid encoded row count must be at least `n_splits`.
+3. Check `features=ready`, all three combinations' `complete` or `reused` statuses, and both reports.
 
-The ordinary runtime always constructs KFold splits. Merely writing `manifest_outer_cv` in an ordinary `all/train` configuration does not import your manifest; use the dedicated benchmark route below for actual fixed members.
+    - The new HTML report is `example/random_split/result/example_random_split_20261113/report/report.html`; per-record predictions are under its task's `runs/run_morgan-<model>/predictions.csv`.
+
+4. For your own CSV, generate a new root `config/<task_name>.yaml` or edit an independent copy of [example.yaml](example.yaml).
+
+    - Set the ID, label, input columns, methods and isolated outputs.
+    - `evaluation.n_splits` is an integer of at least 2; `n_repeats` is at least 1; `shuffle` is a Boolean; `seed` controls shuffling.
+    - Each shuffled repeat uses `seed + repeat - 1`.
+    - With `shuffle: false`, repeats use the same row partition.
+    - The valid encoded row count must be at least `n_splits`.
+
+- The ordinary runtime always constructs KFold splits.
+- Merely writing `manifest_outer_cv` in an ordinary `all/train` configuration does not import your manifest; use the dedicated benchmark route below for actual fixed members.
 
 #### Fixed membership and grouped evaluation
 
-1. Read the [role guide](example/fixed_split/splits/membership_guide.csv), [actual 24-row manifest](example/fixed_split/splits/fixed_split_manifest.csv) and [configuration](example/fixed_split/run.yaml). Every fold lists all 12 sample IDs. Fold 1 holds out `block_A`; fold 2 holds out `block_B`.
+1. Read the [role guide](example/fixed_split/splits/membership_guide.csv), [actual 24-row manifest](example/fixed_split/splits/fixed_split_manifest.csv) and [configuration](example/fixed_split/run.yaml).
+
+    - Every fold lists all 12 sample IDs.
+    - Fold 1 holds out `block_A`; fold 2 holds out `block_B`.
+
 2. Keep `stage: benchmark`, `evaluation.protocol: manifest_outer_cv`, the declared grouping, `evaluation.split_manifest`, and the `benchmark.task_state` block together.
 3. Launch from the project root, then enter `run.yaml`.
 
@@ -329,10 +438,21 @@ Set-Location .\example\fixed_split
 python -u ..\..\yonod.py
 ```
 
-4. Check two successful RF fold records. The HTML report is `example/fixed_split/result/example_fixed_split_20261113/report/benchmark_report.html`; the copied manifest and predictions are in that task's `docs/manifests/` and `docs/predictions/`.
-5. For your data, prepare stable IDs and group keys before assigning folds. Save a new CSV or Parquet manifest, update its dataset checksum and members, and reference it from a new root `config/` YAML. Keep group columns out of the descriptor inputs unless they intentionally represent available predictors. Set the new task's outputs to `./result/<task_name>` and `./result/<task_name>/feature`.
+4. Check two successful RF fold records.
 
-The current interface requires at least two folds. Every fold must contain nonempty training and validation sets and the same sample IDs as the CSV. A group must not cross the training/validation boundary, and every sample must be `valid` exactly once per repeat. A one-off eight-training/four-test list cannot replace this CV manifest. Fixed seeds or disabling shuffle do not specify arbitrary selected members.
+    - The HTML report is `example/fixed_split/result/example_fixed_split_20261113/report/benchmark_report.html`; the copied manifest and predictions are in that task's `docs/manifests/` and `docs/predictions/`.
+
+5. For your data, prepare stable IDs and group keys before assigning folds.
+
+    - Save a new CSV or Parquet manifest, update its dataset checksum and members, and reference it from a new root `config/` YAML.
+    - Keep group columns out of the descriptor inputs unless they intentionally represent available predictors.
+    - Set the new task's outputs to `./result/<task_name>` and `./result/<task_name>/feature`.
+
+- The current interface requires at least two folds.
+- Every fold must contain nonempty training and validation sets and the same sample IDs as the CSV.
+- A group must not cross the training/validation boundary, and every sample must be `valid` exactly once per repeat.
+- A one-off eight-training/four-test list cannot replace this CV manifest.
+- Fixed seeds or disabling shuffle do not specify arbitrary selected members.
 
 When `evaluation.split_manifest` is absent, the dedicated executor creates a manifest from `evaluation.grouping`. This supports five strategies:
 
@@ -345,7 +465,9 @@ When `evaluation.split_manifest` is absent, the dedicated executor creates a man
 | `reaction_fingerprint_cluster` | `reaction_cols` defaults to the molecular role columns; `similarity_threshold` defaults to `0.7`, range `(0, 1]`; Morgan grouping `radius` defaults to `2`, at least `0`; `n_bits` defaults to `2048`, at least `8`. The implementation clusters concatenated molecular components using Tanimoto/Butina. |
 | All four genuinely grouped strategies | Optional `max_group_fraction`, default `0.8`, range `(0, 1]`: reject a generated split if its largest group exceeds that fraction. At least `n_splits` groups are needed. Complete groups are greedily balanced across folds. |
 
-Invalid grouping structures receive explicit fallback keys; they are not silently removed or switched to ordinary KFold. A grouping name alone does not prove that a chemical substrate or source is absent from the other side. With an imported manifest, the imported group IDs and memberships determine the split; changing the grouping settings does not regenerate those imported members.
+- Invalid grouping structures receive explicit fallback keys; they are not silently removed or switched to ordinary KFold.
+- A grouping name alone does not prove that a chemical substrate or source is absent from the other side.
+- With an imported manifest, the imported group IDs and memberships determine the split; changing the grouping settings does not regenerate those imported members.
 
 The manifest's required columns are:
 
@@ -378,12 +500,19 @@ Windows Conda PowerShell:
 Get-FileHash -Algorithm SHA256 -LiteralPath .\dataset\my_reactions.csv
 ```
 
-The importer checks the dataset hash, source run/split identity, population membership, fold coverage and group separation. You must also verify that source-row positions, strategy notes and group definitions accurately describe your CSV; the importer does not independently reconstruct their chemical meaning.
+- The importer checks the dataset hash, source run/split identity, population membership, fold coverage and group separation.
+- You must also verify that source-row positions, strategy notes and group definitions accurately describe your CSV; the importer does not independently reconstruct their chemical meaning.
 
 #### Frozen external testing
 
-1. Inspect the [12-row training table](example/external_test/dataset/train.csv), [six-row external table](example/external_test/dataset/external.csv), [audit record](example/external_test/audit/external_audit.json) and [run.yaml](example/external_test/run.yaml). Freeze descriptor inputs, model parameters and the scoring plan before examining external outcomes.
-2. Keep `stage: benchmark`, `frozen_train_external_test`, `evaluation.seed` and the external-test block. Do not include `n_splits`, `n_repeats`, `shuffle`, `grouping`, `split_manifest` or `population_manifest`.
+1. Inspect the [12-row training table](example/external_test/dataset/train.csv), [six-row external table](example/external_test/dataset/external.csv), [audit record](example/external_test/audit/external_audit.json) and [run.yaml](example/external_test/run.yaml).
+
+    - Freeze descriptor inputs, model parameters and the scoring plan before examining external outcomes.
+
+2. Keep `stage: benchmark`, `frozen_train_external_test`, `evaluation.seed` and the external-test block.
+
+    - Do not include `n_splits`, `n_repeats`, `shuffle`, `grouping`, `split_manifest` or `population_manifest`.
+
 3. Launch from the project root and enter `run.yaml`.
 
 Linux Bash:
@@ -405,8 +534,15 @@ Set-Location .\example\external_test
 python -u ..\..\yonod.py
 ```
 
-4. RF fits once on all 12 training rows and predicts six external rows. Read `example/external_test/result/example_external_test_20261113/report/external_test_report.html`, `docs/predictions/morgan__rf.parquet` and `docs/metrics/external_test_metrics.csv` under that task root. There is no external CV; a saved score is not an independent confidence interval.
-5. For a real task, make independent training, external and audit files, then a new root `config/` YAML with new task/output identities. Use `external_test.column_map` from each training structure column to its external column. The target is specified separately, through training `column_roles.label` and external `label_col`.
+4. RF fits once on all 12 training rows and predicts six external rows.
+
+    - Read `example/external_test/result/example_external_test_20261113/report/external_test_report.html`, `docs/predictions/morgan__rf.parquet` and `docs/metrics/external_test_metrics.csv` under that task root.
+    - There is no external CV; a saved score is not an independent confidence interval.
+
+5. For a real task, make independent training, external and audit files, then a new root `config/` YAML with new task/output identities.
+
+    - Use `external_test.column_map` from each training structure column to its external column.
+    - The target is specified separately, through training `column_roles.label` and external `label_col`.
 
 | Field under `evaluation.external_test` | Meaning |
 | --- | --- |
@@ -420,13 +556,24 @@ python -u ..\..\yonod.py
 | `audit_manifest` | JSON provenance/overlap audit path. |
 | `audit_manifest_sha256` | Exact audit JSON SHA-256. |
 
-The audit needs `candidate_source_sha256` and `exact_canonical_overlap` with `amine`, `acid` and `product` all zero. If present, `row_count` must match; `physical_dataset_id` controls the source-ID prefix. Prepare and review the audit from the actual data: the adapter verifies declarations and file identity, but does not recalculate the molecular structure intersections for you. Calculate hashes with the same Bash/PowerShell commands above, substituting the external and audit paths, then enter them in the new YAML. Do not copy the teaching audit's zero counts.
+- The audit needs `candidate_source_sha256` and `exact_canonical_overlap` with `amine`, `acid` and `product` all zero.
+- If present, `row_count` must match; `physical_dataset_id` controls the source-ID prefix.
+- Prepare and review the audit from the actual data: the adapter verifies declarations and file identity, but does not recalculate the molecular structure intersections for you.
+- Calculate hashes with the same Bash/PowerShell commands above, substituting the external and audit paths, then enter them in the new YAML.
+- Do not copy the teaching audit's zero counts.
 
-This adapter currently accepts only static descriptors, excludes numeric conditions, OHE, AutoGluon, HPO and external-test early stopping, and does not save the ordinary complete feature/final-model package. It rejects existing external run output before fitting and does not resume or overwrite it; use a new task name and output directory. The example includes product structure, which must be known at prediction time. Separate files and zero exact structure overlap do not establish independent experimental provenance or distributional independence.
+- This adapter currently accepts only static descriptors, excludes numeric conditions, OHE, AutoGluon, HPO and external-test early stopping, and does not save the ordinary complete feature/final-model package.
+- It rejects existing external run output before fitting and does not resume or overwrite it; use a new task name and output directory.
+- The example includes product structure, which must be known at prediction time.
+- Separate files and zero exact structure overlap do not establish independent experimental provenance or distributional independence.
 
 ### Read example.yaml line by line
 
-[example.yaml](example.yaml) is the sole complete YAML specification. The table explains every active, nonblank line in the current 104-line file by its full field path. YAML indentation assigns children to their parent; `-` starts a list item, `[]` is an empty list, `{}` an empty mapping, `null` a null value, and `true`/`false` Boolean values. Use spaces, not tabs. Line numbers refer to this checkout and change if the specification is edited.
+- [example.yaml](example.yaml) is the sole complete YAML specification.
+- The table explains every active, nonblank line in the current 104-line file by its full field path.
+- YAML indentation assigns children to their parent; `-` starts a list item, `[]` is an empty list, `{}` an empty mapping, `null` a null value, and `true`/`false` Boolean values.
+- Use spaces, not tabs.
+- Line numbers refer to this checkout and change if the specification is edited.
 
 | Line | Full field path | Meaning and what you can change |
 | --- | --- | --- |
@@ -484,11 +631,17 @@ This adapter currently accepts only static descriptors, excludes numeric conditi
 | 103 | `metadata` | Human notes, not model input. |
 | 104 | `metadata.notes` | Explains the artificial smoke fixture and task isolation. Replace with your provenance and purpose. |
 
-Blank lines only improve readability. Full-line `#` comments and text after `#` are not executed. Lines 1 to 7 explain launch locations; 22 to 26 explain numerical conditions; 33 to 34 explain candidates and lifecycles; 48 to 51 explain model sections and resources; 61 to 65 explain HPO scope; 68 to 84 contain an inactive HPO example; 87 to 90 explain protocol selection. The commented HPO fields are covered below. Do not uncomment a second `hpo` key beside the existing one: duplicate YAML keys are rejected.
+- Blank lines only improve readability.
+- Full-line `#` comments and text after `#` are not executed.
+- Lines 1 to 7 explain launch locations; 22 to 26 explain numerical conditions; 33 to 34 explain candidates and lifecycles; 48 to 51 explain model sections and resources; 61 to 65 explain HPO scope; 68 to 84 contain an inactive HPO example; 87 to 90 explain protocol selection.
+- The commented HPO fields are covered below.
+- Do not uncomment a second `hpo` key beside the existing one: duplicate YAML keys are rejected.
 
 ### Adjust numerical conditions
 
-Declare source columns in `dataset.column_roles.conditions` in their intended input order. They cannot overlap the ID, target, molecular or categorical roles. Rules live under `dataset.numeric_conditions`; every key supported by this interface is listed here.
+- Declare source columns in `dataset.column_roles.conditions` in their intended input order.
+- They cannot overlap the ID, target, molecular or categorical roles.
+- Rules live under `dataset.numeric_conditions`; every key supported by this interface is listed here.
 
 | Location | Accepted keys, values and behavior |
 | --- | --- |
@@ -501,11 +654,17 @@ Declare source columns in `dataset.column_roles.conditions` in their intended in
 | `scaling` | `none`; `standard` subtracts training mean and divides by population SD (`ddof=0`); `minmax` uses training minimum/range. A zero training scale is replaced by 1, retaining the column. |
 | `unit` | Only `source`, `target`, `scale`, `offset`. Source/target strings are required when specified; finite `scale` defaults to 1 and cannot be 0; finite `offset` defaults to 0. Converted value = raw value × scale + offset. Equal source/target units require identity conversion. Omission means dimensionless identity conversion. |
 
-Unit conversion is explicit arithmetic, not automatic unit recognition. Imputation and scaling fit only on the current training subset, including inner training folds during HPO. Validation and future data use that saved state. Frozen external testing does not currently accept numerical-condition inputs.
+- Unit conversion is explicit arithmetic, not automatic unit recognition.
+- Imputation and scaling fit only on the current training subset, including inner training folds during HPO.
+- Validation and future data use that saved state.
+- Frozen external testing does not currently accept numerical-condition inputs.
 
 ### Search model settings with HPO
 
-HPO searches model parameters within training data. It does not choose laboratory conditions. The project integrates RF, XGBoost and LightGBM, using nested folds so outer held-out labels do not select the winning settings. Every encoding × selected model × outer fold gets its own study; the objective is the unweighted arithmetic mean of inner-fold scores.
+- HPO searches model parameters within training data.
+- It does not choose laboratory conditions.
+- The project integrates RF, XGBoost and LightGBM, using nested folds so outer held-out labels do not select the winning settings.
+- Every encoding × selected model × outer fold gets its own study; the objective is the unweighted arithmetic mean of inner-fold scores.
 
 | HPO field | Values and restrictions |
 | --- | --- |
@@ -526,7 +685,12 @@ HPO searches model parameters within training data. It does not choose laborator
 | `final_model.development_population_id` | Required nonempty identifier when final-model fitting is enabled. |
 | `final_model.budget` | Independent final-purpose search budget with `max_trials` and optional study/task timeout keys. A separate study selects settings on the development population, then the final model fits that full population; it does not create an independent test score. |
 
-A distribution has `type: int`, `float` or `categorical`. Integer/float distributions require finite `low` and `high` with `low <= high`; optional `step` must be positive and exactly divide the interval. Integer bounds and steps must be integers; the integer default step is 1. Optional `log` is Boolean and requires positive `low`; integer log requires step 1, and float log cannot also declare step. Categorical distributions accept only a nonempty `choices` list of distinct safe scalars (`null`, strings, Booleans and finite numbers). Arbitrary expressions and callable distributions are not accepted.
+- A distribution has `type: int`, `float` or `categorical`.
+- Integer/float distributions require finite `low` and `high` with `low <= high`; optional `step` must be positive and exactly divide the interval.
+- Integer bounds and steps must be integers; the integer default step is 1.
+- Optional `log` is Boolean and requires positive `low`; integer log requires step 1, and float log cannot also declare step.
+- Categorical distributions accept only a nonempty `choices` list of distinct safe scalars (`null`, strings, Booleans and finite numbers).
+- Arbitrary expressions and callable distributions are not accepted.
 
 | Model | All currently searchable estimator keys |
 | --- | --- |
@@ -534,9 +698,17 @@ A distribution has `type: int`, `float` or `categorical`. Integer/float distribu
 | XGBoost | `n_estimators`, `learning_rate`, `max_depth`, `min_child_weight`, `subsample`, `colsample_bytree`, `gamma`, `reg_alpha`, `reg_lambda`, `max_delta_step` |
 | LightGBM | `n_estimators`, `learning_rate`, `num_leaves`, `min_child_samples`, `min_child_weight`, `subsample`, `colsample_bytree`, `reg_alpha`, `reg_lambda`, `min_split_gain`, `max_depth` |
 
-`compact-v1` searches RF trees 100 to 800 by 100, depths from `null/4/8/12/20/32`, leaf minimum 1 to 20 and feature fraction 0.3 to 1.0. For XGBoost it searches trees 100 to 800 by 100, learning rate 0.01 to 0.2 logarithmically, depth 2 to 10, child weight 1 to 20 logarithmically, row fraction 0.6 to 1.0 and feature fraction 0.5 to 1.0. For LightGBM it searches trees 100 to 800 by 100, learning rate 0.01 to 0.2 logarithmically, leaves 8 to 64, child samples 5 to 50 and feature fraction 0.5 to 1.0. These are software presets, not scientifically validated budgets for every dataset.
+- `compact-v1` searches RF trees 100 to 800 by 100, depths from `null/4/8/12/20/32`, leaf minimum 1 to 20 and feature fraction 0.3 to 1.0.
+- For XGBoost it searches trees 100 to 800 by 100, learning rate 0.01 to 0.2 logarithmically, depth 2 to 10, child weight 1 to 20 logarithmically, row fraction 0.6 to 1.0 and feature fraction 0.5 to 1.0.
+- For LightGBM it searches trees 100 to 800 by 100, learning rate 0.01 to 0.2 logarithmically, leaves 8 to 64, child samples 5 to 50 and feature fraction 0.5 to 1.0.
+- These are software presets, not scientifically validated budgets for every dataset.
 
-Ordinary HPO requires `outer_kfold`; strict HPO requires `stage: benchmark` with `manifest_outer_cv`. It is unavailable for frozen external testing and fixed paper-reproduction protocols. HPO currently rejects runtime early stopping; strict HPO also rejects nonempty model `fit` sections. The feature-only stage validates the declaration without starting a study. LightGBM search rejects fixed aliases of searched parameters, requires positive fixed `subsample_freq` when searching `subsample`, and checks searched `num_leaves` against fixed positive `max_depth`. The XGBoost preset requires `booster: gbtree`.
+- Ordinary HPO requires `outer_kfold`; strict HPO requires `stage: benchmark` with `manifest_outer_cv`.
+- It is unavailable for frozen external testing and fixed paper-reproduction protocols.
+- HPO currently rejects runtime early stopping; strict HPO also rejects nonempty model `fit` sections.
+- The feature-only stage validates the declaration without starting a study.
+- LightGBM search rejects fixed aliases of searched parameters, requires positive fixed `subsample_freq` when searching `subsample`, and checks searched `num_leaves` against fixed positive `max_depth`.
+- The XGBoost preset requires `booster: gbtree`.
 
 ### Additional workflow fields and artifact inputs
 
@@ -550,11 +722,18 @@ Ordinary HPO requires `outer_kfold`; strict HPO requires `stage: benchmark` with
 | `outputs.diagnostics.enabled` | Boolean, default enabled for supported models in ordinary/manifest workflows. Current training/held-out diagnostics support `rf`, `xgb`, `lightgbm`; SVM and AutoGluon are recorded as unsupported. Frozen external scoring does not create these paired diagnostics. |
 | `outputs.diagnostics.save_train_predictions` | Boolean, default false; save per-record training predictions for supported diagnostics. It cannot be true with diagnostics disabled. Turning diagnostics off does not turn off normal held-out scoring. |
 
-The schema recognizes the following top-level keys under `evaluation`: `protocol`, `n_splits`, `n_repeats`, `shuffle`, `seed`, `grouping`, `split_manifest`, `population_manifest`, `metrics`, `external_test`. The three current launch routes use only the fields described above. The generic schema accepts `population_manifest` and `metrics`, but these routes do not use them to select populations or customize scoring. Omit them here. Frozen external testing explicitly rejects `population_manifest` along with the CV fields. A field must be implemented by the selected adapter as well as accepted by the schema.
+- The schema recognizes the following top-level keys under `evaluation`: `protocol`, `n_splits`, `n_repeats`, `shuffle`, `seed`, `grouping`, `split_manifest`, `population_manifest`, `metrics`, `external_test`.
+- The three current launch routes use only the fields described above.
+- The generic schema accepts `population_manifest` and `metrics`, but these routes do not use them to select populations or customize scoring.
+- Omit them here.
+- Frozen external testing explicitly rejects `population_manifest` along with the CV fields.
+- A field must be implemented by the selected adapter as well as accepted by the schema.
 
 ### Choose what to adjust
 
-Start with a fixed, reviewable configuration. Change the setting that answers your question, and keep the evaluation members and metric definition consistent when comparing methods. The full descriptor and model references below identify the supported names and protocol restrictions.
+- Start with a fixed, reviewable configuration.
+- Change the setting that answers your question, and keep the evaluation members and metric definition consistent when comparing methods.
+- The full descriptor and model references below identify the supported names and protocol restrictions.
 
 | What you want to change | YAML location | Effect to consider |
 | --- | --- | --- |
@@ -569,15 +748,22 @@ Start with a fixed, reviewable configuration. Change the setting that answers yo
 | Automatic parameter search | `hpo.enabled`, `hpo.budget.max_trials`, `hpo.search_spaces` | Runs an inner search within each outer training fold for supported models. Set a budget before launching. |
 | Reports | `outputs.report_formats`, `outputs.diagnostics` | Selects reports and optional training diagnostics; diagnostics do not replace held-out evaluation. |
 
-Only declare parameters for selected models. Use a new task name and separate output directory for a changed research configuration. Thread settings depend on your machine; tasks and folds still run in sequence.
+- Only declare parameters for selected models.
+- Use a new task name and separate output directory for a changed research configuration.
+- Thread settings depend on your machine; tasks and folds still run in sequence.
 
 ### Saved examples and reports
 
 [Offline guide](example/index.html) · [Operating instructions](example/README.md) · [Download all examples](example/archives/all_examples.zip)
 
-The ZIPs include `completed_run/` reference snapshots. Source clones generate fresh example-local `result/` folders; the random example's historical `report/` and `evidence/` remain reference material. The saved [random](example/random_split/verification.json), [fixed-membership](example/fixed_split/verification.json) and [external](example/external_test/verification.json) verification records document Linux execution, not Windows runtime acceptance. For unattended execution and status checks, use the Bash/PowerShell commands in the example instructions, keeping logs and PIDs in root `logs/`.
+- The ZIPs include `completed_run/` reference snapshots.
+- Source clones generate fresh example-local `result/` folders; the random example's historical `report/` and `evidence/` remain reference material.
+- The saved [random](example/random_split/verification.json), [fixed-membership](example/fixed_split/verification.json) and [external](example/external_test/verification.json) verification records document Linux execution, not Windows runtime acceptance.
+- For unattended execution and status checks, use the Bash/PowerShell commands in the example instructions, keeping logs and PIDs in root `logs/`.
 
-The ordinary random report scores pooled OOF predictions within each repeat; fixed-membership reports summarize fold metrics. These R² values use different aggregation rules, so do not rank scores across the routes as though the evaluation were identical. Teaching values, low scores and negative R² remain visible; they do not establish performance on real chemistry.
+- The ordinary random report scores pooled OOF predictions within each repeat; fixed-membership reports summarize fold metrics.
+- These R² values use different aggregation rules, so do not rank scores across the routes as though the evaluation were identical.
+- Teaching values, low scores and negative R² remain visible; they do not establish performance on real chemistry.
 
 ### Optional models, data and pretrained weights
 
@@ -587,9 +773,13 @@ Available models are `rf`, `xgb`, `lightgbm`, `svm` and `autogluon`. Install Aut
 python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```
 
-Encodings without neural pretrained weights include `morgan`, count-based Morgan `mfp`, `maccs`, `maf`, `rdkit2d`, `drfp` and categorical `ohe`. DRFP requires reaction inputs; OHE and numerical preprocessing learn from the corresponding training fold. HPO is integrated for RF, XGBoost and LightGBM.
+- Encodings without neural pretrained weights include `morgan`, count-based Morgan `mfp`, `maccs`, `maf`, `rdkit2d`, `drfp` and categorical `ohe`.
+- DRFP requires reaction inputs; OHE and numerical preprocessing learn from the corresponding training fold.
+- HPO is integrated for RF, XGBoost and LightGBM.
 
-The [dataset notes](dataset/README.md) describe data sources, target definitions and licenses. Additional distribution is available through [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) and [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights). From the root with `yonod` active, these commands work on both systems:
+- The [dataset notes](dataset/README.md) describe data sources, target definitions and licenses.
+- Additional distribution is available through [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) and [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights).
+- From the root with `yonod` active, these commands work on both systems:
 
 ```text
 python -m pip install "huggingface_hub>=0.34,<1.0"
@@ -597,7 +787,10 @@ hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/*
 hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 ```
 
-The dataset command downloads only `USPTO/`. Some source tables use tabs despite their CSV extension; read their source notes and prepare comma-separated data before using the generator. Complete any access authorization required by the service. Download only the assets you intend to use; the teaching examples already include their inputs.
+- The dataset command downloads only `USPTO/`.
+- Some source tables use tabs despite their CSV extension; read their source notes and prepare comma-separated data before using the generator.
+- Complete any access authorization required by the service.
+- Download only the assets you intend to use; the teaching examples already include their inputs.
 
 | Pretrained encoding | Required assets |
 | --- | --- |
@@ -605,11 +798,18 @@ The dataset command downloads only `USPTO/`. Some source tables use tabs despite
 | MolMetaLM | Model, configuration and tokenizer from [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base) in `WEIGHTS/MolMetaLM-base/`; see the [upstream project](https://github.com/CSUBioGroup/MolMetaLM). |
 | Chemical VAE | A verified v5 conversion manifest under `WEIGHTS/chemical_vae/<asset>/v5/` and its adjacent, hash-matched `encoder_state_dict.pt`. ZINC and `zinc_properties` assets are distinct. |
 
-A configuration, tokenizer or manifest alone does not supply the binary weights. Chemical VAE uses the frozen PyTorch encoder's raw `z_mean_sample`; it does not train a VAE or load a decoder/property head, and ordinary execution does not need TensorFlow/Keras. See the [weight notes](WEIGHTS/README.md) and [Chemical VAE loader](yonod/descriptors/chemical_vae.py).
+- A configuration, tokenizer or manifest alone does not supply the binary weights.
+- Chemical VAE uses the frozen PyTorch encoder's raw `z_mean_sample`; it does not train a VAE or load a decoder/property head, and ordinary execution does not need TensorFlow/Keras.
+- See the [weight notes](WEIGHTS/README.md) and [Chemical VAE loader](yonod/descriptors/chemical_vae.py).
 
 ## Developer content
 
-[Project structure](#project-structure) · [Develop and verify a change](#develop-and-verify-a-change) · [Descriptor parameters and protocol support](#descriptor-parameters-and-protocol-support) · [Add a new descriptor](#add-a-new-descriptor) · [Model parameters and their execution boundary](#model-parameters-and-their-execution-boundary) · [Add a new model](#add-a-new-model)
+- [Project structure](#project-structure)
+- [Develop and verify a change](#develop-and-verify-a-change)
+- [Descriptor parameters and protocol support](#descriptor-parameters-and-protocol-support)
+- [Add a new descriptor](#add-a-new-descriptor)
+- [Model parameters and their execution boundary](#model-parameters-and-their-execution-boundary)
+- [Add a new model](#add-a-new-model)
 
 ### Project structure
 
@@ -661,9 +861,12 @@ YONOD/
     └── docs/                Other maintained project documentation
 ```
 
-For everyday use, start with the two root scripts, [example.yaml](example.yaml) and [example/](example/). The [dataset notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) explain the inputs and optional assets.
+- For everyday use, start with the two root scripts, [example.yaml](example.yaml) and [example/](example/).
+- The [dataset notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) explain the inputs and optional assets.
 
-The root folders `config/`, `result/`, `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/` are excluded from the main Git repository. `project-docs/` has its own Git history in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission. Cloning YONOD does not fetch that repository; the teaching examples work without it.
+- The root folders `config/`, `result/`, `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/` are excluded from the main Git repository.
+- `project-docs/` has its own Git history in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission.
+- Cloning YONOD does not fetch that repository; the teaching examples work without it.
 
 An ordinary modeling task saves its main outputs in this layout:
 
@@ -679,18 +882,38 @@ result/<task_name>/
 └── report/                          HTML and Markdown reports
 ```
 
-Fixed-membership benchmarks instead organize membership lists, predictions, fold records, metrics and recovery state under `docs/manifests/`, `docs/predictions/`, `docs/folds/`, `docs/metrics/` and `docs/state/` inside the task folder. Frozen external testing also uses `docs/predictions/`, `docs/metrics/` and `report/`; it does not save the ordinary workflow's complete feature and final-model packages. The files available depend on the selected protocol.
+- Fixed-membership benchmarks instead organize membership lists, predictions, fold records, metrics and recovery state under `docs/manifests/`, `docs/predictions/`, `docs/folds/`, `docs/metrics/` and `docs/state/` inside the task folder.
+- Frozen external testing also uses `docs/predictions/`, `docs/metrics/` and `report/`; it does not save the ordinary workflow's complete feature and final-model packages.
+- The files available depend on the selected protocol.
 
-Teaching tasks save new outputs in `example/<package>/result/<task_name>/`, inside their own package. Their generated `result/` folders are Git-ignored. The `completed_run/` folders in downloadable ZIPs contain reference snapshots; they are separate from the outputs you generate.
+- Teaching tasks save new outputs in `example/<package>/result/<task_name>/`, inside their own package.
+- Their generated `result/` folders are Git-ignored.
+- The `completed_run/` folders in downloadable ZIPs contain reference snapshots; they are separate from the outputs you generate.
 
 ### Develop and verify a change
 
-Start from [AGENTS.md](AGENTS.md) and the implementation for the workflow you intend to support. The schema-2 runtime goes from `yonod.py` to the configuration loader, then to ordinary `pipeline/` stages or a dedicated `benchmark/` adapter. Editing an older adapter under `yonod/models/` alone does not extend the schema-2 model factory.
+- Start from [AGENTS.md](AGENTS.md) and the implementation for the workflow you intend to support.
+- The schema-2 runtime goes from `yonod.py` to the configuration loader, then to ordinary `pipeline/` stages or a dedicated `benchmark/` adapter.
+- Editing an older adapter under `yonod/models/` alone does not extend the schema-2 model factory.
 
-1. Define the new provider's input type, output shape, supported parameters, missing-input behavior and protocol support. Keep pure configuration validation separate from descriptor/model execution.
-2. Add its implementation and all relevant registration/dispatch points listed below. Import optional dependencies only when selected; record package versions and asset identity where applicable.
-3. Preserve sample IDs, masks, column ordering, split identity, hashes and atomic publication. Fit learned transforms and model selection only on the corresponding training data. A cached result must change identity when its inputs or effective settings change.
-4. Put local validation scripts under `_verify/`. Check invalid/empty inputs, parameter rejection, output alignment, deterministic fixed seeds, fold isolation, resume behavior and report paths. Begin with configuration and mocked execution checks; a training smoke is a separate execution check.
+1. Define the new provider's input type, output shape, supported parameters, missing-input behavior and protocol support.
+
+    - Keep pure configuration validation separate from descriptor/model execution.
+
+2. Add its implementation and all relevant registration/dispatch points listed below.
+
+    - Import optional dependencies only when selected; record package versions and asset identity where applicable.
+
+3. Preserve sample IDs, masks, column ordering, split identity, hashes and atomic publication.
+
+    - Fit learned transforms and model selection only on the corresponding training data.
+    - A cached result must change identity when its inputs or effective settings change.
+
+4. Put local validation scripts under `_verify/`.
+
+    - Check invalid/empty inputs, parameter rejection, output alignment, deterministic fixed seeds, fold isolation, resume behavior and report paths.
+    - Begin with configuration and mocked execution checks; a training smoke is a separate execution check.
+
 5. Check Linux and Windows path handling with `pathlib.Path`, UTF-8 files and shell-specific launch instructions. Record which operating system was actually run.
 
 For the existing engineering smoke, activate `yonod` and run this from the root (the command is the same in Linux Bash and Windows Conda PowerShell):
@@ -699,13 +922,19 @@ For the existing engineering smoke, activate `yonod` and run this from the root 
 python yonod.py --config example.yaml
 ```
 
-This command computes Morgan features and fits RF on the synthetic fixture. A new descriptor or model needs its own saved schema-2 YAML under `config/`, a unique task name and isolated `result/<task_name>/` outputs before testing it. Formal tasks use the saved-YAML prompt procedure. A smoke pass verifies execution, not scientific validity or acceptance of an untested platform.
+- This command computes Morgan features and fits RF on the synthetic fixture.
+- A new descriptor or model needs its own saved schema-2 YAML under `config/`, a unique task name and isolated `result/<task_name>/` outputs before testing it.
+- Formal tasks use the saved-YAML prompt procedure.
+- A smoke pass verifies execution, not scientific validity or acceptance of an untested platform.
 
-Keep engineering support and backups in `backup/`, operational logs/PIDs in root `logs/`, and maintained documentation in the independent `project-docs/` repository. Explicitly stage task-owned files and commit each changed repository separately; do not commit `_verify/`, `config/`, `backup/` or external reference material.
+- Keep engineering support and backups in `backup/`, operational logs/PIDs in root `logs/`, and maintained documentation in the independent `project-docs/` repository.
+- Explicitly stage task-owned files and commit each changed repository separately; do not commit `_verify/`, `config/`, `backup/` or external reference material.
 
 ### Descriptor parameters and protocol support
 
-The ordinary schema-2 feature registry is defined in [registry.py](yonod/descriptors/registry.py). A descriptor entry uses the fields below. Some arguments accepted by a descriptor's Python constructor are not exposed through YAML.
+- The ordinary schema-2 feature registry is defined in [registry.py](yonod/descriptors/registry.py).
+- A descriptor entry uses the fields below.
+- Some arguments accepted by a descriptor's Python constructor are not exposed through YAML.
 
 | Field | What you can change |
 | --- | --- |
@@ -717,7 +946,9 @@ The ordinary schema-2 feature registry is defined in [registry.py](yonod/descrip
 | `params` | Only the descriptor-specific keys listed below are exposed by the ordinary registry. Omit it or use `{}` for descriptors without exposed parameters. |
 | `extra_reactants` | In the ordinary DRFP route, add declared structure columns to the reaction's reactant side; default empty. DRFP otherwise uses `dataset.column_roles.reactants/products`, rather than taking its reaction membership from `columns`. Both benchmark adapters reject nonempty `extra_reactants`. Other ordinary descriptors do not consume it. |
 
-The dimensions below describe the structure/categorical block, before numerical conditions are appended. For `concat`, a fixed per-column dimension is multiplied by the number of selected columns. OHE learns its width separately in each training fold.
+- The dimensions below describe the structure/categorical block, before numerical conditions are appended.
+- For `concat`, a fixed per-column dimension is multiplied by the number of selected columns.
+- OHE learns its width separately in each training fold.
 
 | Descriptor | Ordinary lifecycle / mode | YAML `params` and output |
 | --- | --- | --- |
@@ -749,7 +980,10 @@ The dimensions below describe the structure/categorical block, before numerical 
 | `ohe.dtype` | `float32`; `float32` or `float64` | Output matrix type. |
 | `ohe.handle_unknown` | `ignore`; only `ignore` accepted | Evaluation categories absent from the training fold produce an all-zero block. |
 
-The following settings exist in Python implementations but are **not exposed as ordinary YAML `params`**: Morgan/MAF `radius` and `n_bits`; RDKit2D `descriptor_names`; FISD `model_dir`, `device`, `batch_size`; MolMetaLM `weight_path`, `device`, `batch_size`, `max_length`; OHE `missing_token`. DRFP's Python `n_bits` is itself restricted to 2,048. Adding these keys to the ordinary YAML does not activate them. Extending support requires validation, constructor routing and identity handling in code.
+- The following settings exist in Python implementations but are **not exposed as ordinary YAML `params`**: Morgan/MAF `radius` and `n_bits`; RDKit2D `descriptor_names`; FISD `model_dir`, `device`, `batch_size`; MolMetaLM `weight_path`, `device`, `batch_size`, `max_length`; OHE `missing_token`.
+- DRFP's Python `n_bits` is itself restricted to 2,048.
+- Adding these keys to the ordinary YAML does not activate them.
+- Extending support requires validation, constructor routing and identity handling in code.
 
 #### Descriptor support differs between the three workflows
 
@@ -762,29 +996,73 @@ The following settings exist in Python implementations but are **not exposed as 
 | `drfp` | Role-aware `reaction` route and optional extra reactants | Not directly supported by the current schema-2 adapter's reaction-role/mode routing | Not directly supported by the current schema-2 adapter's reaction-role/mode routing |
 | `ohe` | Fold-local settings above | Current `ReactionComponentOHE` fixes `missing_policy=zero_block`, `dtype=float64`, `handle_unknown=ignore`; ordinary OHE parameter settings are not forwarded | Rejected: the adapter accepts only `static_descriptor` |
 
-Benchmark adapters have their own validation and execution paths. Their mode checks accept `concat/sum`, and they do not forward DRFP reaction roles as the ordinary feature service does. A descriptor appearing in a menu therefore does not guarantee compatibility with every protocol. Use the runnable examples as protocol-specific starting points.
+- Benchmark adapters have their own validation and execution paths.
+- Their mode checks accept `concat/sum`, and they do not forward DRFP reaction roles as the ordinary feature service does.
+- A descriptor appearing in a menu therefore does not guarantee compatibility with every protocol.
+- Use the runnable examples as protocol-specific starting points.
 
 ### Add a new descriptor
 
 To add a descriptor, edit its source registration points; the project does not discover plugins automatically. Start with the ordinary workflow, then add dedicated-protocol support where needed.
 
-1. Implement a class under `yonod/descriptors/` following [BaseDescriptor](yonod/descriptors/base.py). Define `name`, `output_dim`, and `featurize(smiles_list) -> (features, mask)`. The class returns a matrix shaped `(n_input, output_dim)` and a Boolean mask shaped `(n_input,)`, retaining input order. Failed inputs receive zero rows and `False`; a zero vector alone must not be treated as success.
-2. Add provider metadata to `_PROVIDERS` in [registry.py](yonod/descriptors/registry.py): name, lifecycle, input type, supported modes and parameters. Add normalization, defaults and rejection of unknown keys in `_normalise_params`. For a new parameterized provider, do not rely on the constructor accepting values that the YAML never routes.
-3. Add a lazy import to `_DESCRIPTOR_IMPORT_MAP` and route validated constructor parameters through `_get_descriptor` in [feature_builder.py](yonod/universal/feature_builder.py). The current generic branch calls the class without arguments; MFP and Chemical VAE illustrate explicit parameter routing. Add a lazy public export in [descriptors/__init__.py](yonod/descriptors/__init__.py) if that API should expose the class.
-4. Check combination and sample alignment in [pipeline/features.py](yonod/pipeline/features.py). At this service boundary, the feature computer returns a matrix with `sum(valid_mask)` rows, plus the original-length Boolean mask; the builder performs the filtering. Publish ordered sample IDs, feature names, validity and hashes through the existing artifact APIs. `FeatureSpec.schema_hash` and the feature identity include normalized configuration and resolved columns/roles; include external asset hashes where representation content depends on weights. Changing an asset in place must not silently reuse old vectors.
-5. Update the explicit descriptor menus/default builders in [generate_yaml_config.py](generate_yaml_config.py) and check the launcher choices in [yonod.py](yonod.py). Keep heavy libraries lazily imported. Add dependencies to the documented installation route only if this provider needs them.
-6. For fixed membership or external testing, inspect [benchmark/config.py](yonod/benchmark/config.py), [benchmark/runner.py](yonod/benchmark/runner.py) and [frozen_external.py](yonod/benchmark/frozen_external.py). Connect the required roles, mode, parameters and asset paths explicitly. Ordinary routing is not reused automatically. Preserve frozen external testing's population and overlap checks, and its requirement to retain every row.
-7. Put validation scripts under `_verify/`. Check malformed declarations, unknown parameters, invalid inputs, output dimensions, row/ID alignment, deterministic identity, and changes in parameters or asset content. Use independent configurations and result directories for any later modeling acceptance, through `yonod.py`; follow Linux and Windows path/UTF-8 conventions.
+1. Implement a class under `yonod/descriptors/` following [BaseDescriptor](yonod/descriptors/base.py).
 
-A learned representation belongs to `fold_transform` if it learns categories, scaling or any other state from the task data. OHE's current lifecycle saves raw inputs during `features`, then fits on each outer training fold in [pipeline/training.py](yonod/pipeline/training.py); evaluation records are transformed only. A new fold transformer also needs dispatch and persisted-state support in the feature publisher, training/prediction code, [ordinary HPO](yonod/hpo/ordinary.py), strict benchmark preprocessing and any supported inner-CV search. Those paths currently contain OHE-specific logic. Setting `lifecycle: fold_transform` in the registry alone does not implement them. Never fit a learned transform on the full dataset before splitting.
+    - Define `name`, `output_dim`, and `featurize(smiles_list) -> (features, mask)`.
+    - The class returns a matrix shaped `(n_input, output_dim)` and a Boolean mask shaped `(n_input,)`, retaining input order.
+    - Failed inputs receive zero rows and `False`; a zero vector alone must not be treated as success.
 
-When an implementation change alters the representation, explicitly version its persisted identity, such as `FEATURE_SERVICE_SCHEMA_VERSION`, or use a new candidate ID and configuration. The feature identity does not automatically hash Python source files; unchanged parameter names do not make an old cache valid for a changed algorithm.
+2. Add provider metadata to `_PROVIDERS` in [registry.py](yonod/descriptors/registry.py): name, lifecycle, input type, supported modes and parameters.
+
+    - Add normalization, defaults and rejection of unknown keys in `_normalise_params`.
+    - For a new parameterized provider, do not rely on the constructor accepting values that the YAML never routes.
+
+3. Add a lazy import to `_DESCRIPTOR_IMPORT_MAP` and route validated constructor parameters through `_get_descriptor` in [feature_builder.py](yonod/universal/feature_builder.py).
+
+    - The current generic branch calls the class without arguments; MFP and Chemical VAE illustrate explicit parameter routing.
+    - Add a lazy public export in [descriptors/__init__.py](yonod/descriptors/__init__.py) if that API should expose the class.
+
+4. Check combination and sample alignment in [pipeline/features.py](yonod/pipeline/features.py).
+
+    - At this service boundary, the feature computer returns a matrix with `sum(valid_mask)` rows, plus the original-length Boolean mask; the builder performs the filtering.
+    - Publish ordered sample IDs, feature names, validity and hashes through the existing artifact APIs.
+    - `FeatureSpec.schema_hash` and the feature identity include normalized configuration and resolved columns/roles; include external asset hashes where representation content depends on weights.
+    - Changing an asset in place must not silently reuse old vectors.
+
+5. Update the explicit descriptor menus/default builders in [generate_yaml_config.py](generate_yaml_config.py) and check the launcher choices in [yonod.py](yonod.py).
+
+    - Keep heavy libraries lazily imported.
+    - Add dependencies to the documented installation route only if this provider needs them.
+
+6. For fixed membership or external testing, inspect [benchmark/config.py](yonod/benchmark/config.py), [benchmark/runner.py](yonod/benchmark/runner.py) and [frozen_external.py](yonod/benchmark/frozen_external.py).
+
+    - Connect the required roles, mode, parameters and asset paths explicitly.
+    - Ordinary routing is not reused automatically.
+    - Preserve frozen external testing's population and overlap checks, and its requirement to retain every row.
+
+7. Put validation scripts under `_verify/`.
+
+    - Check malformed declarations, unknown parameters, invalid inputs, output dimensions, row/ID alignment, deterministic identity, and changes in parameters or asset content.
+    - Use independent configurations and result directories for any later modeling acceptance, through `yonod.py`; follow Linux and Windows path/UTF-8 conventions.
+
+- A learned representation belongs to `fold_transform` if it learns categories, scaling or any other state from the task data.
+- OHE's current lifecycle saves raw inputs during `features`, then fits on each outer training fold in [pipeline/training.py](yonod/pipeline/training.py); evaluation records are transformed only.
+- A new fold transformer also needs dispatch and persisted-state support in the feature publisher, training/prediction code, [ordinary HPO](yonod/hpo/ordinary.py), strict benchmark preprocessing and any supported inner-CV search.
+- Those paths currently contain OHE-specific logic.
+- Setting `lifecycle: fold_transform` in the registry alone does not implement them.
+- Never fit a learned transform on the full dataset before splitting.
+
+- When an implementation change alters the representation, explicitly version its persisted identity, such as `FEATURE_SERVICE_SCHEMA_VERSION`, or use a new candidate ID and configuration.
+- The feature identity does not automatically hash Python source files; unchanged parameter names do not make an old cache valid for a changed algorithm.
 
 ### Model parameters and their execution boundary
 
-Schema-2 YAML model parameters are defined in [model_factory.py](yonod/model_factory.py) and [the section routes](yonod/config/contracts.py). Files under `yonod/models/` include older adapters; their defaults, such as 300 RF trees or automatic SVM scaling/PCA, do not become ordinary schema-2 defaults.
+- Schema-2 YAML model parameters are defined in [model_factory.py](yonod/model_factory.py) and [the section routes](yonod/config/contracts.py).
+- Files under `yonod/models/` include older adapters; their defaults, such as 300 RF trees or automatic SVM scaling/PCA, do not become ordinary schema-2 defaults.
 
-The catalog below was checked against scikit-learn 1.4.0, XGBoost 2.0.3, LightGBM 4.3.0 and AutoGluon 1.1.1. An omitted estimator parameter uses the installed library's default. The project validates parameter names before fitting; the library also validates values and combinations. Safe YAML can describe numbers, strings, lists and mappings, but cannot construct Python functions, callback objects or estimator classes.
+- The catalog below was checked against scikit-learn 1.4.0, XGBoost 2.0.3, LightGBM 4.3.0 and AutoGluon 1.1.1.
+- An omitted estimator parameter uses the installed library's default.
+- The project validates parameter names before fitting; the library also validates values and combinations.
+- Safe YAML can describe numbers, strings, lists and mappings, but cannot construct Python functions, callback objects or estimator classes.
 
 | Model | Parameter sections | Project behavior |
 | --- | --- | --- |
@@ -821,11 +1099,16 @@ These are the 18 names accepted under `model_params.rf.estimator` in the support
 | `ccp_alpha` | Nonnegative tree-pruning penalty; default 0. |
 | `monotonic_cst` | Per-feature constraints `-1`, `0`, `1`, or `null`; default `null`. Length must match the final feature matrix. |
 
-`rf.fit` accepts only `sample_weight`. Declare it as `sample_weight: {column: weight_column}`; YONOD reads that column on the current training rows. Do not embed a list of weights. `rf.runtime` has no nonempty settings. The [scikit-learn RF reference](https://scikit-learn.org/1.4/modules/generated/sklearn.ensemble.RandomForestRegressor.html) explains estimator-specific restrictions.
+- `rf.fit` accepts only `sample_weight`.
+- Declare it as `sample_weight: {column: weight_column}`; YONOD reads that column on the current training rows.
+- Do not embed a list of weights.
+- `rf.runtime` has no nonempty settings.
+- The [scikit-learn RF reference](https://scikit-learn.org/1.4/modules/generated/sklearn.ensemble.RandomForestRegressor.html) explains estimator-specific restrictions.
 
 #### XGBoost (`xgb`)
 
-The following 39 names are accepted under `model_params.xgb.estimator`. Defaults omitted by YAML are resolved by XGBoost 2.0.3; many Python constructor defaults are `None`, which lets the booster choose its effective setting.
+- The following 39 names are accepted under `model_params.xgb.estimator`.
+- Defaults omitted by YAML are resolved by XGBoost 2.0.3; many Python constructor defaults are `None`, which lets the booster choose its effective setting.
 
 | Parameters | Meaning and constraints |
 | --- | --- |
@@ -846,13 +1129,24 @@ The following 39 names are accepted under `model_params.xgb.estimator`. Defaults
 | `multi_strategy`, `scale_pos_weight` | Multi-output strategy and positive-class weighting; recognized native names, not additional scalar-regression tasks provided by this guide. |
 | `eval_metric`, `early_stopping_rounds`, `callbacks` | Evaluation metric and stopping/callback controls. Custom Python callbacks are not portable YAML values; use the audited inner-stopping declaration below. |
 
-`xgb.fit` admits `sample_weight`, `eval_metric`, `early_stopping_rounds` and `verbose`. Weights use the column mapping above. Constructor versions of the metric/stopping settings are preferred by XGBoost 2.x; do not declare the same option in both places. `eval_set`, `sample_weight_eval_set`, `base_margin`, `base_margin_eval_set`, `feature_weights`, `xgb_model` and `callbacks` are rejected in `fit` to prevent user-supplied external arrays or objects crossing the fold boundary.
+- `xgb.fit` admits `sample_weight`, `eval_metric`, `early_stopping_rounds` and `verbose`.
+- Weights use the column mapping above.
+- Constructor versions of the metric/stopping settings are preferred by XGBoost 2.x; do not declare the same option in both places.
+- `eval_set`, `sample_weight_eval_set`, `base_margin`, `base_margin_eval_set`, `feature_weights`, `xgb_model` and `callbacks` are rejected in `fit` to prevent user-supplied external arrays or objects crossing the fold boundary.
 
-`xgb.runtime.device_policy` accepts `auto`, `cpu` or `cuda`. If using `estimator.device`, omit the entire `runtime` section: the current validator rejects `estimator.device` together with any declared `runtime` section. `runtime.early_stopping` has three keys: positive integer `rounds`, `validation_fraction` strictly between 0 and 1, and integer `seed` (default 42). YONOD creates that validation split solely from the current outer training fold. Set an early-stopping budget through this route rather than a bare stopping parameter without evaluation data. See the [XGBoost 2.0 parameter reference](https://xgboost.readthedocs.io/en/release_2.0.0/parameter.html).
+- `xgb.runtime.device_policy` accepts `auto`, `cpu` or `cuda`.
+- If using `estimator.device`, omit the entire `runtime` section: the current validator rejects `estimator.device` together with any declared `runtime` section.
+- `runtime.early_stopping` has three keys: positive integer `rounds`, `validation_fraction` strictly between 0 and 1, and integer `seed` (default 42).
+- YONOD creates that validation split solely from the current outer training fold.
+- Set an early-stopping budget through this route rather than a bare stopping parameter without evaluation data.
+- See the [XGBoost 2.0 parameter reference](https://xgboost.readthedocs.io/en/release_2.0.0/parameter.html).
 
 #### LightGBM (`lightgbm`)
 
-`model_params.lightgbm.estimator` accepts the 71 names below. Some are aliases for the same native setting. Choose one spelling per setting; duplicate alias declarations can have backend-dependent precedence. The project's allowlist is narrower than the entire upstream parameter catalog.
+- `model_params.lightgbm.estimator` accepts the 71 names below.
+- Some are aliases for the same native setting.
+- Choose one spelling per setting; duplicate alias declarations can have backend-dependent precedence.
+- The project's allowlist is narrower than the entire upstream parameter catalog.
 
 | Parameters | Meaning and constraints |
 | --- | --- |
@@ -877,7 +1171,13 @@ The following 39 names are accepted under `model_params.xgb.estimator`. Defaults
 | `class_weight`, `is_unbalance`, `scale_pos_weight`, `eval_at` | Recognized classification/ranking controls; they do not convert YONOD's scalar regression workflow to classification/ranking. |
 | `callbacks` | A name included in the project allowlist, but a Python callback object is not a safe YAML value and this is not the supported stopping route. |
 
-`lightgbm.fit` admits `sample_weight`, `eval_names`, `eval_metric`, `feature_name` and `categorical_feature`. Weights use the column mapping. Names and categorical indices must match the model matrix, not an unrelated source-table layout. `init_score`, `eval_set`, `eval_sample_weight`, `eval_init_score`, `init_model` and `callbacks` are rejected in `fit`. `lightgbm.runtime` accepts only `early_stopping`, with the same `rounds`, `validation_fraction`, `seed` structure as XGBoost. The trainer supplies the inner validation rows and LightGBM stopping callback internally. Native details are in the [LightGBM 4.3 regressor API](https://lightgbm.readthedocs.io/en/v4.3.0/pythonapi/lightgbm.LGBMRegressor.html) and [parameter reference](https://lightgbm.readthedocs.io/en/v4.3.0/Parameters.html).
+- `lightgbm.fit` admits `sample_weight`, `eval_names`, `eval_metric`, `feature_name` and `categorical_feature`.
+- Weights use the column mapping.
+- Names and categorical indices must match the model matrix, not an unrelated source-table layout.
+- `init_score`, `eval_set`, `eval_sample_weight`, `eval_init_score`, `init_model` and `callbacks` are rejected in `fit`.
+- `lightgbm.runtime` accepts only `early_stopping`, with the same `rounds`, `validation_fraction`, `seed` structure as XGBoost.
+- The trainer supplies the inner validation rows and LightGBM stopping callback internally.
+- Native details are in the [LightGBM 4.3 regressor API](https://lightgbm.readthedocs.io/en/v4.3.0/pythonapi/lightgbm.LGBMRegressor.html) and [parameter reference](https://lightgbm.readthedocs.io/en/v4.3.0/Parameters.html).
 
 #### Support vector regression (`svm`)
 
@@ -897,7 +1197,10 @@ The following 39 names are accepted under `model_params.xgb.estimator`. Defaults
 | `verbose` | Solver output; default `false`. |
 | `max_iter` | Iteration cap, or -1 for no cap; default -1. |
 
-`svm.fit` accepts only `sample_weight` using a source-column mapping. The factory routes it internally to the final pipeline step. `svm.runtime` must be empty. Unlike the older SVM adapter, the ordinary schema-2 factory adds no scaler, PCA or row subsampling unless declared.
+- `svm.fit` accepts only `sample_weight` using a source-column mapping.
+- The factory routes it internally to the final pipeline step.
+- `svm.runtime` must be empty.
+- Unlike the older SVM adapter, the ordinary schema-2 factory adds no scaler, PCA or row subsampling unless declared.
 
 | `svm.preprocessing` setting | All supported fields and behavior |
 | --- | --- |
@@ -918,11 +1221,16 @@ The following 39 names are accepted under `model_params.xgb.estimator`. Defaults
 | `power_iteration_normalizer` | Normalization during power iteration: `auto`, `QR`, `LU`, `none`; default `auto`. |
 | `random_state` | Seed for randomized/ARPACK solvers, integer or `null`; default `null`. |
 
-Preprocessing constructor parameters retain scikit-learn defaults when omitted; scaler defaults to centering and standardizing, PCA defaults to no whitening. Native details are in the [SVR](https://scikit-learn.org/1.4/modules/generated/sklearn.svm.SVR.html), [StandardScaler](https://scikit-learn.org/1.4/modules/generated/sklearn.preprocessing.StandardScaler.html) and [PCA](https://scikit-learn.org/1.4/modules/generated/sklearn.decomposition.PCA.html) references.
+- Preprocessing constructor parameters retain scikit-learn defaults when omitted; scaler defaults to centering and standardizing, PCA defaults to no whitening.
+- Native details are in the [SVR](https://scikit-learn.org/1.4/modules/generated/sklearn.svm.SVR.html), [StandardScaler](https://scikit-learn.org/1.4/modules/generated/sklearn.preprocessing.StandardScaler.html) and [PCA](https://scikit-learn.org/1.4/modules/generated/sklearn.decomposition.PCA.html) references.
 
 #### AutoGluon (`autogluon`)
 
-These names pass the project's ordinary schema-2 name checks. Some need further code integration or fail in the pinned backend, as marked below. The factory binds `predictor.label` to `dataset.column_roles.label`; declare `problem_type: regression` to state the scalar-regression task explicitly. It builds DataFrames containing encoded `f0`, `f1`, ... features and the target. Arbitrary original CSV columns are not automatically copied into that frame.
+- These names pass the project's ordinary schema-2 name checks.
+- Some need further code integration or fail in the pinned backend, as marked below.
+- The factory binds `predictor.label` to `dataset.column_roles.label`; declare `problem_type: regression` to state the scalar-regression task explicitly.
+- It builds DataFrames containing encoded `f0`, `f1`, ... features and the target.
+- Arbitrary original CSV columns are not automatically copied into that frame.
 
 | `autogluon.predictor` names | Meaning and current restrictions |
 | --- | --- |
@@ -946,9 +1254,17 @@ These names pass the project's ordinary schema-2 name checks. Some need further 
 | `verbosity`, `calibrate` | Fit logging and calibration (`true`, `false` or `auto`, where applicable). |
 | `fit_extra`, `fit_strategy`, `delay_bag_sets`, `raise_on_no_models_fitted` | Included in the project's name allowlist but not accepted by the installed AutoGluon 1.1.1 `fit` argument validator. Do not use them as YAML fit options. `fit_extra()` is a separate backend method. |
 
-`train_data` is bound by the pipeline and cannot be supplied in YAML; neither can `tuning_data` or `unlabeled_data`. Upstream options absent from the allowlist, such as `infer_limit` and `log_file_path`, are not exposed merely because AutoGluon documents them. `autogluon.runtime.save_path` accepts a string or `null`; its default artifact location is the current fold's `autogluon/` folder. `runtime.cleanup` is boolean, default `false` in the ordinary pipeline. Leave both `predictor.path` and `runtime.save_path` unspecified to retain task/fold isolation: ordinary execution does not append a fold suffix to an explicit path, so a shared path can mix or overwrite artifacts or make fitting fail. Any custom path must remain inside that task's designated output directory and isolate every fold and combination. There is no single top-level `random_state` option here that seeds every AutoGluon submodel.
+- `train_data` is bound by the pipeline and cannot be supplied in YAML; neither can `tuning_data` or `unlabeled_data`.
+- Upstream options absent from the allowlist, such as `infer_limit` and `log_file_path`, are not exposed merely because AutoGluon documents them.
+- `autogluon.runtime.save_path` accepts a string or `null`; its default artifact location is the current fold's `autogluon/` folder.
+- `runtime.cleanup` is boolean, default `false` in the ordinary pipeline.
+- Leave both `predictor.path` and `runtime.save_path` unspecified to retain task/fold isolation: ordinary execution does not append a fold suffix to an explicit path, so a shared path can mix or overwrite artifacts or make fitting fail.
+- Any custom path must remain inside that task's designated output directory and isolate every fold and combination.
+- There is no single top-level `random_state` option here that seeds every AutoGluon submodel.
 
-The version-pinned upstream [constructor documentation](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L222) and [fit documentation](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L392) also define the nested `hyperparameters`, `ag_args`, `ag_args_fit` and `ag_args_ensemble` dictionaries. YONOD exposes those dictionaries but does not define or validate every backend-family subparameter. Check the 1.1.1 source/API for that nested range before declaring it.
+- The version-pinned upstream [constructor documentation](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L222) and [fit documentation](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L392) also define the nested `hyperparameters`, `ag_args`, `ag_args_fit` and `ag_args_ensemble` dictionaries.
+- YONOD exposes those dictionaries but does not define or validate every backend-family subparameter.
+- Check the 1.1.1 source/API for that nested range before declaring it.
 
 #### Parameter support differs by evaluation protocol
 
@@ -960,19 +1276,52 @@ The version-pinned upstream [constructor documentation](https://github.com/autog
 | AutoGluon | Ordinary allowlists above | Only `fit.time_limit`, `fit.presets`, `fit.num_cpus`, supported runtime path/cleanup; omit `predictor.label` (internal label is `yield`) | Unsupported |
 | SVM subsampling | Samples only final SVR training rows | Does not execute `preprocessing.subsample.n_samples`; declared scaler/PCA still execute through the factory Pipeline | Does not execute `preprocessing.subsample.n_samples`; declared scaler/PCA still execute through the factory Pipeline |
 
-The standard `manifest_outer_cv` benchmark does not replace `estimator.random_state` with `evaluation.seed`. The explicit reproduction setting `benchmark.reproduction_protocol.name: vjethbkm_rf_5x5` and the separate `paper_exact_5x5` evaluation route bind RF's model seed to the fold manifest and reject conflicts. Factory acceptance alone does not mean that every benchmark adapter executes a parameter.
+- The standard `manifest_outer_cv` benchmark does not replace `estimator.random_state` with `evaluation.seed`.
+- The explicit reproduction setting `benchmark.reproduction_protocol.name: vjethbkm_rf_5x5` and the separate `paper_exact_5x5` evaluation route bind RF's model seed to the fold manifest and reject conflicts.
+- Factory acceptance alone does not mean that every benchmark adapter executes a parameter.
 
-The manifest benchmark's AutoGluon route uses the dedicated adapter, whose omitted settings are a 300-second fit budget, `medium_quality`, one CPU and cleanup enabled. These are that adapter's compatibility defaults; ordinary schema-2 AutoGluon uses the shared predictor factory and its installed-library defaults instead. Select resources explicitly when using the dedicated route.
+- The manifest benchmark's AutoGluon route uses the dedicated adapter, whose omitted settings are a 300-second fit budget, `medium_quality`, one CPU and cleanup enabled.
+- These are that adapter's compatibility defaults; ordinary schema-2 AutoGluon uses the shared predictor factory and its installed-library defaults instead.
+- Select resources explicitly when using the dedicated route.
 
 ### Add a new model
 
-1. Implement or wrap an estimator with `fit(X_train, y_train, **fit_options)`, `predict(X_valid)` and `get_params()`. Return one finite numeric prediction per validation record; ensure the fitted estimator can be saved and restored with the pipeline's artifact format. Keep data-dependent preprocessing inside each training fold.
-2. Add the model ID and allowed parameter sections to `MODEL_PARAMETER_ROUTES` in [config/contracts.py](yonod/config/contracts.py). If aliases are needed, add them to `_MODEL_ALIASES` in [config/loader.py](yonod/config/loader.py).
-3. Extend `_library_catalog`, `resolve_model_config`, `_validate_runtime`, `construct_estimator` (or a deliberate predictor-specific route) and `software_versions` in [model_factory.py](yonod/model_factory.py). Keep optional dependencies lazily imported. Reject unknown parameters and external data/callback objects before expensive work.
-4. Check `_default_fold_runner` in [pipeline/training.py](yonod/pipeline/training.py), serialization and [saved prediction](yonod/pipeline/prediction.py). For non-sklearn models, implement fit-option routing and artifact loading explicitly; the generic runner may not be sufficient. Add diagnostic support only after verifying the model's train/holdout prediction contract.
-5. Add discovery in `_MODEL_NAMES` in [yonod.py](yonod.py), the model menu and `_canonical_wizard_models` in [generate_yaml_config.py](generate_yaml_config.py). The legacy `_make_model` and files under `yonod/models/` matter only if you also support that older direct-CSV interface; editing them alone does not register a schema-2 model.
-6. Add HPO support separately in [hpo/contracts.py](yonod/hpo/contracts.py), [hpo/spaces.py](yonod/hpo/spaces.py), [hpo/search.py](yonod/hpo/search.py) and finalization where needed. Define bounded, versioned search spaces and inner-fold scoring; constructor support alone does not enable HPO.
-7. Enable dedicated protocols deliberately: review [benchmark/config.py](yonod/benchmark/config.py), [benchmark/executor.py](yonod/benchmark/executor.py) and [frozen_external.py](yonod/benchmark/frozen_external.py). Preserve each protocol's data boundary, allowed models and recovery artifacts. Keep an unsupported route rejected until its adapter is implemented.
-8. Put validation scripts in `_verify/`. Check unknown-key rejection, shape/finite-value errors, training-only preprocessing, no outer-label leakage, saved model/prediction round trips and Linux/Windows paths. Keep the engineering smoke separate from real research tasks. Update dependencies, bilingual documentation and the independent documentation log, then commit actual changes separately in the two repositories.
+1. Implement or wrap an estimator with `fit(X_train, y_train, **fit_options)`, `predict(X_valid)` and `get_params()`.
+
+    - Return one finite numeric prediction per validation record; ensure the fitted estimator can be saved and restored with the pipeline's artifact format.
+    - Keep data-dependent preprocessing inside each training fold.
+
+2. Add the model ID and allowed parameter sections to `MODEL_PARAMETER_ROUTES` in [config/contracts.py](yonod/config/contracts.py).
+
+    - If aliases are needed, add them to `_MODEL_ALIASES` in [config/loader.py](yonod/config/loader.py).
+
+3. Extend `_library_catalog`, `resolve_model_config`, `_validate_runtime`, `construct_estimator` (or a deliberate predictor-specific route) and `software_versions` in [model_factory.py](yonod/model_factory.py).
+
+    - Keep optional dependencies lazily imported.
+    - Reject unknown parameters and external data/callback objects before expensive work.
+
+4. Check `_default_fold_runner` in [pipeline/training.py](yonod/pipeline/training.py), serialization and [saved prediction](yonod/pipeline/prediction.py).
+
+    - For non-sklearn models, implement fit-option routing and artifact loading explicitly; the generic runner may not be sufficient.
+    - Add diagnostic support only after verifying the model's train/holdout prediction contract.
+
+5. Add discovery in `_MODEL_NAMES` in [yonod.py](yonod.py), the model menu and `_canonical_wizard_models` in [generate_yaml_config.py](generate_yaml_config.py).
+
+    - The legacy `_make_model` and files under `yonod/models/` matter only if you also support that older direct-CSV interface; editing them alone does not register a schema-2 model.
+
+6. Add HPO support separately in [hpo/contracts.py](yonod/hpo/contracts.py), [hpo/spaces.py](yonod/hpo/spaces.py), [hpo/search.py](yonod/hpo/search.py) and finalization where needed.
+
+    - Define bounded, versioned search spaces and inner-fold scoring; constructor support alone does not enable HPO.
+
+7. Enable dedicated protocols deliberately: review [benchmark/config.py](yonod/benchmark/config.py), [benchmark/executor.py](yonod/benchmark/executor.py) and [frozen_external.py](yonod/benchmark/frozen_external.py).
+
+    - Preserve each protocol's data boundary, allowed models and recovery artifacts.
+    - Keep an unsupported route rejected until its adapter is implemented.
+
+8. Put validation scripts in `_verify/`.
+
+    - Check unknown-key rejection, shape/finite-value errors, training-only preprocessing, no outer-label leakage, saved model/prediction round trips and Linux/Windows paths.
+    - Keep the engineering smoke separate from real research tasks.
+    - Update dependencies, bilingual documentation and the independent documentation log, then commit actual changes separately in the two repositories.
 
 Last reviewed against this checkout: 2026-11-14.

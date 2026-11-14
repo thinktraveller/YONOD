@@ -12,11 +12,17 @@ YONOD（You Only Need Outstanding Descriptors）用已有化学反应记录建�
 
 ## 入门内容
 
-[它能帮你做什么](#它能帮你做什么) · [安装](#安装) · [完成第一次运行](#完成第一次运行) · [怎样读结果](#怎样读结果) · [遇到问题时](#遇到问题时) · [License](#license)
+- [它能帮你做什么](#它能帮你做什么)
+- [安装](#安装)
+- [完成第一次运行](#完成第一次运行)
+- [怎样读结果](#怎样读结果)
+- [遇到问题时](#遇到问题时)
+- [License](#license)
 
 ### 它能帮你做什么
 
-整理好一批反应物结构和实验产率后，YONOD 可以将结构转换为描述符（descriptor，即供模型使用的数值编码），用部分记录建立回归模型，再预测本次建模留出的记录。你也可以在同一批数据和划分上比较不同编码、随机森林等建模方法。
+- 整理好一批反应物结构和实验产率后，YONOD 可以将结构转换为描述符（descriptor，即供模型使用的数值编码），用部分记录建立回归模型，再预测本次建模留出的记录。
+- 你也可以在同一批数据和划分上比较不同编码、随机森林等建模方法。
 
 | 你提供什么 | 程序做什么 | 你得到什么 |
 | --- | --- | --- |
@@ -24,9 +30,15 @@ YONOD（You Only Need Outstanding Descriptors）用已有化学反应记录建�
 | 分子结构的 SMILES 文本 | 生成或复用所选数值编码 | 特征文件，或按训练折学习的编码 |
 | 产率等数值参考值、检验规则 | 建立模型，对留出的记录预测并评分 | 逐条预测、误差指标、HTML 和 Markdown 报告 |
 
-SMILES 是用字符表示分子结构的方法，例如 `CCO` 表示乙醇。结构列填写可解析的 SMILES，分子图片、化学名称或 CAS 号不能直接替代它。CSV 是可以用 Excel 打开的文本表格；保存时请选择“CSV UTF-8（逗号分隔）”。第一次练习可以直接用仓库已有文件。
+- SMILES 是用字符表示分子结构的方法，例如 `CCO` 表示乙醇。
+- 结构列填写可解析的 SMILES，分子图片、化学名称或 CAS 号不能直接替代它。
+- CSV 是可以用 Excel 打开的文本表格；保存时请选择“CSV UTF-8（逗号分隔）”。
+- 第一次练习可以直接用仓库已有文件。
 
-YONOD 的主要流程需要已有数值参考值来建模和检验。它不会自动生成产物结构、推导反应机理或寻找最佳实验条件。若把产物结构作为输入，实际预测时就需要事先知道目标产物结构。没有参考值的新反应预测也不能直接套用本页的外测评分流程。
+- YONOD 的主要流程需要已有数值参考值来建模和检验。
+- 它不会自动生成产物结构、推导反应机理或寻找最佳实验条件。
+- 若把产物结构作为输入，实际预测时就需要事先知道目标产物结构。
+- 没有参考值的新反应预测也不能直接套用本页的外测评分流程。
 
 | 你的问题 | 从哪里开始 |
 | --- | --- |
@@ -39,15 +51,24 @@ YONOD 的主要流程需要已有数值参考值来建模和检验。它不会�
 
 #### 准备终端和项目文件
 
-先安装 [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install) 和 [Git](https://git-scm.com/downloads)。Conda 用来为本项目建立独立的 Python 环境，Git 用来下载源码。这里使用名为 `yonod` 的环境，Python 版本为 3.9。
+- 先安装 [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install) 和 [Git](https://git-scm.com/downloads)。
+- Conda 用来为本项目建立独立的 Python 环境，Git 用来下载源码。
+- 这里使用名为 `yonod` 的环境，Python 版本为 3.9。
 
-Linux 打开 Bash 终端。Windows 打开 **Anaconda PowerShell Prompt**；如果使用普通 PowerShell，需要先从 Anaconda Prompt 执行 `conda init powershell`，关闭后重新打开 PowerShell。下面命令在终端中逐行输入，每行按回车；不要在 Python 的 `>>>` 提示符后输入，也不要复制网页中显示的运行输出。若已经进入 `>>>`，输入 `exit()` 回到终端。
+- Linux 打开 Bash 终端。
+- Windows 打开 **Anaconda PowerShell Prompt**；如果使用普通 PowerShell，需要先从 Anaconda Prompt 执行 `conda init powershell`，关闭后重新打开 PowerShell。
+- 下面命令在终端中逐行输入，每行按回车；不要在 Python 的 `>>>` 提示符后输入，也不要复制网页中显示的运行输出。
+- 若已经进入 `>>>`，输入 `exit()` 回到终端。
 
-“项目根目录”指包含 `yonod.py`、`requirements.txt` 和 `example.yaml` 的 YONOD 文件夹。下载后用 `cd YONOD` 或 `Set-Location YONOD` 进入它。路径里有空格时，用引号包住路径。
+- “项目根目录”指包含 `yonod.py`、`requirements.txt` 和 `example.yaml` 的 YONOD 文件夹。
+- 下载后用 `cd YONOD` 或 `Set-Location YONOD` 进入它。
+- 路径里有空格时，用引号包住路径。
 
 #### 首次安装依赖
 
-以下步骤只需安装时完成一次。Linux 的 Conda 初始化命令假定 Miniconda 安装在 `$HOME/miniconda3`，若位置不同，请替换该前缀。已下载源码时，可跳过 `git clone`，直接进入已有的项目根目录。
+- 以下步骤只需安装时完成一次。
+- Linux 的 Conda 初始化命令假定 Miniconda 安装在 `$HOME/miniconda3`，若位置不同，请替换该前缀。
+- 已下载源码时，可跳过 `git clone`，直接进入已有的项目根目录。
 
 Linux Bash：
 
@@ -72,9 +93,14 @@ python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index
 python -m pip install -r requirements.txt
 ```
 
-这里先安装 CPU 版 PyTorch，再安装 [requirements.txt](requirements.txt) 中的依赖，包括 LightGBM 和 SciPy。三个教学样例都可使用 CPU；首次使用无需配置 CUDA。需要 GPU 时，请结合本机驱动查看 [PyTorch 对应版本安装说明](https://pytorch.org/get-started/previous-versions/) 和依赖文件中的 CUDA 12.1 命令。
+- 这里先安装 CPU 版 PyTorch，再安装 [requirements.txt](requirements.txt) 中的依赖，包括 LightGBM 和 SciPy。
+- 三个教学样例都可使用 CPU；首次使用无需配置 CUDA。
+- 需要 GPU 时，请结合本机驱动查看 [PyTorch 对应版本安装说明](https://pytorch.org/get-started/previous-versions/) 和依赖文件中的 CUDA 12.1 命令。
 
-如果已经有可用的 `yonod` 环境，不必重复创建。Windows 的 Conda 初始化通常只需完成一次；Linux 的新 Bash 窗口按上面的初始化命令读入 Conda。每次打开新终端都需执行 `conda activate yonod`，然后进入项目目录。环境激活后，终端通常会显示 `(yonod)`。
+- 如果已经有可用的 `yonod` 环境，不必重复创建。
+- Windows 的 Conda 初始化通常只需完成一次；Linux 的新 Bash 窗口按上面的初始化命令读入 Conda。
+- 每次打开新终端都需执行 `conda activate yonod`，然后进入项目目录。
+- 环境激活后，终端通常会显示 `(yonod)`。
 
 #### 检查环境
 
@@ -91,9 +117,15 @@ python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports
 
 #### 看一眼数据和设置
 
-先打开[随机划分样例的数据表](example/random_split/dataset/reactions.csv)。它有12条人工记录：`reaction_id` 是唯一编号，两个 `*_smiles` 列是结构，`yield` 是参考产率。例如 `0.10` 表示10%。这些结构搭配和产率仅用于教学，不是实验测量，也不保证代表合理的化学反应。
+- 先打开[随机划分样例的数据表](example/random_split/dataset/reactions.csv)。
+- 它有12条人工记录：`reaction_id` 是唯一编号，两个 `*_smiles` 列是结构，`yield` 是参考产率。
+- 例如 `0.10` 表示10%。
+- 这些结构搭配和产率仅用于教学，不是实验测量，也不保证代表合理的化学反应。
 
-同目录的 [run.yaml](example/random_split/run.yaml) 保存本次设置。YAML 是用缩进组织设置的文本文件，这里已经准备好，第一次运行无需修改。程序会使用 Morgan 编码，依次运行随机森林（RF）、XGBoost 和 LightGBM；将12条记录分成两份，每次6条建模、6条检验，再交换。首次完整运行共进行6次拟合。
+- 同目录的 [run.yaml](example/random_split/run.yaml) 保存本次设置。
+- YAML 是用缩进组织设置的文本文件，这里已经准备好，第一次运行无需修改。
+- 程序会使用 Morgan 编码，依次运行随机森林（RF）、XGBoost 和 LightGBM；将12条记录分成两份，每次6条建模、6条检验，再交换。
+- 首次完整运行共进行6次拟合。
 
 #### 启动并输入配置路径
 
@@ -124,11 +156,16 @@ python -u ..\..\yonod.py
 run.yaml
 ```
 
-程序随后校验配置、准备编码并运行模型。完成时应看到 `features=ready`，以及 `morgan × rf`、`morgan × xgb`、`morgan × lightgbm` 各自的 `complete` 或 `reused`。`reused` 表示程序核对身份后复用了已有结果。运行路径中的长编号由内容决定，不必与别人屏幕上的编号相同。
+- 程序随后校验配置、准备编码并运行模型。
+- 完成时应看到 `features=ready`，以及 `morgan × rf`、`morgan × xgb`、`morgan × lightgbm` 各自的 `complete` 或 `reused`。
+- `reused` 表示程序核对身份后复用了已有结果。
+- 运行路径中的长编号由内容决定，不必与别人屏幕上的编号相同。
 
 #### 打开报告
 
-仍在 `example/random_split/` 目录时，新报告位于 `result/example_random_split_20261113/report/report.html`。在文件管理器找到它，双击用浏览器打开即可。也可使用下列命令。
+- 仍在 `example/random_split/` 目录时，新报告位于 `result/example_random_split_20261113/report/report.html`。
+- 在文件管理器找到它，双击用浏览器打开即可。
+- 也可使用下列命令。
 
 Linux Bash（有桌面环境时）：
 
@@ -142,15 +179,20 @@ Windows Conda PowerShell：
 Invoke-Item .\result\example_random_split_20261113\report\report.html
 ```
 
-同目录的 `report.md` 是文字版报告；逐条预测位于任务目录的 `runs/run_morgan-<模型>/predictions.csv`。这里的 `<模型>` 替换为 `rf`、`xgb` 或 `lightgbm`，不是文件名的一部分。
+- 同目录的 `report.md` 是文字版报告；逐条预测位于任务目录的 `runs/run_morgan-<模型>/predictions.csv`。
+- 这里的 `<模型>` 替换为 `rf`、`xgb` 或 `lightgbm`，不是文件名的一部分。
 
-后续步骤从项目根目录开始。运行结束后，Linux 用 `cd ../..`，Windows PowerShell 用 `Set-Location ..\..` 返回。需要关闭终端后继续计算时，再参考[后台启动与状态查看说明](example/README.md)；所有操作日志、标准输入文件和 PID 文件统一放在仓库根 `logs/`。
+- 后续步骤从项目根目录开始。
+- 运行结束后，Linux 用 `cd ../..`，Windows PowerShell 用 `Set-Location ..\..` 返回。
+- 需要关闭终端后继续计算时，再参考[后台启动与状态查看说明](example/README.md)；所有操作日志、标准输入文件和 PID 文件统一放在仓库根 `logs/`。
 
 教学包保存的完整运行验收来自 Linux。Windows 命令说明操作方法，尚不能据此认定各后端通过了 Windows 实机验收；请在本机完成安装与运行检查。
 
 ### 怎样读结果
 
-先看留出检验的指标和逐条预测。每条记录由没有学习该记录的相应模型预测，这些结果汇总称为 OOF（out-of-fold）预测。训练分数反映模型对已学记录的拟合情况，不能替代留出分数。
+- 先看留出检验的指标和逐条预测。
+- 每条记录由没有学习该记录的相应模型预测，这些结果汇总称为 OOF（out-of-fold）预测。
+- 训练分数反映模型对已学记录的拟合情况，不能替代留出分数。
 
 | 指标 | 含义 |
 | --- | --- |
@@ -158,7 +200,8 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 | RMSE，均方根误差 | 也与参考值同单位，对较大的偏差更敏感。 |
 | R²，决定系数 | 将预测误差与检验数据均值基线比较，可以为负；它不是“预测正确率”。 |
 
-小样例的低分和负 R² 都保留，目的是教你查看结果，不能用来判断某种方法对真实化学问题的预测能力。随机划分也不保证检验中的底物从未在建模记录中出现；要研究新底物，需要另外设计分组和检查结构重叠。
+- 小样例的低分和负 R² 都保留，目的是教你查看结果，不能用来判断某种方法对真实化学问题的预测能力。
+- 随机划分也不保证检验中的底物从未在建模记录中出现；要研究新底物，需要另外设计分组和检查结构重叠。
 
 ### 遇到问题时
 
@@ -175,7 +218,8 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 | 没有生成报告 | 查看终端首次报错及最终完成状态；`result/` 中仅出现目录不代表任务完成。 |
 | 同名任务或已存在外测结果被拒绝 | 另取任务名和配置名，同步设置独立结果路径；冻结外测会保护已有指标，不能按普通任务复用方式理解。 |
 
-仍需帮助时，可在[项目 Issues](https://github.com/thinktraveller/YONOD/issues)中提供操作系统、Python版本、所用命令、配置及完整报错。提交前移除私人数据和凭据。
+- 仍需帮助时，可在[项目 Issues](https://github.com/thinktraveller/YONOD/issues)中提供操作系统、Python版本、所用命令、配置及完整报错。
+- 提交前移除私人数据和凭据。
 
 ### License
 
@@ -183,17 +227,33 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 
 ## 进阶内容
 
-[使用自己的 CSV](#使用自己的-csv) · [配置路径与执行阶段](#配置路径与执行阶段) · [选择并运行检验方式](#选择并运行检验方式) · [逐行理解 example.yaml](#逐行理解-exampleyaml) · [调整数值条件](#调整数值条件) · [使用 HPO 搜索模型设置](#使用-hpo-搜索模型设置) · [其他流程字段与已有特征输入](#其他流程字段与已有特征输入) · [根据问题选择要调节的设置](#根据问题选择要调节的设置) · [保存的样例与报告口径](#保存的样例与报告口径) · [按需安装可选依赖和资产](#按需安装可选依赖和资产)
+- [使用自己的 CSV](#使用自己的-csv)
+- [配置路径与执行阶段](#配置路径与执行阶段)
+- [选择并运行检验方式](#选择并运行检验方式)
+- [逐行理解 example.yaml](#逐行理解-exampleyaml)
+- [调整数值条件](#调整数值条件)
+- [使用 HPO 搜索模型设置](#使用-hpo-搜索模型设置)
+- [其他流程字段与已有特征输入](#其他流程字段与已有特征输入)
+- [根据问题选择要调节的设置](#根据问题选择要调节的设置)
+- [保存的样例与报告口径](#保存的样例与报告口径)
+- [按需安装可选依赖和资产](#按需安装可选依赖和资产)
 
 ### 使用自己的 CSV
 
 #### 先准备数据表
 
-每行放一条反应记录，保留表头，并为记录准备稳定、非空且唯一的编号，例如 `record-001`。不要把编号作为模型输入。避免单独使用 `001`、`NA` 等可能在读取时改变含义的编号；需要改编号时保留原编号对应表。Excel中使用“另存为”选择CSV UTF-8，直接把 `.xlsx` 后缀改为 `.csv` 不会转换文件格式。
+- 每行放一条反应记录，保留表头，并为记录准备稳定、非空且唯一的编号，例如 `record-001`。
+- 不要把编号作为模型输入。
+- 避免单独使用 `001`、`NA` 等可能在读取时改变含义的编号；需要改编号时保留原编号对应表。
+- Excel中使用“另存为”选择CSV UTF-8，直接把 `.xlsx` 后缀改为 `.csv` 不会转换文件格式。
 
-参考产率必须是数值，并统一尺度，例如始终用 `0.80` 表示80%，或始终用 `80` 表示80%。程序不自动换算产率尺度；不要在单元格里写 `80%`。列角色也要按化学含义核对，产率、转化率、LC面积比和 ee 不能混为同一目标。
+- 参考产率必须是数值，并统一尺度，例如始终用 `0.80` 表示80%，或始终用 `80` 表示80%。
+- 程序不自动换算产率尺度；不要在单元格里写 `80%`。
+- 列角色也要按化学含义核对，产率、转化率、LC面积比和 ee 不能混为同一目标。
 
-当前配置生成向导必须选择一列数值参考值和一列产物 SMILES；反应物、其他组分和数值条件可按提示选择。若你的数据没有产物列，请使用本节末尾的手工配置方法。普通建模运行器支持 `products: []`，可以只用反应物；不要为通过向导虚构产物结构。
+- 当前配置生成向导必须选择一列数值参考值和一列产物 SMILES；反应物、其他组分和数值条件可按提示选择。
+- 若你的数据没有产物列，请使用本节末尾的手工配置方法。
+- 普通建模运行器支持 `products: []`，可以只用反应物；不要为通过向导虚构产物结构。
 
 #### 生成配置
 
@@ -225,25 +285,35 @@ python -u .\generate_yaml_config.py
 5. 在模型菜单输入 `2` 选择 Random Forest。描述符或模型菜单直接回车会选择多种方法，其中有的需要额外权重或依赖，首次不要在这两处留空。
 6. 按需填写网址、DOI 和备注；报告格式回车选择 HTML 与 Markdown。最后可选的“修复后数据集”是额外副本，回车不生成该副本也不会取消已经完成的规范化处理。
 
-生成器将 YAML 保存为 `config/my_reaction.yaml`。规范化表在 `result/my_reaction/feature/docs/my_reaction_normalized_dataset.csv`；有无效行时，排除报告在 `result/my_reaction/report/my_reaction_invalid_report.md`。原始 CSV 保留。
+- 生成器将 YAML 保存为 `config/my_reaction.yaml`。
+- 规范化表在 `result/my_reaction/feature/docs/my_reaction_normalized_dataset.csv`；有无效行时，排除报告在 `result/my_reaction/report/my_reaction_invalid_report.md`。
+- 原始 CSV 保留。
 
 #### 检查后启动
 
-用文本编辑器打开生成的 YAML，核对数据路径、列名、输入信息和结果目录。当前生成器默认是随机5折、1轮、种子42，HPO关闭，不会询问训练参数预算；有效编码记录至少要有5条才能执行5折，但达到这个数量下限不代表数据足以支持有意义的科学评价。模型参数未声明时采用已安装库的默认值。
+- 用文本编辑器打开生成的 YAML，核对数据路径、列名、输入信息和结果目录。
+- 当前生成器默认是随机5折、1轮、种子42，HPO关闭，不会询问训练参数预算；有效编码记录至少要有5条才能执行5折，但达到这个数量下限不代表数据足以支持有意义的科学评价。
+- 模型参数未声明时采用已安装库的默认值。
 
-数值条件默认缺失即报错，不自动填零或换算单位。存在缺失条件时，先核对数据，或参考 [example.yaml](example.yaml) 的 `dataset.numeric_conditions` 显式设置缺失标记、填补和缩放规则。均值、中位数和缩放参数从相应训练折学习。
+- 数值条件默认缺失即报错，不自动填零或换算单位。
+- 存在缺失条件时，先核对数据，或参考 [example.yaml](example.yaml) 的 `dataset.numeric_conditions` 显式设置缺失标记、填补和缩放规则。
+- 均值、中位数和缩放参数从相应训练折学习。
 
-确认后，在同一个已激活 `yonod` 的终端、项目根目录启动：Linux用 `python -u yonod.py`，Windows用 `python -u .\yonod.py`。首次提示输入：
+- 确认后，在同一个已激活 `yonod` 的终端、项目根目录启动：Linux用 `python -u yonod.py`，Windows用 `python -u .\yonod.py`。
+- 首次提示输入：
 
 ```text
 config/my_reaction.yaml
 ```
 
-新结果都保存在 `result/my_reaction/`，HTML 报告为 `report/report.html`。一次只运行一个任务；任务、编码、模型组合和交叉验证折依次执行。
+- 新结果都保存在 `result/my_reaction/`，HTML 报告为 `report/report.html`。
+- 一次只运行一个任务；任务、编码、模型组合和交叉验证折依次执行。
 
 #### 手工准备 YAML
 
-[example.yaml](example.yaml) 是完整 schema-2 配置的唯一格式规范。无产物列或需要自行设置时，从它另存新文件再编辑，不要覆盖原样例。以下文件操作从项目根目录执行。
+- [example.yaml](example.yaml) 是完整 schema-2 配置的唯一格式规范。
+- 无产物列或需要自行设置时，从它另存新文件再编辑，不要覆盖原样例。
+- 以下文件操作从项目根目录执行。
 
 Linux Bash：
 
@@ -259,13 +329,18 @@ New-Item -ItemType Directory -Path config -Force | Out-Null
 Copy-Item example.yaml config\my_reaction.yaml
 ```
 
-选择尚未使用的任务名，并同步修改 `project_name`、数据路径和角色、编码与模型、检验设置、`outputs.root: ./result/my_reaction`、`artifacts.output_dir: ./result/my_reaction/feature`，保留 `outputs.report_formats: [html, markdown]`。只声明已选模型的参数。保存后仍通过 `yonod.py` 首次提示输入配置路径。
+- 选择尚未使用的任务名，并同步修改 `project_name`、数据路径和角色、编码与模型、检验设置、`outputs.root: ./result/my_reaction`、`artifacts.output_dir: ./result/my_reaction/feature`，保留 `outputs.report_formats: [html, markdown]`。
+- 只声明已选模型的参数。
+- 保存后仍通过 `yonod.py` 首次提示输入配置路径。
 
 原始格式样例使用12条人工记录、两折和10棵RF树，只用于轻量工程检查。研究任务需要按自己的问题确定数据量、模型设置和检验设计。
 
 ### 配置路径与执行阶段
 
-研究 YAML 保存在根 `config/`。这些文件中以 `./` 开头的路径按项目根解析；显式 `../` 及其他位置配置内的相对路径按 YAML 所在目录解析，绝对路径保持绝对。教学 `run.yaml` 的输入输出因此留在各自包内。配置保存为 UTF-8 纯文本，缩进使用空格；Windows下检查文件没有被另加 `.txt` 后缀。
+- 研究 YAML 保存在根 `config/`。
+- 这些文件中以 `./` 开头的路径按项目根解析；显式 `../` 及其他位置配置内的相对路径按 YAML 所在目录解析，绝对路径保持绝对。
+- 教学 `run.yaml` 的输入输出因此留在各自包内。
+- 配置保存为 UTF-8 纯文本，缩进使用空格；Windows下检查文件没有被另加 `.txt` 后缀。
 
 | `stage` | 执行内容 |
 | --- | --- |
@@ -274,11 +349,15 @@ Copy-Item example.yaml config\my_reaction.yaml
 | `all` | 准备编码后进行普通内测。 |
 | `benchmark` | 按所选协议及必需字段分派专用执行器。 |
 
-每个研究任务使用独立的 `outputs.root: ./result/<task_name>`，并将编码放入子目录，例如 `artifacts.output_dir: ./result/<task_name>/feature`，保留 `outputs.report_formats: [html, markdown]`。操作日志和PID在根 `logs/`，最终建模结果在任务目录内，不放入 `derived/`。
+- 每个研究任务使用独立的 `outputs.root: ./result/<task_name>`，并将编码放入子目录，例如 `artifacts.output_dir: ./result/<task_name>/feature`，保留 `outputs.report_formats: [html, markdown]`。
+- 操作日志和PID在根 `logs/`，最终建模结果在任务目录内，不放入 `derived/`。
 
 ### 选择并运行检验方式
 
-三个样例都使用人工教学记录。一次只运行一个任务。每组命令都从项目根目录开始；若仍在上一个样例中，Bash 用 `cd ../..`，PowerShell 用 `Set-Location ..\..` 返回。运行器首次询问配置路径时，输入 `run.yaml`。
+- 三个样例都使用人工教学记录。
+- 一次只运行一个任务。
+- 每组命令都从项目根目录开始；若仍在上一个样例中，Bash 用 `cd ../..`，PowerShell 用 `Set-Location ..\..` 返回。
+- 运行器首次询问配置路径时，输入 `run.yaml`。
 
 | 你的问题 | 流程与配置 | 怎样分开建模和检验 |
 | --- | --- | --- |
@@ -288,7 +367,9 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 #### 随机划分内测
 
-1. 查看[12行数据表](example/random_split/dataset/reactions.csv)和 [run.yaml](example/random_split/run.yaml)。本例使用两列反应物结构、Morgan 编码、RF/XGBoost/LightGBM，进行两折、一轮检验。
+1. 查看[12行数据表](example/random_split/dataset/reactions.csv)和 [run.yaml](example/random_split/run.yaml)。
+
+   - 本例使用两列反应物结构、Morgan 编码、RF/XGBoost/LightGBM，进行两折、一轮检验。
 2. 按系统运行下面的命令，在首次提示输入 `run.yaml`。
 
 Linux Bash：
@@ -310,14 +391,25 @@ Set-Location .\example\random_split
 python -u ..\..\yonod.py
 ```
 
-3. 核对 `features=ready`、三个组合的 `complete` 或 `reused` 状态及两种报告。新 HTML 报告是 `example/random_split/result/example_random_split_20261113/report/report.html`；逐条预测位于该任务的 `runs/run_morgan-<model>/predictions.csv`。
-4. 使用自己的 CSV 时，在根 `config/` 生成新配置，或从 [example.yaml](example.yaml) 另存独立副本。修改编号、目标、输入列、方法与独立输出。`evaluation.n_splits` 至少为2，`n_repeats` 至少为1，`shuffle` 为布尔值，`seed` 控制打乱。每轮打乱使用 `seed + repeat - 1`；`shuffle: false` 时，多轮使用相同的行划分。有效编码行数必须不少于折数。
+3. 核对 `features=ready`、三个组合的 `complete` 或 `reused` 状态及两种报告。
 
-普通运行器始终建立 KFold 划分。只在普通 `all/train` 配置中写 `manifest_outer_cv` 不会导入自己的清单；需要真正固定成员时，使用下一条专用 benchmark 路线。
+   - 新 HTML 报告是 `example/random_split/result/example_random_split_20261113/report/report.html`；逐条预测位于该任务的 `runs/run_morgan-<model>/predictions.csv`。
+
+4. 使用自己的 CSV 时，在根 `config/` 生成新配置，或从 [example.yaml](example.yaml) 另存独立副本。
+
+   - 修改编号、目标、输入列、方法与独立输出。
+   - `evaluation.n_splits` 至少为2，`n_repeats` 至少为1，`shuffle` 为布尔值，`seed` 控制打乱。
+   - 每轮打乱使用 `seed + repeat - 1`；`shuffle: false` 时，多轮使用相同的行划分。
+   - 有效编码行数必须不少于折数。
+
+- 普通运行器始终建立 KFold 划分。
+- 只在普通 `all/train` 配置中写 `manifest_outer_cv` 不会导入自己的清单；需要真正固定成员时，使用下一条专用 benchmark 路线。
 
 #### 固定名单与分组检验
 
-1. 查看[角色解释表](example/fixed_split/splits/membership_guide.csv)、[实际24行清单](example/fixed_split/splits/fixed_split_manifest.csv)和[配置](example/fixed_split/run.yaml)。每折列出全部12条记录；第1折留出 `block_A`，第2折留出 `block_B`。
+1. 查看[角色解释表](example/fixed_split/splits/membership_guide.csv)、[实际24行清单](example/fixed_split/splits/fixed_split_manifest.csv)和[配置](example/fixed_split/run.yaml)。
+
+   - 每折列出全部12条记录；第1折留出 `block_A`，第2折留出 `block_B`。
 2. 保持 `stage: benchmark`、`evaluation.protocol: manifest_outer_cv`、分组声明、`evaluation.split_manifest` 与 `benchmark.task_state` 相互一致。
 3. 从项目根目录启动，首提示输入 `run.yaml`。
 
@@ -340,10 +432,20 @@ Set-Location .\example\fixed_split
 python -u ..\..\yonod.py
 ```
 
-4. 核对 RF 两折成功记录。报告是 `example/fixed_split/result/example_fixed_split_20261113/report/benchmark_report.html`；实际采用的清单和预测在该任务的 `docs/manifests/`、`docs/predictions/`。
-5. 用自己的数据时，先准备稳定编号和分组键，再分配折成员。另存新的 CSV 或 Parquet 清单，更新其数据校验码和成员，在新的根 `config/` YAML 中引用。分组列只用于划分时，不要把它放入描述符输入。新任务输出使用 `./result/<task_name>` 与 `./result/<task_name>/feature`。
+4. 核对 RF 两折成功记录。
 
-当前接口至少要求两折。每折的训练、验证部分均非空，编号全集与数据表一致，同一组的记录不能分散在该折的训练和验证部分，每条记录每轮恰好一次 `valid`。仅一次“8条训练、4条测试”的名单不能代替这份交叉验证清单。固定种子或关闭打乱也不能表达任意指定的成员。
+   - 报告是 `example/fixed_split/result/example_fixed_split_20261113/report/benchmark_report.html`；实际采用的清单和预测在该任务的 `docs/manifests/`、`docs/predictions/`。
+
+5. 用自己的数据时，先准备稳定编号和分组键，再分配折成员。
+
+   - 另存新的 CSV 或 Parquet 清单，更新其数据校验码和成员，在新的根 `config/` YAML 中引用。
+   - 分组列只用于划分时，不要把它放入描述符输入。
+   - 新任务输出使用 `./result/<task_name>` 与 `./result/<task_name>/feature`。
+
+- 当前接口至少要求两折。
+- 每折的训练、验证部分均非空，编号全集与数据表一致，同一组的记录不能分散在该折的训练和验证部分，每条记录每轮恰好一次 `valid`。
+- 仅一次“8条训练、4条测试”的名单不能代替这份交叉验证清单。
+- 固定种子或关闭打乱也不能表达任意指定的成员。
 
 若没有 `evaluation.split_manifest`，专用执行器会根据 `evaluation.grouping` 生成清单，目前支持五种策略：
 
@@ -356,7 +458,9 @@ python -u ..\..\yonod.py
 | `reaction_fingerprint_cluster` | `reaction_cols` 默认使用分子角色列；`similarity_threshold` 默认 `0.7`，范围 `(0, 1]`；分组 Morgan 的 `radius` 默认 `2`、至少为0，`n_bits` 默认 `2048`、至少为8。实现将分子组分合并后按 Tanimoto/Butina 聚类。 |
 | 上述四种实际分组策略 | 可选 `max_group_fraction` 默认 `0.8`，范围 `(0, 1]`：生成划分时最大组占比超过该值则拒绝。组数至少等于折数，程序按组大小贪心平衡各折。 |
 
-无法解析的分组结构使用明确的 fallback 键，不静默删行，也不自动改为普通 KFold。分组名本身不能证明两侧不存在相同底物或来源。导入已有清单时，以其中的组键和成员为准；修改分组设置不会重新生成导入清单的成员。
+- 无法解析的分组结构使用明确的 fallback 键，不静默删行，也不自动改为普通 KFold。
+- 分组名本身不能证明两侧不存在相同底物或来源。
+- 导入已有清单时，以其中的组键和成员为准；修改分组设置不会重新生成导入清单的成员。
 
 清单需要以下列：
 
@@ -393,8 +497,13 @@ Get-FileHash -Algorithm SHA256 -LiteralPath .\dataset\my_reactions.csv
 
 #### 冻结设置后进行外测
 
-1. 查看[12行训练表](example/external_test/dataset/train.csv)、[6行外测表](example/external_test/dataset/external.csv)、[审计文件](example/external_test/audit/external_audit.json)和 [run.yaml](example/external_test/run.yaml)。先固定描述符输入、模型参数和评分方案，再查看外测结果。
-2. 保留 `stage: benchmark`、`frozen_train_external_test`、`evaluation.seed` 和完整外测字段。不能混入 `n_splits`、`n_repeats`、`shuffle`、`grouping`、`split_manifest`、`population_manifest`。
+1. 查看[12行训练表](example/external_test/dataset/train.csv)、[6行外测表](example/external_test/dataset/external.csv)、[审计文件](example/external_test/audit/external_audit.json)和 [run.yaml](example/external_test/run.yaml)。
+
+   - 先固定描述符输入、模型参数和评分方案，再查看外测结果。
+
+2. 保留 `stage: benchmark`、`frozen_train_external_test`、`evaluation.seed` 和完整外测字段。
+
+   - 不能混入 `n_splits`、`n_repeats`、`shuffle`、`grouping`、`split_manifest`、`population_manifest`。
 3. 从项目根目录启动，首提示输入 `run.yaml`。
 
 Linux Bash：
@@ -416,8 +525,14 @@ Set-Location .\example\external_test
 python -u ..\..\yonod.py
 ```
 
-4. RF 使用全部12条训练记录拟合一次，再预测6条外测记录。查看 `example/external_test/result/example_external_test_20261113/report/external_test_report.html`，以及该任务根下的 `docs/predictions/morgan__rf.parquet`、`docs/metrics/external_test_metrics.csv`。外测没有交叉验证；保存的分数也不是独立置信区间。
-5. 真实任务需另建训练、外测与审计文件，再建立独立根 `config/` YAML 和任务输出目录。`external_test.column_map` 从训练结构列映射到外测结构列；目标由训练 `column_roles.label` 与外测 `label_col` 分别指定。
+4. RF 使用全部12条训练记录拟合一次，再预测6条外测记录。
+
+   - 查看 `example/external_test/result/example_external_test_20261113/report/external_test_report.html`，以及该任务根下的 `docs/predictions/morgan__rf.parquet`、`docs/metrics/external_test_metrics.csv`。
+   - 外测没有交叉验证；保存的分数也不是独立置信区间。
+
+5. 真实任务需另建训练、外测与审计文件，再建立独立根 `config/` YAML 和任务输出目录。
+
+   - `external_test.column_map` 从训练结构列映射到外测结构列；目标由训练 `column_roles.label` 与外测 `label_col` 分别指定。
 
 | `evaluation.external_test` 下的字段 | 含义 |
 | --- | --- |
@@ -431,13 +546,23 @@ python -u ..\..\yonod.py
 | `audit_manifest` | JSON 来源/重叠审计路径。 |
 | `audit_manifest_sha256` | 审计 JSON 的准确 SHA-256。 |
 
-审计文件需要 `candidate_source_sha256`，以及 `exact_canonical_overlap` 中的 `amine`、`acid`、`product` 均为0。若提供 `row_count`，需与行数一致；`physical_dataset_id` 决定来源编号前缀。根据实际数据准备审计，并自行检查结构交集；适配器只核对声明及文件身份，不会重新计算分子结构交集。按上面的 Bash/PowerShell 命令分别对外测和审计文件计算哈希，再填写新 YAML；不能照抄教学审计中的零值。
+- 审计文件需要 `candidate_source_sha256`，以及 `exact_canonical_overlap` 中的 `amine`、`acid`、`product` 均为0。
+- 若提供 `row_count`，需与行数一致；`physical_dataset_id` 决定来源编号前缀。
+- 根据实际数据准备审计，并自行检查结构交集；适配器只核对声明及文件身份，不会重新计算分子结构交集。
+- 按上面的 Bash/PowerShell 命令分别对外测和审计文件计算哈希，再填写新 YAML；不能照抄教学审计中的零值。
 
-当前适配器只接受静态描述符，不支持数值条件、OHE、AutoGluon、HPO 或外测早停，不保存普通完整特征/最终模型包。已有外测运行输出会在拟合前被拒绝，不恢复或覆盖；需新建任务名和输出目录。样例含产物输入，实际预测时须已知目标产物结构。另存文件、精确结构零重叠，都不能证明独立实验来源或分布独立。
+- 当前适配器只接受静态描述符，不支持数值条件、OHE、AutoGluon、HPO 或外测早停，不保存普通完整特征/最终模型包。
+- 已有外测运行输出会在拟合前被拒绝，不恢复或覆盖；需新建任务名和输出目录。
+- 样例含产物输入，实际预测时须已知目标产物结构。
+- 另存文件、精确结构零重叠，都不能证明独立实验来源或分布独立。
 
 ### 逐行理解 example.yaml
 
-[example.yaml](example.yaml) 是唯一完整 YAML 规范。下表对应当前104行文件中的每条有效非空行，用完整字段路径说明其含义。缩进表示从属层级；`-` 表示列表项，`[]` 是空列表，`{}` 是空映射，`null` 是空值，`true`/`false` 是布尔值。缩进用空格，不用制表符。修改格式规范后，行号也会变化。
+- [example.yaml](example.yaml) 是唯一完整 YAML 规范。
+- 下表对应当前104行文件中的每条有效非空行，用完整字段路径说明其含义。
+- 缩进表示从属层级；`-` 表示列表项，`[]` 是空列表，`{}` 是空映射，`null` 是空值，`true`/`false` 是布尔值。
+- 缩进用空格，不用制表符。
+- 修改格式规范后，行号也会变化。
 
 | 行号 | 完整字段路径 | 含义与可调整内容 |
 | --- | --- | --- |
@@ -495,11 +620,16 @@ python -u ..\..\yonod.py
 | 103 | `metadata` | 人工说明，不作为模型输入。 |
 | 104 | `metadata.notes` | 说明人工 fixture 和独立任务约定；可替换为自己的来源与研究目的。 |
 
-空行只便于阅读。整行 `#` 注释及行末 `#` 后的文字不执行。第1至7行说明启动位置；22至26行说明数值条件；33至34行说明候选和生命周期；48至51行说明模型节与资源；61至65行说明 HPO 范围；68至84行是未启用的 HPO 示例；87至90行说明协议切换。注释中的 HPO 字段见后文。不能在原有 `hpo` 旁再取消注释另一份同名节，YAML 重复键会被拒绝。
+- 空行只便于阅读。
+- 整行 `#` 注释及行末 `#` 后的文字不执行。
+- 第1至7行说明启动位置；22至26行说明数值条件；33至34行说明候选和生命周期；48至51行说明模型节与资源；61至65行说明 HPO 范围；68至84行是未启用的 HPO 示例；87至90行说明协议切换。
+- 注释中的 HPO 字段见后文。
+- 不能在原有 `hpo` 旁再取消注释另一份同名节，YAML 重复键会被拒绝。
 
 ### 调整数值条件
 
-在 `dataset.column_roles.conditions` 按输入顺序声明源列，不能与编号、标签、分子或类别角色重叠。预处理设置写入 `dataset.numeric_conditions`，当前支持的全部键如下。
+- 在 `dataset.column_roles.conditions` 按输入顺序声明源列，不能与编号、标签、分子或类别角色重叠。
+- 预处理设置写入 `dataset.numeric_conditions`，当前支持的全部键如下。
 
 | 位置 | 支持的键、值与行为 |
 | --- | --- |
@@ -516,7 +646,9 @@ python -u ..\..\yonod.py
 
 ### 使用 HPO 搜索模型设置
 
-HPO 在训练数据内搜索模型参数，不选择实验条件。当前接入 RF、XGBoost 和 LightGBM，通过内外层划分隔离外层留出标签。每个编码×模型×外层折分别搜索，以各内层折分数的等权算术平均为目标。
+- HPO 在训练数据内搜索模型参数，不选择实验条件。
+- 当前接入 RF、XGBoost 和 LightGBM，通过内外层划分隔离外层留出标签。
+- 每个编码×模型×外层折分别搜索，以各内层折分数的等权算术平均为目标。
 
 | HPO 字段 | 取值与限制 |
 | --- | --- |
@@ -537,7 +669,11 @@ HPO 在训练数据内搜索模型参数，不选择实验条件。当前接入 
 | `final_model.development_population_id` | 开启最终模型时必需的非空开发数据身份。 |
 | `final_model.budget` | 为最终模型单独安排的搜索预算，包含 `max_trials` 及可选 study/task 时间键。单独搜索后在完整开发数据上重训，不产生独立测试分数。 |
 
-分布的 `type` 只支持 `int`、`float`、`categorical`。整数/浮点分布需要有限 `low`、`high`，且 low≤high；可选正数 `step` 必须整除区间。整数边界和步长必须为整数，默认步长1。可选 `log` 为布尔值且要求 low>0；整数对数分布步长只能为1，浮点对数分布不能同时声明 step。类别分布只接受非空 `choices`，由不重复的安全标量组成（`null`、字符串、布尔值及有限数值），不接受任意表达式或可调用对象。
+- 分布的 `type` 只支持 `int`、`float`、`categorical`。
+- 整数/浮点分布需要有限 `low`、`high`，且 low≤high；可选正数 `step` 必须整除区间。
+- 整数边界和步长必须为整数，默认步长1。
+- 可选 `log` 为布尔值且要求 low>0；整数对数分布步长只能为1，浮点对数分布不能同时声明 step。
+- 类别分布只接受非空 `choices`，由不重复的安全标量组成（`null`、字符串、布尔值及有限数值），不接受任意表达式或可调用对象。
 
 | 模型 | 当前全部可搜索构造参数 |
 | --- | --- |
@@ -545,9 +681,16 @@ HPO 在训练数据内搜索模型参数，不选择实验条件。当前接入 
 | XGBoost | `n_estimators`、`learning_rate`、`max_depth`、`min_child_weight`、`subsample`、`colsample_bytree`、`gamma`、`reg_alpha`、`reg_lambda`、`max_delta_step` |
 | LightGBM | `n_estimators`、`learning_rate`、`num_leaves`、`min_child_samples`、`min_child_weight`、`subsample`、`colsample_bytree`、`reg_alpha`、`reg_lambda`、`min_split_gain`、`max_depth` |
 
-`compact-v1` 中，RF 搜索100至800棵树（步长100）、深度 `null/4/8/12/20/32`、叶最小样本1至20、特征比例0.3至1.0。XGBoost 搜索100至800棵树（步长100）、对数学习率0.01至0.2、深度2至10、对数子节点权重1至20、行比例0.6至1.0、特征比例0.5至1.0。LightGBM 搜索100至800棵树（步长100）、对数学习率0.01至0.2、叶数8至64、子节点最小样本5至50、特征比例0.5至1.0。这些只是软件预设，不代表适合所有数据集的科学预算。
+- `compact-v1` 中，RF 搜索100至800棵树（步长100）、深度 `null/4/8/12/20/32`、叶最小样本1至20、特征比例0.3至1.0。
+- XGBoost 搜索100至800棵树（步长100）、对数学习率0.01至0.2、深度2至10、对数子节点权重1至20、行比例0.6至1.0、特征比例0.5至1.0。
+- LightGBM 搜索100至800棵树（步长100）、对数学习率0.01至0.2、叶数8至64、子节点最小样本5至50、特征比例0.5至1.0。
+- 这些只是软件预设，不代表适合所有数据集的科学预算。
 
-普通 HPO 要求 `outer_kfold`，严格 HPO 要求 `stage: benchmark` 和 `manifest_outer_cv`；冻结外测和固定论文复现协议不支持。当前 HPO 拒绝 runtime 早停，严格 HPO 也拒绝非空模型 `fit` 节。仅特征阶段只校验声明，不建立 study。LightGBM 搜索时不能固定被搜索参数的别名；搜索 `subsample` 需固定正数 `subsample_freq`，还会核对搜索 `num_leaves` 与固定正 `max_depth` 是否冲突。XGBoost 预设要求 `booster: gbtree`。
+- 普通 HPO 要求 `outer_kfold`，严格 HPO 要求 `stage: benchmark` 和 `manifest_outer_cv`；冻结外测和固定论文复现协议不支持。
+- 当前 HPO 拒绝 runtime 早停，严格 HPO 也拒绝非空模型 `fit` 节。
+- 仅特征阶段只校验声明，不建立 study。
+- LightGBM 搜索时不能固定被搜索参数的别名；搜索 `subsample` 需固定正数 `subsample_freq`，还会核对搜索 `num_leaves` 与固定正 `max_depth` 是否冲突。
+- XGBoost 预设要求 `booster: gbtree`。
 
 ### 其他流程字段与已有特征输入
 
@@ -561,7 +704,11 @@ HPO 在训练数据内搜索模型参数，不选择实验条件。当前接入 
 | `outputs.diagnostics.enabled` | 布尔值，在普通/固定名单流程对支持的模型默认启用。当前训练/留出诊断支持 `rf`、`xgb`、`lightgbm`，SVM 和 AutoGluon 记为不支持；冻结外测不生成这类配对诊断。 |
 | `outputs.diagnostics.save_train_predictions` | 布尔值，默认关闭；保存支持诊断的逐条训练预测。诊断关闭时不能为真。关闭诊断不会关闭正常留出评分。 |
 
-`evaluation` 下的完整顶层白名单为：`protocol`、`n_splits`、`n_repeats`、`shuffle`、`seed`、`grouping`、`split_manifest`、`population_manifest`、`metrics`、`external_test`。三条当前启动路线实际使用的字段以前述对应说明为准。通用 schema 接受 `population_manifest` 或 `metrics`，不代表它们能在这三条路线切换记录集合或自定义评分，此处应省略。冻结外测明确禁止 `population_manifest` 和内测字段。字段通过通用格式校验，不等于适配器实现了该设置。
+- `evaluation` 下的完整顶层白名单为：`protocol`、`n_splits`、`n_repeats`、`shuffle`、`seed`、`grouping`、`split_manifest`、`population_manifest`、`metrics`、`external_test`。
+- 三条当前启动路线实际使用的字段以前述对应说明为准。
+- 通用 schema 接受 `population_manifest` 或 `metrics`，不代表它们能在这三条路线切换记录集合或自定义评分，此处应省略。
+- 冻结外测明确禁止 `population_manifest` 和内测字段。
+- 字段通过通用格式校验，不等于适配器实现了该设置。
 
 ### 根据问题选择要调节的设置
 
@@ -584,23 +731,32 @@ HPO 在训练数据内搜索模型参数，不选择实验条件。当前接入 
 
 ### 保存的样例与报告口径
 
-[浏览器导览](example/index.html) · [操作说明](example/README.md) · [下载全部样例](example/archives/all_examples.zip)
+- [浏览器导览](example/index.html)
+- [操作说明](example/README.md)
+- [下载全部样例](example/archives/all_examples.zip)
 
-ZIP 附有 `completed_run/` 参考快照；克隆源码后，重新运行会在各样例目录生成 `result/`。随机包历史 `report/` 和 `evidence/` 用于追溯。[随机](example/random_split/verification.json)、[固定名单](example/fixed_split/verification.json)、[外测](example/external_test/verification.json)验收记录来自 Linux，不代表 Windows 实机验收。后台运行和状态查询参照操作说明中的 Bash/PowerShell 命令，日志与 PID保存在根 `logs/`。
+- ZIP 附有 `completed_run/` 参考快照；克隆源码后，重新运行会在各样例目录生成 `result/`。
+- 随机包历史 `report/` 和 `evidence/` 用于追溯。
+- [随机](example/random_split/verification.json)、[固定名单](example/fixed_split/verification.json)、[外测](example/external_test/verification.json)验收记录来自 Linux，不代表 Windows 实机验收。
+- 后台运行和状态查询参照操作说明中的 Bash/PowerShell 命令，日志与 PID保存在根 `logs/`。
 
-普通随机报告在每轮汇总 OOF 预测评分，固定名单报告汇总逐折指标，两者 R² 聚合口径不同，不能当作相同评价直接跨路线排名。教学值、低分和负 R² 均保留，不能据此认定真实化学预测能力。
+- 普通随机报告在每轮汇总 OOF 预测评分，固定名单报告汇总逐折指标，两者 R² 聚合口径不同，不能当作相同评价直接跨路线排名。
+- 教学值、低分和负 R² 均保留，不能据此认定真实化学预测能力。
 
 ### 按需安装可选依赖和资产
 
-只有选择 AutoGluon 时，才需在已激活 `yonod` 的终端额外安装。下列命令适用于 Linux Bash 和 Windows Conda PowerShell：
+- 只有选择 AutoGluon 时，才需在已激活 `yonod` 的终端额外安装。
+- 下列命令适用于 Linux Bash 和 Windows Conda PowerShell：
 
 ```text
 python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```
 
-三个教学包已含数据且使用 Morgan。其他数据与权重可从 [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) 和 [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights) 获取，下载前查看[数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)。
+- 三个教学包已含数据且使用 Morgan。
+- 其他数据与权重可从 [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) 和 [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights) 获取，下载前查看[数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)。
 
-以下命令在已激活环境的项目根目录执行，两种系统相同。先安装兼容 Transformers 4.40 的 Hugging Face CLI，再按需下载；数据命令只下载 USPTO 子目录。
+- 以下命令在已激活环境的项目根目录执行，两种系统相同。
+- 先安装兼容 Transformers 4.40 的 Hugging Face CLI，再按需下载；数据命令只下载 USPTO 子目录。
 
 ```text
 python -m pip install "huggingface_hub>=0.34,<1.0"
@@ -608,7 +764,9 @@ hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/*
 hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 ```
 
-按服务要求完成登录或访问授权。Git 忽略二进制权重；看见配置、tokenizer或manifest文件不代表权重已齐全。部分原始数据虽然扩展名是 CSV，实际使用制表符分隔，需先按子目录说明转换，不能直接送入逗号CSV向导。
+- 按服务要求完成登录或访问授权。
+- Git 忽略二进制权重；看见配置、tokenizer或manifest文件不代表权重已齐全。
+- 部分原始数据虽然扩展名是 CSV，实际使用制表符分隔，需先按子目录说明转换，不能直接送入逗号CSV向导。
 
 | 编码 | 所需资产 |
 | --- | --- |
@@ -616,11 +774,17 @@ hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 | `molmetalm` | [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base) 的模型、配置与tokenizer，放入 `WEIGHTS/MolMetaLM-base/`；参见[上游项目](https://github.com/CSUBioGroup/MolMetaLM)。 |
 | `chemical_vae` | `WEIGHTS/chemical_vae/<资产>/v5/` 下已验证转换manifest及相邻、哈希匹配的 `encoder_state_dict.pt`。ZINC 与 `zinc_properties` 资产不能互换。 |
 
-Chemical VAE只使用冻结 PyTorch 编码器的原始 `z_mean_sample`，不训练 VAE，也不加载解码器或性质头。原始 HDF5 或只有manifest不能替代转换后权重；普通运行无需 TensorFlow/Keras，详见[加载器](yonod/descriptors/chemical_vae.py)。
+- Chemical VAE只使用冻结 PyTorch 编码器的原始 `z_mean_sample`，不训练 VAE，也不加载解码器或性质头。
+- 原始 HDF5 或只有manifest不能替代转换后权重；普通运行无需 TensorFlow/Keras，详见[加载器](yonod/descriptors/chemical_vae.py)。
 
 ## 开发者内容
 
-[项目结构](#项目结构) · [开发与验证一个改动](#开发与验证一个改动) · [描述符参数与协议支持](#描述符参数与协议支持) · [新增描述符](#新增描述符) · [模型参数与实际执行范围](#模型参数与实际执行范围) · [增加新的模型](#增加新的模型)
+- [项目结构](#项目结构)
+- [开发与验证一个改动](#开发与验证一个改动)
+- [描述符参数与协议支持](#描述符参数与协议支持)
+- [新增描述符](#新增描述符)
+- [模型参数与实际执行范围](#模型参数与实际执行范围)
+- [增加新的模型](#增加新的模型)
 
 ### 项目结构
 
@@ -672,9 +836,12 @@ YONOD/
     └── docs/                其他维护文档
 ```
 
-日常使用先看根目录的两个入口脚本、[example.yaml](example.yaml) 和 [example/](example/)。[数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)分别解释输入来源和可选资产。
+- 日常使用先看根目录的两个入口脚本、[example.yaml](example.yaml) 和 [example/](example/)。
+- [数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)分别解释输入来源和可选资产。
 
-根目录的 `config/`、`result/`、`logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/` 都不由主仓 Git 跟踪。`project-docs/` 在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) 仓库中维护，访问需要权限，克隆主仓不会自动获取它。运行教学样例不需要该文档仓库。
+- 根目录的 `config/`、`result/`、`logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/` 都不由主仓 Git 跟踪。
+- `project-docs/` 在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) 仓库中维护，访问需要权限，克隆主仓不会自动获取它。
+- 运行教学样例不需要该文档仓库。
 
 一次普通建模任务的主要结果结构如下：
 
@@ -690,13 +857,19 @@ result/<task_name>/
 └── report/                          HTML 与 Markdown 报告
 ```
 
-固定名单等 benchmark 将成员名单、预测、逐折记录、指标和恢复状态分别放在任务目录内的 `docs/manifests/`、`docs/predictions/`、`docs/folds/`、`docs/metrics/`、`docs/state/`。冻结外测也使用 `docs/predictions/`、`docs/metrics/` 和 `report/`，但不保存普通流程那样完整的特征与最终模型包。具体文件取决于所选协议。
+- 固定名单等 benchmark 将成员名单、预测、逐折记录、指标和恢复状态分别放在任务目录内的 `docs/manifests/`、`docs/predictions/`、`docs/folds/`、`docs/metrics/`、`docs/state/`。
+- 冻结外测也使用 `docs/predictions/`、`docs/metrics/` 和 `report/`，但不保存普通流程那样完整的特征与最终模型包。
+- 具体文件取决于所选协议。
 
-教学任务的新结果位于各自的 `example/<包名>/result/<task_name>/`，生成的 `result/` 不由 Git 跟踪。下载 ZIP 中的 `completed_run/` 是参考快照，与自己运行产生的结果分开保存。参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
+- 教学任务的新结果位于各自的 `example/<包名>/result/<task_name>/`，生成的 `result/` 不由 Git 跟踪。
+- 下载 ZIP 中的 `completed_run/` 是参考快照，与自己运行产生的结果分开保存。
+- 参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
 
 ### 开发与验证一个改动
 
-先阅读 [AGENTS.md](AGENTS.md)，再定位准备支持的运行流程。schema-2 从 `yonod.py` 进入配置加载器，随后调用普通 `pipeline/` 或专用 `benchmark/` 适配器。只修改 `yonod/models/` 中的旧适配器，不能完成 schema-2 模型工厂的扩展。
+- 先阅读 [AGENTS.md](AGENTS.md)，再定位准备支持的运行流程。
+- schema-2 从 `yonod.py` 进入配置加载器，随后调用普通 `pipeline/` 或专用 `benchmark/` 适配器。
+- 只修改 `yonod/models/` 中的旧适配器，不能完成 schema-2 模型工厂的扩展。
 
 1. 明确新组件的输入类型、输出形状、支持参数、缺失输入处理和协议范围。配置校验与描述符计算、模型执行分开实现。
 2. 添加实现和下文列出的注册、分派位置。可选依赖在被选中时再导入；按需记录库版本和资产身份。
@@ -710,13 +883,18 @@ result/<task_name>/
 python yonod.py --config example.yaml
 ```
 
-该命令会计算 Morgan 编码，并在人工 fixture 上拟合 RF。测试新描述符或模型前，还应在 `config/` 保存独立 schema-2 YAML、使用唯一任务名，并隔离 `result/<task_name>/` 输出；正式任务仍通过保存YAML后的交互入口启动。smoke通过说明程序能执行，不等于科学有效性或未测试平台的验收。
+- 该命令会计算 Morgan 编码，并在人工 fixture 上拟合 RF。
+- 测试新描述符或模型前，还应在 `config/` 保存独立 schema-2 YAML、使用唯一任务名，并隔离 `result/<task_name>/` 输出；正式任务仍通过保存YAML后的交互入口启动。
+- smoke通过说明程序能执行，不等于科学有效性或未测试平台的验收。
 
-工程支持与备份放 `backup/`，操作日志/PID放根 `logs/`，维护文档放独立 `project-docs/`。逐项暂存本任务修改的文件，两个发生改动的仓库分别提交；不提交 `_verify/`、`config/`、`backup/` 或外部参考材料。
+- 工程支持与备份放 `backup/`，操作日志/PID放根 `logs/`，维护文档放独立 `project-docs/`。
+- 逐项暂存本任务修改的文件，两个发生改动的仓库分别提交；不提交 `_verify/`、`config/`、`backup/` 或外部参考材料。
 
 ### 描述符参数与协议支持
 
-普通 schema-2 流程的特征注册表在 [registry.py](yonod/descriptors/registry.py)。每个描述符条目使用下列字段。Python 构造器中的参数不一定已经开放给 YAML。
+- 普通 schema-2 流程的特征注册表在 [registry.py](yonod/descriptors/registry.py)。
+- 每个描述符条目使用下列字段。
+- Python 构造器中的参数不一定已经开放给 YAML。
 
 | 字段 | 可以怎样调整 |
 | --- | --- |
@@ -760,7 +938,9 @@ python yonod.py --config example.yaml
 | `ohe.dtype` | `float32`；`float32` 或 `float64` | 输出矩阵的数据类型。 |
 | `ohe.handle_unknown` | `ignore`；只接受 `ignore` | 检验记录中训练折未出现的类别对应全零块。 |
 
-下列设置存在于 Python 实现，但**尚未开放为普通 YAML 的 `params`**：Morgan/MAF 的 `radius`、`n_bits`；RDKit2D 的 `descriptor_names`；FISD 的 `model_dir`、`device`、`batch_size`；MolMetaLM 的 `weight_path`、`device`、`batch_size`、`max_length`；OHE 的 `missing_token`。DRFP 的 Python 参数 `n_bits` 本身也只允许2,048。将这些键写进普通 YAML 不会启用它们；新增支持还需修改校验、构造器路由与特征身份处理。
+- 下列设置存在于 Python 实现，但**尚未开放为普通 YAML 的 `params`**：Morgan/MAF 的 `radius`、`n_bits`；RDKit2D 的 `descriptor_names`；FISD 的 `model_dir`、`device`、`batch_size`；MolMetaLM 的 `weight_path`、`device`、`batch_size`、`max_length`；OHE 的 `missing_token`。
+- DRFP 的 Python 参数 `n_bits` 本身也只允许2,048。
+- 将这些键写进普通 YAML 不会启用它们；新增支持还需修改校验、构造器路由与特征身份处理。
 
 #### 三种流程的描述符支持有所不同
 
@@ -773,29 +953,62 @@ python yonod.py --config example.yaml
 | `drfp` | 支持按角色构建 `reaction` 与额外反应物 | 当前 schema-2 适配器未接通相应反应角色与模式路由，不能直接使用 | 当前 schema-2 适配器未接通相应反应角色与模式路由，不能直接使用 |
 | `ohe` | 按训练折应用上述参数 | 当前 `ReactionComponentOHE` 固定 `missing_policy=zero_block`、`dtype=float64`、`handle_unknown=ignore`，不转发普通 OHE 参数 | 拒绝；适配器只接受 `static_descriptor` |
 
-benchmark 采用独立校验和执行路径，模式检查只接受 `concat/sum`，也没有像普通特征服务那样传递 DRFP 反应角色。描述符出现在菜单里，不代表它适用于每个协议；请从对应可运行样例开始设置。
+- benchmark 采用独立校验和执行路径，模式检查只接受 `concat/sum`，也没有像普通特征服务那样传递 DRFP 反应角色。
+- 描述符出现在菜单里，不代表它适用于每个协议；请从对应可运行样例开始设置。
 
 ### 新增描述符
 
 当前扩展入口是源码，没有自动发现插件的机制。先接入普通流程，再按需要补专用协议支持。
 
-1. 在 `yonod/descriptors/` 下实现遵守 [BaseDescriptor](yonod/descriptors/base.py) 的类，声明 `name`、`output_dim`，实现 `featurize(smiles_list) -> (features, mask)`。类返回 `(输入行数, output_dim)` 矩阵及原输入行数的一维 Boolean 掩码，顺序与输入一致；失败输入保留对应行，将数值置零并标为 `False`，不能仅凭零向量判为成功。
-2. 在 [registry.py](yonod/descriptors/registry.py) 的 `_PROVIDERS` 中添加名称、生命周期、输入类型、模式和参数元数据，并在 `_normalise_params` 中实现默认值、取值校验与未知键拒绝。新的参数化提供者须同时开放 YAML 路由，不能只改构造器。
-3. 在 [feature_builder.py](yonod/universal/feature_builder.py) 的 `_DESCRIPTOR_IMPORT_MAP` 中增加延迟导入，在 `_get_descriptor` 中把已校验参数传到构造器。当前通用分支无参构造；MFP 和 Chemical VAE 使用了显式参数路由。若需要公开类 API，再补 [descriptors/__init__.py](yonod/descriptors/__init__.py) 的延迟导出。
-4. 在 [pipeline/features.py](yonod/pipeline/features.py) 核对组合与成员对齐。传给特征服务的计算函数返回 `sum(valid_mask)` 行矩阵和原始行数的 Boolean 掩码，过滤由构建器完成。经现有 artifact API 保存有序编号、特征名、有效性与哈希。`FeatureSpec.schema_hash` 及特征身份包含规范化设置、解析后的列和角色；依赖外部权重时，还需绑定资产内容哈希，不能让同路径替换后的新权重复用旧编码。
-5. 更新 [generate_yaml_config.py](generate_yaml_config.py) 的显式菜单和默认配置构建逻辑，核对 [yonod.py](yonod.py) 的名称选择。依赖较多或加载较慢的库继续延迟导入，按实际需要补安装说明。
-6. 若需固定名单或外测，检查 [benchmark/config.py](yonod/benchmark/config.py)、[benchmark/runner.py](yonod/benchmark/runner.py) 与 [frozen_external.py](yonod/benchmark/frozen_external.py)，逐项接通角色、模式、参数和资产路径。保留冻结外测的总体、结构重叠与不得丢行等约束，不能假定它复用普通路由。
-7. 验证脚本放 `_verify/`。检查错误声明、未知参数、无效输入、维数、行号/编号对齐、确定性身份，以及改变参数或资产内容后的缓存身份。后续确需建模验收时，使用独立配置和结果目录经 `yonod.py` 启动，遵循 Linux/Windows 路径与 UTF-8 规则。
+1. 在 `yonod/descriptors/` 下实现遵守 [BaseDescriptor](yonod/descriptors/base.py) 的类，声明 `name`、`output_dim`，实现 `featurize(smiles_list) -> (features, mask)`。
 
-如果表示方法从当前任务数据学习类别表、缩放或其他状态，应采用 `fold_transform`。目前 OHE 在 `features` 阶段只保存原始输入，再由 [pipeline/training.py](yonod/pipeline/training.py) 在每个外层训练折单独拟合，检验数据只做转换。新的折内转换器还需接入原始输入发布、训练/预测、[普通 HPO](yonod/hpo/ordinary.py)、严格 benchmark 预处理及适用的内层 CV 搜索与状态保存；这些路径当前含有 OHE 专用逻辑。仅在注册表写 `lifecycle: fold_transform` 不会完成接入，也不能先在全量数据上拟合再划分。
+   - 类返回 `(输入行数, output_dim)` 矩阵及原输入行数的一维 Boolean 掩码，顺序与输入一致；失败输入保留对应行，将数值置零并标为 `False`，不能仅凭零向量判为成功。
 
-实现改动如果改变了表示结果，应明确更新持久化身份版本，例如 `FEATURE_SERVICE_SCHEMA_VERSION`，或改用新的候选ID和配置。特征身份不会自动对 Python 源文件求哈希；参数名相同不表示旧缓存仍适用于修改后的算法。
+2. 在 [registry.py](yonod/descriptors/registry.py) 的 `_PROVIDERS` 中添加名称、生命周期、输入类型、模式和参数元数据，并在 `_normalise_params` 中实现默认值、取值校验与未知键拒绝。
+
+   - 新的参数化提供者须同时开放 YAML 路由，不能只改构造器。
+
+3. 在 [feature_builder.py](yonod/universal/feature_builder.py) 的 `_DESCRIPTOR_IMPORT_MAP` 中增加延迟导入，在 `_get_descriptor` 中把已校验参数传到构造器。
+
+   - 当前通用分支无参构造；MFP 和 Chemical VAE 使用了显式参数路由。
+   - 若需要公开类 API，再补 [descriptors/__init__.py](yonod/descriptors/__init__.py) 的延迟导出。
+
+4. 在 [pipeline/features.py](yonod/pipeline/features.py) 核对组合与成员对齐。
+
+   - 传给特征服务的计算函数返回 `sum(valid_mask)` 行矩阵和原始行数的 Boolean 掩码，过滤由构建器完成。
+   - 经现有 artifact API 保存有序编号、特征名、有效性与哈希。
+   - `FeatureSpec.schema_hash` 及特征身份包含规范化设置、解析后的列和角色；依赖外部权重时，还需绑定资产内容哈希，不能让同路径替换后的新权重复用旧编码。
+
+5. 更新 [generate_yaml_config.py](generate_yaml_config.py) 的显式菜单和默认配置构建逻辑，核对 [yonod.py](yonod.py) 的名称选择。
+
+   - 依赖较多或加载较慢的库继续延迟导入，按实际需要补安装说明。
+
+6. 若需固定名单或外测，检查 [benchmark/config.py](yonod/benchmark/config.py)、[benchmark/runner.py](yonod/benchmark/runner.py) 与 [frozen_external.py](yonod/benchmark/frozen_external.py)，逐项接通角色、模式、参数和资产路径。
+
+   - 保留冻结外测的总体、结构重叠与不得丢行等约束，不能假定它复用普通路由。
+
+7. 验证脚本放 `_verify/`。
+
+   - 检查错误声明、未知参数、无效输入、维数、行号/编号对齐、确定性身份，以及改变参数或资产内容后的缓存身份。
+   - 后续确需建模验收时，使用独立配置和结果目录经 `yonod.py` 启动，遵循 Linux/Windows 路径与 UTF-8 规则。
+
+- 如果表示方法从当前任务数据学习类别表、缩放或其他状态，应采用 `fold_transform`。
+- 目前 OHE 在 `features` 阶段只保存原始输入，再由 [pipeline/training.py](yonod/pipeline/training.py) 在每个外层训练折单独拟合，检验数据只做转换。
+- 新的折内转换器还需接入原始输入发布、训练/预测、[普通 HPO](yonod/hpo/ordinary.py)、严格 benchmark 预处理及适用的内层 CV 搜索与状态保存；这些路径当前含有 OHE 专用逻辑。
+- 仅在注册表写 `lifecycle: fold_transform` 不会完成接入，也不能先在全量数据上拟合再划分。
+
+- 实现改动如果改变了表示结果，应明确更新持久化身份版本，例如 `FEATURE_SERVICE_SCHEMA_VERSION`，或改用新的候选ID和配置。
+- 特征身份不会自动对 Python 源文件求哈希；参数名相同不表示旧缓存仍适用于修改后的算法。
 
 ### 模型参数与实际执行范围
 
-schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[配置区段路由](yonod/config/contracts.py)为准。`yonod/models/` 中保留了旧适配器；其中300棵RF树、自动SVM缩放/PCA等默认值，不会自动成为普通schema-2任务的默认设置。
+- schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[配置区段路由](yonod/config/contracts.py)为准。
+- `yonod/models/` 中保留了旧适配器；其中300棵RF树、自动SVM缩放/PCA等默认值，不会自动成为普通schema-2任务的默认设置。
 
-以下参数已对照 scikit-learn 1.4.0、XGBoost 2.0.3、LightGBM 4.3.0 和 AutoGluon 1.1.1 核对。YAML 未声明的估计器参数采用已安装库的默认值。项目在拟合前核对参数名，后端库还会检查参数值及组合。安全YAML可表达数值、字符串、列表和映射，不能构造Python函数、回调对象或估计器类。
+- 以下参数已对照 scikit-learn 1.4.0、XGBoost 2.0.3、LightGBM 4.3.0 和 AutoGluon 1.1.1 核对。
+- YAML 未声明的估计器参数采用已安装库的默认值。
+- 项目在拟合前核对参数名，后端库还会检查参数值及组合。
+- 安全YAML可表达数值、字符串、列表和映射，不能构造Python函数、回调对象或估计器类。
 
 | 模型 | 参数区段 | 项目行为 |
 | --- | --- | --- |
@@ -832,11 +1045,15 @@ schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[�
 | `ccp_alpha` | 非负剪枝惩罚；默认0。 |
 | `monotonic_cst` | 每个特征的 `-1`、`0`、`1` 单调约束或 `null`，默认 `null`；长度应对应最终特征矩阵。 |
 
-`rf.fit` 只接受 `sample_weight`，写为 `sample_weight: {column: weight_column}`，程序仅从当前训练行读取该列。不要在YAML中放入权重数组。`rf.runtime` 没有可用的非空设置。[scikit-learn RF文档](https://scikit-learn.org/1.4/modules/generated/sklearn.ensemble.RandomForestRegressor.html)说明估计器自身的取值限制。
+- `rf.fit` 只接受 `sample_weight`，写为 `sample_weight: {column: weight_column}`，程序仅从当前训练行读取该列。
+- 不要在YAML中放入权重数组。
+- `rf.runtime` 没有可用的非空设置。
+- [scikit-learn RF文档](https://scikit-learn.org/1.4/modules/generated/sklearn.ensemble.RandomForestRegressor.html)说明估计器自身的取值限制。
 
 #### XGBoost（`xgb`）
 
-`model_params.xgb.estimator` 接受下列39个参数名。省略参数采用XGBoost 2.0.3默认值；许多Python构造器字段默认为 `None`，由Booster决定最终设置。
+- `model_params.xgb.estimator` 接受下列39个参数名。
+- 省略参数采用XGBoost 2.0.3默认值；许多Python构造器字段默认为 `None`，由Booster决定最终设置。
 
 | 参数 | 含义与限制 |
 | --- | --- |
@@ -857,13 +1074,23 @@ schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[�
 | `multi_strategy`、`scale_pos_weight` | 多输出策略与正类权重；参数名被原生接口识别，不代表本页标量回归流程新增其他任务类型。 |
 | `eval_metric`、`early_stopping_rounds`、`callbacks` | 评价指标及早停/回调控制。Python回调对象不能由可移植的安全YAML构造；早停使用下述已接入路径。 |
 
-`xgb.fit` 允许 `sample_weight`、`eval_metric`、`early_stopping_rounds`、`verbose`。权重按上面的列映射指定。XGBoost 2.x推荐将指标和早停预算放在构造器，不能在两处重复声明同一项。`fit` 拒绝 `eval_set`、`sample_weight_eval_set`、`base_margin`、`base_margin_eval_set`、`feature_weights`、`xgb_model`、`callbacks`，避免外部数组或对象进入折内拟合。
+- `xgb.fit` 允许 `sample_weight`、`eval_metric`、`early_stopping_rounds`、`verbose`。
+- 权重按上面的列映射指定。
+- XGBoost 2.x推荐将指标和早停预算放在构造器，不能在两处重复声明同一项。
+- `fit` 拒绝 `eval_set`、`sample_weight_eval_set`、`base_margin`、`base_margin_eval_set`、`feature_weights`、`xgb_model`、`callbacks`，避免外部数组或对象进入折内拟合。
 
-`xgb.runtime.device_policy` 可设 `auto`、`cpu`、`cuda`。若使用 `estimator.device`，需省略整个 `runtime` 区段；当前校验器拒绝 `estimator.device` 与任何显式 `runtime` 区段同时出现。`runtime.early_stopping` 有三个键：正整数 `rounds`、严格位于0和1之间的 `validation_fraction`、整数 `seed`（默认42）。程序只从当前外层训练折再划内层验证记录。需要早停时使用这个路径，不要仅填没有验证数据的裸早停参数。原生含义见 [XGBoost 2.0参数文档](https://xgboost.readthedocs.io/en/release_2.0.0/parameter.html)。
+- `xgb.runtime.device_policy` 可设 `auto`、`cpu`、`cuda`。
+- 若使用 `estimator.device`，需省略整个 `runtime` 区段；当前校验器拒绝 `estimator.device` 与任何显式 `runtime` 区段同时出现。
+- `runtime.early_stopping` 有三个键：正整数 `rounds`、严格位于0和1之间的 `validation_fraction`、整数 `seed`（默认42）。
+- 程序只从当前外层训练折再划内层验证记录。
+- 需要早停时使用这个路径，不要仅填没有验证数据的裸早停参数。
+- 原生含义见 [XGBoost 2.0参数文档](https://xgboost.readthedocs.io/en/release_2.0.0/parameter.html)。
 
 #### LightGBM（`lightgbm`）
 
-`model_params.lightgbm.estimator` 接受以下71个参数名，其中部分是同一设置的别名。一个设置选择一种写法，重复写别名可能触发后端的优先级规则。项目名单不包含上游全部参数。
+- `model_params.lightgbm.estimator` 接受以下71个参数名，其中部分是同一设置的别名。
+- 一个设置选择一种写法，重复写别名可能触发后端的优先级规则。
+- 项目名单不包含上游全部参数。
 
 | 参数 | 含义与限制 |
 | --- | --- |
@@ -888,7 +1115,11 @@ schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[�
 | `class_weight`、`is_unbalance`、`scale_pos_weight`、`eval_at` | 名单中保留的分类/排序参数，不会将YONOD标量回归流程转换为分类或排序。 |
 | `callbacks` | 项目名单中存在该名字，但安全YAML不能构造Python回调对象；这里不是已接入的早停路径。 |
 
-`lightgbm.fit` 允许 `sample_weight`、`eval_names`、`eval_metric`、`feature_name`、`categorical_feature`。权重使用列映射；特征名和类别索引须对应模型矩阵，不能按不相关的源表列次序填写。`fit` 拒绝 `init_score`、`eval_set`、`eval_sample_weight`、`eval_init_score`、`init_model`、`callbacks`。`lightgbm.runtime` 只允许 `early_stopping`，内部同样使用 `rounds`、`validation_fraction`、`seed`，程序自己提供训练内验证集和LightGBM回调。原生细节见 [LightGBM 4.3回归器API](https://lightgbm.readthedocs.io/en/v4.3.0/pythonapi/lightgbm.LGBMRegressor.html)和[参数文档](https://lightgbm.readthedocs.io/en/v4.3.0/Parameters.html)。
+- `lightgbm.fit` 允许 `sample_weight`、`eval_names`、`eval_metric`、`feature_name`、`categorical_feature`。
+- 权重使用列映射；特征名和类别索引须对应模型矩阵，不能按不相关的源表列次序填写。
+- `fit` 拒绝 `init_score`、`eval_set`、`eval_sample_weight`、`eval_init_score`、`init_model`、`callbacks`。
+- `lightgbm.runtime` 只允许 `early_stopping`，内部同样使用 `rounds`、`validation_fraction`、`seed`，程序自己提供训练内验证集和LightGBM回调。
+- 原生细节见 [LightGBM 4.3回归器API](https://lightgbm.readthedocs.io/en/v4.3.0/pythonapi/lightgbm.LGBMRegressor.html)和[参数文档](https://lightgbm.readthedocs.io/en/v4.3.0/Parameters.html)。
 
 #### 支持向量回归（`svm`）
 
@@ -908,7 +1139,9 @@ schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[�
 | `verbose` | 求解日志，默认 `false`。 |
 | `max_iter` | 迭代上限，-1表示不限，默认-1。 |
 
-`svm.fit` 只允许按源列映射的 `sample_weight`，工厂会在内部路由到最终Pipeline步骤。`svm.runtime` 必须为空。普通schema-2工厂没有旧SVM适配器中隐含的缩放、PCA或训练行抽样，只有显式声明后才执行。
+- `svm.fit` 只允许按源列映射的 `sample_weight`，工厂会在内部路由到最终Pipeline步骤。
+- `svm.runtime` 必须为空。
+- 普通schema-2工厂没有旧SVM适配器中隐含的缩放、PCA或训练行抽样，只有显式声明后才执行。
 
 | `svm.preprocessing` 设置 | 全部字段与行为 |
 | --- | --- |
@@ -929,11 +1162,14 @@ schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[�
 | `power_iteration_normalizer` | 幂迭代的归一化方法：`auto`、`QR`、`LU`、`none`，默认 `auto`。 |
 | `random_state` | randomized/ARPACK求解器的种子，整数或 `null`，默认 `null`。 |
 
-省略预处理构造参数时采用scikit-learn默认值：缩放默认中心化并标准化，PCA默认不白化。原生细节见 [SVR](https://scikit-learn.org/1.4/modules/generated/sklearn.svm.SVR.html)、[StandardScaler](https://scikit-learn.org/1.4/modules/generated/sklearn.preprocessing.StandardScaler.html)、[PCA](https://scikit-learn.org/1.4/modules/generated/sklearn.decomposition.PCA.html)文档。
+- 省略预处理构造参数时采用scikit-learn默认值：缩放默认中心化并标准化，PCA默认不白化。
+- 原生细节见 [SVR](https://scikit-learn.org/1.4/modules/generated/sklearn.svm.SVR.html)、[StandardScaler](https://scikit-learn.org/1.4/modules/generated/sklearn.preprocessing.StandardScaler.html)、[PCA](https://scikit-learn.org/1.4/modules/generated/sklearn.decomposition.PCA.html)文档。
 
 #### AutoGluon（`autogluon`）
 
-以下参数名在普通schema-2流程的允许范围内；其中需要代码适配或会被固定版本拒绝的项已标明。工厂将 `predictor.label` 绑定到 `dataset.column_roles.label`，需要明确任务类型时使用 `problem_type: regression`。训练DataFrame只包含编码后的 `f0`、`f1` 等特征与目标，不自动保留任意原始CSV列。
+- 以下参数名在普通schema-2流程的允许范围内；其中需要代码适配或会被固定版本拒绝的项已标明。
+- 工厂将 `predictor.label` 绑定到 `dataset.column_roles.label`，需要明确任务类型时使用 `problem_type: regression`。
+- 训练DataFrame只包含编码后的 `f0`、`f1` 等特征与目标，不自动保留任意原始CSV列。
 
 | `autogluon.predictor` 参数 | 含义与当前限制 |
 | --- | --- |
@@ -957,9 +1193,15 @@ schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[�
 | `verbosity`、`calibrate` | 拟合日志和适用情况下的校准（`true`、`false`、`auto`）。 |
 | `fit_extra`、`fit_strategy`、`delay_bag_sets`、`raise_on_no_models_fitted` | 虽在项目名称名单中，但不是当前AutoGluon 1.1.1 `fit` 参数校验器允许的项，不应作为YAML拟合参数。`fit_extra()` 是后端的另一个方法。 |
 
-`train_data` 由流程绑定，不能从YAML提供；`tuning_data`、`unlabeled_data` 也不允许。上游存在但不在项目名单内的 `infer_limit`、`log_file_path` 等不会自动开放。`autogluon.runtime.save_path` 接受字符串或 `null`，默认模型位置是本折的 `autogluon/` 目录；`runtime.cleanup` 为布尔值，普通流程默认 `false`。建议省略 `predictor.path` 和 `runtime.save_path`，保留系统的任务/逐折隔离目录：普通执行器不会为显式路径自动追加折后缀，共用路径可能混入或覆盖旧模型，也可能导致拟合失败。自定义路径仍须位于本任务指定输出目录内，并隔离每折、每个组合。这里没有一个能固定全部AutoGluon子模型的顶层 `random_state`。
+- `train_data` 由流程绑定，不能从YAML提供；`tuning_data`、`unlabeled_data` 也不允许。
+- 上游存在但不在项目名单内的 `infer_limit`、`log_file_path` 等不会自动开放。
+- `autogluon.runtime.save_path` 接受字符串或 `null`，默认模型位置是本折的 `autogluon/` 目录；`runtime.cleanup` 为布尔值，普通流程默认 `false`。
+- 建议省略 `predictor.path` 和 `runtime.save_path`，保留系统的任务/逐折隔离目录：普通执行器不会为显式路径自动追加折后缀，共用路径可能混入或覆盖旧模型，也可能导致拟合失败。
+- 自定义路径仍须位于本任务指定输出目录内，并隔离每折、每个组合。
+- 这里没有一个能固定全部AutoGluon子模型的顶层 `random_state`。
 
-固定版本的上游[构造器文档](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L222)和[拟合文档](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L392)也定义了 `hyperparameters`、`ag_args`、`ag_args_fit`、`ag_args_ensemble` 内部的嵌套范围。YONOD开放这些字典，但不逐项定义或校验每个后端模型家族的子参数，填写前需核对1.1.1源码/API。
+- 固定版本的上游[构造器文档](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L222)和[拟合文档](https://github.com/autogluon/autogluon/blob/v1.1.1/tabular/src/autogluon/tabular/predictor/predictor.py#L392)也定义了 `hyperparameters`、`ag_args`、`ag_args_fit`、`ag_args_ensemble` 内部的嵌套范围。
+- YONOD开放这些字典，但不逐项定义或校验每个后端模型家族的子参数，填写前需核对1.1.1源码/API。
 
 #### 参数支持范围随检验协议变化
 
@@ -971,19 +1213,47 @@ schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[�
 | AutoGluon | 上述普通流程名单 | 仅 `fit.time_limit`、`fit.presets`、`fit.num_cpus`，以及已支持runtime路径/清理；省略 `predictor.label`，内部固定为 `yield` | 不支持 |
 | SVM抽样 | 只减少最终SVR训练行 | 不执行 `preprocessing.subsample.n_samples` 裁样；显式缩放/PCA仍随工厂Pipeline执行 | 不执行 `preprocessing.subsample.n_samples` 裁样；显式缩放/PCA仍随工厂Pipeline执行 |
 
-常规 `manifest_outer_cv` benchmark 不会用 `evaluation.seed` 替换 `estimator.random_state`。显式复现设置 `benchmark.reproduction_protocol.name: vjethbkm_rf_5x5` 和单独的 `paper_exact_5x5` 评价路径会将RF模型种子绑定到逐折manifest，并拒绝冲突。普通工厂接受某个参数，不代表所有benchmark适配器都会执行它。
+- 常规 `manifest_outer_cv` benchmark 不会用 `evaluation.seed` 替换 `estimator.random_state`。
+- 显式复现设置 `benchmark.reproduction_protocol.name: vjethbkm_rf_5x5` 和单独的 `paper_exact_5x5` 评价路径会将RF模型种子绑定到逐折manifest，并拒绝冲突。
+- 普通工厂接受某个参数，不代表所有benchmark适配器都会执行它。
 
-manifest benchmark的AutoGluon使用专用适配器，省略设置时采用300秒拟合预算、`medium_quality`、单CPU和启用清理。这些是该适配器的兼容默认值；普通schema-2 AutoGluon通过共同predictor工厂采用已安装库默认。使用专用路径时可明确声明资源。
+- manifest benchmark的AutoGluon使用专用适配器，省略设置时采用300秒拟合预算、`medium_quality`、单CPU和启用清理。
+- 这些是该适配器的兼容默认值；普通schema-2 AutoGluon通过共同predictor工厂采用已安装库默认。
+- 使用专用路径时可明确声明资源。
 
 ### 增加新的模型
 
-1. 实现或包装具有 `fit(X_train, y_train, **fit_options)`、`predict(X_valid)`、`get_params()` 的估计器。每条检验记录必须返回一个有限数值，拟合对象应可按流程模型格式保存和恢复；依赖数据的预处理只在训练折学习。
-2. 在 [config/contracts.py](yonod/config/contracts.py) 的 `MODEL_PARAMETER_ROUTES` 中加入模型ID和参数区段。需要别名时，再更新 [config/loader.py](yonod/config/loader.py) 的 `_MODEL_ALIASES`。
-3. 更新 [model_factory.py](yonod/model_factory.py) 中的 `_library_catalog`、`resolve_model_config`、`_validate_runtime`、`construct_estimator`（或明确的predictor专用路径）、`software_versions`。可选依赖延迟导入，在耗时计算前拒绝未知键和外部数据/回调对象。
-4. 核对 [pipeline/training.py](yonod/pipeline/training.py) 的 `_default_fold_runner`、模型序列化和[保存模型预测](yonod/pipeline/prediction.py)。非sklearn模型需显式实现拟合选项路由和加载，不应假定通用runner已足够。需要训练诊断时，再验证训练/留出预测契约并加入支持。
-5. 在 [yonod.py](yonod.py) 的 `_MODEL_NAMES`、[generate_yaml_config.py](generate_yaml_config.py) 的模型菜单及 `_canonical_wizard_models` 中增加模型选项。旧 `_make_model` 和 `yonod/models/` 只在同时支持旧直接CSV接口时需要更新，单独修改它们不能注册schema-2模型。
-6. HPO需另行更新 [hpo/contracts.py](yonod/hpo/contracts.py)、[hpo/spaces.py](yonod/hpo/spaces.py)、[hpo/search.py](yonod/hpo/search.py)及必要的最终模型流程。定义有边界、有版本的搜索空间和训练内评分；支持构造器不等于自动支持HPO。
-7. 明确选择要兼容的专用协议，核对 [benchmark/config.py](yonod/benchmark/config.py)、[benchmark/executor.py](yonod/benchmark/executor.py)、[frozen_external.py](yonod/benchmark/frozen_external.py)。保留各协议的数据边界、模型限制和恢复证据；未实现适配时保持明确拒绝。
-8. 验证脚本放 `_verify/`，检查未知参数拒绝、维度/非有限值、训练内预处理、外层标签隔离、模型保存/预测恢复、Linux/Windows路径。工程smoke与真实研究任务分开；更新依赖、双语文档和独立文档仓日志，再按两仓实际更改分别提交。
+1. 实现或包装具有 `fit(X_train, y_train, **fit_options)`、`predict(X_valid)`、`get_params()` 的估计器。
+
+   - 每条检验记录必须返回一个有限数值，拟合对象应可按流程模型格式保存和恢复；依赖数据的预处理只在训练折学习。
+
+2. 在 [config/contracts.py](yonod/config/contracts.py) 的 `MODEL_PARAMETER_ROUTES` 中加入模型ID和参数区段。
+
+   - 需要别名时，再更新 [config/loader.py](yonod/config/loader.py) 的 `_MODEL_ALIASES`。
+
+3. 更新 [model_factory.py](yonod/model_factory.py) 中的 `_library_catalog`、`resolve_model_config`、`_validate_runtime`、`construct_estimator`（或明确的predictor专用路径）、`software_versions`。
+
+   - 可选依赖延迟导入，在耗时计算前拒绝未知键和外部数据/回调对象。
+
+4. 核对 [pipeline/training.py](yonod/pipeline/training.py) 的 `_default_fold_runner`、模型序列化和[保存模型预测](yonod/pipeline/prediction.py)。
+
+   - 非sklearn模型需显式实现拟合选项路由和加载，不应假定通用runner已足够。
+   - 需要训练诊断时，再验证训练/留出预测契约并加入支持。
+
+5. 在 [yonod.py](yonod.py) 的 `_MODEL_NAMES`、[generate_yaml_config.py](generate_yaml_config.py) 的模型菜单及 `_canonical_wizard_models` 中增加模型选项。
+
+   - 旧 `_make_model` 和 `yonod/models/` 只在同时支持旧直接CSV接口时需要更新，单独修改它们不能注册schema-2模型。
+
+6. HPO需另行更新 [hpo/contracts.py](yonod/hpo/contracts.py)、[hpo/spaces.py](yonod/hpo/spaces.py)、[hpo/search.py](yonod/hpo/search.py)及必要的最终模型流程。
+
+   - 定义有边界、有版本的搜索空间和训练内评分；支持构造器不等于自动支持HPO。
+
+7. 明确选择要兼容的专用协议，核对 [benchmark/config.py](yonod/benchmark/config.py)、[benchmark/executor.py](yonod/benchmark/executor.py)、[frozen_external.py](yonod/benchmark/frozen_external.py)。
+
+   - 保留各协议的数据边界、模型限制和恢复证据；未实现适配时保持明确拒绝。
+
+8. 验证脚本放 `_verify/`，检查未知参数拒绝、维度/非有限值、训练内预处理、外层标签隔离、模型保存/预测恢复、Linux/Windows路径。
+
+   - 工程smoke与真实研究任务分开；更新依赖、双语文档和独立文档仓日志，再按两仓实际更改分别提交。
 
 最近一次对照本仓库核对：2026-11-14。
