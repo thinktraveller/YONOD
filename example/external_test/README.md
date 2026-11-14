@@ -2,7 +2,7 @@
 
 本包展示**训练CSV、外测CSV、列名对应关系和来源核查文件怎样配合**。这里有12条训练记录、6条外测记录，所有产率都为人工编造；结构只是形式上的酰胺示例，没有反应条件或实验测量依据。**本包演示外测操作，不构成独立实验来源的科学验证。**
 
-本包已有完整运行与逐条验收记录。当前YAML不固定线程数；实际测试配置版本与平台见 `verification.json`。
+本包已有完整运行与逐条验收记录。当前YAML不固定线程数；历史实际测试配置版本与平台见 `verification.json`；其中 `current_configuration` 记录当前输出路径配置，本次仅做静态校验，未重新建模。
 
 ## 文件如何分工
 
@@ -11,7 +11,7 @@
 | [dataset/train.csv](dataset/train.csv) | 12条建立模型用的记录：反应编号、人工参考产率、胺、酸和产物结构。 |
 | [dataset/external.csv](dataset/external.csv) | 6条留待外测的记录；额外保留来源编号和胺分组，并故意采用不同列名展示对应方法。 |
 | [audit/external_audit.json](audit/external_audit.json) | 外测来源与结构重叠核查清单（audit manifest），明确人工教学身份及结构交集。 |
-| [run.yaml](run.yaml) | 直接在本目录运行的任务配置；路径相对本文件所在目录。 |
+| [run.yaml](run.yaml) | 复制到根 config/example/ 后运行的任务配置模板；路径相对本文件所在目录。 |
 | [provenance.json](provenance.json) | 训练/外测文件校验码、实际结构交集与本轮运行记录。 |
 
 ## 两份表怎样对应
@@ -63,13 +63,13 @@
 2. 同一输入角色两表一一对应；先核对结构和实际化学角色，再填写`column_map`，不能只凭列顺序猜测。
 3. 训练编号与外测编号不能相交；外测编号和来源编号分别唯一，外测分组至少两个且都非空。
 4. 外测CSV、审计JSON及YAML中的校验码同步更新；保留真实来源链、结构重叠和排除依据。
-5. 使用新的任务名，结果隔离到新`result/<任务名>/`。该协议不接受CV折数字段或分组划分清单，也不支持OHE类别编码、数值条件输入、自动设置筛选、AutoGluon或外测早停；本例仅展示支持的静态分子编码与固定RF。
+5. 使用新的任务名，建议将结果隔离到仓库根新的 `result/<任务名>/`。该协议不接受CV折数字段或分组划分清单，也不支持OHE类别编码、数值条件输入、自动设置筛选、AutoGluon或外测早停；本例仅展示支持的静态分子编码与固定RF。
 
 这里同时使用胺、酸和产物结构，所以真正使用时须确认预测时确实已知目标产物。它不是仅输入反应物就自动推断产物的功能。
 
 ## 在本文件夹运行
 
-从YONOD根目录进入 `example/external_test/`，检查同目录的 [run.yaml](run.yaml)，无需复制或移动设置。输入和新结果保留在本包中；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
+从YONOD根目录进入 `example/external_test/`，检查同目录的 [run.yaml](run.yaml)，先将模板复制到仓库根 `config/example/example_external_test_20261113.yaml`，再读取该副本。输入保留在本包，新结果统一写入仓库根 `result/example/<任务名>/`；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
 
 ### Linux：Bash
 
@@ -80,8 +80,9 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/external_test
-mkdir -p ../../logs
-printf '%s\n' 'run.yaml' > ../../logs/example_external_test_20261113.stdin.txt
+mkdir -p ../../logs ../../config/example
+cp run.yaml ../../config/example/example_external_test_20261113.yaml
+printf '%s\n' '../../config/example/example_external_test_20261113.yaml' > ../../logs/example_external_test_20261113.stdin.txt
 nohup python -u ../../yonod.py \
   < ../../logs/example_external_test_20261113.stdin.txt \
   > ../../logs/example_external_test_20261113.log 2>&1 &
@@ -98,25 +99,27 @@ echo $! > ../../logs/example_external_test_20261113.pid
 conda activate yonod
 $env:PYTHONUTF8 = '1'
 Set-Location .\example\external_test
+New-Item -ItemType Directory -Force -Path ..\..\config\example | Out-Null
+Copy-Item -LiteralPath .\run.yaml -Destination ..\..\config\example\example_external_test_20261113.yaml
 python -u ..\..\yonod.py
 ```
 
-首次提示输入 `run.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
+首次提示输入 `../../config/example/example_external_test_20261113.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
 
-新结果写入本目录的 `result/example_external_test_20261113/`，网页报告为其中的 `report/external_test_report.html`。下载包的 `completed_run/` 保留已完成运行的快照；具体测试配置版本和平台见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
+新结果写入仓库根的独立任务目录，从本示例目录访问为 `../../result/example/example_external_test_20261113/`，网页报告为其中的 `report/external_test_report.html`。下载包的 `completed_run/` 保留已完成运行的快照；历史测试配置版本和平台，以及当前路径配置的静态校验记录见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
 
 ## 真正完成运行后的报告在哪里
 
-下载包的[本轮网页报告](completed_run/report/external_test_report.html)与[文字报告](completed_run/report/external_test_report.md)保存在 `completed_run/` 完整快照中。重新运行使用同目录YAML，在本包 `result/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
+下载包的[本轮网页报告](completed_run/report/external_test_report.html)与[文字报告](completed_run/report/external_test_report.md)保存在 `completed_run/` 完整快照中。重新运行先复制模板到根 `config/example/`，再读取该副本，在仓库根 `result/example/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
 
 以下路径均相对当前示例文件夹；运行成功后应生成并核对这些结果：
 
 | 路径（相对当前示例目录） | 内容 |
 | --- | --- |
-| `result/example_external_test_20261113/report/external_test_report.html` | 外测网页报告，包含实际训练/外测规模与外测指标。 |
-| `result/example_external_test_20261113/report/external_test_report.md` | Markdown版外测报告。 |
-| `result/example_external_test_20261113/docs/metrics/external_test_metrics.csv` | 完整精度外测指标。 |
-| `result/example_external_test_20261113/docs/predictions/morgan__rf.parquet` | 6条外测记录的参考值、预测值、来源编号与组信息。 |
+| `../../result/example/example_external_test_20261113/report/external_test_report.html` | 外测网页报告，包含实际训练/外测规模与外测指标。 |
+| `../../result/example/example_external_test_20261113/report/external_test_report.md` | Markdown版外测报告。 |
+| `../../result/example/example_external_test_20261113/docs/metrics/external_test_metrics.csv` | 完整精度外测指标。 |
+| `../../result/example/example_external_test_20261113/docs/predictions/morgan__rf.parquet` | 6条外测记录的参考值、预测值、来源编号与组信息。 |
 
 R²（决定系数）不是预测正确率；MAE（平均绝对误差）在本例0–1产率表示下乘100才是百分点。人工小样例只用于检查操作流程，不能据其分数评价真实化学预测效果。
 
@@ -125,4 +128,4 @@ R²（决定系数）不是预测正确率；MAE（平均绝对误差）在本�
 
 ### 生成其他任务的配置
 
-本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；yonod.py同时承担任务启动与建模执行，历史运行记录中的旧名保留其日期语境。
+本包run.yaml模板已经准备好，按上面的分系统步骤复制到config/example后执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；yonod.py同时承担任务启动与建模执行，历史运行记录中的旧名保留其日期语境。

@@ -136,5 +136,17 @@
   "data_status": "synthetic_not_measured",
   "platform_tested": "Linux",
   "logs": "../../logs/example_random_split_portable_20261114.log",
-  "snapshot_note": "Saved outputs for inspection. A fresh run creates result/<task> and does not reuse completed_run. Snapshot model portability has not been tested."
+  "snapshot_note": "Saved outputs for inspection. A fresh run creates result/<task> and does not reuse completed_run. Snapshot model portability has not been tested.",
+  "current_configuration": {
+    "path": "run.yaml",
+    "launch_configuration": "../../config/example/example_random_split_20261113.yaml",
+    "config_sha256": "c76279af3d04e7961a6bdf4e477cf4e407f3876286edd15026d5cec928304dc7",
+    "path_base": "example_directory",
+    "output_root": "../../result/example/example_random_split_20261113",
+    "repository_output_root": "result/example/example_random_split_20261113",
+    "validation_status": "validated_without_modeling",
+    "modeling_executed": false,
+    "change": "Input paths now resolve from both example/<package> and config/example; outputs use repository result/example. Input bytes, descriptors, model parameters and evaluation settings are unchanged.",
+    "historical_execution": "The existing launch, status, checks and snapshots describe the earlier configuration hash; this output-path revision has not been rerun."
+  }
 }

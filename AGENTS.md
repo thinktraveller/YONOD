@@ -59,13 +59,19 @@ Every modeling task must follow this order from the repository root:
 3. Start through `yonod.py`. At the first prompt, provide the already-created
    YAML path; the script validates it and launches the configured run.
 
-Teaching examples under `example/` are an exception to the root `config/`
-location: each has one executable `run.yaml`, inputs relative to its own
-folder, and outputs under its own `result/<task_name>/`. From that folder,
+Teaching examples under `example/` each provide a `run.yaml` template. Before
+running one, copy it to the repository-root `config/example/<task_name>.yaml`,
+preserving an existing copy. The template's `../../example/<package>/` input
+paths resolve identically from either location. Outputs belong under the
+repository-root `result/example/<task_name>/` (set
+`outputs.root: ../../result/example/<task_name>` and put feature artifacts in
+its `feature/` subdirectory). From an example folder,
 run `python ../../yonod.py` on Linux or `python ..\..\yonod.py` on Windows
-and enter `run.yaml`; no configuration copy is required. Keep schema-2,
+and enter `../../config/example/<task_name>.yaml`. Keep schema-2,
 serial execution, dual reports, and repository-root `logs/` for operational
 logs and PID files. Research task YAMLs still belong in root `config/`.
+The root `example.yaml` remains the engineering smoke interface and also
+writes under `result/example/`.
 
 Schedule tasks linearly: run one task to completion before starting the
 next. Do not launch multiple YONOD runs, descriptors, model combinations,
@@ -161,8 +167,9 @@ It may write normalized/prepared CSVs and invalid-input reports under the
 isolated `result/<task_name>/feature/docs/`, but must not calculate descriptors,
 fit models, predict, or automatically launch a modeling task. Existing YAML
 input is validated only. Review the saved YAML, then launch `yonod.py` and
-provide that path at the first prompt. Teaching `run.yaml` files are already
-prepared and do not need to pass through the generator.
+provide that path at the first prompt. Teaching `run.yaml` templates are
+already prepared: copy them to `config/example/` as described above; they do
+not need to pass through the generator.
 
 Executable run configurations use schema-2 YAML. JSON audit records and
 manifests remain supported evidence formats; they are not run configurations.
@@ -205,10 +212,13 @@ Write new backups and engineering-support files under `backup/`. Once results
 are no longer needed for active work, move them into `backup/`, keeping each
 task's files together so the original run remains identifiable. `backup/` is
 excluded from the main Git repository.
-For each
-project run, all result files must be contained in that task's designated
-`result/<task_name>/` directory; do not write loose run results directly under
-`result/`, share result directories between tasks, or place final modeling
+Recommend the repository-root `result/` for all run outputs. Its `example/`
+subfolder initially contains only a Git placeholder, with no run results;
+each example run creates its own `result/example/<task_name>/`. Research
+tasks use `result/<task_name>/`. For each project run, all result files must
+be contained in that task's designated directory (`result/<task_name>/` for
+research or `result/example/<task_name>/` for examples); do not write loose
+run results directly under `result/`, share result directories between tasks, or place final modeling
 results under `derived/`. All modeling-task operational logs and PID files
 must be placed in `logs/` (for example, `logs/<task_name>.log` and
 `logs/<task_name>.pid`); do not write task logs under `result/`.
@@ -275,14 +285,18 @@ platform as tested based solely on its documented commands.
 
 The main project repository stays on `main`. `project-docs/` is a separate Git
 repository that includes its `docs/` subdirectory. The main repository ignores
-`project-docs/`, `_verify/`, `config/`, `reference-projects/`, and `backup/`.
+`project-docs/`, `_verify/`, `reference-projects/`, and `backup/`.
+Under `config/` and `result/`, only their `example/` subfolders are kept in
+the main repository; all other files and folders are ignored. Each example
+subfolder initially contains only `.gitkeep` to preserve the empty directory.
 
 ### Required directory locations
 
 - Put all test, validation, and acceptance scripts under `_verify/`. Do not
   commit that directory to either Git repository.
-- Put task YAML files under `config/`. Keep the directory local and excluded
-  from the main Git repository.
+- Put task YAML files under `config/`. Recommend this folder for all run
+  configurations. Keep research configurations local and excluded from the
+  main Git repository; `config/example/` is the tracked example exception.
 - Put the agent documents `goal.md`, `project-plan.md`, `buildlog.md`, and
   `teach.md` at the root of `project-docs/`. Their responsible agents maintain
   their contents; do not create empty placeholders for them.
@@ -303,7 +317,7 @@ repository that includes its `docs/` subdirectory. The main repository ignores
 
 At the end of each task, commit the task's changes separately in both Git
 repositories: one main project commit and one `project-docs/` commit. The main
-commit must exclude `project-docs/`, `_verify/`, `config/`,
+commit must exclude `project-docs/`, `_verify/`, non-example files in `config/`,
 `reference-projects/`, and `backup/`; the documentation commit contains the
 task's maintained documents.
 If a repository has no changes to commit, report that fact instead of making
@@ -312,7 +326,7 @@ an empty commit. Do not declare a task with pending changes complete.
 Inspect each staging area before committing, and explicitly list only the
 files changed by the task. Never use `git add .` or `git add -A` in either
 repository. Never commit `.env`, credentials, or files from `_verify/`,
-`config/`, `reference-projects/`, or `backup/`.
+non-example files in `config/`, `reference-projects/`, or `backup/`.
 
 ```text
 # Git commands below work in Bash and PowerShell; replace paths and message.

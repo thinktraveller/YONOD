@@ -2,16 +2,16 @@
 
 这是供化学研究人员阅读的完整示例入口。建议先用浏览器打开 [index.html](index.html)，再按下面顺序看文件。
 
-**数据是12条人工构造的流程测试记录，不是实验测量数据。** 分子结构文本用于演示输入格式，不表示这两列分子一定能发生合理反应。本页保留同一批数据、同一结构编码、模型规模与随机划分的历史实际计算输出，供对照来源。当前YAML不固定线程数，历史报告保留当时参数；最新验收配置版本与平台见 `verification.json`。
+**数据是12条人工构造的流程测试记录，不是实验测量数据。** 分子结构文本用于演示输入格式，不表示这两列分子一定能发生合理反应。本页保留同一批数据、同一结构编码、模型规模与随机划分的历史实际计算输出，供对照来源。当前YAML不固定线程数，历史报告保留当时参数；历史实际测试配置版本与平台见 `verification.json`；其中 `current_configuration` 记录当前输出路径配置，本次仅做静态校验，未重新建模。
 
-本轮下载快照：[网页报告](completed_run/report/report.html) · [文字报告](completed_run/report/report.md)。快照保存在 `completed_run/`，重新运行仍写入独立的 `result/example_random_split_20261113/`。
+本轮下载快照：[网页报告](completed_run/report/report.html) · [文字报告](completed_run/report/report.md)。快照保存在 `completed_run/`，重新运行写入仓库根的独立任务目录，从本示例目录访问为 `../../result/example/example_random_split_20261113/`。
 
 ## 1. 示例文件夹里有什么
 
 | 文件 | 先看什么 |
 |---|---|
 | [dataset/reactions.csv](dataset/reactions.csv) | 反应数据表（CSV）：每行一条记录，含编号、参考产率和两列分子结构 |
-| [run.yaml](run.yaml) | 可直接在本文件夹运行的建模任务设置文件（YAML）：说明选哪些列、怎样编码、采用哪些建模方法和怎样测试 |
+| [run.yaml](run.yaml) | 可复制到根 config/example/ 后运行的建模任务设置模板（YAML）：说明选哪些列、怎样编码、采用哪些建模方法和怎样测试 |
 | [tables/split_assignments.csv](tables/split_assignments.csv) | 每条记录在哪一批测试中被留出；它们不是三套不同模型各自随意拆出的数据 |
 | [tables/metrics.csv](tables/metrics.csv) | 从已保存逐条预测核对得到的评分，保留全部三种方法及负分 |
 | [report/report.html](report/report.html) | 原始完整网页报告，保留原任务名和原报告用语 |
@@ -20,7 +20,7 @@
 | `evidence/run_morgan-rf/` 等 | 历史原始设置、生效设置、逐条预测、每批评分及运行记录清单的审计节选 |
 | [provenance.json](provenance.json) | 数据和报告来自哪里、哪些文件是原字节复制、哪些是本次整理的展示内容 |
 
-直接进入本目录，通过 `../../yonod.py` 选择 `run.yaml`。输入和结果路径都相对本YAML所在目录，无须复制到根 `config/`。新报告位于 `result/example_random_split_20261113/report/`；旧报告仍位于 `report/`，来自 `diag215_20260929_ordinary_fixed_off_v1`，保留原任务名称与日期。
+先将本目录 `run.yaml` 复制到仓库根 `config/example/example_random_split_20261113.yaml`，再通过 `../../yonod.py` 读取该副本。输入和结果路径按YAML所在目录解析，模板路径同时适用于原示例目录和 `config/example/`。新报告位于 `../../result/example/example_random_split_20261113/report/`；旧报告仍位于 `report/`，来自 `diag215_20260929_ordinary_fixed_off_v1`，保留原任务名称与日期。
 
 `evidence/` 不是整套可重载模型的交付。保存预测和评分，并不等于保存了全部模型、转换文件及原运行环境；请勿据此直接调用模型预测接口。
 
@@ -48,7 +48,7 @@
 | `schema_version` | `2.0` | 使用当前设置格式 |
 | `project_name` | `example_random_split_20261113` | 新示例任务的独立名称；历史报告保留原任务名 |
 | `stage` | `all` | 连续完成输入编码、建立模型与内测报告 |
-| `dataset.path` | 指向本包的 `dataset/reactions.csv` | 读取本目录中的反应表，输入和输出都按YAML所在目录解析 |
+| `dataset.path` | `../../example/random_split/dataset/reactions.csv` | 读取示例包中的反应表，输入和输出均按YAML所在目录解析 |
 | `dataset.sample_id_col` | `reaction_id` | 哪列是反应记录编号 |
 | `dataset.column_roles.label` | `yield` | 哪列是希望预测的参考产率 |
 | `dataset.column_roles.reactants` | 两列结构文本 | 这些列可以作为已知分子输入 |
@@ -63,7 +63,7 @@
 | `evaluation.shuffle` | `true` | 先打乱记录顺序后再划分 |
 | `evaluation.seed` | `42` | 固定随机安排，方便核对划分；这个数字没有化学含义 |
 | `artifacts.output_dir` | 新任务的 `feature/` 子目录 | 将结构编码保存到任务自己的文件夹 |
-| `outputs.root` | `./result/example_random_split_20261113` | 在当前示例目录内保存新结果，与历史报告分开 |
+| `outputs.root` | `../../result/example/example_random_split_20261113` | 在仓库根 result/example/ 下保存本任务的新结果，与历史报告分开 |
 | `outputs.report_formats` | `html`、`markdown` | 完成时生成网页和文字两种报告 |
 | `outputs.diagnostics.enabled` | `false` | 关闭已学反应与留出反应的额外效果对照；不关闭正常内测预测和评分 |
 
@@ -105,7 +105,7 @@ R²比较模型与统一使用该测试结果均值预测的表现。负值表�
 - 开头“训练与外层评估诊断”的 `disabled` 表示额外效果对照被关闭。该诊断汇总的完成数为0，不表示三种模型的正常两折内测失败；正常评分表和各运行清单显示完整内测结果。
 - “严格外层CV加权排名”是历史报告的标题。本例实际协议为随机 `outer_kfold`，不能从“严格”两个字推断采用了底物分组留出。
 - 任务信息中的“SMILES列”为 `—` 是旧报告展示项未填；实际模型明确使用两列分子结构，见YAML和原始设置记录。
-- 原任务名、生成日期和原项目路径有意保留，用来追查历史来源；这份旧报告没有改写；本轮新任务的报告另存于包内的 `result/`。
+- 原任务名、生成日期和原项目路径有意保留，用来追查历史来源；这份旧报告没有改写；本轮新任务的报告另存于仓库根 `result/example/<任务名>/`。
 - 原报告保留历史通用指标文案，其中固定R²/误差阈值及用途建议不能直接作为本例或其他化学体系的可靠性标准。R²按“1减去误差平方和／测试值离均差平方和”理解；0–1尺度的误差乘100才是百分点，MAE也并非完全不受极端误差影响。本包的指标解读以本页和导览页为准。
 - 原报告网页可能用在线公式排版资源；主要图片已内嵌。文字版的图片位于同包的 `pictures/`，请一起保留。
 
@@ -114,7 +114,7 @@ R²比较模型与统一使用该测试结果均值预测的表现。负值表�
 
 ## 在本文件夹运行
 
-从YONOD根目录进入 `example/random_split/`，检查同目录的 [run.yaml](run.yaml)，无需复制或移动设置。输入和新结果保留在本包中；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
+从YONOD根目录进入 `example/random_split/`，检查同目录的 [run.yaml](run.yaml)，先将模板复制到仓库根 `config/example/example_random_split_20261113.yaml`，再读取该副本。输入保留在本包，新结果统一写入仓库根 `result/example/<任务名>/`；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
 
 ### Linux：Bash
 
@@ -125,8 +125,9 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/random_split
-mkdir -p ../../logs
-printf '%s\n' 'run.yaml' > ../../logs/example_random_split_20261113.stdin.txt
+mkdir -p ../../logs ../../config/example
+cp run.yaml ../../config/example/example_random_split_20261113.yaml
+printf '%s\n' '../../config/example/example_random_split_20261113.yaml' > ../../logs/example_random_split_20261113.stdin.txt
 nohup python -u ../../yonod.py \
   < ../../logs/example_random_split_20261113.stdin.txt \
   > ../../logs/example_random_split_20261113.log 2>&1 &
@@ -143,16 +144,18 @@ echo $! > ../../logs/example_random_split_20261113.pid
 conda activate yonod
 $env:PYTHONUTF8 = '1'
 Set-Location .\example\random_split
+New-Item -ItemType Directory -Force -Path ..\..\config\example | Out-Null
+Copy-Item -LiteralPath .\run.yaml -Destination ..\..\config\example\example_random_split_20261113.yaml
 python -u ..\..\yonod.py
 ```
 
-首次提示输入 `run.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
+首次提示输入 `../../config/example/example_random_split_20261113.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
 
-新结果写入本目录的 `result/example_random_split_20261113/`，网页报告为其中的 `report/report.html`。下载包的 `completed_run/` 保留已完成运行的快照；具体测试配置版本和平台见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
+新结果写入仓库根的独立任务目录，从本示例目录访问为 `../../result/example/example_random_split_20261113/`，网页报告为其中的 `report/report.html`。下载包的 `completed_run/` 保留已完成运行的快照；历史测试配置版本和平台，以及当前路径配置的静态校验记录见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
 
-本目录的历史数据、报告、图片和预测证据保留原字节；`evidence/`中的历史YAML仅用于追溯原计算，不是当前任务入口。下载压缩包附完整输出；源码克隆后自行运行生成包内 `result/`。
+本目录的历史数据、报告、图片和预测证据保留原字节；`evidence/`中的历史YAML仅用于追溯原计算，不是当前任务入口。下载压缩包附完整输出；源码克隆后自行运行，在仓库根 `result/example/` 下生成任务结果。
 
 
 ### 生成其他任务的配置
 
-本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；yonod.py同时承担任务启动与建模执行，历史运行记录中的旧名保留其日期语境。
+本包run.yaml模板已经准备好，按上面的分系统步骤复制到config/example后执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；yonod.py同时承担任务启动与建模执行，历史运行记录中的旧名保留其日期语境。

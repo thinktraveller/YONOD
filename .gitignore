@@ -101,9 +101,14 @@ _verify
 /project-docs/
 /backup/
 /scripts/
-result
+# Keep only example folders; ignore all other local outputs and configurations.
+/result/*
+!/result/example/
+!/result/example/**
 docs
-/config/
+/config/*
+!/config/example/
+!/config/example/**
 
 # Retired experiment archives must not be reintroduced.
 /experiments/

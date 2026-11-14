@@ -1,12 +1,12 @@
 # 随机划分教学示例：12条人工记录，不是实验测量数据。
-# 本目录report/保留历史报告；本配置的新计算输出保存在本目录result/。
-# 从本文件夹启动python ../../yonod.py，首提示输入run.yaml，无需复制配置。
+# 本目录report/保留历史报告；本配置的新计算输出保存在仓库根result/example/下的独立任务目录。
+# 先复制run.yaml到../../config/example/同任务名.yaml；从本目录启动python ../../yonod.py并读取该副本。
 schema_version: "2.0"
 project_name: example_random_split_20261113
 stage: all  # 先准备输入编码，再建立模型并做内测
 
 dataset:
-  path: ./dataset/reactions.csv
+  path: ../../example/random_split/dataset/reactions.csv
   sample_id_col: reaction_id  # 每条反应记录的唯一编号
   column_roles:
     label: yield             # 教学参考产率，0.10表示10%；不作为模型输入
@@ -28,7 +28,7 @@ descriptors:
     columns: [reactant_1_smiles, reactant_2_smiles]
 
 artifacts:
-  output_dir: ./result/example_random_split_20261113/feature
+  output_dir: ../../result/example/example_random_split_20261113/feature
 
 models: [rf, xgb, lightgbm]   # 同一数据、同一划分，比较三种建模方法
 # 未指定线程数时采用所用模型库的默认值；可按本机资源另设 estimator.n_jobs。
@@ -61,11 +61,11 @@ evaluation:
   seed: 42                   # 固定打乱方式；不表示未见底物或独立外测
 
 outputs:
-  root: ./result/example_random_split_20261113
+  root: ../../result/example/example_random_split_20261113
   report_formats: [html, markdown]
   diagnostics:
     enabled: false           # 与历史报告一致，不另算已学反应效果对照
     save_train_predictions: false
 
 metadata:
-  notes: "人工教学数据；结构编码、模型规模与划分来自历史任务diag215_20260929_ordinary_fixed_off_v1；计算线程数采用模型库默认值；当前配置可从本目录独立启动；结果写入本目录result。"
+  notes: "人工教学数据；结构编码、模型规模与划分来自历史任务diag215_20260929_ordinary_fixed_off_v1；计算线程数采用模型库默认值；当前模板默认复制到config/example后启动；结果写入仓库根result/example下的独立任务目录。"

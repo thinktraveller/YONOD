@@ -90,7 +90,7 @@
     "path": "run.yaml",
     "path_base": "example_directory"
   },
-  "output_root": "result/example_random_split_20261113",
+  "output_root": "../../result/example/example_random_split_20261113",
   "verification": "verification.json",
   "completed_run_snapshot": "completed_run",
   "current_reports": {
@@ -106,5 +106,17 @@
     ],
     "historical_resource_parameters": "Preserved only in frozen evidence; not current defaults"
   },
-  "historical_model_settings_note": "Model algorithms, small tree counts and split remain the teaching choices; resource fields in the live YAML differ from frozen historical evidence."
+  "historical_model_settings_note": "Model algorithms, small tree counts and split remain the teaching choices; resource fields in the live YAML differ from frozen historical evidence.",
+  "current_configuration": {
+    "path": "run.yaml",
+    "launch_configuration": "../../config/example/example_random_split_20261113.yaml",
+    "config_sha256": "c76279af3d04e7961a6bdf4e477cf4e407f3876286edd15026d5cec928304dc7",
+    "path_base": "example_directory",
+    "output_root": "../../result/example/example_random_split_20261113",
+    "repository_output_root": "result/example/example_random_split_20261113",
+    "validation_status": "validated_without_modeling",
+    "modeling_executed": false,
+    "change": "Input paths now resolve from both example/<package> and config/example; outputs use repository result/example. Input bytes, descriptors, model parameters and evaluation settings are unchanged.",
+    "historical_execution": "The existing launch, status, checks and snapshots describe the earlier configuration hash; this output-path revision has not been rerun."
+  }
 }

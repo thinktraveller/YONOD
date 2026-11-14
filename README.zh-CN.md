@@ -2,22 +2,23 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+[项目结构](#项目结构) · [致谢](#致谢) · [License](#license)
+
 YONOD（You Only Need Outstanding Descriptors）用已有化学反应记录建立数值预测模型，例如预测反应产率。你准备一张数据表，选好输入列和建模方法，程序会把分子结构转换成数值编码，完成建模与留出检验，并保存逐条预测和可在浏览器打开的报告。
 
 如果你还不熟悉 Python，可以先跟着下面的步骤运行自带样例。你只需输入命令和配置文件名，无需编写程序或下载预训练模型权重。
 
 程序的交互提示目前使用中文。
 
-[入门内容](#入门内容)带你安装并完成首次运行；[进阶内容](#进阶内容)说明三种检验方式与配置；[开发者内容](#开发者内容)提供完整参数参考及扩展方法。
+[入门内容](#入门内容)带你安装并完成冒烟测试；[进阶内容](#进阶内容)说明三种检验方式与配置；[开发者内容](#开发者内容)提供完整参数参考及扩展方法。
 
 ## 入门内容
 
 - [它能帮你做什么](#它能帮你做什么)
 - [安装](#安装)
-- [完成第一次运行](#完成第一次运行)
+- [完成冒烟测试](#完成冒烟测试)
 - [怎样读结果](#怎样读结果)
 - [遇到问题时](#遇到问题时)
-- [License](#license)
 
 ### 它能帮你做什么
 
@@ -111,9 +112,9 @@ python --version
 python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports OK')"
 ```
 
-应看到 Python 3.9 和 `YONOD imports OK`，说明主要依赖可以导入。保留当前终端，继续第一次运行。
+应看到 Python 3.9 和 `YONOD imports OK`，说明主要依赖可以导入。保留当前终端，继续冒烟测试。
 
-### 完成第一次运行
+### 完成冒烟测试
 
 #### 什么是冒烟测试
 
@@ -130,7 +131,7 @@ python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports
 - 这些结构搭配和产率是供冒烟测试使用的人工数据，不是实验测量，也不保证代表合理的化学反应。
 
 - 同目录的 [run.yaml](example/random_split/run.yaml) 保存本次设置。
-- YAML 是用缩进组织设置的文本文件，这里已经准备好，第一次运行无需修改。
+- YAML 是用缩进组织设置的文本文件，这里已经准备好，运行冒烟测试无需修改。
 - 程序会使用 Morgan 编码，依次运行随机森林（RF）、XGBoost 和 LightGBM；将12条记录分成两份，每次6条建模、6条检验，再交换。
 - 首次完整运行共进行6次拟合。
 
@@ -145,6 +146,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/random_split
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -154,15 +157,18 @@ Windows Conda PowerShell：
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\random_split
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 当程序询问 `请输入配置文件路径(schema-2 YAML):` 时，输入下面的文件名并按回车：
 
 ```text
-run.yaml
+../../config/example/example_random_split_20261113.yaml
 ```
 
+- 上述命令先将模板复制到根 `config/example/`，已有同名配置会保留，无需运行 YAML 生成器。
 - 程序随后校验配置、准备编码并运行模型。
 - 完成时应看到 `features=ready`，以及 `morgan × rf`、`morgan × xgb`、`morgan × lightgbm` 各自的 `complete` 或 `reused`。
 - `reused` 表示程序核对身份后复用了已有结果。
@@ -170,20 +176,20 @@ run.yaml
 
 #### 打开报告
 
-- 仍在 `example/random_split/` 目录时，新报告位于 `result/example_random_split_20261113/report/report.html`。
+- 仍在 `example/random_split/` 目录时，新报告位于 `../../result/example/example_random_split_20261113/report/report.html`。
 - 在文件管理器找到它，双击用浏览器打开即可。
 - 也可使用下列命令。
 
 Linux Bash（有桌面环境时）：
 
 ```bash
-xdg-open result/example_random_split_20261113/report/report.html
+xdg-open ../../result/example/example_random_split_20261113/report/report.html
 ```
 
 Windows Conda PowerShell：
 
 ```powershell
-Invoke-Item .\result\example_random_split_20261113\report\report.html
+Invoke-Item ..\..\result\example\example_random_split_20261113\report\report.html
 ```
 
 - 同目录的 `report.md` 是文字版报告；逐条预测位于任务目录的 `runs/run_morgan-<模型>/predictions.csv`。
@@ -228,10 +234,6 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 - 仍需帮助时，可在[项目 Issues](https://github.com/thinktraveller/YONOD/issues)中提供操作系统、Python版本、所用命令、配置及完整报错。
 - 提交前移除私人数据和凭据。
 
-### License
-
-本项目代码和文档采用 [CC BY-NC 4.0](LICENSE)，要求署名并限于非商业使用。第三方数据、预训练权重与参考代码遵循各自许可证和引用要求。
-
 ## 进阶内容
 
 - [使用自己的 CSV](#使用自己的-csv)
@@ -246,6 +248,8 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 - [按需安装可选依赖和资产](#按需安装可选依赖和资产)
 
 ### 使用自己的 CSV
+
+可直接打开[示例 CSV 数据集](example/random_split/dataset/reactions.csv)，参考列名与记录格式；其中数值是冒烟测试使用的人工数据。
 
 #### 先准备数据表
 
@@ -344,9 +348,9 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 ### 配置路径与执行阶段
 
-- 研究 YAML 保存在根 `config/`。
+- 推荐将运行配置统一保存在根 `config/`：研究配置使用 `config/<task_name>.yaml`，示例副本使用 `config/example/<task_name>.yaml`。
 - 这些文件中以 `./` 开头的路径按项目根解析；显式 `../` 及其他位置配置内的相对路径按 YAML 所在目录解析，绝对路径保持绝对。
-- 首次使用样例中，`run.yaml` 的输入输出因此留在各自包内。
+- 示例模板使用 `../../example/<包名>/` 输入路径，复制到 `config/example/` 后仍读取同一文件；输出通过 `../../result/example/<task_name>` 保存到项目根目录。
 - 配置保存为 UTF-8 纯文本，缩进使用空格；Windows下检查文件没有被另加 `.txt` 后缀。
 
 | `stage` | 执行内容 |
@@ -356,6 +360,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 | `all` | 准备编码后进行普通内测。 |
 | `benchmark` | 按所选协议及必需字段分派专用执行器。 |
 
+- 推荐将所有运行结果统一放在项目根目录 `result/`，每项任务使用独立的 `result/<task_name>/`。
 - 每个研究任务使用独立的 `outputs.root: ./result/<task_name>`，并将编码放入子目录，例如 `artifacts.output_dir: ./result/<task_name>/feature`，保留 `outputs.report_formats: [html, markdown]`。
 - 操作日志和PID在根 `logs/`，最终建模结果在任务目录内，不放入 `derived/`。
 
@@ -364,7 +369,8 @@ Copy-Item example.yaml config\my_reaction.yaml
 - 三个首次使用样例都使用人工记录，主要用于冒烟测试，检查各自流程能否完整运行。
 - 一次只运行一个任务。
 - 每组命令都从项目根目录开始；若仍在上一个样例中，Bash 用 `cd ../..`，PowerShell 用 `Set-Location ..\..` 返回。
-- 运行器首次询问配置路径时，输入 `run.yaml`。
+- 下列命令将示例配置保存到项目根目录 `config/example/`；运行器首提示输入各例给出的已保存路径。
+- 以下报告路径均相对项目根目录。
 
 | 你的问题 | 流程与配置 | 怎样分开建模和检验 |
 | --- | --- | --- |
@@ -377,7 +383,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 1. 查看[12行数据表](example/random_split/dataset/reactions.csv)和 [run.yaml](example/random_split/run.yaml)。
 
    - 本例使用两列反应物结构、Morgan 编码、RF/XGBoost/LightGBM，进行两折、一轮检验。
-2. 按系统运行下面的命令，在首次提示输入 `run.yaml`。
+2. 按系统运行下面的命令，在首次提示输入 `../../config/example/example_random_split_20261113.yaml`。
 
 Linux Bash：
 
@@ -386,6 +392,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/random_split
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -395,12 +403,14 @@ Windows Conda PowerShell：
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\random_split
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 3. 核对 `features=ready`、三个组合的 `complete` 或 `reused` 状态及两种报告。
 
-   - 新 HTML 报告是 `example/random_split/result/example_random_split_20261113/report/report.html`；逐条预测位于该任务的 `runs/run_morgan-<model>/predictions.csv`。
+   - 新 HTML 报告是 `result/example/example_random_split_20261113/report/report.html`；逐条预测位于该任务的 `runs/run_morgan-<model>/predictions.csv`。
 
 4. 使用自己的 CSV 时，在根 `config/` 生成新配置，或从 [example.yaml](example.yaml) 另存独立副本。
 
@@ -418,7 +428,7 @@ python -u ..\..\yonod.py
 
    - 每折列出全部12条记录；第1折留出 `block_A`，第2折留出 `block_B`。
 2. 保持 `stage: benchmark`、`evaluation.protocol: manifest_outer_cv`、分组声明、`evaluation.split_manifest` 与 `benchmark.task_state` 相互一致。
-3. 从项目根目录启动，首提示输入 `run.yaml`。
+3. 从项目根目录启动，首提示输入 `../../config/example/example_fixed_split_20261113.yaml`。
 
 Linux Bash：
 
@@ -427,6 +437,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/fixed_split
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_fixed_split_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -436,12 +448,14 @@ Windows Conda PowerShell：
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\fixed_split
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_fixed_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_fixed_split_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 4. 核对 RF 两折成功记录。
 
-   - 报告是 `example/fixed_split/result/example_fixed_split_20261113/report/benchmark_report.html`；实际采用的清单和预测在该任务的 `docs/manifests/`、`docs/predictions/`。
+   - 报告是 `result/example/example_fixed_split_20261113/report/benchmark_report.html`；实际采用的清单和预测在该任务的 `docs/manifests/`、`docs/predictions/`。
 
 5. 用自己的数据时，先准备稳定编号和分组键，再分配折成员。
 
@@ -511,7 +525,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath .\dataset\my_reactions.csv
 2. 保留 `stage: benchmark`、`frozen_train_external_test`、`evaluation.seed` 和完整外测字段。
 
    - 不能混入 `n_splits`、`n_repeats`、`shuffle`、`grouping`、`split_manifest`、`population_manifest`。
-3. 从项目根目录启动，首提示输入 `run.yaml`。
+3. 从项目根目录启动，首提示输入 `../../config/example/example_external_test_20261113.yaml`。
 
 Linux Bash：
 
@@ -520,6 +534,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/external_test
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_external_test_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -529,12 +545,14 @@ Windows Conda PowerShell：
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\external_test
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_external_test_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_external_test_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 4. RF 使用全部12条训练记录拟合一次，再预测6条外测记录。
 
-   - 查看 `example/external_test/result/example_external_test_20261113/report/external_test_report.html`，以及该任务根下的 `docs/predictions/morgan__rf.parquet`、`docs/metrics/external_test_metrics.csv`。
+   - 查看 `result/example/example_external_test_20261113/report/external_test_report.html`，以及该任务根下的 `docs/predictions/morgan__rf.parquet`、`docs/metrics/external_test_metrics.csv`。
    - 外测没有交叉验证；保存的分数也不是独立置信区间。
 
 5. 真实任务需另建训练、外测与审计文件，再建立独立根 `config/` YAML 和任务输出目录。
@@ -619,7 +637,7 @@ python -u ..\..\yonod.py
 | 94 | `evaluation.shuffle` | `true`，普通 KFold 前打乱记录。 |
 | 95 | `evaluation.seed` | 划分种子 `42`，不能代替具体成员名单。 |
 | 97 | `outputs` | 结果位置与报告设置。 |
-| 98 | `outputs.root` | 独立的 `result/<task_name>/` 根目录。 |
+| 98 | `outputs.root` | 任务根目录：本冒烟测试使用 `result/example/yonod_schema2_smoke/`；自己的任务使用 `result/<task_name>/`。 |
 | 99 | `outputs.report_formats` | 同时生成 `html` 和 `markdown`，日常使用保留两种。 |
 | 100 | `outputs.diagnostics` | 可选训练与留出效果诊断设置。 |
 | 101 | `outputs.diagnostics.enabled` | `true`，启用诊断，不改变划分成员。 |
@@ -742,7 +760,7 @@ python -u ..\..\yonod.py
 - [操作说明](example/README.md)
 - [下载全部样例](example/archives/all_examples.zip)
 
-- ZIP 附有 `completed_run/` 参考快照；克隆源码后，重新运行会在各样例目录生成 `result/`。
+- ZIP 附有 `completed_run/` 参考快照；重新运行的结果统一保存到项目根目录 `result/example/<task_name>/`。
 - 随机包历史 `report/` 和 `evidence/` 用于追溯。
 - [随机](example/random_split/verification.json)、[固定名单](example/fixed_split/verification.json)、[外测](example/external_test/verification.json)验收记录来自 Linux，不代表 Windows 实机验收。
 - 后台运行和状态查询参照操作说明中的 Bash/PowerShell 命令，日志与 PID保存在根 `logs/`。
@@ -768,109 +786,70 @@ python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```text
 python -m pip install "huggingface_hub>=0.34,<1.0"
 hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/**" --local-dir dataset
-hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 ```
 
 - 按服务要求完成登录或访问授权。
 - Git 忽略二进制权重；看见配置、tokenizer或manifest文件不代表权重已齐全。
 - 部分原始数据虽然扩展名是 CSV，实际使用制表符分隔，需先按子目录说明转换，不能直接送入逗号CSV向导。
 
+#### 下载预训练描述符权重
+
+**选择 `fisd`、`chemical_vae` 或 `molmetalm` 前，必须先从 [Hugging Face](https://huggingface.co/thinktraveller/YONOD-weights) 下载对应的预训练权重。** 克隆源码只有配置和资产说明，不包含二进制权重；使用 Morgan 的冒烟测试不需要这些权重。
+
+在项目根目录、已激活 `yonod` 的终端中，按需运行对应命令。以下命令在 Linux Bash 与 Windows Conda PowerShell 相同，使用上文安装的 CLI：
+
+```text
+hf download thinktraveller/YONOD-weights --include "FISD/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "chemical_vae/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "MolMetaLM-base/**" --local-dir WEIGHTS
+```
+
+三条命令分别恢复 `WEIGHTS/FISD/`、`WEIGHTS/chemical_vae/`、`WEIGHTS/MolMetaLM-base/`。若需一次下载全部权重，可用 `hf download thinktraveller/YONOD-weights --local-dir WEIGHTS`；更多选项见 [Hugging Face CLI 文档](https://huggingface.co/docs/huggingface_hub/v0.36.0/guides/cli)。
+
 | 编码 | 所需资产 |
 | --- | --- |
-| `fisd` | 从[上游](https://github.com/KeantChen/FISD/tree/main/model)获取 `qm_9_mse_model.pth`、`qm_9_cos_model.pth`、`qm_9_2in1_model.pth`，放入 `WEIGHTS/FISD/`。 |
+| `fisd` | 从 [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights) 的 `FISD/` 下载 `qm_9_mse_model.pth`、`qm_9_cos_model.pth`、`qm_9_2in1_model.pth`，放入 `WEIGHTS/FISD/`。 |
 | `molmetalm` | [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base) 的模型、配置与tokenizer，放入 `WEIGHTS/MolMetaLM-base/`；参见[上游项目](https://github.com/CSUBioGroup/MolMetaLM)。 |
 | `chemical_vae` | `WEIGHTS/chemical_vae/<资产>/v5/` 下已验证转换manifest及相邻、哈希匹配的 `encoder_state_dict.pt`。ZINC 与 `zinc_properties` 资产不能互换。 |
 
 - Chemical VAE只使用冻结 PyTorch 编码器的原始 `z_mean_sample`，不训练 VAE，也不加载解码器或性质头。
 - 原始 HDF5 或只有manifest不能替代转换后权重；普通运行无需 TensorFlow/Keras，详见[加载器](yonod/descriptors/chemical_vae.py)。
 
+#### 通过镜像下载权重
+
+访问 Hugging Face 较慢时，可按 [HF-Mirror 的使用说明](https://hf-mirror.com/)切换下载端点。先完成上文 CLI 安装并激活 `yonod`，在项目根目录选择对应系统的命令；只需下载所选描述符的一项。环境变量仅作用于当前终端，最后一行恢复官方端点；`HF_HUB_DISABLE_XET=1` 使下载使用普通 HTTP。
+
+Linux Bash：
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_DISABLE_XET=1
+hf download thinktraveller/YONOD-weights --include "FISD/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "chemical_vae/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "MolMetaLM-base/**" --local-dir WEIGHTS
+unset HF_ENDPOINT HF_HUB_DISABLE_XET
+```
+
+Windows Conda PowerShell：
+
+```powershell
+$env:HF_ENDPOINT = "https://hf-mirror.com"
+$env:HF_HUB_DISABLE_XET = "1"
+hf download thinktraveller/YONOD-weights --include "FISD/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "chemical_vae/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "MolMetaLM-base/**" --local-dir WEIGHTS
+Remove-Item Env:HF_ENDPOINT, Env:HF_HUB_DISABLE_XET -ErrorAction SilentlyContinue
+```
+
+镜像下载仍保存到同一个 `WEIGHTS/` 目录，文件要求与上表一致。若访问受限仓库，先到 Hugging Face 官网完成授权。
+
 ## 开发者内容
 
-- [项目结构](#项目结构)
 - [开发与验证一个改动](#开发与验证一个改动)
 - [描述符参数与协议支持](#描述符参数与协议支持)
 - [新增描述符](#新增描述符)
 - [模型参数与实际执行范围](#模型参数与实际执行范围)
 - [增加新的模型](#增加新的模型)
-
-### 项目结构
-
-本地任务目录会在准备或运行任务时建立，刚克隆项目时可能还不存在。
-
-```text
-YONOD/
-├── README.md                英文使用指南
-├── README.zh-CN.md          中文使用指南
-├── AGENTS.md                开发与目录约定
-├── LICENSE                  项目许可证
-├── yonod.py                 读取并执行已保存的 YAML
-├── generate_yaml_config.py  准备数据、生成和校验 YAML，不建模
-├── example.yaml             完整 schema-2 格式与工程冒烟测试
-├── requirements.txt         依赖清单；PyTorch 先单独安装
-├── example/                 首次使用样例及各自的 run.yaml
-│   ├── README.md            样例操作说明
-│   ├── index.html           浏览器离线导览
-│   ├── random_split/        随机划分内测
-│   ├── fixed_split/         按固定成员名单检验
-│   ├── external_test/       训练表与外测表分开检验
-│   └── archives/            可下载的样例压缩包
-├── yonod/                   Python 源码；下列为主要组件
-│   ├── model_factory.py     schema-2 模型校验与构造
-│   ├── config/              YAML 读取、校验与路径解析
-│   ├── descriptors/         分子结构与类别编码
-│   ├── features/            数据准备与数值条件处理
-│   ├── models/              旧模型适配器
-│   ├── pipeline/            普通编码、训练、预测与报告流程
-│   ├── benchmark/           固定名单、外测等专用流程
-│   ├── splits/              分组与成员清单
-│   ├── artifacts/           特征包保存与完整性检查
-│   ├── hpo/                 训练数据内的模型参数搜索
-│   └── universal/           CSV 读取与特征拼装等公共组件
-├── dataset/                 数据及来源说明
-├── WEIGHTS/                 可选预训练资产
-├── config/                  本地研究任务 YAML
-├── result/                  研究任务的独立结果目录
-│   └── <task_name>/         同一个研究任务的全部输出
-├── logs/                    操作日志与 PID 文件
-├── _verify/                 本地验证脚本
-├── backup/                  备份与工程支持文件
-├── reference-projects/      外部参考材料
-└── project-docs/            独立文档仓库
-    ├── goal.md              项目目标
-    ├── project-plan.md      开发计划
-    ├── buildlog.md          变更与验证记录
-    ├── teach.md             学习笔记
-    └── docs/                其他维护文档
-```
-
-- 日常使用先看根目录的两个入口脚本、[example.yaml](example.yaml) 和 [example/](example/)。
-- [数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)分别解释输入来源和可选资产。
-
-- 根目录的 `config/`、`result/`、`logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/` 都不由主仓 Git 跟踪。
-- `project-docs/` 在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) 仓库中维护，访问需要权限，克隆主仓不会自动获取它。
-- 运行首次使用样例不需要该文档仓库。
-
-一次普通建模任务的主要结果结构如下：
-
-```text
-result/<task_name>/
-├── feature/                         编码及特征记录
-├── runs/
-│   └── run_<feature_id>-<model>/     一个编码与模型组合
-│       ├── predictions.csv          逐条留出预测
-│       ├── fold_metrics.csv         各折指标
-│       └── run_manifest.yaml        配置与运行记录
-├── pictures/                        报告图像
-└── report/                          HTML 与 Markdown 报告
-```
-
-- 固定名单等 benchmark 将成员名单、预测、逐折记录、指标和恢复状态分别放在任务目录内的 `docs/manifests/`、`docs/predictions/`、`docs/folds/`、`docs/metrics/`、`docs/state/`。
-- 冻结外测也使用 `docs/predictions/`、`docs/metrics/` 和 `report/`，但不保存普通流程那样完整的特征与最终模型包。
-- 具体文件取决于所选协议。
-
-- 首次使用样例的新结果位于各自的 `example/<包名>/result/<task_name>/`，生成的 `result/` 不由 Git 跟踪。
-- 下载 ZIP 中的 `completed_run/` 是参考快照，与自己运行产生的结果分开保存。
-- 参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
 
 ### 开发与验证一个改动
 
@@ -1264,3 +1243,99 @@ python yonod.py --config example.yaml
    - 工程冒烟测试与真实研究任务分开；更新依赖、双语文档和独立文档仓日志，再按两仓实际更改分别提交。
 
 最近一次对照本仓库核对：2026-11-14。
+
+## 项目结构
+
+`config/example/` 和 `result/example/` 初始仅含 Git 占位文件，没有任务配置或运行结果；其他本地任务目录会在准备或运行任务时建立。
+
+```text
+YONOD/
+├── README.md                英文使用指南
+├── README.zh-CN.md          中文使用指南
+├── AGENTS.md                开发与目录约定
+├── LICENSE                  项目许可证
+├── yonod.py                 读取并执行已保存的 YAML
+├── generate_yaml_config.py  准备数据、生成和校验 YAML，不建模
+├── example.yaml             完整 schema-2 格式与工程冒烟测试
+├── requirements.txt         依赖清单；PyTorch 先单独安装
+├── example/                 首次使用样例及各自的 run.yaml
+│   ├── README.md            样例操作说明
+│   ├── index.html           浏览器离线导览
+│   ├── random_split/        随机划分内测
+│   ├── fixed_split/         按固定成员名单检验
+│   ├── external_test/       训练表与外测表分开检验
+│   └── archives/            可下载的样例压缩包
+├── yonod/                   Python 源码；下列为主要组件
+│   ├── model_factory.py     schema-2 模型校验与构造
+│   ├── config/              YAML 读取、校验与路径解析
+│   ├── descriptors/         分子结构与类别编码
+│   ├── features/            数据准备与数值条件处理
+│   ├── models/              旧模型适配器
+│   ├── pipeline/            普通编码、训练、预测与报告流程
+│   ├── benchmark/           固定名单、外测等专用流程
+│   ├── splits/              分组与成员清单
+│   ├── artifacts/           特征包保存与完整性检查
+│   ├── hpo/                 训练数据内的模型参数搜索
+│   └── universal/           CSV 读取与特征拼装等公共组件
+├── dataset/                 数据及来源说明
+├── WEIGHTS/                 可选预训练资产
+├── config/                  推荐统一存放运行配置
+│   ├── example/             保存示例 YAML；初始为空
+│   └── <task_name>.yaml     本地研究任务配置
+├── result/                  推荐统一存放运行结果
+│   ├── example/             示例输出；初始没有运行结果
+│   │   └── <task_name>/     运行示例时创建
+│   └── <task_name>/         同一个研究任务的全部输出
+├── logs/                    操作日志与 PID 文件
+├── _verify/                 本地验证脚本
+├── backup/                  备份与工程支持文件
+├── reference-projects/      外部参考材料
+└── project-docs/            独立文档仓库
+    ├── goal.md              项目目标
+    ├── project-plan.md      开发计划
+    ├── buildlog.md          变更与验证记录
+    ├── teach.md             学习笔记
+    └── docs/                其他维护文档
+```
+
+- 日常使用先看根目录的两个入口脚本、[example.yaml](example.yaml) 和 [example/](example/)。
+- [数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)分别解释输入来源和可选资产。
+
+- `config/` 和 `result/` 都只保留各自的 `example/` 子目录，其余文件和文件夹全部由 Git 忽略。根目录的 `logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/` 也不由主仓 Git 跟踪。
+- `project-docs/` 在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) 仓库中维护，访问需要权限，克隆主仓不会自动获取它。
+- 运行首次使用样例不需要该文档仓库。
+
+一次普通建模任务的主要结果结构如下：
+
+```text
+result/<task_name>/
+├── feature/                         编码及特征记录
+├── runs/
+│   └── run_<feature_id>-<model>/     一个编码与模型组合
+│       ├── predictions.csv          逐条留出预测
+│       ├── fold_metrics.csv         各折指标
+│       └── run_manifest.yaml        配置与运行记录
+├── pictures/                        报告图像
+└── report/                          HTML 与 Markdown 报告
+```
+
+- 固定名单等 benchmark 将成员名单、预测、逐折记录、指标和恢复状态分别放在任务目录内的 `docs/manifests/`、`docs/predictions/`、`docs/folds/`、`docs/metrics/`、`docs/state/`。
+- 冻结外测也使用 `docs/predictions/`、`docs/metrics/` 和 `report/`，但不保存普通流程那样完整的特征与最终模型包。
+- 具体文件取决于所选协议。
+
+- 示例的新结果统一位于项目根目录 `result/example/<task_name>/`，每个任务使用独立子目录。
+- 推荐自己的配置放在根 `config/<task_name>.yaml`，结果放在 `result/<task_name>/`；两个示例子目录之外的配置和结果均由 Git 忽略。
+- 下载 ZIP 中的 `completed_run/` 是参考快照，与自己运行产生的结果分开保存。
+- 参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
+
+## 致谢
+
+感谢以下项目的作者与贡献者提供 YONOD 使用的分子表征方法和预训练资源：
+
+- [DRFP](https://github.com/reymond-group/drfp)：感谢 Daniel Probst、Philippe Schwaller、Jean-Louis Reymond 及贡献者提供差分反应指纹方法与实现。
+- [RDKit](https://www.rdkit.org/)：感谢开发者与贡献者提供分子解析、指纹与描述符计算等化学信息学工具；YONOD 的 MACCS 指纹也采用其实现。
+- [MolMetaLM](https://github.com/CSUBioGroup/MolMetaLM)：感谢作者提供分子语言模型，以及 [MolMetaLM-base 预训练权重与 tokenizer](https://huggingface.co/wudejian789/MolMetaLM-base)。
+
+## License
+
+本项目代码和文档采用 [CC BY-NC 4.0](LICENSE)，要求署名并限于非商业使用。第三方数据、预训练权重与参考代码遵循各自许可证和引用要求。

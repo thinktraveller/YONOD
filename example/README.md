@@ -1,8 +1,8 @@
 # YONOD 三种数据检验方式示例
 
-先用浏览器打开 [index.html](index.html)。三个包都只需使用自己目录中的 `run.yaml`，不用复制设置到其他目录。数据、划分清单和新计算结果都留在各自包内。
+先用浏览器打开 [index.html](index.html)。三个包各有一份 `run.yaml` 模板，运行前复制到仓库根 `config/example/<任务名>.yaml`，再通过主入口读取该副本。数据与划分清单留在各自包内，新计算结果统一保存到仓库根 `result/example/<任务名>/`。
 
-**全部数据都是人工教学记录，不是实验测量。** 分子结构文本用于说明格式，不代表所列组分一定能发生合理反应。三个样例均有完整运行快照和逐条验收记录；实际测试的配置版本与平台见各包的 `verification.json`。随机包另保留2026-09-29的历史实际报告，供追查来源。
+**全部数据都是人工教学记录，不是实验测量。** 分子结构文本用于说明格式，不代表所列组分一定能发生合理反应。三个样例均有完整运行快照和逐条验收记录；历史实际测试的配置版本与平台见各包的 `verification.json`；当前输出路径修订仅做静态校验，记录在其中的 `current_configuration`。随机包另保留2026-09-29的历史实际报告，供追查来源。
 
 | 示例包 | 它回答的问题 | 主要文件与入口 |
 |---|---|---|
@@ -10,7 +10,7 @@
 | [固定名单内测](fixed_split/README.md) | 按事先指定的成员名单留出反应，能预测得怎样？ | [数据表](fixed_split/dataset/reactions.csv)、[固定名单](fixed_split/splits/fixed_split_manifest.csv)、[名单解释表](fixed_split/splits/membership_guide.csv)、[设置文件](fixed_split/run.yaml) |
 | [独立外测流程](external_test/README.md) | 用训练表建立模型后，对另外提供的一批反应，能预测得怎样？ | [训练表](external_test/dataset/train.csv)、[外测表](external_test/dataset/external.csv)、[来源核查记录](external_test/audit/external_audit.json)、[设置文件](external_test/run.yaml) |
 
-可分别下载[随机划分包](archives/random_split.zip)、[固定划分包](archives/fixed_split.zip)、[外测流程包](archives/external_test.zip)，或下载[全部示例](archives/all_examples.zip)。下载包的 `completed_run/` 保存本轮完整输出快照；重新运行会生成本包的 `result/`，两者互不占用。源码克隆不包含这些运行目录。实际运行仍需要完整YONOD项目及其 `yonod` 环境。
+可分别下载[随机划分包](archives/random_split.zip)、[固定划分包](archives/fixed_split.zip)、[外测流程包](archives/external_test.zip)，或下载[全部示例](archives/all_examples.zip)。下载包的 `completed_run/` 保存本轮完整输出快照；重新运行会在仓库根 `result/example/` 下生成独立任务目录，两者互不占用。源码克隆不包含这些运行目录。实际运行仍需要完整YONOD项目及其 `yonod` 环境。
 
 ## 三种方法的相同点和区别
 
@@ -24,18 +24,18 @@
 
 ## 在自己的示例文件夹运行
 
-| 示例目录（相对YONOD根） | 首次提示时输入 | 新结果目录（相对该示例目录） |
+| 示例目录（相对YONOD根） | 首次提示时输入（相对示例目录） | 新结果目录（相对该示例目录） |
 |---|---|---|
-| `example/random_split/` | `run.yaml` | `result/example_random_split_20261113/` |
-| `example/fixed_split/` | `run.yaml` | `result/example_fixed_split_20261113/` |
-| `example/external_test/` | `run.yaml` | `result/example_external_test_20261113/` |
+| `example/random_split/` | `../../config/example/example_random_split_20261113.yaml` | `../../result/example/example_random_split_20261113/` |
+| `example/fixed_split/` | `../../config/example/example_fixed_split_20261113.yaml` | `../../result/example/example_fixed_split_20261113/` |
+| `example/external_test/` | `../../config/example/example_external_test_20261113.yaml` | `../../result/example/example_external_test_20261113/` |
 
 1. 把整个 `example/` 放在完整YONOD项目根目录中，保持各包内部结构。
 2. 进入选中的示例目录。先看CSV列名、编号和产率单位，再看同目录的 `run.yaml`；固定划分另核对名单，外测另核对映射和来源记录。
-3. 激活 `yonod` 环境，通过 `../../yonod.py` 主入口启动，首次提示输入 `run.yaml`。输入与输出路径均按该YAML所在目录解析。
+3. 激活 `yonod` 环境，先将模板复制到根 `config/example/<任务名>.yaml`，再通过 `../../yonod.py` 主入口启动，首次提示输入复制后的 `../../config/example/<任务名>.yaml`。输入与输出路径均按该YAML所在目录解析。
 4. 等当前任务完成后再启动下一个。核对网页报告（HTML）、文字报告（Markdown）、逐条预测和运行清单。
 
-准备自己的任务时另存独立YAML，同步修改任务名、输入路径、`artifacts.output_dir` 与 `outputs.root`。完整设置格式仍以仓库根 [example.yaml](../example.yaml) 为准，本说明不复制另一套YAML模板。
+准备自己的任务时另存独立YAML，同步修改任务名、输入路径、`artifacts.output_dir` 与 `outputs.root`。建议将自有任务结果统一保存到仓库根 `result/<任务名>/`，特征放在其 `feature/` 子目录。完整设置格式仍以仓库根 [example.yaml](../example.yaml) 为准，本说明不复制另一套YAML模板。
 
 ## Linux：Bash 后台运行
 
@@ -49,15 +49,17 @@ cd example/random_split
 
 example_repo_root="$(cd ../.. && pwd)"
 example_task="example_random_split_20261113"
+mkdir -p ../../config/example
+cp run.yaml "../../config/example/$example_task.yaml"
 mkdir -p "$example_repo_root/logs"
-printf '%s\n' 'run.yaml' > "$example_repo_root/logs/$example_task.stdin.txt"
+printf '%s\n' "../../config/example/$example_task.yaml" > "$example_repo_root/logs/$example_task.stdin.txt"
 nohup python -u ../../yonod.py \
   < "$example_repo_root/logs/$example_task.stdin.txt" \
   > "$example_repo_root/logs/$example_task.log" 2>&1 &
 echo $! > "$example_repo_root/logs/$example_task.pid"
 ```
 
-固定名单或外测运行时，进入相应示例目录，并将 `example_task` 改为该包YAML中的任务名。每次只启动一个任务，完成后再运行下一个。输入与输出仍按同目录 `run.yaml` 解析；日志、标准输入文件与PID统一存于仓库根 `logs/`。
+固定名单或外测运行时，进入相应示例目录，并将 `example_task` 改为该包YAML中的任务名。每次只启动一个任务，完成后再运行下一个。输入与输出均按复制后的 `config/example/<任务名>.yaml` 解析；日志、标准输入文件与PID统一存于仓库根 `logs/`。
 
 仍在随机示例目录时，按需查询状态：
 
@@ -69,16 +71,18 @@ tail -n 100 ../../logs/example_random_split_20261113.log
 
 ## Windows：Conda PowerShell
 
-打开 Anaconda PowerShell Prompt 或已完成 Conda 初始化的 PowerShell，从YONOD根目录执行。直接交互运行最容易检查输入；在首次提示输入 `run.yaml`：
+打开 Anaconda PowerShell Prompt 或已完成 Conda 初始化的 PowerShell，从YONOD根目录执行。直接交互运行最容易检查输入；在首次提示输入复制后的 `../../config/example/example_random_split_20261113.yaml`：
 
 ```powershell
 conda activate yonod
 $env:PYTHONUTF8 = '1'
 Set-Location .\example\random_split
+New-Item -ItemType Directory -Force -Path ..\..\config\example | Out-Null
+Copy-Item -LiteralPath .\run.yaml -Destination ..\..\config\example\example_random_split_20261113.yaml
 python -u ..\..\yonod.py
 ```
 
-需要保存后台日志时，用下面的完整块代替上面的交互启动块，仍从YONOD根目录执行。它将所有操作文件放入根 `logs/`，工作目录与输入文件保持在示例包中：
+需要保存后台日志时，用下面的完整块代替上面的交互启动块，仍从YONOD根目录执行。它将所有操作文件放入根 `logs/`，工作目录保持在示例包中，配置副本保存在根 `config/example/`：
 
 ```powershell
 conda activate yonod
@@ -86,10 +90,14 @@ $env:PYTHONUTF8 = '1'
 $exampleRepoRoot = (Get-Location).Path
 $exampleWorkDir = Join-Path $exampleRepoRoot 'example\random_split'
 $exampleTask = 'example_random_split_20261113'
+$exampleConfigs = Join-Path $exampleRepoRoot 'config\example'
+New-Item -ItemType Directory -Force -Path $exampleConfigs | Out-Null
+$exampleConfig = Join-Path $exampleConfigs "$exampleTask.yaml"
+Copy-Item -LiteralPath (Join-Path $exampleWorkDir 'run.yaml') -Destination $exampleConfig
 $exampleLogs = Join-Path $exampleRepoRoot 'logs'
 New-Item -ItemType Directory -Force -Path $exampleLogs | Out-Null
 $exampleInput = Join-Path $exampleLogs "$exampleTask.stdin.txt"
-Set-Content -LiteralPath $exampleInput -Value 'run.yaml' -Encoding ascii
+[IO.File]::WriteAllText($exampleInput, "$exampleConfig`n", [Text.UTF8Encoding]::new($false))
 $examplePython = (Get-Command python -CommandType Application | Select-Object -First 1).Source
 $exampleProcess = Start-Process -FilePath $examplePython -ArgumentList '-u', '..\..\yonod.py' -WorkingDirectory $exampleWorkDir -RedirectStandardInput $exampleInput -RedirectStandardOutput (Join-Path $exampleLogs "$exampleTask.log") -RedirectStandardError (Join-Path $exampleLogs "$exampleTask.stderr.log") -PassThru
 Set-Content -LiteralPath (Join-Path $exampleLogs "$exampleTask.pid") -Value $exampleProcess.Id -Encoding ascii
@@ -116,9 +124,9 @@ Windows不使用Bash的 `source`、`nohup`、`ps` 或输入重定向写法。路
 
 | 示例 | 新网页报告（相对该示例目录） |
 |---|---|
-| 随机划分 | `result/example_random_split_20261113/report/report.html` |
-| 固定名单 | `result/example_fixed_split_20261113/report/benchmark_report.html` |
-| 外测 | `result/example_external_test_20261113/report/external_test_report.html` |
+| 随机划分 | `../../result/example/example_random_split_20261113/report/report.html` |
+| 固定名单 | `../../result/example/example_fixed_split_20261113/report/benchmark_report.html` |
+| 外测 | `../../result/example/example_external_test_20261113/report/external_test_report.html` |
 
 留出反应的内测预测汇总（out-of-fold prediction，OOF）来自未学习该条记录的相应模型；外测则每个组合只用训练表建立一次模型。R²不是“预测正确率”；0–1产率尺度上的平均绝对误差（MAE）乘100才是产率百分点。人工小样例的评分用于学习操作与读报告，不用于推荐真实化学预测模型。
 
@@ -127,7 +135,7 @@ Windows不使用Bash的 `source`、`nohup`、`ps` 或输入重定向写法。路
 
 ## 为自己的数据生成标准YAML
 
-以上三个包已经包含run.yaml，无需重新生成。新研究任务可在主仓根使用[generate_yaml_config.py](../generate_yaml_config.py)；它只生成或校验schema-2 YAML，配置直接保存到config/<任务名>.yaml。生成配置和执行任务分别由两个脚本负责：generate_yaml_config.py生成配置，yonod.py校验并执行已有YAML。
+以上三个包已经包含run.yaml模板，按上方命令复制到config/example后启动，无需重新生成。新研究任务可在主仓根使用[generate_yaml_config.py](../generate_yaml_config.py)；它只生成或校验schema-2 YAML，配置直接保存到config/<任务名>.yaml。生成配置和执行任务分别由两个脚本负责：generate_yaml_config.py生成配置，yonod.py校验并执行已有YAML。
 
 Linux Bash（从主仓根）：
 

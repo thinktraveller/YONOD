@@ -2,19 +2,20 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+[Project structure](#project-structure) · [Acknowledgments](#acknowledgments) · [License](#license)
+
 YONOD (You Only Need Outstanding Descriptors) helps chemistry researchers build and compare models for numerical reaction properties such as yield. You provide a table of reaction records, molecular structures and measured values. YONOD converts the inputs into numbers, trains regression models, and saves predictions and reports showing how well the models predict held-out records.
 
 You can use it without writing Python code. Start the program from a terminal and describe each calculation in a text settings file called YAML. The interactive prompts are currently in Chinese.
 
-Read [beginner content](#beginner-content) to install and complete a first run, [advanced content](#advanced-content) to configure an evaluation, and [developer content](#developer-content) to inspect parameters or extend the code.
+Read [beginner content](#beginner-content) to install and complete a smoke test, [advanced content](#advanced-content) to configure an evaluation, and [developer content](#developer-content) to inspect parameters or extend the code.
 
 ## Beginner content
 
 - [What can I do with it?](#what-can-i-do-with-it)
 - [Install YONOD](#install-yonod)
-- [Complete your first run](#complete-your-first-run)
+- [Complete the smoke test](#complete-the-smoke-test)
 - [If something goes wrong](#if-something-goes-wrong)
-- [License](#license)
 
 ### What can I do with it?
 
@@ -90,10 +91,10 @@ python -c "import torch, rdkit, sklearn, xgboost, lightgbm; print('YONOD imports
 
 - Expect Python 3.9 and `YONOD imports OK`.
 - This checks that the main packages can be imported.
-- Keep the terminal open for the first run.
+- Keep the terminal open for the smoke test.
 - In each new terminal, activate `yonod` again; Linux also needs the `source` line when Conda has not been initialized in that shell.
 
-### Complete your first run
+### Complete the smoke test
 
 #### What is a smoke test?
 
@@ -110,7 +111,7 @@ A smoke test runs the main steps on a small dataset to catch obvious installatio
 - It does not establish chemical prediction accuracy, scientific validity or support for every descriptor, model and workflow.
 - The artificial data's low scores and negative R² remain visible so you can inspect those outputs during first use.
 
-#### 1. Look at the first-use files
+#### 1. Look at the smoke-test files
 
 Open [the data table](example/random_split/dataset/reactions.csv) and [its settings](example/random_split/run.yaml). A CSV is a text table; SMILES is a text representation of a molecular structure.
 
@@ -138,6 +139,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/random_split
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -147,16 +150,18 @@ Windows Conda PowerShell:
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\random_split
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 The program asks `请输入配置文件路径(schema-2 YAML):` (enter the configuration file path). Type the following and press Enter:
 
 ```text
-run.yaml
+../../config/example/example_random_split_20261113.yaml
 ```
 
-This file is already prepared. You do not need to copy it or run the YAML generator first. Run one task at a time, waiting for it to finish before starting another.
+The commands copy the prepared template into `config/example/`, preserving an existing copy. No YAML generator is needed. Run one task at a time, waiting for it to finish before starting another.
 
 #### 3. Check completion and open the report
 
@@ -165,21 +170,21 @@ This file is already prepared. You do not need to copy it or run the YAML genera
 - The `[report]` message prints the report locations.
 - Check any error message or missing report, even after the process ends.
 
-Still in `example/random_split/`, open `result/example_random_split_20261113/report/report.html` in your file manager. On desktop Linux you can also use:
+Still in `example/random_split/`, open `../../result/example/example_random_split_20261113/report/report.html` in your file manager. On desktop Linux you can also use:
 
 ```bash
-xdg-open result/example_random_split_20261113/report/report.html
+xdg-open ../../result/example/example_random_split_20261113/report/report.html
 ```
 
 Windows Conda PowerShell:
 
 ```powershell
-Invoke-Item .\result\example_random_split_20261113\report\report.html
+Invoke-Item ..\..\result\example\example_random_split_20261113\report\report.html
 ```
 
 - The same folder contains `report.md`, a text report you can read in an editor.
-- Each model's per-record predictions are under `result/example_random_split_20261113/runs/run_morgan-<model>/predictions.csv`, where `<model>` is `rf`, `xgb` or `lightgbm`.
-- Look inside the example folder for these results; the project-root `result/` folder holds research tasks.
+- Each model's per-record predictions are under `../../result/example/example_random_split_20261113/runs/run_morgan-<model>/predictions.csv`, where `<model>` is `rf`, `xgb` or `lightgbm`.
+- All example outputs are under the project-root `result/example/<task_name>/`; each example has its own task folder.
 
 #### 4. Read the results
 
@@ -216,11 +221,6 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 - For a bug report in [project Issues](https://github.com/thinktraveller/YONOD/issues), include your operating system, Python/package versions, the error text and a small shareable example.
 - Remove confidential data and credentials.
 
-### License
-
-- Project code and documentation use [CC BY-NC 4.0](LICENSE), requiring attribution and limiting use to noncommercial purposes.
-- Third-party data, pretrained weights and reference code retain their own licenses and citation requirements.
-
 ## Advanced content
 
 - [Use your own reaction table](#use-your-own-reaction-table)
@@ -235,6 +235,8 @@ Invoke-Item .\result\example_random_split_20261113\report\report.html
 - [Optional models, data and pretrained weights](#optional-models-data-and-pretrained-weights)
 
 ### Use your own reaction table
+
+Open the [example CSV dataset](example/random_split/dataset/reactions.csv) to see the column names and record layout. Its values are artificial smoke-test data.
 
 Return to the project root before continuing: use `cd ../..` in Linux Bash or `Set-Location ..\..` in Windows PowerShell if you are still in the example folder.
 
@@ -353,10 +355,10 @@ Copy-Item example.yaml config\my_reaction.yaml
 
 ### Configuration paths and execution stages
 
-- Keep research YAML files under root `config/`.
+- We recommend keeping run configurations under root `config/`: research YAMLs in `config/<task_name>.yaml` and example copies in `config/example/<task_name>.yaml`.
 - Paths beginning `./` inside those files resolve from the project root.
 - Explicit `../` paths and relative paths in configurations elsewhere resolve from the YAML's folder; absolute paths stay absolute.
-- A first-use `run.yaml` therefore resolves inputs and outputs inside its own package.
+- Example templates use `../../example/<package>/` input paths so their copies in `config/example/` resolve the same files; `../../result/example/<task_name>` saves outputs under the project root.
 - Use UTF-8 plain text, spaces for indentation, and check that Windows has not added a `.txt` extension.
 
 | `stage` | Execution |
@@ -366,6 +368,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 | `all` | Prepare encodings and run ordinary internal evaluation. |
 | `benchmark` | Dispatch a dedicated evaluation adapter with its required fields. |
 
+- We recommend saving all run results under the project-root `result/`, with an independent `result/<task_name>/` for each task.
 - Each research task uses its own `outputs.root: ./result/<task_name>` and a feature child such as `artifacts.output_dir: ./result/<task_name>/feature`, retaining `outputs.report_formats: [html, markdown]`.
 - Operational logs and PIDs belong in root `logs/`; final modeling outputs belong under the task, not `derived/`.
 
@@ -374,7 +377,8 @@ Copy-Item example.yaml config\my_reaction.yaml
 - All three first-use examples use artificial records and mainly serve as smoke tests of their respective workflows.
 - Run them one at a time.
 - Start each command block from the project root; if you are still inside an example, return with `cd ../..` in Bash or `Set-Location ..\..` in PowerShell.
-- At the launcher's first prompt, enter `run.yaml`.
+- The commands save each example configuration under the project-root `config/example/`. At the first prompt, enter the saved path shown for that example.
+- Report paths below are relative to the project root.
 
 | Your question | Workflow and configuration | What is kept separate |
 | --- | --- | --- |
@@ -388,7 +392,7 @@ Copy-Item example.yaml config\my_reaction.yaml
 
     - The example uses two reactant columns, Morgan, RF/XGBoost/LightGBM, two folds and one repeat.
 
-2. Run the block for your system and enter `run.yaml` when asked.
+2. Run the block for your system and enter `../../config/example/example_random_split_20261113.yaml` when asked.
 
 Linux Bash:
 
@@ -397,6 +401,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/random_split
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_random_split_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -406,12 +412,14 @@ Windows Conda PowerShell:
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\random_split
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_random_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_random_split_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 3. Check `features=ready`, all three combinations' `complete` or `reused` statuses, and both reports.
 
-    - The new HTML report is `example/random_split/result/example_random_split_20261113/report/report.html`; per-record predictions are under its task's `runs/run_morgan-<model>/predictions.csv`.
+    - The new HTML report is `result/example/example_random_split_20261113/report/report.html`; per-record predictions are under its task's `runs/run_morgan-<model>/predictions.csv`.
 
 4. For your own CSV, generate a new root `config/<task_name>.yaml` or edit an independent copy of [example.yaml](example.yaml).
 
@@ -432,7 +440,7 @@ python -u ..\..\yonod.py
     - Fold 1 holds out `block_A`; fold 2 holds out `block_B`.
 
 2. Keep `stage: benchmark`, `evaluation.protocol: manifest_outer_cv`, the declared grouping, `evaluation.split_manifest`, and the `benchmark.task_state` block together.
-3. Launch from the project root, then enter `run.yaml`.
+3. Launch from the project root, then enter `../../config/example/example_fixed_split_20261113.yaml`.
 
 Linux Bash:
 
@@ -441,6 +449,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/fixed_split
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_fixed_split_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -450,12 +460,14 @@ Windows Conda PowerShell:
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\fixed_split
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_fixed_split_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_fixed_split_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 4. Check two successful RF fold records.
 
-    - The HTML report is `example/fixed_split/result/example_fixed_split_20261113/report/benchmark_report.html`; the copied manifest and predictions are in that task's `docs/manifests/` and `docs/predictions/`.
+    - The HTML report is `result/example/example_fixed_split_20261113/report/benchmark_report.html`; the copied manifest and predictions are in that task's `docs/manifests/` and `docs/predictions/`.
 
 5. For your data, prepare stable IDs and group keys before assigning folds.
 
@@ -528,7 +540,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath .\dataset\my_reactions.csv
 
     - Do not include `n_splits`, `n_repeats`, `shuffle`, `grouping`, `split_manifest` or `population_manifest`.
 
-3. Launch from the project root and enter `run.yaml`.
+3. Launch from the project root and enter `../../config/example/example_external_test_20261113.yaml`.
 
 Linux Bash:
 
@@ -537,6 +549,8 @@ source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/external_test
+mkdir -p ../../config/example
+cp -n run.yaml ../../config/example/example_external_test_20261113.yaml
 python -u ../../yonod.py
 ```
 
@@ -546,12 +560,14 @@ Windows Conda PowerShell:
 conda activate yonod
 $env:PYTHONUTF8 = "1"
 Set-Location .\example\external_test
+New-Item -ItemType Directory -Path ..\..\config\example -Force | Out-Null
+if (-not (Test-Path ..\..\config\example\example_external_test_20261113.yaml)) { Copy-Item run.yaml ..\..\config\example\example_external_test_20261113.yaml }
 python -u ..\..\yonod.py
 ```
 
 4. RF fits once on all 12 training rows and predicts six external rows.
 
-    - Read `example/external_test/result/example_external_test_20261113/report/external_test_report.html`, `docs/predictions/morgan__rf.parquet` and `docs/metrics/external_test_metrics.csv` under that task root.
+    - Read `result/example/example_external_test_20261113/report/external_test_report.html`, `docs/predictions/morgan__rf.parquet` and `docs/metrics/external_test_metrics.csv` under that task root.
     - There is no external CV; a saved score is not an independent confidence interval.
 
 5. For a real task, make independent training, external and audit files, then a new root `config/` YAML with new task/output identities.
@@ -638,7 +654,7 @@ python -u ..\..\yonod.py
 | 94 | `evaluation.shuffle` | `true`; shuffle rows before ordinary KFold. |
 | 95 | `evaluation.seed` | Split seed `42`; does not specify arbitrary member IDs. |
 | 97 | `outputs` | Result locations and report settings. |
-| 98 | `outputs.root` | Independent `result/<task_name>/` task root. |
+| 98 | `outputs.root` | Task root: this smoke test uses `result/example/yonod_schema2_smoke/`; use `result/<task_name>/` for your own tasks. |
 | 99 | `outputs.report_formats` | Both `html` and `markdown`; retain both for normal use. |
 | 100 | `outputs.diagnostics` | Optional training-versus-held-out diagnostic settings. |
 | 101 | `outputs.diagnostics.enabled` | `true`; enable diagnostics without changing the evaluation membership. |
@@ -772,7 +788,7 @@ python -u ..\..\yonod.py
 [Offline guide](example/index.html) · [Operating instructions](example/README.md) · [Download all examples](example/archives/all_examples.zip)
 
 - The ZIPs include `completed_run/` reference snapshots.
-- Source clones generate fresh example-local `result/` folders; the random example's historical `report/` and `evidence/` remain reference material.
+- New example runs write to the project-root `result/example/<task_name>/`; the random example's historical `report/` and `evidence/` remain reference material.
 - The saved [random](example/random_split/verification.json), [fixed-membership](example/fixed_split/verification.json) and [external](example/external_test/verification.json) verification records document Linux execution, not Windows runtime acceptance.
 - For unattended execution and status checks, use the Bash/PowerShell commands in the example instructions, keeping logs and PIDs in root `logs/`.
 
@@ -799,7 +815,6 @@ python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
 ```text
 python -m pip install "huggingface_hub>=0.34,<1.0"
 hf download thinktraveller/YONOD-datasets --repo-type dataset --include "USPTO/**" --local-dir dataset
-hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 ```
 
 - The dataset command downloads only `USPTO/`.
@@ -807,9 +822,23 @@ hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 - Complete any access authorization required by the service.
 - Download only the assets you intend to use; the first-use examples already include their inputs.
 
+#### Download pretrained descriptor weights
+
+**Before selecting `fisd`, `chemical_vae` or `molmetalm`, download their pretrained weights from [Hugging Face](https://huggingface.co/thinktraveller/YONOD-weights).** A source clone supplies configuration and asset notes, but does not include the binary weights. The Morgan smoke tests do not require them.
+
+With `yonod` active, run only the command for the descriptor you need from the project root. These commands work in Linux Bash and Windows Conda PowerShell, using the CLI installed above:
+
+```text
+hf download thinktraveller/YONOD-weights --include "FISD/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "chemical_vae/**" --local-dir WEIGHTS
+hf download thinktraveller/YONOD-weights --include "MolMetaLM-base/**" --local-dir WEIGHTS
+```
+
+The three commands restore `WEIGHTS/FISD/`, `WEIGHTS/chemical_vae/` and `WEIGHTS/MolMetaLM-base/`, respectively. To download all weights together, use `hf download thinktraveller/YONOD-weights --local-dir WEIGHTS`. See the [Hugging Face CLI guide](https://huggingface.co/docs/huggingface_hub/v0.36.0/guides/cli) for download options.
+
 | Pretrained encoding | Required assets |
 | --- | --- |
-| FISD | [Upstream weights](https://github.com/KeantChen/FISD/tree/main/model) in `WEIGHTS/FISD/`: `qm_9_mse_model.pth`, `qm_9_cos_model.pth`, `qm_9_2in1_model.pth`. |
+| FISD | Download `FISD/` from [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights) into `WEIGHTS/FISD/` ([upstream source](https://github.com/KeantChen/FISD/tree/main/model)): `qm_9_mse_model.pth`, `qm_9_cos_model.pth`, `qm_9_2in1_model.pth`. |
 | MolMetaLM | Model, configuration and tokenizer from [MolMetaLM-base](https://huggingface.co/wudejian789/MolMetaLM-base) in `WEIGHTS/MolMetaLM-base/`; see the [upstream project](https://github.com/CSUBioGroup/MolMetaLM). |
 | Chemical VAE | A verified v5 conversion manifest under `WEIGHTS/chemical_vae/<asset>/v5/` and its adjacent, hash-matched `encoder_state_dict.pt`. ZINC and `zinc_properties` assets are distinct. |
 
@@ -819,91 +848,11 @@ hf download thinktraveller/YONOD-weights --local-dir WEIGHTS
 
 ## Developer content
 
-- [Project structure](#project-structure)
 - [Develop and verify a change](#develop-and-verify-a-change)
 - [Descriptor parameters and protocol support](#descriptor-parameters-and-protocol-support)
 - [Add a new descriptor](#add-a-new-descriptor)
 - [Model parameters and their execution boundary](#model-parameters-and-their-execution-boundary)
 - [Add a new model](#add-a-new-model)
-
-### Project structure
-
-Local task folders appear when you prepare or run a task; they may be absent from a fresh clone.
-
-```text
-YONOD/
-├── README.md                English user guide
-├── README.zh-CN.md          Chinese user guide
-├── AGENTS.md                Development and directory conventions
-├── LICENSE                  Project license
-├── yonod.py                 Launch and execute a saved YAML
-├── generate_yaml_config.py  Prepare and validate YAML without modeling
-├── example.yaml             Complete schema-2 format and engineering smoke
-├── requirements.txt         Dependencies; install PyTorch separately first
-├── example/                 First-use examples and their own run.yaml configurations
-│   ├── README.md            Example operating instructions
-│   ├── index.html           Offline browser guide
-│   ├── random_split/        Random-split internal evaluation
-│   ├── fixed_split/         Evaluation using saved membership lists
-│   ├── external_test/       Separate training and external-test tables
-│   └── archives/            Downloadable example packages
-├── yonod/                   Python implementation; main components below
-│   ├── model_factory.py     Schema-2 model validation and construction
-│   ├── config/              YAML loading, validation and path resolution
-│   ├── descriptors/         Molecular and categorical encodings
-│   ├── features/            Data preparation and numerical-condition processing
-│   ├── models/              Legacy model adapters
-│   ├── pipeline/            Ordinary feature, training, prediction and reporting stages
-│   ├── benchmark/           Dedicated fixed-membership and external-test workflows
-│   ├── splits/              Grouping and membership manifests
-│   ├── artifacts/           Feature-package storage and integrity checks
-│   ├── hpo/                 Model-parameter search within training data
-│   └── universal/           Shared CSV-reading and feature-building components
-├── dataset/                 Data and source notes
-├── WEIGHTS/                 Optional pretrained assets
-├── config/                  Local research YAMLs
-├── result/                  Separate folders for research-task outputs
-│   └── <task_name>/         All outputs belonging to one research task
-├── logs/                    Operational logs and PID files
-├── _verify/                 Local validation scripts
-├── backup/                  Backups and engineering support
-├── reference-projects/      External reference material
-└── project-docs/            Independent documentation repository
-    ├── goal.md              Project goals
-    ├── project-plan.md      Development plan
-    ├── buildlog.md          Change and verification records
-    ├── teach.md             Learning notes
-    └── docs/                Other maintained project documentation
-```
-
-- For everyday use, start with the two root scripts, [example.yaml](example.yaml) and [example/](example/).
-- The [dataset notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) explain the inputs and optional assets.
-
-- The root folders `config/`, `result/`, `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/` are excluded from the main Git repository.
-- `project-docs/` has its own Git history in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission.
-- Cloning YONOD does not fetch that repository; the first-use examples work without it.
-
-An ordinary modeling task saves its main outputs in this layout:
-
-```text
-result/<task_name>/
-├── feature/                         Encodings and feature records
-├── runs/
-│   └── run_<feature_id>-<model>/     One encoding/model combination
-│       ├── predictions.csv          Per-record held-out predictions
-│       ├── fold_metrics.csv         Metrics for each fold
-│       └── run_manifest.yaml        Settings and run record
-├── pictures/                        Report figures
-└── report/                          HTML and Markdown reports
-```
-
-- Fixed-membership benchmarks instead organize membership lists, predictions, fold records, metrics and recovery state under `docs/manifests/`, `docs/predictions/`, `docs/folds/`, `docs/metrics/` and `docs/state/` inside the task folder.
-- Frozen external testing also uses `docs/predictions/`, `docs/metrics/` and `report/`; it does not save the ordinary workflow's complete feature and final-model packages.
-- The files available depend on the selected protocol.
-
-- First-use tasks save new outputs in `example/<package>/result/<task_name>/`, inside their own package.
-- Their generated `result/` folders are Git-ignored.
-- The `completed_run/` folders in downloadable ZIPs contain reference snapshots; they are separate from the outputs you generate.
 
 ### Develop and verify a change
 
@@ -1340,3 +1289,99 @@ These are the 18 names accepted under `model_params.rf.estimator` in the support
     - Update dependencies, bilingual documentation and the independent documentation log, then commit actual changes separately in the two repositories.
 
 Last reviewed against this checkout: 2026-11-14.
+
+## Project structure
+
+The `config/example/` and `result/example/` folders initially contain only Git placeholders, with no task configurations or run results. Other local task folders appear when you prepare or run a task.
+
+```text
+YONOD/
+├── README.md                English user guide
+├── README.zh-CN.md          Chinese user guide
+├── AGENTS.md                Development and directory conventions
+├── LICENSE                  Project license
+├── yonod.py                 Launch and execute a saved YAML
+├── generate_yaml_config.py  Prepare and validate YAML without modeling
+├── example.yaml             Complete schema-2 format and engineering smoke
+├── requirements.txt         Dependencies; install PyTorch separately first
+├── example/                 First-use examples and their own run.yaml configurations
+│   ├── README.md            Example operating instructions
+│   ├── index.html           Offline browser guide
+│   ├── random_split/        Random-split internal evaluation
+│   ├── fixed_split/         Evaluation using saved membership lists
+│   ├── external_test/       Separate training and external-test tables
+│   └── archives/            Downloadable example packages
+├── yonod/                   Python implementation; main components below
+│   ├── model_factory.py     Schema-2 model validation and construction
+│   ├── config/              YAML loading, validation and path resolution
+│   ├── descriptors/         Molecular and categorical encodings
+│   ├── features/            Data preparation and numerical-condition processing
+│   ├── models/              Legacy model adapters
+│   ├── pipeline/            Ordinary feature, training, prediction and reporting stages
+│   ├── benchmark/           Dedicated fixed-membership and external-test workflows
+│   ├── splits/              Grouping and membership manifests
+│   ├── artifacts/           Feature-package storage and integrity checks
+│   ├── hpo/                 Model-parameter search within training data
+│   └── universal/           Shared CSV-reading and feature-building components
+├── dataset/                 Data and source notes
+├── WEIGHTS/                 Optional pretrained assets
+├── config/                  Recommended location for run configurations
+│   ├── example/             Saved example YAMLs; initially empty
+│   └── <task_name>.yaml     Local research-task configuration
+├── result/                  Recommended location for all run outputs
+│   ├── example/             Example outputs; initially no run results
+│   │   └── <task_name>/     Created when an example runs
+│   └── <task_name>/         All outputs belonging to one research task
+├── logs/                    Operational logs and PID files
+├── _verify/                 Local validation scripts
+├── backup/                  Backups and engineering support
+├── reference-projects/      External reference material
+└── project-docs/            Independent documentation repository
+    ├── goal.md              Project goals
+    ├── project-plan.md      Development plan
+    ├── buildlog.md          Change and verification records
+    ├── teach.md             Learning notes
+    └── docs/                Other maintained project documentation
+```
+
+- For everyday use, start with the two root scripts, [example.yaml](example.yaml) and [example/](example/).
+- The [dataset notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) explain the inputs and optional assets.
+
+- Under `config/` and `result/`, Git keeps only each `example/` subtree; all other files and folders are ignored. The root folders `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/` are also ignored.
+- `project-docs/` has its own Git history in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission.
+- Cloning YONOD does not fetch that repository; the first-use examples work without it.
+
+An ordinary modeling task saves its main outputs in this layout:
+
+```text
+result/<task_name>/
+├── feature/                         Encodings and feature records
+├── runs/
+│   └── run_<feature_id>-<model>/     One encoding/model combination
+│       ├── predictions.csv          Per-record held-out predictions
+│       ├── fold_metrics.csv         Metrics for each fold
+│       └── run_manifest.yaml        Settings and run record
+├── pictures/                        Report figures
+└── report/                          HTML and Markdown reports
+```
+
+- Fixed-membership benchmarks instead organize membership lists, predictions, fold records, metrics and recovery state under `docs/manifests/`, `docs/predictions/`, `docs/folds/`, `docs/metrics/` and `docs/state/` inside the task folder.
+- Frozen external testing also uses `docs/predictions/`, `docs/metrics/` and `report/`; it does not save the ordinary workflow's complete feature and final-model packages.
+- The files available depend on the selected protocol.
+
+- Example tasks save new outputs in the project-root `result/example/<task_name>/`, with one folder per task.
+- We recommend keeping your own configurations in `config/<task_name>.yaml` and results under `result/<task_name>/`; both are Git-ignored outside the example subfolders.
+- The `completed_run/` folders in downloadable ZIPs contain reference snapshots; they are separate from the outputs you generate.
+
+## Acknowledgments
+
+We thank the authors and contributors of the projects that provide molecular representations and pretrained resources used in YONOD:
+
+- [DRFP](https://github.com/reymond-group/drfp): Daniel Probst, Philippe Schwaller, Jean-Louis Reymond and contributors, for the Differential Reaction Fingerprint method and implementation.
+- [RDKit](https://www.rdkit.org/): the developers and contributors, for the cheminformatics toolkit used for molecular parsing, fingerprints and descriptors, including YONOD's MACCS implementation.
+- [MolMetaLM](https://github.com/CSUBioGroup/MolMetaLM): the authors, for the molecular language model and the [MolMetaLM-base pretrained checkpoint and tokenizer](https://huggingface.co/wudejian789/MolMetaLM-base).
+
+## License
+
+- Project code and documentation use [CC BY-NC 4.0](LICENSE), requiring attribution and limiting use to noncommercial purposes.
+- Third-party data, pretrained weights and reference code retain their own licenses and citation requirements.

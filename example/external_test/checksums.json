@@ -1,18 +1,19 @@
 {
   "source_files": {
-    "README.md": "30f862947153fa65461e2882a2839c4f5670599512f7821d7a4d317076a302c3",
+    "README.md": "f1419bd58e3da14a811f329a69922ee86f78244345b1c9f41b53761e34495eec",
     "audit/external_audit.json": "e4145e45f41d95003509380960496a1b43b0ef86290f9ed0d72fcf5066b1be77",
     "dataset/external.csv": "1801f2879cc2486983cfc5c33ab0c5b7fe26f18bbe1f91766e52d9f1dc06e44f",
     "dataset/train.csv": "3bb9715d841d8e0a72afab961288b403bcccbd488a918c1880a0846454b7af35",
-    "provenance.json": "7ea5ecfc1673ced04c55cc72b9fea494965aacb1f5f59259d05cf8bd5c835fb7",
-    "run.yaml": "342b1caa8cc6804434fa2cbfbef0b8a5a91757b786d41a97b9ec4b983bd4e27d",
-    "verification.json": "dc67d31113c3bfda15e38c2881171fb50d141d20501a4406806210d43c5a2b58"
+    "provenance.json": "2556a23e4a6edb7771826dbfc991c3b1a5ac7ea0458f368ce13407ba9eb1af8e",
+    "run.yaml": "2c15c9138fcdc956f11553fe2e3fc45a63958a74ed700e109d2f71c13af76608",
+    "verification.json": "a28f8f347ef37b446eacdb701a0d473bc9c17ea0bf2b8eaf20a69c618c26a967"
   },
   "completed_run_snapshot": {
     "manifest": "completed_run/snapshot_checksums.json",
     "sha256": "ab1492fa2c871e6fea19cc18c091c891327b4da9bf8576e9c8cc960268c6f934"
   },
   "excluded": [
-    "result/ (created by a new run)"
+    "../../result/example/<task>/ (created by a new run)",
+    "result/ (legacy local outputs)"
   ]
 }

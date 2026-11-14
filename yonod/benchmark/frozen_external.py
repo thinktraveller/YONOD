@@ -203,9 +203,15 @@ class FrozenExternalTestConfig:
             raise FrozenExternalTestError("冻结外部测试必须声明 outputs.root")
         output_root = resolve_config_path(source_path, str(outputs["root"]))
         artifact_dir = resolve_config_path(source_path, str(artifacts["output_dir"]))
-        if output_root.parent.name != "result" or artifact_dir != output_root / "feature":
+        is_task_root = output_root.parent.name == "result" and output_root.name != "example"
+        is_example_task_root = (
+            output_root.parent.name == "example"
+            and output_root.parent.parent.name == "result"
+        )
+        if not (is_task_root or is_example_task_root) or artifact_dir != output_root / "feature":
             raise FrozenExternalTestError(
-                "冻结外部测试必须使用隔离的 result/<task_name>/ 根目录和其 feature/ 子目录"
+                "冻结外部测试必须使用隔离的 result/<task_name>/ 或 "
+                "result/example/<task_name>/ 根目录和其 feature/ 子目录"
             )
         external = evaluation.get("external_test")
         if not isinstance(external, Mapping):  # generic schema normally catches this

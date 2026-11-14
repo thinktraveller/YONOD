@@ -11,7 +11,7 @@
 | [dataset/reactions.csv](dataset/reactions.csv) | 12条人工记录，附加`fixed_block`分组列。 |
 | [splits/membership_guide.csv](splits/membership_guide.csv) | 最易阅读的12行角色对照表：`held_out`是暂不用于建立模型的留出记录。 |
 | [splits/fixed_split_manifest.csv](splits/fixed_split_manifest.csv) | 程序真正读取的24行划分清单（split manifest），每折列出全部12条记录。 |
-| [run.yaml](run.yaml) | 直接在本目录运行的任务配置；所有输入与输出路径相对本文件所在目录。 |
+| [run.yaml](run.yaml) | 复制到根 config/example/ 后运行的任务配置模板；所有输入与输出路径相对本文件所在目录。 |
 | [provenance.json](provenance.json) | 数据来源、校验码与本轮运行记录。 |
 
 ## 数据表中的列是什么意思
@@ -42,13 +42,13 @@
 2. 先确定各折成员，再修改正式划分清单。`role`只用`train`或`valid`；`source_row_index`从0开始，记录原CSV行序。
 3. 每折必须包含全部记录且无重复，同一组不能同时出现在训练与留出部分；每轮每条记录恰好一次`valid`。本例采用1轮2折，因此12条记录对应24行清单。
 4. 清单的`dataset_sha256`必须改为新CSV文件的SHA-256。它防止误用另一份数据，不能证明实验来源独立。`group_id`须与实际分组意义一致；不能为了通过检查随意编号。
-5. 在YAML同步修改列名、折数、名单路径和独立任务名；将所有输出放在新的`result/<任务名>/`，避免复用旧结果目录。
+5. 在YAML同步修改列名、折数、名单路径和独立任务名；建议将所有输出放在仓库根新的 `result/<任务名>/`，避免复用旧结果目录。
 
 程序会核查导入名单的成员、文件身份及组是否跨训练/留出；它不会仅凭组名判断化学结构是否真正未见。
 
 ## 在本文件夹运行
 
-从YONOD根目录进入 `example/fixed_split/`，检查同目录的 [run.yaml](run.yaml)，无需复制或移动设置。输入和新结果保留在本包中；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
+从YONOD根目录进入 `example/fixed_split/`，检查同目录的 [run.yaml](run.yaml)，先将模板复制到仓库根 `config/example/example_fixed_split_20261113.yaml`，再读取该副本。输入保留在本包，新结果统一写入仓库根 `result/example/<任务名>/`；当前YAML未指定线程数，采用模型库默认值，可按本机资源另设。每次只运行一个任务。
 
 ### Linux：Bash
 
@@ -59,8 +59,9 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate yonod
 export PYTHONUTF8=1
 cd example/fixed_split
-mkdir -p ../../logs
-printf '%s\n' 'run.yaml' > ../../logs/example_fixed_split_20261113.stdin.txt
+mkdir -p ../../logs ../../config/example
+cp run.yaml ../../config/example/example_fixed_split_20261113.yaml
+printf '%s\n' '../../config/example/example_fixed_split_20261113.yaml' > ../../logs/example_fixed_split_20261113.stdin.txt
 nohup python -u ../../yonod.py \
   < ../../logs/example_fixed_split_20261113.stdin.txt \
   > ../../logs/example_fixed_split_20261113.log 2>&1 &
@@ -77,25 +78,27 @@ echo $! > ../../logs/example_fixed_split_20261113.pid
 conda activate yonod
 $env:PYTHONUTF8 = '1'
 Set-Location .\example\fixed_split
+New-Item -ItemType Directory -Force -Path ..\..\config\example | Out-Null
+Copy-Item -LiteralPath .\run.yaml -Destination ..\..\config\example\example_fixed_split_20261113.yaml
 python -u ..\..\yonod.py
 ```
 
-首次提示输入 `run.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
+首次提示输入 `../../config/example/example_fixed_split_20261113.yaml`。需要后台运行时，使用[总操作说明中的Windows日志与PID步骤](../README.md#windowsconda-powershell)，同步替换示例目录和任务名。Windows不执行Linux的Bash命令，目录含空格或中文时保留引号。
 
-新结果写入本目录的 `result/example_fixed_split_20261113/`，网页报告为其中的 `report/benchmark_report.html`。下载包的 `completed_run/` 保留已完成运行的快照；具体测试配置版本和平台见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
+新结果写入仓库根的独立任务目录，从本示例目录访问为 `../../result/example/example_fixed_split_20261113/`，网页报告为其中的 `report/benchmark_report.html`。下载包的 `completed_run/` 保留已完成运行的快照；历史测试配置版本和平台，以及当前路径配置的静态校验记录见 [verification.json](verification.json)。历史运行中实际记录的资源参数只用于追溯，不是当前YAML的要求。
 
 ## 运行完成后会看到什么
 
-下载包的[本轮网页报告](completed_run/report/benchmark_report.html)与[文字报告](completed_run/report/benchmark_report.md)保存在 `completed_run/` 完整快照中。重新运行使用同目录YAML，在本包 `result/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
+下载包的[本轮网页报告](completed_run/report/benchmark_report.html)与[文字报告](completed_run/report/benchmark_report.md)保存在 `completed_run/` 完整快照中。重新运行先复制模板到根 `config/example/`，再读取该副本，在仓库根 `result/example/<任务名>/` 新建结果；快照不会占用默认结果位置。源码Git不跟踪运行目录。
 
 以下路径均相对当前示例文件夹；运行成功后应生成并核对这些结果：
 
 | 路径（相对当前示例目录） | 内容 |
 | --- | --- |
-| `result/example_fixed_split_20261113/report/benchmark_report.html` | 网页报告：模型结果、数据划分核对、每折完成情况和图表。 |
-| `result/example_fixed_split_20261113/report/benchmark_report.md` | 同一次计算的Markdown报告。 |
-| `result/example_fixed_split_20261113/docs/manifests/split_manifest.parquet` | 重新核查后实际采用的划分清单。 |
-| `result/example_fixed_split_20261113/docs/predictions/` | 每折逐条留出预测，便于核对实际成员。 |
+| `../../result/example/example_fixed_split_20261113/report/benchmark_report.html` | 网页报告：模型结果、数据划分核对、每折完成情况和图表。 |
+| `../../result/example/example_fixed_split_20261113/report/benchmark_report.md` | 同一次计算的Markdown报告。 |
+| `../../result/example/example_fixed_split_20261113/docs/manifests/split_manifest.parquet` | 重新核查后实际采用的划分清单。 |
+| `../../result/example/example_fixed_split_20261113/docs/predictions/` | 每折逐条留出预测，便于核对实际成员。 |
 
 先检查两折都完成，再看预测误差。R²（决定系数）不是正确率；MAE（平均绝对误差）在本例0–1产率单位下乘100后，才是产率百分点。固定名单本身不保证模型好，也不自动证明未见底物预测能力。
 
@@ -104,4 +107,4 @@ python -u ..\..\yonod.py
 
 ### 生成其他任务的配置
 
-本包run.yaml已经准备好，继续按上面的分系统步骤执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；yonod.py同时承担任务启动与建模执行，历史运行记录中的旧名保留其日期语境。
+本包run.yaml模板已经准备好，按上面的分系统步骤复制到config/example后执行。为自己的CSV创建新配置时，回到主仓根使用generate_yaml_config.py，仅生成/校验标准YAML，随后由yonod.py启动。操作见[总说明](../README.md)；yonod.py同时承担任务启动与建模执行，历史运行记录中的旧名保留其日期语境。

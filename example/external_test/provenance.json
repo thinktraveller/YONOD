@@ -25,8 +25,8 @@
     }
   },
   "expected_reports_after_run": [
-    "result/example_external_test_20261113/report/external_test_report.html",
-    "result/example_external_test_20261113/report/external_test_report.md"
+    "../../result/example/example_external_test_20261113/report/external_test_report.html",
+    "../../result/example/example_external_test_20261113/report/external_test_report.md"
   ],
   "provided_reports": [],
   "scientific_performance_claims": [],
@@ -34,7 +34,7 @@
     "path": "run.yaml",
     "path_base": "example_directory"
   },
-  "output_root": "result/example_external_test_20261113",
+  "output_root": "../../result/example/example_external_test_20261113",
   "verification": "verification.json",
   "completed_run_snapshot": "completed_run",
   "current_reports": {
@@ -49,5 +49,17 @@
       "Windows Conda PowerShell"
     ],
     "historical_resource_parameters": "Preserved only in frozen evidence; not current defaults"
+  },
+  "current_configuration": {
+    "path": "run.yaml",
+    "launch_configuration": "../../config/example/example_external_test_20261113.yaml",
+    "config_sha256": "2c15c9138fcdc956f11553fe2e3fc45a63958a74ed700e109d2f71c13af76608",
+    "path_base": "example_directory",
+    "output_root": "../../result/example/example_external_test_20261113",
+    "repository_output_root": "result/example/example_external_test_20261113",
+    "validation_status": "validated_without_modeling",
+    "modeling_executed": false,
+    "change": "Input paths now resolve from both example/<package> and config/example; outputs use repository result/example. Input bytes, descriptors, model parameters and evaluation settings are unchanged.",
+    "historical_execution": "The existing launch, status, checks and snapshots describe the earlier configuration hash; this output-path revision has not been rerun."
   }
 }
