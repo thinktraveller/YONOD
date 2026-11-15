@@ -16,6 +16,9 @@ from typing import Any, List, Mapping, Tuple
 import numpy as np
 
 from .base import BaseDescriptor
+from .trusted_assets import (
+    TrustedAssetError, read_pinned_asset_bytes, validated_chemical_vae_asset_identity,
+)
 from .chemical_vae_backend import (
     ChemicalVaeAssetError,
     load_converted_torch_encoder_runtime,
@@ -50,11 +53,17 @@ class ChemicalVaeDescriptor(BaseDescriptor):
         if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size <= 0:
             raise ChemicalVaeAssetError("chemical_vae.batch_size 必须是正整数")
         self.manifest_path = Path(model_manifest).expanduser().resolve()
+        try:
+            trusted_identity = validated_chemical_vae_asset_identity(self.manifest_path)
+        except TrustedAssetError as exc:
+            raise ChemicalVaeAssetError(str(exc)) from exc
         if not self.manifest_path.is_file():
             raise ChemicalVaeAssetError(f"chemical_vae model_manifest 不存在：{self.manifest_path}")
         try:
-            manifest = json.loads(self.manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            manifest = json.loads(read_pinned_asset_bytes(
+                self.manifest_path, trusted_identity["conversion_manifest_sha256"],
+            ).decode("utf-8"))
+        except (OSError, json.JSONDecodeError, TrustedAssetError) as exc:
             raise ChemicalVaeAssetError(f"无法读取 chemical_vae conversion manifest：{exc}") from exc
         if not isinstance(manifest, Mapping) or manifest.get("schema_version") != "chemical_vae_conversion_manifest/v1":
             raise ChemicalVaeAssetError("不支持的 chemical_vae conversion manifest schema")

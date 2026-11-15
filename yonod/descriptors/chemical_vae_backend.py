@@ -20,6 +20,8 @@ from typing import Any, Dict, Mapping, MutableMapping, Sequence, Tuple
 
 import numpy as np
 
+from .trusted_assets import TrustedAssetError, chemical_vae_checkpoint_buffer
+
 
 class ChemicalVaeAssetError(ValueError):
     """Raised when a historical asset is malformed or outside the supported contract."""
@@ -624,18 +626,23 @@ def converted_payload(asset: ChemicalVaeEncoderAsset, *, converter_version: str)
 
 
 def load_converted_torch_encoder(
-    converted_path: Path | str, asset: ChemicalVaeEncoderAsset
+    converted_path: Path | str, asset: ChemicalVaeEncoderAsset, *, trusted_state_sha256: str | None = None,
 ) -> Any:
-    """Load a converted state dict and reject an asset-identity mismatch."""
+    """Load independently admitted bytes and reject an asset-identity mismatch.
 
-    torch = _import_torch()
+    Non-bundled migration outputs require trusted_state_sha256 obtained from
+    the caller's own trusted conversion/audit, not a self-reported manifest.
+    """
+
     path = Path(converted_path)
-    if not path.is_file():
-        raise ChemicalVaeAssetError(f"converted encoder does not exist: {path}")
     try:
-        payload = torch.load(path, map_location="cpu", weights_only=True)
-    except TypeError:  # torch versions before the optional weights_only argument.
-        payload = torch.load(path, map_location="cpu")
+        checkpoint = chemical_vae_checkpoint_buffer(
+            path, trusted_state_sha256=trusted_state_sha256, expected_source_sha256=asset.source_sha256,
+        )
+    except TrustedAssetError as exc:
+        raise ChemicalVaeAssetError(str(exc)) from exc
+    torch = _import_torch()
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
     if not isinstance(payload, Mapping):
         raise ChemicalVaeAssetError("converted encoder payload is not a mapping")
     expected = asset.source_sha256
@@ -661,22 +668,27 @@ def load_converted_torch_encoder_runtime(
     converted_path: Path | str,
     *,
     expected_source_sha256: str | None = None,
+    trusted_state_sha256: str | None = None,
 ) -> Tuple[Any, ChemicalVaeEncoderRuntime]:
     """Load a checked converted state without reopening source HDF5 weights.
 
     The payload's source-manifest fragment is validated against the frozen
     per-variant encoder identity and architecture before a strict ``state_dict`` load.  Thus ordinary
     descriptor inference does not import h5py or access the reference project.
+    Independent byte admission precedes torch.load. Migration callers may
+    explicitly trust their own audited output with trusted_state_sha256; the
+    digest must not come from a neighbouring untrusted manifest.
     """
 
-    torch = _import_torch()
     path = Path(converted_path)
-    if not path.is_file():
-        raise ChemicalVaeAssetError(f"converted encoder does not exist: {path}")
     try:
-        payload = torch.load(path, map_location="cpu", weights_only=True)
-    except TypeError:  # torch versions before the optional weights_only argument.
-        payload = torch.load(path, map_location="cpu")
+        checkpoint = chemical_vae_checkpoint_buffer(
+            path, trusted_state_sha256=trusted_state_sha256, expected_source_sha256=expected_source_sha256,
+        )
+    except TrustedAssetError as exc:
+        raise ChemicalVaeAssetError(str(exc)) from exc
+    torch = _import_torch()
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
     if not isinstance(payload, Mapping):
         raise ChemicalVaeAssetError("converted encoder payload is not a mapping")
     if payload.get("schema_version") != "chemical_vae_torch_encoder/v1":
@@ -702,12 +714,13 @@ def load_converted_torch_encoder_runtime(
 
 
 def converted_torch_encoder_forward(
-    one_hot: np.ndarray, converted_path: Path | str, asset: ChemicalVaeEncoderAsset, *, capture_layers: bool = False
+    one_hot: np.ndarray, converted_path: Path | str, asset: ChemicalVaeEncoderAsset, *, capture_layers: bool = False,
+    trusted_state_sha256: str | None = None,
 ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
     """Run the candidate that was actually persisted by the conversion tool."""
 
     torch = _import_torch()
-    model = load_converted_torch_encoder(converted_path, asset)
+    model = load_converted_torch_encoder(converted_path, asset, trusted_state_sha256=trusted_state_sha256)
     tensor = torch.from_numpy(np.asarray(one_hot, dtype=np.float32)).cpu()
     with torch.no_grad():
         if capture_layers:

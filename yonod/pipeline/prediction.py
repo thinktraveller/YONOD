@@ -17,10 +17,27 @@ from yonod.descriptors.ohe import OHEFeature
 from yonod.descriptors.registry import normalise_feature_specs
 from yonod.features.numeric_conditions import NumericConditionsTransformer
 from yonod.pipeline.features import _production_feature_computer
+from yonod.runtime_identity import RuntimeIdentityError, require_runtime_identity, runtime_identity
 
 
 class PredictionContractError(ValueError):
     """A saved fold cannot safely consume the requested prediction rows."""
+
+
+def _require_bundle_runtime(bundle: Mapping[str, Any], config_path: Path | str | None = None) -> None:
+    """Check before OHE's own joblib loader as well as model/descriptor code."""
+    try:
+        if not isinstance(bundle.get("runtime_identity"), Mapping):
+            require_runtime_identity(None, {})
+        spec = bundle.get("feature_spec")
+        if not isinstance(spec, Mapping):
+            raise RuntimeIdentityError("模型包缺少描述符运行时声明；请回到原历史环境或重新建模")
+        require_runtime_identity(
+            bundle["runtime_identity"],
+            runtime_identity(descriptors=[spec], models=[str(bundle.get("model", ""))], config_path=config_path),
+        )
+    except ValueError as exc:
+        raise PredictionContractError(str(exc)) from exc
 
 
 def _sha256_file(path: Path) -> str:
@@ -122,6 +139,7 @@ def _predict_saved_ordinary(
         raise PredictionContractError("模型包版本不受支持")
     if not isinstance(manifest, dict) or bundle.get("run_id") != manifest.get("run_id"):
         raise PredictionContractError("模型包与训练结果身份不一致")
+    _require_bundle_runtime(bundle, descriptor_config_path or config_path)
     if manifest.get("hpo"):
         hashes = manifest.get("model_bundle_sha256")
         if not isinstance(hashes, Mapping) or _sha256_file(bundle_path) != hashes.get(bundle_reference):
@@ -276,6 +294,7 @@ def predict_saved_strict_fold(
     identity = (bundle.get("run_id"), bundle.get("descriptor"), bundle.get("model"))
     if identity != (metadata.get("run_id"), descriptor, model):
         raise PredictionContractError("严格模型包与折级身份不一致")
+    _require_bundle_runtime(bundle, descriptor_config_path)
     if _purpose == "final_model":
         if bundle.get("purpose") != "final_model" or bundle.get("hpo", {}).get("study_id") != info["study"]["study_id"]:
             raise PredictionContractError("严格最终模型包与独立 study 不一致")

@@ -57,7 +57,7 @@ git clone https://github.com/thinktraveller/YONOD.git
 cd YONOD
 conda create -n yonod python=3.9 -y
 conda activate yonod
-python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 ```
 
@@ -68,7 +68,7 @@ git clone https://github.com/thinktraveller/YONOD.git
 Set-Location YONOD
 conda create -n yonod python=3.9 -y
 conda activate yonod
-python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 ```
 
@@ -78,7 +78,10 @@ python -m pip install -r requirements.txt
 - Install PyTorch before the other requirements.
 - The commands above use CPU PyTorch; the three first-use examples need no GPU.
 - LightGBM and SciPy are included in [requirements.txt](requirements.txt).
-- CUDA installation notes are also in that file; choose the PyTorch package for your hardware using the [official version instructions](https://pytorch.org/get-started/previous-versions/).
+- The core pins are scikit-learn 1.5.2, LightGBM 4.6.0 and tqdm 4.67.1. Linux x86_64 binary wheels require glibc ≥2.28 (including Ubuntu 22.04); Windows targets amd64. Other architectures, musl and older glibc need separate acceptance.
+- For dependency migration, use a new `yonod` environment in a separate Conda installation, VM or CI runner. Preserve existing frozen research environments and results. New library versions can change preprocessing, fitted models and predictions; do not reuse old caches or assume cross-version model loading is supported.
+- The CPU installation uses the matched Python 3.9 family Torch 2.8.0 / torchvision 0.23.0 / torchaudio 2.8.0. Frozen Torch 2.1.2 environments remain separate; GPU support needs separate acceptance. Choose GPU packages for your hardware using the [official version instructions](https://pytorch.org/get-started/previous-versions/).
+- Torch 2.8 still has published vulnerabilities; Python 3.9 compatibility is not a whole-environment security guarantee. The audited Transformers `4.57.6+yonod.sec2` requires Torch ≥2.10 for pickle/RNG loading, so its Python 3.9 route uses approved local safetensors. FISD and Chemical VAE admit only independently pinned checkpoint bytes; this restricts their input boundary without patching native Torch.
 
 #### Check the environment
 
@@ -898,11 +901,9 @@ Read task information first, then the result matrix, detailed metrics and scatte
 
 ### Optional models, data and pretrained weights
 
-Available models are `rf`, `xgb`, `lightgbm`, `svm` and `autogluon`. Install AutoGluon only when selecting it. With `yonod` active, the following command works in Linux Bash and Windows Conda PowerShell:
+Available model adapters are `rf`, `xgb`, `lightgbm`, `svm` and `autogluon`. The current core dependency set supports the first four. AutoGluon 1.1.1 is retained only for separately frozen historical environments: it requires scikit-learn ≥1.3,<1.4.1 and, with its LightGBM extra, LightGBM ≥3.3,<4.4. It cannot be added to the current core environment. Do not bypass dependency resolution or downgrade the core to make that installation succeed.
 
-```text
-python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
-```
+AutoGluon 1.4.0 permits the new scikit-learn/LightGBM pins in its published metadata, but its common package requires PyArrow <21 and its Torch extras require Torch <2.8. It is a separate migration candidate, not a tested drop-in replacement. Resolve and validate its complete environment and adapter behavior before using it. The AutoGluon parameter descriptions below document the historical 1.1.1 adapter; they do not establish compatibility with this core or with 1.4.0.
 
 - Encodings without neural pretrained weights include `morgan`, count-based Morgan `mfp`, `maccs`, `maf`, `rdkit2d`, `drfp` and categorical `ohe`.
 - DRFP requires reaction inputs; OHE and numerical preprocessing learn from the corresponding training fold.
@@ -943,6 +944,8 @@ The three commands restore `WEIGHTS/FISD/`, `WEIGHTS/chemical_vae/` and `WEIGHTS
 | Chemical VAE | A verified v5 conversion manifest under `WEIGHTS/chemical_vae/<asset>/v5/` and its adjacent, hash-matched `encoder_state_dict.pt`. ZINC and `zinc_properties` assets are distinct. |
 
 - A configuration, tokenizer or manifest alone does not supply the binary weights.
+- FISD accepts only its three independently approved original checkpoints. Chemical VAE accepts only the approved v5 manifest/state pairs; an unfamiliar package cannot authorize itself by supplying matching hashes in its own manifest.
+- MolMetaLM follows the authors' character-by-character spacing with the fixed-vocabulary BERT fast tokenizer. The vocabulary is not expanded: rows containing unsupported characters such as `%`, `:` or `*`, or producing unknown tokens, fail. The default 512-token truncation remains explicit and is reported in the task log. Masked mean pooling retains its existing contract.
 - Chemical VAE uses the frozen PyTorch encoder's raw `z_mean_sample`; it does not train a VAE or load a decoder/property head, and ordinary execution does not need TensorFlow/Keras.
 - See the [weight notes](WEIGHTS/README.md) and [Chemical VAE loader](yonod/descriptors/chemical_vae.py).
 
@@ -1024,8 +1027,8 @@ python yonod.py --config example.yaml
 | `maf` | `static_descriptor` / `sum` | No exposed parameters. Sum the selected molecular components' binary fingerprints into one 128-value block, using fixed radius 2. |
 | `rdkit2d` | `static_descriptor` / `concat` | No exposed parameters. The current fixed list has 210 values per column. The implementation uses the first component of a multi-component cell and replaces nonfinite calculated values with zero. |
 | `drfp` | `static_descriptor` / `reaction` | No exposed parameters. A 2,048-value reaction block; membership comes from reaction roles and optional `extra_reactants`. |
-| `fisd` | `static_descriptor` / `concat` | No exposed parameters. 50 values per column. Weights are read from `WEIGHTS/FISD/`, with the implementation's legacy-path fallback. |
-| `molmetalm` | `static_descriptor` / `concat` | No exposed parameters. Nominally 768 values per column; the loaded checkpoint's hidden size determines the actual width. Weights are read from `WEIGHTS/MolMetaLM-base/`. |
+| `fisd` | `static_descriptor` / `concat` | No exposed parameters. 50 values per column. Independently pinned original weights are read from `WEIGHTS/FISD/`, with the implementation's legacy-path fallback. |
+| `molmetalm` | `static_descriptor` / `concat` | No exposed parameters. Fixed 768 values per column with the approved float32 LlamaForCausalLM / BERT fast-tokenizer profile and author character spacing. Loads approved local safetensors offline from `WEIGHTS/MolMetaLM-base/`; unsupported token rows fail. |
 | `chemical_vae` | `static_descriptor` / `concat` | Six exposed keys listed below. Verified frozen encoder output has 196 values per column. |
 | `ohe` | `fold_transform` / `concat` | `missing_policy`, `dtype`, `handle_unknown`; width is the sum of category counts learned from the training fold. |
 
@@ -1125,7 +1128,7 @@ To add a descriptor, edit its source registration points; the project does not d
 - Schema-2 YAML model parameters are defined in [model_factory.py](yonod/model_factory.py) and [the section routes](yonod/config/contracts.py).
 - Files under `yonod/models/` include older adapters; their defaults, such as 300 RF trees or automatic SVM scaling/PCA, do not become ordinary schema-2 defaults.
 
-- The catalog below was checked against scikit-learn 1.4.0, XGBoost 2.0.3, LightGBM 4.3.0 and AutoGluon 1.1.1.
+- The catalog below describes the project parameter allowlists. Core dependencies target scikit-learn 1.5.2, XGBoost 2.0.3 and LightGBM 4.6.0; AutoGluon 1.1.1 descriptions apply only to its separate historical environment. Version metadata alone does not establish runtime compatibility.
 - An omitted estimator parameter uses the installed library's default.
 - The project validates parameter names before fitting; the library also validates values and combinations.
 - Safe YAML can describe numbers, strings, lists and mappings, but cannot construct Python functions, callback objects or estimator classes.
@@ -1169,7 +1172,7 @@ These are the 18 names accepted under `model_params.rf.estimator` in the support
 - Declare it as `sample_weight: {column: weight_column}`; YONOD reads that column on the current training rows.
 - Do not embed a list of weights.
 - `rf.runtime` has no nonempty settings.
-- The [scikit-learn RF reference](https://scikit-learn.org/1.4/modules/generated/sklearn.ensemble.RandomForestRegressor.html) explains estimator-specific restrictions.
+- The [scikit-learn RF reference](https://scikit-learn.org/1.5/modules/generated/sklearn.ensemble.RandomForestRegressor.html) explains estimator-specific restrictions.
 
 #### XGBoost (`xgb`)
 
@@ -1243,7 +1246,7 @@ These are the 18 names accepted under `model_params.rf.estimator` in the support
 - `init_score`, `eval_set`, `eval_sample_weight`, `eval_init_score`, `init_model` and `callbacks` are rejected in `fit`.
 - `lightgbm.runtime` accepts only `early_stopping`, with the same `rounds`, `validation_fraction`, `seed` structure as XGBoost.
 - The trainer supplies the inner validation rows and LightGBM stopping callback internally.
-- Native details are in the [LightGBM 4.3 regressor API](https://lightgbm.readthedocs.io/en/v4.3.0/pythonapi/lightgbm.LGBMRegressor.html) and [parameter reference](https://lightgbm.readthedocs.io/en/v4.3.0/Parameters.html).
+- Native details are in the [LightGBM 4.6 regressor API](https://lightgbm.readthedocs.io/en/v4.6.0/pythonapi/lightgbm.LGBMRegressor.html) and [parameter reference](https://lightgbm.readthedocs.io/en/v4.6.0/Parameters.html).
 
 #### Support vector regression (`svm`)
 
@@ -1288,7 +1291,7 @@ These are the 18 names accepted under `model_params.rf.estimator` in the support
 | `random_state` | Seed for randomized/ARPACK solvers, integer or `null`; default `null`. |
 
 - Preprocessing constructor parameters retain scikit-learn defaults when omitted; scaler defaults to centering and standardizing, PCA defaults to no whitening.
-- Native details are in the [SVR](https://scikit-learn.org/1.4/modules/generated/sklearn.svm.SVR.html), [StandardScaler](https://scikit-learn.org/1.4/modules/generated/sklearn.preprocessing.StandardScaler.html) and [PCA](https://scikit-learn.org/1.4/modules/generated/sklearn.decomposition.PCA.html) references.
+- Native details are in the [SVR](https://scikit-learn.org/1.5/modules/generated/sklearn.svm.SVR.html), [StandardScaler](https://scikit-learn.org/1.5/modules/generated/sklearn.preprocessing.StandardScaler.html) and [PCA](https://scikit-learn.org/1.5/modules/generated/sklearn.decomposition.PCA.html) references.
 
 #### AutoGluon (`autogluon`)
 

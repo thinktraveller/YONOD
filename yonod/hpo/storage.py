@@ -11,6 +11,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Mapping
+from yonod.runtime_identity import runtime_identity
 
 
 class StudyStorageError(RuntimeError):
@@ -45,14 +46,16 @@ def study_identity(payload: Mapping[str, Any]) -> str:
 
 def dependency_versions(model: str) -> dict[str, str]:
     """Record exact packages that can change suggestions or model results."""
-    names = ["optuna", "numpy", "scikit-learn", "pandas"]
+    names = ["optuna", "numpy", "scikit-learn", "pandas", "scipy", "joblib", "sqlalchemy"]
     if model == "xgb":
         names.append("xgboost")
     elif model == "lightgbm":
         names.append("lightgbm")
     elif model != "rf":
         raise StudyStorageError(f"不支持的 HPO 模型：{model}")
-    return {name: importlib.metadata.version(name) for name in names}
+    versions = {name: importlib.metadata.version(name) for name in names}
+    versions["python"] = _canonical(runtime_identity()["python"])
+    return versions
 
 
 def source_fingerprints(modules: Mapping[str, Path]) -> dict[str, str]:

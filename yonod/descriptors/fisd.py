@@ -19,6 +19,7 @@ Requires ``torch_geometric`` for ``GCNConv`` and the pooling ops.
 from __future__ import annotations
 
 from pathlib import Path
+from io import BytesIO
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -30,6 +31,9 @@ from torch_geometric.data import Batch, Data
 from torch_geometric.nn import GCNConv, global_max_pool, global_mean_pool
 
 from .base import BaseDescriptor
+from .trusted_assets import (
+    FISD_CHECKPOINT_PINS, read_pinned_asset_bytes, validated_fisd_asset_identity,
+)
 
 
 # Default location for the three pretrained checkpoints (bundled with the
@@ -188,19 +192,26 @@ class FISDDescriptor(BaseDescriptor):
             return
         import sys
 
+        # weights_only is not a sandbox on the supported Torch/Python 3.9
+        # stack. Admit every checkpoint before constructing or loading models.
+        validated_fisd_asset_identity(self.model_dir)
+        checkpoints = {
+            name: BytesIO(read_pinned_asset_bytes(self.model_dir / name, digest))
+            for name, digest in FISD_CHECKPOINT_PINS.items()
+        }
         self.device = self._resolve_device()
         mse = _GNN(hidden_channels=512)
         cos = _GNN(hidden_channels=512)
         two = _TwoInOne(hidden_channels=256)
         mse.load_state_dict(
-            torch.load(self.model_dir / MSE_CKPT, map_location=self.device)
+            torch.load(checkpoints[MSE_CKPT], map_location=self.device, weights_only=True)
         )
         cos.load_state_dict(
-            torch.load(self.model_dir / COS_CKPT, map_location=self.device)
+            torch.load(checkpoints[COS_CKPT], map_location=self.device, weights_only=True)
         )
         two.load_state_dict(
             torch.load(
-                self.model_dir / TWO_IN_ONE_CKPT, map_location=self.device
+                checkpoints[TWO_IN_ONE_CKPT], map_location=self.device, weights_only=True
             )
         )
         self._mse = mse.to(self.device).eval()

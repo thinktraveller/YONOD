@@ -4,3 +4,4 @@
 /example/** -text
 /config/example/** -text
 /example.yaml -text
+/WEIGHTS/** -text

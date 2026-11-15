@@ -21,6 +21,7 @@ from yonod.features.numeric_conditions import NumericConditionsTransformer
 from yonod.model_factory import construct_estimator, materialise_fit_parameters, resolve_model_config, software_versions
 from yonod.pipeline.training import _atomic_yaml, _sha256_file, _sha256_text, _canonical_json
 from yonod.benchmark.fold_preprocessors import ReactionComponentOHE
+from yonod.runtime_identity import runtime_identity, require_runtime_identity, artifact_descriptor
 from .search import _audit_value
 from .storage import _atomic_json
 
@@ -33,6 +34,7 @@ def fit_final_model(
     *, artifact: FeatureArtifact, config: Mapping[str, Any], aligned: pd.DataFrame,
     sample_ids: np.ndarray, labels: np.ndarray, numeric_contract: Mapping[str, Any],
     model: str, run_id: str, staging: Path, search_audit: Mapping[str, Any],
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Save one separate final bundle; never reuse a CV fold's state or model."""
     if search_audit.get("purpose") != "final_model":
@@ -115,6 +117,7 @@ def fit_final_model(
         "hpo": dict(search_audit),
         "effective_estimator_parameters": construction["effective_estimator_params"],
         "software_versions": software_versions(model),
+        "runtime_identity": runtime_identity(descriptors=[artifact_descriptor(artifact.manifest)], models=[model], config_path=config_path),
     }
     _atomic_yaml(bundle_path, bundle)
     return {
@@ -155,6 +158,7 @@ def fit_strict_final_model(
             metadata_path = root / bundle["ohe_state_path"] / "metadata.json"
             if not metadata_path.is_file() or _sha256_file(metadata_path) != bundle.get("ohe_state_metadata_sha256"):
                 raise FinalModelError("已有 strict 最终 OHE 状态元数据哈希不匹配")
+        require_runtime_identity(bundle.get("runtime_identity"), runtime_identity(descriptors=[feature_set], models=[model], config_path=contract.config.source_path))
         return {
             "purpose": "final_model", "study": dict(search_audit),
             "bundle_path": bundle_path.relative_to(root).as_posix(),
@@ -224,6 +228,7 @@ def fit_strict_final_model(
             "hpo": dict(search_audit),
             "effective_estimator_parameters": _audit_value(construction["effective_estimator_params"]),
             "software_versions": software_versions(model),
+            "runtime_identity": runtime_identity(descriptors=[feature_set], models=[model], config_path=contract.config.source_path),
         }
         _atomic_json(staging / "bundle.json", bundle)
         os.replace(staging, destination)

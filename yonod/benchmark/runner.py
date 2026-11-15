@@ -120,6 +120,7 @@ def _prepare_feature_artifacts(config: BenchmarkConfig, frame, run_dir: Path):
                 compute=build_universal_features,
                 mode=mode,
                 descriptor_config=dict(feature_set["params"]),
+                config_path=getattr(config, "source_path", None),
             )
             # Reload even newly-created artifacts so modelling has one input path.
             artifact = load_descriptor_artifact(

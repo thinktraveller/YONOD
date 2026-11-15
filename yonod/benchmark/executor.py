@@ -27,6 +27,7 @@ from yonod.features.numeric_conditions import (
 
 from .config import BenchmarkContract
 from .layout import resolve_benchmark_output_layout
+from yonod.runtime_identity import runtime_identity, require_runtime_identity
 
 
 class FoldExecutionError(RuntimeError):
@@ -561,6 +562,11 @@ def execute_fold(
     features are passed through untouched because their construction is
     descriptor-specific and already complete before this boundary.
     """
+    require_runtime_identity(
+        contract.manifest["benchmark_config"].get("runtime_identity"),
+        runtime_identity(descriptors=contract.config.feature_sets, models=contract.config.models,
+                         config_path=contract.config.source_path, hpo=bool(contract.config.raw.get("hpo", {}).get("enabled"))),
+    )
     ids = np.asarray([str(value) for value in sample_ids], dtype=str)
     y_array = np.asarray(y, dtype=float)
     if len(ids) != len(y_array):
@@ -757,6 +763,7 @@ def execute_fold(
             "train_sample_ids_hash": _hash_values(ids[train_idx]),
             **({"hpo": hpo_audit} if hpo_audit is not None else {}),
             "software_versions": _software_versions(),
+            "runtime_identity": runtime_identity(descriptors=[feature_spec], models=[model], config_path=contract.config.source_path),
         }
         bundle_path = model_dir / ("bundle-" + uuid.uuid4().hex + ".json")
         _atomic_write_json(bundle, bundle_path)

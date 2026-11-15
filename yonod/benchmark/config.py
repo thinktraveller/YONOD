@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from yonod.runtime_identity import runtime_identity
 import json
 import platform
 import re
@@ -594,6 +595,7 @@ class BenchmarkConfig:
             "descriptors": list(self.descriptors),
             "feature_sets": [dict(item) for item in self.feature_sets],
             "models": list(self.models),
+            "runtime_identity": runtime_identity(descriptors=self.feature_sets, models=self.models, config_path=self.source_path, hpo=bool(self.raw.get("hpo", {}).get("enabled"))),
             "model_params": self.raw.get("model_params", {}),
             "schema2_model_params": self.raw.get("schema2_model_params", {}),
             "reproduction_protocol": self.raw.get("reproduction_protocol", {}),

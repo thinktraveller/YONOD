@@ -30,6 +30,7 @@ from ..config.contracts import ConfigContractError, resolve_config_path
 from ..config.loader import ConfigLoadError, load_run_config
 from ..model_factory import ModelConfigurationError, ResolvedModelConfig, construct_estimator, resolve_model_config
 from ..universal.feature_builder import build_universal_features
+from ..runtime_identity import runtime_identity, require_runtime_identity
 
 
 EXTERNAL_PROTOCOL = "frozen_train_external_test"
@@ -404,6 +405,10 @@ class FrozenExternalTestConfig:
                 for item in self.feature_sets
             ],
             "models": list(self.models),
+            "runtime_identity": runtime_identity(
+                descriptors=[{"algorithm": item.algorithm, "params": item.params} for item in self.feature_sets],
+                models=self.models, config_path=self.source_path,
+            ),
             "model_params": self.raw.get("model_params", {}),
             "seed": self.seed,
             "artifact_output_dir": str(self.artifact_output_dir),
@@ -481,15 +486,22 @@ def _canonical_external_feature_frame(config: FrozenExternalTestConfig) -> pd.Da
     return frame
 
 
-def _feature_matrix(frame: pd.DataFrame, feature_set: ExternalFeatureSet) -> np.ndarray:
+def _feature_matrix(frame: pd.DataFrame, feature_set: ExternalFeatureSet, *, config_path: Path | None = None) -> np.ndarray:
+    runtime = runtime_identity(descriptors=[{"algorithm": feature_set.algorithm, "params": feature_set.params}], config_path=config_path)
+    params = copy.deepcopy(feature_set.params)
+    if feature_set.algorithm == "chemical_vae" and config_path is not None:
+        reference = params.get("model_manifest")
+        if isinstance(reference, str):
+            params["model_manifest"] = str(resolve_config_path(config_path, reference))
     matrix, numeric, mask = build_universal_features(
         smiles_cols=list(feature_set.columns),
         numeric_cols=[],
         df=frame,
         desc_name=feature_set.algorithm,
         mode=feature_set.mode,
-        descriptor_config=feature_set.params,
+        descriptor_config=params,
     )
+    require_runtime_identity(runtime, runtime_identity(descriptors=[{"algorithm": feature_set.algorithm, "params": feature_set.params}], config_path=config_path))
     if numeric is not None or not bool(np.asarray(mask, dtype=bool).all()):
         raise FrozenExternalTestError(
             "冻结外部测试描述符不得丢弃行或注入未声明数值特征；请修复输入而不是缩小外部样本"
@@ -663,8 +675,12 @@ def run_frozen_external_test(config_path: Path | str) -> int:
     y_train = train[config.label_col].to_numpy(dtype=float)
     metric_rows: list[Dict[str, Any]] = []
     for feature_set in config.feature_sets:
-        x_train = _feature_matrix(train, feature_set)
-        x_external = _feature_matrix(external_features, feature_set)
+        require_runtime_identity(
+            contract.manifest["benchmark_config"]["runtime_identity"],
+            config.normalized_for_hash(contract.population)["runtime_identity"],
+        )
+        x_train = _feature_matrix(train, feature_set, config_path=config.source_path)
+        x_external = _feature_matrix(external_features, feature_set, config_path=config.source_path)
         schema_hash = _feature_schema_hash(feature_set, x_train, x_external)
         for model in config.models:
             model_config = config.model_configs[model]

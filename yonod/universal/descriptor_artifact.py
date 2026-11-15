@@ -9,6 +9,7 @@ inputs/configuration, but not on model or cross-validation settings.
 from __future__ import annotations
 
 import hashlib
+from yonod.runtime_identity import runtime_identity, require_runtime_identity
 import json
 import os
 import re
@@ -69,8 +70,18 @@ def _normalise_config(
     mode: str,
     descriptor_config: Optional[Mapping[str, Any]],
     sample_id_name: str,
+    config_path: Path | None = None,
 ) -> Dict[str, Any]:
     roles = smiles_roles or {"reactant": [], "product": [], "other": []}
+    options = dict(descriptor_config or {})
+    params = options.get("params", options)
+    runtime = runtime_identity(descriptors=[{"descriptor": descriptor, "params": params}], config_path=config_path)
+    locator = {"molmetalm": "weight_path", "fisd": "model_dir"}.get(descriptor.lower())
+    if locator:
+        options = json.loads(_canonical_json(options))
+        identity_params = options.get("params", options)
+        if locator in identity_params:
+            identity_params[locator] = "content_addressed_asset"
     return json.loads(_canonical_json({
         "feature_id": feature_id,
         "descriptor": descriptor.lower(),
@@ -82,7 +93,8 @@ def _normalise_config(
             "product": list(roles.get("product", [])),
             "other": list(roles.get("other", [])),
         },
-        "options": dict(descriptor_config or {}),
+        "options": options,
+        "runtime_identity": runtime,
     }))
 
 
@@ -263,6 +275,7 @@ def prepare_descriptor_artifact(
     sample_ids: Optional[List[Any]] = None,
     sample_id_name: str = "dataframe_index",
     compute: Optional[Callable[..., Any]] = None,
+    config_path: Path | None = None,
 ) -> DescriptorPreparation:
     """Reuse a matching artifact or atomically compute and persist a new one."""
     current_sample_ids = _sample_id_array(df, sample_ids)
@@ -270,7 +283,7 @@ def prepare_descriptor_artifact(
     if not resolved_feature_id:
         raise DescriptorArtifactError("feature_id 不能为空")
     config = _normalise_config(
-        descriptor, resolved_feature_id, smiles_cols, smiles_roles, mode, descriptor_config, sample_id_name
+        descriptor, resolved_feature_id, smiles_cols, smiles_roles, mode, descriptor_config, sample_id_name, config_path
     )
     fingerprint = dataset_fingerprint(df, smiles_cols, current_sample_ids)
     path = descriptor_artifact_path(directory, resolved_feature_id)
@@ -295,6 +308,15 @@ def prepare_descriptor_artifact(
     if compute is None:
         from .feature_builder import build_universal_features
         compute = build_universal_features
+    compute_options = dict(descriptor_config or {})
+    if descriptor.lower() == "chemical_vae" and config_path is not None:
+        from yonod.config.contracts import resolve_config_path
+        if "params" in compute_options:
+            compute_options["params"] = dict(compute_options["params"])
+        compute_params = compute_options.get("params", compute_options)
+        reference = compute_params.get("model_manifest")
+        if isinstance(reference, str):
+            compute_params["model_manifest"] = str(resolve_config_path(config_path, reference))
     X_smiles, _X_numeric, valid_mask = compute(
         smiles_cols=smiles_cols,
         numeric_cols=[],
@@ -302,7 +324,12 @@ def prepare_descriptor_artifact(
         desc_name=descriptor,
         smiles_roles=dict(smiles_roles or {}),
         mode=mode,
-        descriptor_config=dict(descriptor_config or {}),
+        descriptor_config=compute_options,
+    )
+    require_runtime_identity(
+        config["runtime_identity"],
+        _normalise_config(descriptor, resolved_feature_id, smiles_cols, smiles_roles, mode,
+                          descriptor_config, sample_id_name, config_path)["runtime_identity"],
     )
     X_smiles = np.asarray(X_smiles)
     valid_mask = np.asarray(valid_mask, dtype=np.bool_)

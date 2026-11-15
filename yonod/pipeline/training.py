@@ -33,6 +33,9 @@ from yonod.artifacts.reader import ArtifactReadError, FeatureArtifact, load_feat
 from yonod.config.contracts import resolve_config_path
 from yonod.config.loader import LoadedRunConfig, load_run_config
 from yonod.config.output_layout import combination_name, create_task_layout, task_root
+from yonod.runtime_identity import (
+    RuntimeIdentityError, artifact_descriptor, require_runtime_identity, runtime_identity,
+)
 from yonod.model_factory import (
     ModelConfigurationError,
     ResolvedModelConfig,
@@ -660,6 +663,7 @@ def _run_identity(
     numeric_identity: str | None = None,
     hpo_identity: Mapping[str, Any] | None = None,
     diagnostic_request: Mapping[str, Any] | None = None,
+    config_path: Path | None = None,
 ) -> str:
     payload = {
         "training_schema_version": TRAINING_SCHEMA_VERSION,
@@ -669,6 +673,7 @@ def _run_identity(
         "model_config": model_config.as_audit_dict(),
         "label_identity": label_identity,
         "split_identity": split_identity,
+        "runtime_identity": runtime_identity(descriptors=[artifact_descriptor(artifact.manifest)], models=[model], hpo=hpo_identity is not None, config_path=config_path),
     }
     if numeric_identity is not None:
         payload["numeric_identity"] = numeric_identity
@@ -921,6 +926,13 @@ def _run_one_artifact(
         artifact = load_feature_artifact(artifact_path)
     except ArtifactReadError as exc:
         raise TrainingServiceError(f"训练输入 manifest 无效：{exc}") from exc
+    try:
+        require_runtime_identity(
+            (artifact.manifest.get("metadata") or {}).get("runtime_identity"),
+            runtime_identity(descriptors=[artifact_descriptor(artifact.manifest)], config_path=loaded.path),
+        )
+    except RuntimeIdentityError as exc:
+        raise TrainingServiceError(str(exc)) from exc
     frame, _id_col, label_col, dataset_identity = _load_label_frame(loaded)
     sample_ids, matrix, labels, aligned = _align_artifact_to_labels(artifact, frame, label_col, dataset_identity)
     evaluation = _evaluation_config(config)
@@ -974,6 +986,7 @@ def _run_one_artifact(
         split_identity=split_identity, numeric_identity=numeric_identity,
         hpo_identity=hpo_declaration,
         diagnostic_request=diagnostic_request if "diagnostics" in (config.get("outputs") or {}) else None,
+        config_path=loaded.path,
     )
     result_root = _result_root(loaded, config)
     run_dir = result_root / "runs" / combination_name(str(artifact.manifest["feature_id"]), model)
@@ -1083,6 +1096,7 @@ def _run_one_artifact(
                     "train_sample_ids_sha256": fold_context["train_sample_ids_sha256"],
                     "split_identity": split_identity,
                     "software_versions": software_versions(model),
+                    "runtime_identity": runtime_identity(descriptors=[artifact_descriptor(artifact.manifest)], models=[model], config_path=loaded.path),
                     **({"hpo": search_audit} if search_audit is not None else {}),
                 }
                 _atomic_yaml(bundle_path, bundle)
@@ -1197,6 +1211,7 @@ def _run_one_artifact(
                     artifact=artifact, config=config, aligned=aligned,
                     sample_ids=sample_ids, labels=labels, numeric_contract=numeric_contract,
                     model=model, run_id=run_id, staging=staging, search_audit=final_search,
+                    config_path=loaded.path,
                 )
             model_bundles.append(final_info["bundle_path"])
         predictions = pd.DataFrame.from_records(prediction_records)
@@ -1241,6 +1256,7 @@ def _run_one_artifact(
             "source_config_sha256": _sha256_file(staging / "source_config.yaml"),
             "effective_config_sha256": _sha256_file(staging / "effective_config.yaml"),
             "dependency_versions": software_versions(model),
+            "runtime_identity": runtime_identity(descriptors=[artifact_descriptor(artifact.manifest)], models=[model], config_path=loaded.path),
             "outputs": {
                 "predictions": "predictions.csv",
                 "fold_metrics": "fold_metrics.csv",

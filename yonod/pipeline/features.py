@@ -30,6 +30,7 @@ from yonod.config.contracts import resolve_config_path
 from yonod.config.loader import LoadedRunConfig, load_run_config
 from yonod.descriptors.registry import FeatureRegistryError, FeatureSpec, normalise_feature_specs
 from yonod.provenance import feature_dataset_identity
+from yonod.runtime_identity import runtime_identity, require_runtime_identity
 from yonod.features.numeric_conditions import (
     normalise_numeric_contract, numeric_input_identity, publish_numeric_block,
 )
@@ -232,8 +233,13 @@ def _feature_identity(
     columns: Sequence[str],
     smiles_roles: Mapping[str, Sequence[str]],
     asset_identity: Mapping[str, Any] | None = None,
+    runtime: Mapping[str, Any] | None = None,
 ) -> str:
     feature_spec = spec.to_dict()
+    locator = {"molmetalm": "weight_path", "fisd": "model_dir"}.get(spec.descriptor)
+    if locator and locator in feature_spec["params"]:
+        feature_spec["params"] = dict(feature_spec["params"])
+        feature_spec["params"][locator] = "content_addressed_asset"
     if asset_identity is not None:
         # A model path is an execution locator, not semantic feature content.
         # The manifest/state hashes below are the cache key and make a copied
@@ -246,6 +252,7 @@ def _feature_identity(
         "resolved_columns": list(columns),
         "resolved_roles": {name: list(values) for name, values in sorted(smiles_roles.items())},
         "chemical_vae_asset": dict(asset_identity) if asset_identity is not None else None,
+        "runtime_identity": dict(runtime) if runtime is not None else runtime_identity(descriptors=[spec.to_dict()]),
     }
     return "sha256:" + hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
@@ -402,6 +409,7 @@ def _publish_fold_transform_raw_input(
     feature_identity: str,
     destination: Path,
     artifact_id: str,
+    runtime: Mapping[str, Any],
 ) -> Path:
     columns = list(spec.columns)
     missing = [column for column in columns if column not in frame.columns]
@@ -427,6 +435,8 @@ def _publish_fold_transform_raw_input(
         },
         lifecycle="fold_transform",
         metadata={
+            "feature_spec": spec.to_dict(),
+            "runtime_identity": dict(runtime),
             "fold_transform": {
                 "transform": "ohe",
                 "fit_scope": "training_fold_only",
@@ -450,9 +460,10 @@ def _execute_one_feature(
     config_path: Path,
 ) -> FeatureStatus:
     try:
+        runtime = runtime_identity(descriptors=[spec.to_dict()], config_path=config_path)
         if spec.lifecycle == "fold_transform":
             columns = list(spec.columns)
-            feature_identity = _feature_identity(spec, columns=columns, smiles_roles={})
+            feature_identity = _feature_identity(spec, columns=columns, smiles_roles={}, runtime=runtime)
             artifact_id = _artifact_id(spec, dataset_identity, feature_identity)
             destination = artifacts_root / "features" / artifact_id
             if destination.exists():
@@ -464,6 +475,7 @@ def _execute_one_feature(
             manifest = _publish_fold_transform_raw_input(
                 spec=spec, frame=frame, sample_ids=sample_ids, dataset_identity=dataset_identity,
                 feature_identity=feature_identity, destination=destination, artifact_id=artifact_id,
+                runtime=runtime,
             )
             return FeatureStatus(spec.id, spec.descriptor, spec.lifecycle, "ready", artifact_id,
                                  manifest, feature_identity, "已保存折内 OHE 的原始类别输入；未执行全量 fit")
@@ -474,7 +486,7 @@ def _execute_one_feature(
             raise FeatureServiceError(f"{spec.id} 的 SMILES 输入列不存在：{', '.join(missing)}")
         asset_identity = _chemical_vae_asset_identity(spec, config_path)
         feature_identity = _feature_identity(
-            spec, columns=columns, smiles_roles=feature_roles, asset_identity=asset_identity,
+            spec, columns=columns, smiles_roles=feature_roles, asset_identity=asset_identity, runtime=runtime,
         )
         artifact_id = _artifact_id(spec, dataset_identity, feature_identity)
         destination = artifacts_root / "features" / artifact_id
@@ -486,6 +498,7 @@ def _execute_one_feature(
                                  artifact.manifest_path, feature_identity, "命中已验证的静态特征缓存")
 
         generated = computer(spec, frame, columns, feature_roles)
+        require_runtime_identity(runtime, runtime_identity(descriptors=[spec.to_dict()], config_path=config_path))
         if not isinstance(generated, tuple) or len(generated) not in {2, 3}:
             raise FeatureServiceError("特征计算器必须返回 (matrix, valid_mask) 或加 diagnostics 的三元组")
         matrix, valid_mask = generated[0], generated[1]
@@ -517,6 +530,7 @@ def _execute_one_feature(
             lifecycle="static_descriptor",
             metadata={
                 "feature_spec": spec.to_dict(),
+                "runtime_identity": runtime,
                 "resolved_columns": columns,
                 "resolved_roles": feature_roles,
                 "generation": "yonod.universal.feature_builder",

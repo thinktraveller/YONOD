@@ -79,7 +79,7 @@ git clone https://github.com/thinktraveller/YONOD.git
 cd YONOD
 conda create -n yonod python=3.9 -y
 conda activate yonod
-python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 ```
 
@@ -90,13 +90,16 @@ git clone https://github.com/thinktraveller/YONOD.git
 Set-Location YONOD
 conda create -n yonod python=3.9 -y
 conda activate yonod
-python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 ```
 
 - 这里先安装 CPU 版 PyTorch，再安装 [requirements.txt](requirements.txt) 中的依赖，包括 LightGBM 和 SciPy。
+- 核心固定版本为 scikit-learn 1.5.2、LightGBM 4.6.0 和 tqdm 4.67.1。Linux x86_64 二进制轮子要求 glibc ≥2.28（包括 Ubuntu 22.04），Windows 面向 amd64；其他架构、musl 和更旧 glibc 需单独验收。
+- 迁移依赖时，在独立 Conda 安装、虚拟机或 CI runner 中新建 `yonod`，保留已有冻结研究环境和结果。升级可能改变预处理、模型和预测；不要复用旧缓存，也不要假定模型支持跨版本加载。
 - 三个首次使用样例都可使用 CPU；首次使用无需配置 CUDA。
-- 需要 GPU 时，请结合本机驱动查看 [PyTorch 对应版本安装说明](https://pytorch.org/get-started/previous-versions/) 和依赖文件中的 CUDA 12.1 命令。
+- CPU 安装使用配套且支持 Python 3.9 的 Torch 2.8.0 / torchvision 0.23.0 / torchaudio 2.8.0；原 Torch 2.1.2 冻结环境单独保留。GPU 需另行匹配驱动并验收，参见 [PyTorch 对应版本安装说明](https://pytorch.org/get-started/previous-versions/)。
+- Torch 2.8 仍有已公开漏洞，支持 Python 3.9 不代表整个环境安全。经审计的 Transformers `4.57.6+yonod.sec2` 对 pickle/RNG 加载要求 Torch ≥2.10，因此其 Python 3.9 路线使用获准的本地 safetensors。FISD 与 Chemical VAE 仅接收独立固定摘要批准的检查点字节；这限制了输入边界，没有修复原生 Torch 漏洞。
 
 - 如果已经有可用的 `yonod` 环境，不必重复创建。
 - Windows 的 Conda 初始化通常只需完成一次；Linux 的新 Bash 窗口按上面的初始化命令读入 Conda。
@@ -867,12 +870,8 @@ Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding 
 
 ### 按需安装可选依赖和资产
 
-- 只有选择 AutoGluon 时，才需在已激活 `yonod` 的终端额外安装。
-- 下列命令适用于 Linux Bash 和 Windows Conda PowerShell：
-
-```text
-python -m pip install "autogluon.tabular[lightgbm,catboost]==1.1.1"
-```
+- 当前核心依赖支持 RF、XGBoost、LightGBM 和 SVM。AutoGluon 1.1.1 仅保留在独立的历史冻结环境：它要求 scikit-learn ≥1.3,<1.4.1，其 LightGBM extra 要求 LightGBM ≥3.3,<4.4，与当前核心版本冲突。不能在当前核心环境追加安装，也不能绕过依赖解析或降级核心来强行安装。
+- AutoGluon 1.4.0 的公开元数据允许新的 sklearn/LightGBM 固定版本，但其 common 包要求 PyArrow <21，Torch 相关 extras 要求 Torch <2.8。它是需要单独迁移、完整解析和运行验收的候选，尚非经过验证的替代版。下文 AutoGluon 参数目录描述历史 1.1.1 适配器，不代表它与当前核心或 1.4.0 兼容。
 
 - 三个首次使用样例已含数据且使用 Morgan。
 - 其他数据与权重可从 [YONOD-datasets](https://huggingface.co/datasets/thinktraveller/YONOD-datasets) 和 [YONOD-weights](https://huggingface.co/thinktraveller/YONOD-weights) 获取，下载前查看[数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)。
@@ -910,6 +909,8 @@ hf download thinktraveller/YONOD-weights --include "MolMetaLM-base/**" --local-d
 | `chemical_vae` | `WEIGHTS/chemical_vae/<资产>/v5/` 下已验证转换manifest及相邻、哈希匹配的 `encoder_state_dict.pt`。ZINC 与 `zinc_properties` 资产不能互换。 |
 
 - Chemical VAE只使用冻结 PyTorch 编码器的原始 `z_mean_sample`，不训练 VAE，也不加载解码器或性质头。
+- FISD 只接受三份独立批准的原始检查点；Chemical VAE 只接受批准的 v5 manifest/state 配对，陌生资产不能靠随包提供的自报哈希授权加载。
+- MolMetaLM 按作者方法逐字符加空格，使用固定词表的 BERT fast tokenizer，不扩充词表。含 `%`、`:`、`*` 等不支持字符或产生未知词的行会失败；默认512 token截断仍明确保留，并写入任务日志。带掩码的均值池化保持既有契约。
 - 原始 HDF5 或只有manifest不能替代转换后权重；普通运行无需 TensorFlow/Keras，详见[加载器](yonod/descriptors/chemical_vae.py)。
 
 #### 通过镜像下载权重
@@ -1001,8 +1002,8 @@ python yonod.py --config example.yaml
 | `maf` | `static_descriptor` / `sum` | 没有开放参数。将所选分子组分的二值指纹加和为一个128维块，固定半径2。 |
 | `rdkit2d` | `static_descriptor` / `concat` | 没有开放参数。当前固定清单每列210维；多组分单元格取第一个组分，计算出的非有限值替换为0。 |
 | `drfp` | `static_descriptor` / `reaction` | 没有开放参数。一个2,048维反应块，反应成员来自角色列和可选 `extra_reactants`。 |
-| `fisd` | `static_descriptor` / `concat` | 没有开放参数。每列50维；权重来自 `WEIGHTS/FISD/`，实现另保留旧路径回退。 |
-| `molmetalm` | `static_descriptor` / `concat` | 没有开放参数。名义上每列768维，实际维数由所载检查点的 hidden size 决定；权重来自 `WEIGHTS/MolMetaLM-base/`。 |
+| `fisd` | `static_descriptor` / `concat` | 没有开放参数。每列50维；从 `WEIGHTS/FISD/` 读取独立固定摘要批准的原始权重，实现另保留旧路径回退。 |
+| `molmetalm` | `static_descriptor` / `concat` | 没有开放参数。固定 float32 LlamaForCausalLM / BERT fast tokenizer 与作者逐字符空格输入，每列768维；从 `WEIGHTS/MolMetaLM-base/` 离线加载获准的本地 safetensors，不支持的分词行失败。 |
 | `chemical_vae` | `static_descriptor` / `concat` | 开放下列6个键；已验证冻结编码器每列输出196维。 |
 | `ohe` | `fold_transform` / `concat` | `missing_policy`、`dtype`、`handle_unknown`；维数是当前训练折中各列类别数之和。 |
 
@@ -1090,7 +1091,7 @@ python yonod.py --config example.yaml
 - schema-2 YAML 的模型参数以 [model_factory.py](yonod/model_factory.py)和[配置区段路由](yonod/config/contracts.py)为准。
 - `yonod/models/` 中保留了旧适配器；其中300棵RF树、自动SVM缩放/PCA等默认值，不会自动成为普通schema-2任务的默认设置。
 
-- 以下参数已对照 scikit-learn 1.4.0、XGBoost 2.0.3、LightGBM 4.3.0 和 AutoGluon 1.1.1 核对。
+- 以下参数描述项目的参数白名单。核心版本面向 scikit-learn 1.5.2、XGBoost 2.0.3 和 LightGBM 4.6.0；AutoGluon 1.1.1 描述仅适用于独立历史环境。版本元数据不能代替运行兼容性验收。
 - YAML 未声明的估计器参数采用已安装库的默认值。
 - 项目在拟合前核对参数名，后端库还会检查参数值及组合。
 - 安全YAML可表达数值、字符串、列表和映射，不能构造Python函数、回调对象或估计器类。
@@ -1133,7 +1134,7 @@ python yonod.py --config example.yaml
 - `rf.fit` 只接受 `sample_weight`，写为 `sample_weight: {column: weight_column}`，程序仅从当前训练行读取该列。
 - 不要在YAML中放入权重数组。
 - `rf.runtime` 没有可用的非空设置。
-- [scikit-learn RF文档](https://scikit-learn.org/1.4/modules/generated/sklearn.ensemble.RandomForestRegressor.html)说明估计器自身的取值限制。
+- [scikit-learn RF文档](https://scikit-learn.org/1.5/modules/generated/sklearn.ensemble.RandomForestRegressor.html)说明估计器自身的取值限制。
 
 #### XGBoost（`xgb`）
 
@@ -1204,7 +1205,7 @@ python yonod.py --config example.yaml
 - 权重使用列映射；特征名和类别索引须对应模型矩阵，不能按不相关的源表列次序填写。
 - `fit` 拒绝 `init_score`、`eval_set`、`eval_sample_weight`、`eval_init_score`、`init_model`、`callbacks`。
 - `lightgbm.runtime` 只允许 `early_stopping`，内部同样使用 `rounds`、`validation_fraction`、`seed`，程序自己提供训练内验证集和LightGBM回调。
-- 原生细节见 [LightGBM 4.3回归器API](https://lightgbm.readthedocs.io/en/v4.3.0/pythonapi/lightgbm.LGBMRegressor.html)和[参数文档](https://lightgbm.readthedocs.io/en/v4.3.0/Parameters.html)。
+- 原生细节见 [LightGBM 4.6回归器API](https://lightgbm.readthedocs.io/en/v4.6.0/pythonapi/lightgbm.LGBMRegressor.html)和[参数文档](https://lightgbm.readthedocs.io/en/v4.6.0/Parameters.html)。
 
 #### 支持向量回归（`svm`）
 
@@ -1248,7 +1249,7 @@ python yonod.py --config example.yaml
 | `random_state` | randomized/ARPACK求解器的种子，整数或 `null`，默认 `null`。 |
 
 - 省略预处理构造参数时采用scikit-learn默认值：缩放默认中心化并标准化，PCA默认不白化。
-- 原生细节见 [SVR](https://scikit-learn.org/1.4/modules/generated/sklearn.svm.SVR.html)、[StandardScaler](https://scikit-learn.org/1.4/modules/generated/sklearn.preprocessing.StandardScaler.html)、[PCA](https://scikit-learn.org/1.4/modules/generated/sklearn.decomposition.PCA.html)文档。
+- 原生细节见 [SVR](https://scikit-learn.org/1.5/modules/generated/sklearn.svm.SVR.html)、[StandardScaler](https://scikit-learn.org/1.5/modules/generated/sklearn.preprocessing.StandardScaler.html)、[PCA](https://scikit-learn.org/1.5/modules/generated/sklearn.decomposition.PCA.html)文档。
 
 #### AutoGluon（`autogluon`）
 
