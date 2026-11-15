@@ -29,6 +29,8 @@ Place local test and acceptance scripts under `_verify/`; do not commit that dir
 
 Keep source IDs, roles, input hashes, fold membership and train-only transformations explicit. Tests for invalid inputs should fail before creating task outputs. Low or negative scores on artificial smoke data do not constitute a runtime failure or a claim about real chemical prediction.
 
+The tracked `.gitattributes` preserves exact Git bytes for datasets, example inputs and prepared YAMLs, including on Windows with `core.autocrlf=true`. Do not change an expected audit or split hash to hide a checkout line-ending mismatch. Existing working copies may still contain previously converted files; preserve local changes and use a fresh checkout for byte-identity acceptance instead of overwriting user data.
+
 ## Repository boundaries and commits
 
 - Keep the main checkout on `main`. `project-docs/` is a separate private Git repository, not a submodule. Public contributors do not need access to that private repository.

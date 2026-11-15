@@ -1,0 +1,6 @@
+# Keep integrity-checked inputs and run specifications byte-identical to Git
+# blobs on Linux and Windows, including when core.autocrlf is enabled.
+/dataset/** -text
+/example/** -text
+/config/example/** -text
+/example.yaml -text
