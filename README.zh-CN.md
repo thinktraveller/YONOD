@@ -99,7 +99,7 @@ python -m pip install -r requirements.txt
 - 迁移依赖时，在独立 Conda 安装、虚拟机或 CI runner 中新建 `yonod`，保留已有冻结研究环境和结果。升级可能改变预处理、模型和预测；不要复用旧缓存，也不要假定模型支持跨版本加载。
 - 三个首次使用样例都可使用 CPU；首次使用无需配置 CUDA。
 - CPU 安装使用配套且支持 Python 3.9 的 Torch 2.8.0 / torchvision 0.23.0 / torchaudio 2.8.0；原 Torch 2.1.2 冻结环境单独保留。GPU 需另行匹配驱动并验收，参见 [PyTorch 对应版本安装说明](https://pytorch.org/get-started/previous-versions/)。
-- Torch 2.8 仍有已公开漏洞，支持 Python 3.9 不代表整个环境安全。经审计的 Transformers `4.57.6+yonod.sec2` 对 pickle/RNG 加载要求 Torch ≥2.10，因此其 Python 3.9 路线使用获准的本地 safetensors。FISD 与 Chemical VAE 仅接收独立固定摘要批准的检查点字节；这限制了输入边界，没有修复原生 Torch 漏洞。
+- Torch 2.8 仍有已公开漏洞，支持 Python 3.9 不代表整个环境安全。经审计的 Transformers `4.57.6+yonod.sec3` 对 pickle/RNG 加载要求 Torch ≥2.10，因此其 Python 3.9 路线使用获准的本地 safetensors。FISD 与 Chemical VAE 仅接收独立固定摘要批准的检查点字节；这限制了输入边界，没有修复原生 Torch 漏洞。
 
 - 如果已经有可用的 `yonod` 环境，不必重复创建。
 - Windows 的 Conda 初始化通常只需完成一次；Linux 的新 Bash 窗口按上面的初始化命令读入 Conda。

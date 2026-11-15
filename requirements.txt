@@ -29,8 +29,8 @@ h5py==3.14.0
 drfp>=0.3.4
 # Audited Python 3.9 fork; retain an explicit version for dependency scanners.
 # The immutable release link carries its independently checked wheel hash.
---find-links https://github.com/thinktraveller/transformers-yonod-sec/releases/download/v4.57.6-yonod.sec2/transformers-4.57.6%2Byonod.sec2-py3-none-any.whl#sha256=688116400dc4037f3585c75858169617ca7dcb817d949ef12321d826df85d98b
-transformers==4.57.6+yonod.sec2
+--find-links https://github.com/thinktraveller/transformers-yonod-sec/releases/download/v4.57.6-yonod.sec3/transformers-4.57.6%2Byonod.sec3-py3-none-any.whl#sha256=40c67695f543cc6763abab6bfe0fd44b45be34421e1345e92b661924c8e1f96e
+transformers==4.57.6+yonod.sec3
 networkx==3.2.1
 torch_geometric==2.5.3
 

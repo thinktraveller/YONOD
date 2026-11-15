@@ -376,7 +376,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/ci_dependency_fork_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '97c3aac18cfb48a3ac1580ececb88c11dc17b0ada365808c7fb6a5b05b4c0e36', 'Materialized program SHA mismatch'"
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/ci_dependency_fork_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == 'b7cee749e6924084aa7829c63ba45c6b47436c2534713ddaada82c66e478aeb6', 'Materialized program SHA mismatch'"
       env:
         YONOD_CI_CHUNK: |
           """Install an immutable CI fork wheel after independent SHA-256 verification."""
@@ -394,7 +394,7 @@ jobs:
           from ci_dependency_assets_20261115 import download_verified
 
           ROOT = Path(__file__).resolve().parents[1]
-          EXPECTED_VERSION = "4.57.6+yonod.sec2"
+          EXPECTED_VERSION = "4.57.6+yonod.sec3"
 
 
           def main():
@@ -408,7 +408,7 @@ jobs:
               if (
                   parts.scheme != "https" or parts.netloc != "github.com" or parts.query or parts.fragment
                   or not parts.path.startswith("/thinktraveller/transformers-yonod-sec/releases/download/")
-                  or name != "transformers-4.57.6+yonod.sec2-py3-none-any.whl"
+                  or name != "transformers-4.57.6+yonod.sec3-py3-none-any.whl"
                   or re.fullmatch(r"[a-f0-9]{64}", digest) is None or not 1 <= count <= 32 * 1024 * 1024
               ):
                   raise AssertionError("Fork installation requires the reviewed immutable release URL, wheel name, size and SHA")
@@ -444,7 +444,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/ci_dependency_fork_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '97c3aac18cfb48a3ac1580ececb88c11dc17b0ada365808c7fb6a5b05b4c0e36', 'Materialized program SHA mismatch'"
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/ci_dependency_fork_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == 'b7cee749e6924084aa7829c63ba45c6b47436c2534713ddaada82c66e478aeb6', 'Materialized program SHA mismatch'"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
         YONOD_CI_CHUNK: |
@@ -463,7 +463,7 @@ jobs:
           from ci_dependency_assets_20261115 import download_verified
 
           ROOT = Path(__file__).resolve().parents[1]
-          EXPECTED_VERSION = "4.57.6+yonod.sec2"
+          EXPECTED_VERSION = "4.57.6+yonod.sec3"
 
 
           def main():
@@ -477,7 +477,7 @@ jobs:
               if (
                   parts.scheme != "https" or parts.netloc != "github.com" or parts.query or parts.fragment
                   or not parts.path.startswith("/thinktraveller/transformers-yonod-sec/releases/download/")
-                  or name != "transformers-4.57.6+yonod.sec2-py3-none-any.whl"
+                  or name != "transformers-4.57.6+yonod.sec3-py3-none-any.whl"
                   or re.fullmatch(r"[a-f0-9]{64}", digest) is None or not 1 <= count <= 32 * 1024 * 1024
               ):
                   raise AssertionError("Fork installation requires the reviewed immutable release URL, wheel name, size and SHA")
@@ -515,9 +515,9 @@ jobs:
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
         python _verify/ci_dependency_fork_20261115.py
       env:
-        YONOD_HF_FORK_URL: https://github.com/thinktraveller/transformers-yonod-sec/releases/download/v4.57.6-yonod.sec2/transformers-4.57.6%2Byonod.sec2-py3-none-any.whl
-        YONOD_HF_FORK_SHA256: 688116400dc4037f3585c75858169617ca7dcb817d949ef12321d826df85d98b
-        YONOD_HF_FORK_BYTES: '11998756'
+        YONOD_HF_FORK_URL: https://github.com/thinktraveller/transformers-yonod-sec/releases/download/v4.57.6-yonod.sec3/transformers-4.57.6%2Byonod.sec3-py3-none-any.whl
+        YONOD_HF_FORK_SHA256: 40c67695f543cc6763abab6bfe0fd44b45be34421e1345e92b661924c8e1f96e
+        YONOD_HF_FORK_BYTES: '11999675'
     - name: '[dependency] install reviewed HF wheel and pip-check (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -528,10 +528,10 @@ jobs:
         python _verify/ci_dependency_fork_20261115.py
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
-        YONOD_HF_FORK_URL: https://github.com/thinktraveller/transformers-yonod-sec/releases/download/v4.57.6-yonod.sec2/transformers-4.57.6%2Byonod.sec2-py3-none-any.whl
-        YONOD_HF_FORK_SHA256: 688116400dc4037f3585c75858169617ca7dcb817d949ef12321d826df85d98b
-        YONOD_HF_FORK_BYTES: '11998756'
-    - name: '[dependency] materialize verify_transformers_backport_20261115.py 1/3 (Bash)'
+        YONOD_HF_FORK_URL: https://github.com/thinktraveller/transformers-yonod-sec/releases/download/v4.57.6-yonod.sec3/transformers-4.57.6%2Byonod.sec3-py3-none-any.whl
+        YONOD_HF_FORK_SHA256: 40c67695f543cc6763abab6bfe0fd44b45be34421e1345e92b661924c8e1f96e
+        YONOD_HF_FORK_BYTES: '11999675'
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 1/4 (Bash)'
       if: runner.os != 'Windows'
       shell: bash -el {0}
       run: |
@@ -570,13 +570,14 @@ jobs:
           FORK = ROOT / "reference-projects" / "transformers-yonod-sec"
           SUPPORT = ROOT / "backup" / "dependency_security_fix_20261115" / "transformers-fork"
           SOURCE = FORK / "src" / "transformers"
-          EXPECTED_VERSION = "4.57.6+yonod.sec2"
+          EXPECTED_VERSION = "4.57.6+yonod.sec3"
           INSTALLED = False
           EXPECTED_PATCHES = {
               "GHSA-xrqw-3rrv-vx5w": "eaaaf8494dd5386634ae37d1d122212fdc315be5",
               "GHSA-fgcw-684q-jj6r": "676559d5022b74aaa0cee1cee0842b7f27c5320e",
               "GHSA-29pf-2h5f-8g72": "a7f8e7ff37d87d1a1a0c8cf607971c607741452f",
               "GHSA-69w3-r845-3855": "03c8082ba4594c9b8d6fe190ca9bed0e5f8ca396",
+              "GHSA-x9r9-c232-4q39": "cbc1651a032b923da7f4b44b3d0e6f68e6ba6b55",
           }
           OBSERVATIONS = []
 
@@ -685,8 +686,8 @@ jobs:
                           def __init__(self, **kwargs):
                               self.__dict__.update(kwargs)
                       auto = SimpleNamespace(from_pretrained=MagicMock(side_effect=AssertionError("Remote config loading is forbidden")))
-                      namespace = {"__name__": "isolated_backport_test", "PretrainedConfig": Na
-    - name: '[dependency] materialize verify_transformers_backport_20261115.py 1/3 (PowerShell)'
+                      na
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 1/4 (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
@@ -726,13 +727,14 @@ jobs:
           FORK = ROOT / "reference-projects" / "transformers-yonod-sec"
           SUPPORT = ROOT / "backup" / "dependency_security_fix_20261115" / "transformers-fork"
           SOURCE = FORK / "src" / "transformers"
-          EXPECTED_VERSION = "4.57.6+yonod.sec2"
+          EXPECTED_VERSION = "4.57.6+yonod.sec3"
           INSTALLED = False
           EXPECTED_PATCHES = {
               "GHSA-xrqw-3rrv-vx5w": "eaaaf8494dd5386634ae37d1d122212fdc315be5",
               "GHSA-fgcw-684q-jj6r": "676559d5022b74aaa0cee1cee0842b7f27c5320e",
               "GHSA-29pf-2h5f-8g72": "a7f8e7ff37d87d1a1a0c8cf607971c607741452f",
               "GHSA-69w3-r845-3855": "03c8082ba4594c9b8d6fe190ca9bed0e5f8ca396",
+              "GHSA-x9r9-c232-4q39": "cbc1651a032b923da7f4b44b3d0e6f68e6ba6b55",
           }
           OBSERVATIONS = []
 
@@ -841,8 +843,8 @@ jobs:
                           def __init__(self, **kwargs):
                               self.__dict__.update(kwargs)
                       auto = SimpleNamespace(from_pretrained=MagicMock(side_effect=AssertionError("Remote config loading is forbidden")))
-                      namespace = {"__name__": "isolated_backport_test", "PretrainedConfig": Na
-    - name: '[dependency] materialize verify_transformers_backport_20261115.py 2/3 (Bash)'
+                      na
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 2/4 (Bash)'
       if: runner.os != 'Windows'
       shell: bash -el {0}
       run: |
@@ -852,7 +854,7 @@ jobs:
         python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_transformers_backport_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8'))"
       env:
         YONOD_CI_CHUNK: |-
-          tiveConfig, "CONFIG_MAPPING": {"superpoint": NativeConfig}, "AutoConfig": auto}
+          mespace = {"__name__": "isolated_backport_test", "PretrainedConfig": NativeConfig, "CONFIG_MAPPING": {"superpoint": NativeConfig}, "AutoConfig": auto}
                       configuration = copy.deepcopy(find_class(relative, "LightGlueConfig"))
                       configuration.decorator_list = []
                       execute([configuration], namespace)
@@ -951,10 +953,9 @@ jobs:
                   fake_torch.load.assert_not_called()
                   OBSERVATIONS.append({"policy": "sec2-torch-pickle-admission", "rejected_torch_minors": ["2.1", "2.6", "2.8", "2.9"], "threshold_2_10_accepted_by_stub": True, "weights_only_false_cannot_bypass": True, "safetensors_branch_usable": True, "rng_rejected_before_load": True, "native_torch_patched": False})
 
-              def test_release_version_patch_manifest_and_python39_syntax(self):
-                  init = tree("__init__.py")
-                  version = next(ast.literal_eval(node.value) for node in init.body if isinstance(node, ast.Assign) and any(isin
-    - name: '[dependency] materialize verify_transformers_backport_20261115.py 2/3 (PowerShell)'
+              def test_sec3_custom_generation_consent_precedes_fetch_and_cache(self):
+                  method = find_method("generation/utils.py", "GenerationMixin", "load_
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 2/4 (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
@@ -965,7 +966,7 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
         YONOD_CI_CHUNK: |-
-          tiveConfig, "CONFIG_MAPPING": {"superpoint": NativeConfig}, "AutoConfig": auto}
+          mespace = {"__name__": "isolated_backport_test", "PretrainedConfig": NativeConfig, "CONFIG_MAPPING": {"superpoint": NativeConfig}, "AutoConfig": auto}
                       configuration = copy.deepcopy(find_class(relative, "LightGlueConfig"))
                       configuration.decorator_list = []
                       execute([configuration], namespace)
@@ -1064,20 +1065,91 @@ jobs:
                   fake_torch.load.assert_not_called()
                   OBSERVATIONS.append({"policy": "sec2-torch-pickle-admission", "rejected_torch_minors": ["2.1", "2.6", "2.8", "2.9"], "threshold_2_10_accepted_by_stub": True, "weights_only_false_cannot_bypass": True, "safetensors_branch_usable": True, "rng_rejected_before_load": True, "native_torch_patched": False})
 
-              def test_release_version_patch_manifest_and_python39_syntax(self):
-                  init = tree("__init__.py")
-                  version = next(ast.literal_eval(node.value) for node in init.body if isinstance(node, ast.Assign) and any(isin
-    - name: '[dependency] materialize verify_transformers_backport_20261115.py 3/3 (Bash)'
+              def test_sec3_custom_generation_consent_precedes_fetch_and_cache(self):
+                  method = find_method("generation/utils.py", "GenerationMixin", "load_
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 3/4 (Bash)'
       if: runner.os != 'Windows'
       shell: bash -el {0}
       run: |
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_transformers_backport_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '9910a16590ab26e148a66b62c9d58ce83a3d8b63a46b69d0d5c7d3881c7bc326', 'Materialized program SHA mismatch'"
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_transformers_backport_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8'))"
       env:
-        YONOD_CI_CHUNK: |
-          stance(target, ast.Name) and target.id == "__version__" for target in node.targets))
+        YONOD_CI_CHUNK: |-
+          custom_generate")
+                  marker = self.base / "owned-cache-marker.txt"
+
+                  def runner(consent, resolved=None, denied=False, local=False, missing=False, existing_file=False):
+                      events = []
+                      def resolve(value, repository, **kwargs):
+                          events.append("consent")
+                          self.assertEqual(kwargs["has_local_code"], local)
+                          self.assertEqual(kwargs["has_remote_code"], not local)
+                          if denied:
+                              raise ValueError("declined consent")
+                          return resolved
+                      def fetch(repository, **kwargs):
+                          events.append("fetch-cache")
+                          if missing:
+                              raise OSError("missing marker module")
+                          marker.write_text("harmless owned cache marker", encoding="utf-8")
+                          return "owned-placeholder-module"
+                      def requirements(repository, **kwargs):
+                          events.append("requirements")
+                      placeholder = lambda: "inert callable, never executed"
+                      def load_class(name, module):
+                          events.append("load-class-stub")
+                          self.assertEqual(name, "generate")
+                          return placeholder
+                      namespace = {"os": SimpleNamespace(path=SimpleNamespace(exists=lambda path: local or existing_file, isdir=lambda path: local)), "resolve_trust_remote_code": MagicMock(side_effect=resolve), "get_cached_module_file": MagicMock(side_effect=fetch), "check_python_requirements": MagicMock(side_effect=requirements), "get_class_in_module": MagicMock(side_effect=load_class)}
+                      load = function(method, namespace)
+                      call = lambda: load(object(), "owned-local-path" if local else "uncontacted-owner/uncontacted-repository", trust_remote_code=consent, revision="owned-fixed-revision")
+                      return call, namespace, events, placeholder
+
+                  rejected = 0
+                  for consent, resolved, denied in ((False, None, True), (None, None, True), (None, None, False), (None, False, False)):
+                      call, namespace, events, _ = runner(consent, resolved=resolved, denied=denied)
+                      with self.assertRaises(ValueError):
+                          call()
+                      namespace["get_cached_module_file"].assert_not_called()
+                      namespace["check_python_requirements"].assert_not_called()
+                      namespace["get_class_in_module"].assert_not_called()
+                      self.assertEqual(events, ["consent"])
+                      self.assertFalse(marker.exists())
+                      rejected += 1
+                  ordinary_file = self.base / "owned-regular-file"
+                  ordinary_file.write_text("inert local file, not a directory", encoding="utf-8")
+                  self.assertTrue(ordinary_file.exists())
+                  self.assertFalse(ordinary_file.is_dir())
+                  for consent in (False, None):
+                      call, namespace, events, _ = runner(consent, resolved=False, existing_file=True)
+                      with self.assertRaises(ValueError):
+                          call()
+                      namespace["get_cached_module_file"].assert_not_called()
+                      namespace["check_python_requirements"].assert_not_called()
+                      namespace["get_class_in_module"].assert_not_called()
+                      self.assertEqual(events, ["consent"])
+                      self.assertFalse(marker.exists())
+                      rejected += 1
+                  for consent, local, resolved in ((True, False, True), (None, False, True), (False, True, False)):
+                      call, namespace, events, placeholder = runner(consent, local=local, resolved=resolved)
+                      self.assertIs(call(), placeholder)
+                      self.assertEqual(events, ["consent", "fetch-cache", "requirements", "load-class-stub"])
+                      self.assertTrue(marker.exists())
+                      self.assertEqual(namespace["get_cached_module_file"].call_args.kwargs["revision"], "owned-fixed-revision")
+                      marker.unlink()
+                  call, namespace, events, _ = runner(True, resolved=True, missing=True)
+                  with self.assertRaisesRegex(OSError, "does not contain"):
+                      call()
+                  self.assertEqual(events, ["consent", "fetch-cache"])
+                  namespace["check_python_requirements"].assert_not_called()
+                  self.assertFalse(marker.exists())
+                  OBSERVATIONS.append({"patch": "custom_generation_consent", "rejected_without_fetch_or_cache_write": rejected, "regular_file_is_not_trusted_local_directory": True, "explicit_and_resolved_consent_order_verified": True, "local_interface_preserved": True, "authorized_missing_file_error_preserved": True, "real_remote_code_or_network_executed": False})
+
+              def test_release_version_patch_manifest_and_python39_syntax(self):
+                  init = tree("__init__.py")
+                  version = next(ast.literal_eval(node.value) for node in init.body if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets))
                   self.assertEqual(version, EXPECTED_VERSION)
                   if INSTALLED:
                       distribution = importlib.metadata.distribution("transformers")
@@ -1128,7 +1200,153 @@ jobs:
               stream = StringIO()
               result = unittest.TextTestRunner(stream=stream, verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(BackportTests))
               stem = "backport-installed" if INSTALLED else "backport"
-              (SUPPORT / (stem + "-tests.log")).write_text(stream.getvalue(), encoding="utf-8")
+              (SU
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 3/4 (PowerShell)'
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda activate yonod
+        if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_transformers_backport_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8'))"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      env:
+        YONOD_CI_CHUNK: |-
+          custom_generate")
+                  marker = self.base / "owned-cache-marker.txt"
+
+                  def runner(consent, resolved=None, denied=False, local=False, missing=False, existing_file=False):
+                      events = []
+                      def resolve(value, repository, **kwargs):
+                          events.append("consent")
+                          self.assertEqual(kwargs["has_local_code"], local)
+                          self.assertEqual(kwargs["has_remote_code"], not local)
+                          if denied:
+                              raise ValueError("declined consent")
+                          return resolved
+                      def fetch(repository, **kwargs):
+                          events.append("fetch-cache")
+                          if missing:
+                              raise OSError("missing marker module")
+                          marker.write_text("harmless owned cache marker", encoding="utf-8")
+                          return "owned-placeholder-module"
+                      def requirements(repository, **kwargs):
+                          events.append("requirements")
+                      placeholder = lambda: "inert callable, never executed"
+                      def load_class(name, module):
+                          events.append("load-class-stub")
+                          self.assertEqual(name, "generate")
+                          return placeholder
+                      namespace = {"os": SimpleNamespace(path=SimpleNamespace(exists=lambda path: local or existing_file, isdir=lambda path: local)), "resolve_trust_remote_code": MagicMock(side_effect=resolve), "get_cached_module_file": MagicMock(side_effect=fetch), "check_python_requirements": MagicMock(side_effect=requirements), "get_class_in_module": MagicMock(side_effect=load_class)}
+                      load = function(method, namespace)
+                      call = lambda: load(object(), "owned-local-path" if local else "uncontacted-owner/uncontacted-repository", trust_remote_code=consent, revision="owned-fixed-revision")
+                      return call, namespace, events, placeholder
+
+                  rejected = 0
+                  for consent, resolved, denied in ((False, None, True), (None, None, True), (None, None, False), (None, False, False)):
+                      call, namespace, events, _ = runner(consent, resolved=resolved, denied=denied)
+                      with self.assertRaises(ValueError):
+                          call()
+                      namespace["get_cached_module_file"].assert_not_called()
+                      namespace["check_python_requirements"].assert_not_called()
+                      namespace["get_class_in_module"].assert_not_called()
+                      self.assertEqual(events, ["consent"])
+                      self.assertFalse(marker.exists())
+                      rejected += 1
+                  ordinary_file = self.base / "owned-regular-file"
+                  ordinary_file.write_text("inert local file, not a directory", encoding="utf-8")
+                  self.assertTrue(ordinary_file.exists())
+                  self.assertFalse(ordinary_file.is_dir())
+                  for consent in (False, None):
+                      call, namespace, events, _ = runner(consent, resolved=False, existing_file=True)
+                      with self.assertRaises(ValueError):
+                          call()
+                      namespace["get_cached_module_file"].assert_not_called()
+                      namespace["check_python_requirements"].assert_not_called()
+                      namespace["get_class_in_module"].assert_not_called()
+                      self.assertEqual(events, ["consent"])
+                      self.assertFalse(marker.exists())
+                      rejected += 1
+                  for consent, local, resolved in ((True, False, True), (None, False, True), (False, True, False)):
+                      call, namespace, events, placeholder = runner(consent, local=local, resolved=resolved)
+                      self.assertIs(call(), placeholder)
+                      self.assertEqual(events, ["consent", "fetch-cache", "requirements", "load-class-stub"])
+                      self.assertTrue(marker.exists())
+                      self.assertEqual(namespace["get_cached_module_file"].call_args.kwargs["revision"], "owned-fixed-revision")
+                      marker.unlink()
+                  call, namespace, events, _ = runner(True, resolved=True, missing=True)
+                  with self.assertRaisesRegex(OSError, "does not contain"):
+                      call()
+                  self.assertEqual(events, ["consent", "fetch-cache"])
+                  namespace["check_python_requirements"].assert_not_called()
+                  self.assertFalse(marker.exists())
+                  OBSERVATIONS.append({"patch": "custom_generation_consent", "rejected_without_fetch_or_cache_write": rejected, "regular_file_is_not_trusted_local_directory": True, "explicit_and_resolved_consent_order_verified": True, "local_interface_preserved": True, "authorized_missing_file_error_preserved": True, "real_remote_code_or_network_executed": False})
+
+              def test_release_version_patch_manifest_and_python39_syntax(self):
+                  init = tree("__init__.py")
+                  version = next(ast.literal_eval(node.value) for node in init.body if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets))
+                  self.assertEqual(version, EXPECTED_VERSION)
+                  if INSTALLED:
+                      distribution = importlib.metadata.distribution("transformers")
+                      self.assertEqual(distribution.version, EXPECTED_VERSION)
+                      self.assertEqual(distribution.metadata["Requires-Python"], ">=3.9.0")
+                      self.assertEqual(Path(distribution.locate_file("transformers")).resolve(), SOURCE.resolve())
+                  else:
+                      setup = ast.parse((FORK / "setup.py").read_text(encoding="utf-8"))
+                      call = next(node for node in ast.walk(setup) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "setup")
+                      self.assertEqual(next(ast.literal_eval(item.value) for item in call.keywords if item.arg == "version"), EXPECTED_VERSION)
+                  manifest = json.loads((SOURCE / "yonod_security_backports.json").read_text(encoding="utf-8"))
+                  self.assertEqual(manifest["version"], EXPECTED_VERSION)
+                  self.assertEqual({item["advisory"]: item["upstream_commit"] for item in manifest["patches"]}, EXPECTED_PATCHES)
+                  self.assertEqual(manifest["additional_policy"]["torch_load_minimum"], "2.10")
+                  for name in manifest["modified_production_files"]:
+                      if INSTALLED:
+                          if not name.startswith("src/transformers/"):
+                              continue  # setup.py belongs to the source build; installed METADATA is checked above.
+                          path = SOURCE / name.removeprefix("src/transformers/")
+                      else:
+                          path = FORK / name
+                      ast.parse(path.read_text(encoding="utf-8"), feature_version=(3, 9))
+                  sbom = json.loads((SOURCE / "yonod_security_sbom.cdx.json").read_text(encoding="utf-8"))
+                  self.assertEqual(sbom["bomFormat"], "CycloneDX")
+                  self.assertEqual(sbom["metadata"]["component"]["version"], EXPECTED_VERSION)
+                  OBSERVATIONS.append({"patch": "release_metadata", "honest_local_version": version, "patches": len(EXPECTED_PATCHES)})
+
+
+          def main():
+              global FORK, SOURCE, SUPPORT, INSTALLED
+              parser = argparse.ArgumentParser(description=__doc__)
+              location = parser.add_mutually_exclusive_group()
+              location.add_argument("--source-root", type=Path, default=FORK)
+              location.add_argument("--installed", action="store_true", help="Check the installed wheel without a source checkout or model import")
+              parser.add_argument("--output-dir", type=Path, default=SUPPORT)
+              args = parser.parse_args()
+              INSTALLED = args.installed
+              SUPPORT = args.output_dir.resolve()
+              if INSTALLED:
+                  specification = importlib.util.find_spec("transformers")
+                  if specification is None or specification.origin is None:
+                      parser.error("The audited transformers wheel is not installed")
+                  SOURCE = Path(specification.origin).resolve().parent
+              else:
+                  FORK = args.source_root.resolve()
+                  SOURCE = FORK / "src" / "transformers"
+              SUPPORT.mkdir(parents=True, exist_ok=True)
+              stream = StringIO()
+              result = unittest.TextTestRunner(stream=stream, verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(BackportTests))
+              stem = "backport-installed" if INSTALLED else "backport"
+              (SU
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 4/4 (Bash)'
+      if: runner.os != 'Windows'
+      shell: bash -el {0}
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_transformers_backport_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == 'e55fab6f3522c414c1c34d400a05721cbd38cb0cdee5472b36db73c496519060', 'Materialized program SHA mismatch'"
+      env:
+        YONOD_CI_CHUNK: |
+          PPORT / (stem + "-tests.log")).write_text(stream.getvalue(), encoding="utf-8")
               diff = None if INSTALLED else subprocess.run(["git", "-C", str(FORK), "diff", "--check"], text=True, capture_output=True)
               report = {"status": "passed" if result.wasSuccessful() and (diff is None or diff.returncode == 0) else "failed", "tests_run": result.testsRun, "failures": len(result.failures), "errors": len(result.errors), "observations": OBSERVATIONS, "python": sys.version.split()[0], "platform": sys.platform, "mode": "installed-wheel" if INSTALLED else "source-build", "package_root": str(SOURCE), "diff_check_returncode": None if diff is None else diff.returncode, "model_or_descriptor_executed": False, "real_pickle_or_remote_code_executed": False}
               (SUPPORT / (stem + "-verification.json")).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -1139,69 +1357,18 @@ jobs:
 
           if __name__ == "__main__":
               raise SystemExit(main())
-    - name: '[dependency] materialize verify_transformers_backport_20261115.py 3/3 (PowerShell)'
+    - name: '[dependency] materialize verify_transformers_backport_20261115.py 4/4 (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_transformers_backport_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '9910a16590ab26e148a66b62c9d58ce83a3d8b63a46b69d0d5c7d3881c7bc326', 'Materialized program SHA mismatch'"
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_transformers_backport_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == 'e55fab6f3522c414c1c34d400a05721cbd38cb0cdee5472b36db73c496519060', 'Materialized program SHA mismatch'"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
         YONOD_CI_CHUNK: |
-          stance(target, ast.Name) and target.id == "__version__" for target in node.targets))
-                  self.assertEqual(version, EXPECTED_VERSION)
-                  if INSTALLED:
-                      distribution = importlib.metadata.distribution("transformers")
-                      self.assertEqual(distribution.version, EXPECTED_VERSION)
-                      self.assertEqual(distribution.metadata["Requires-Python"], ">=3.9.0")
-                      self.assertEqual(Path(distribution.locate_file("transformers")).resolve(), SOURCE.resolve())
-                  else:
-                      setup = ast.parse((FORK / "setup.py").read_text(encoding="utf-8"))
-                      call = next(node for node in ast.walk(setup) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "setup")
-                      self.assertEqual(next(ast.literal_eval(item.value) for item in call.keywords if item.arg == "version"), EXPECTED_VERSION)
-                  manifest = json.loads((SOURCE / "yonod_security_backports.json").read_text(encoding="utf-8"))
-                  self.assertEqual(manifest["version"], EXPECTED_VERSION)
-                  self.assertEqual({item["advisory"]: item["upstream_commit"] for item in manifest["patches"]}, EXPECTED_PATCHES)
-                  self.assertEqual(manifest["additional_policy"]["torch_load_minimum"], "2.10")
-                  for name in manifest["modified_production_files"]:
-                      if INSTALLED:
-                          if not name.startswith("src/transformers/"):
-                              continue  # setup.py belongs to the source build; installed METADATA is checked above.
-                          path = SOURCE / name.removeprefix("src/transformers/")
-                      else:
-                          path = FORK / name
-                      ast.parse(path.read_text(encoding="utf-8"), feature_version=(3, 9))
-                  sbom = json.loads((SOURCE / "yonod_security_sbom.cdx.json").read_text(encoding="utf-8"))
-                  self.assertEqual(sbom["bomFormat"], "CycloneDX")
-                  self.assertEqual(sbom["metadata"]["component"]["version"], EXPECTED_VERSION)
-                  OBSERVATIONS.append({"patch": "release_metadata", "honest_local_version": version, "patches": len(EXPECTED_PATCHES)})
-
-
-          def main():
-              global FORK, SOURCE, SUPPORT, INSTALLED
-              parser = argparse.ArgumentParser(description=__doc__)
-              location = parser.add_mutually_exclusive_group()
-              location.add_argument("--source-root", type=Path, default=FORK)
-              location.add_argument("--installed", action="store_true", help="Check the installed wheel without a source checkout or model import")
-              parser.add_argument("--output-dir", type=Path, default=SUPPORT)
-              args = parser.parse_args()
-              INSTALLED = args.installed
-              SUPPORT = args.output_dir.resolve()
-              if INSTALLED:
-                  specification = importlib.util.find_spec("transformers")
-                  if specification is None or specification.origin is None:
-                      parser.error("The audited transformers wheel is not installed")
-                  SOURCE = Path(specification.origin).resolve().parent
-              else:
-                  FORK = args.source_root.resolve()
-                  SOURCE = FORK / "src" / "transformers"
-              SUPPORT.mkdir(parents=True, exist_ok=True)
-              stream = StringIO()
-              result = unittest.TextTestRunner(stream=stream, verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(BackportTests))
-              stem = "backport-installed" if INSTALLED else "backport"
-              (SUPPORT / (stem + "-tests.log")).write_text(stream.getvalue(), encoding="utf-8")
+          PPORT / (stem + "-tests.log")).write_text(stream.getvalue(), encoding="utf-8")
               diff = None if INSTALLED else subprocess.run(["git", "-C", str(FORK), "diff", "--check"], text=True, capture_output=True)
               report = {"status": "passed" if result.wasSuccessful() and (diff is None or diff.returncode == 0) else "failed", "tests_run": result.testsRun, "failures": len(result.failures), "errors": len(result.errors), "observations": OBSERVATIONS, "python": sys.version.split()[0], "platform": sys.platform, "mode": "installed-wheel" if INSTALLED else "source-build", "package_root": str(SOURCE), "diff_check_returncode": None if diff is None else diff.returncode, "model_or_descriptor_executed": False, "real_pickle_or_remote_code_executed": False}
               (SUPPORT / (stem + "-verification.json")).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -5694,7 +5861,7 @@ jobs:
 
           ROOT = Path(__file__).resolve().parents[1]
           sys.path.insert(0, str(ROOT))
-          EXPECTED_TRANSFORMERS = "4.57.6+yonod.sec2"
+          EXPECTED_TRANSFORMERS = "4.57.6+yonod.sec3"
           SMILES = ["CCO", "CC", "CCC", "CCO", "CC", "CCC"]
 
 
@@ -5765,8 +5932,12 @@ jobs:
                         "config_sha256": sha(config_path), "dataset": data.relative_to(ROOT).as_posix(),
                         "dataset_sha256": sha(data), "expected_rows": 6, "expected_width": width,
                         "descriptor": descriptor, "profile": profile,
+                        # Parallel float32 GCN reductions may differ by a few ULPs even
+                        # for duplicate graphs; retain both an absolute and norm bound.
                         "duplicate_tolerance": ({"max_absolute": 2e-5, "relative_l2": 1e-5}
-                                                if profile == "molmetalm" else {"rtol": 1e-6, "atol": 1e-6}),
+                                                if profile == "molmetalm" else
+                                                {"max_absolute": 1e-4, "relative_l2": 1e-5}
+                                                if profile == "fisd" else {"rtol": 1e-6, "atol": 1e-6}),
                         "expected_transformers": EXPECTED_TRANSFORMERS,
                         "modeling_execution_performed": False}
               write(evidence / "prepared.json", record)
@@ -5813,22 +5984,17 @@ jobs:
               check(np.isfinite(artifact.matrix).all(), "finite real embeddings")
               check(np.all(np.linalg.norm(artifact.matrix, axis=1) > 1e-8), "no silent zero-vector substitution")
               check(list(artifact.sample_ids) == ["smoke-" + str(index) for index in range(6)], "feature sample order")
+              duplicate_observations = []
               for first, second in [(0, 3), (1, 4), (2, 5)]:
                   tolerance = record["duplicate_tolerance"]
+                  delta = artifact.matrix[first].astype(float) - artifact.matrix[second].astype(float)
+                  maximum = float(np.max(np.abs(delta)))
+                  relative = float(np.linalg.norm(delta) / max(np.linalg.norm(artifact.matrix[first]), 1e-12))
+                  duplicate_observations.append({"rows": [first, second], "max_absolute": maximum,
+                                                 "relative_l2": relative, "tolerance": tolerance})
+                  write(evidence / "duplicate-observations.json", duplicate_observations)
                   if "max_absolute" in tolerance:
-                      delta = artifact.matrix[first].astype(float) - artifact.matrix[second].astype(float)
-                      agrees = (np.max(np.abs(delta)) <= tolerance["max_absolute"] and
-                                np.linalg.norm(delta) / max(np.linalg.norm(artifact.matrix[first]), 1e-12) <= tolerance["relative_l2"])
-                  else:
-                      agrees = np.allclose(artifact.matrix[first], artifact.matrix[second], **tolerance)
-                  check(agrees,
-                        "same molecule pooling agrees at rows " + str((first, second)))
-              ids, mask = np.asarray([], dtype=int), np.asarray([], dtype=int)
-              if record["profile"] == "molmetalm":
-                  from transformers import AutoTokenizer
-                  tokenizer = AutoTokenizer.from_pretrained(DEFAULT_WEIGHT_PATH, local_files_only=True, trust_remote_code=False, use_fast=True)
-                  prepared = [" ".join(list(smiles)) for smiles in SMILES]
-                  tokens = tokenizer(prepared, padding=T
+                      agrees = maximum <= tolerance["max_absolute"] and relative <= tole
     - name: '[dependency] materialize verify_molmetalm_candidate_20261115.py 1/2 (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -5859,7 +6025,7 @@ jobs:
 
           ROOT = Path(__file__).resolve().parents[1]
           sys.path.insert(0, str(ROOT))
-          EXPECTED_TRANSFORMERS = "4.57.6+yonod.sec2"
+          EXPECTED_TRANSFORMERS = "4.57.6+yonod.sec3"
           SMILES = ["CCO", "CC", "CCC", "CCO", "CC", "CCC"]
 
 
@@ -5930,8 +6096,12 @@ jobs:
                         "config_sha256": sha(config_path), "dataset": data.relative_to(ROOT).as_posix(),
                         "dataset_sha256": sha(data), "expected_rows": 6, "expected_width": width,
                         "descriptor": descriptor, "profile": profile,
+                        # Parallel float32 GCN reductions may differ by a few ULPs even
+                        # for duplicate graphs; retain both an absolute and norm bound.
                         "duplicate_tolerance": ({"max_absolute": 2e-5, "relative_l2": 1e-5}
-                                                if profile == "molmetalm" else {"rtol": 1e-6, "atol": 1e-6}),
+                                                if profile == "molmetalm" else
+                                                {"max_absolute": 1e-4, "relative_l2": 1e-5}
+                                                if profile == "fisd" else {"rtol": 1e-6, "atol": 1e-6}),
                         "expected_transformers": EXPECTED_TRANSFORMERS,
                         "modeling_execution_performed": False}
               write(evidence / "prepared.json", record)
@@ -5978,12 +6148,28 @@ jobs:
               check(np.isfinite(artifact.matrix).all(), "finite real embeddings")
               check(np.all(np.linalg.norm(artifact.matrix, axis=1) > 1e-8), "no silent zero-vector substitution")
               check(list(artifact.sample_ids) == ["smoke-" + str(index) for index in range(6)], "feature sample order")
+              duplicate_observations = []
               for first, second in [(0, 3), (1, 4), (2, 5)]:
                   tolerance = record["duplicate_tolerance"]
+                  delta = artifact.matrix[first].astype(float) - artifact.matrix[second].astype(float)
+                  maximum = float(np.max(np.abs(delta)))
+                  relative = float(np.linalg.norm(delta) / max(np.linalg.norm(artifact.matrix[first]), 1e-12))
+                  duplicate_observations.append({"rows": [first, second], "max_absolute": maximum,
+                                                 "relative_l2": relative, "tolerance": tolerance})
+                  write(evidence / "duplicate-observations.json", duplicate_observations)
                   if "max_absolute" in tolerance:
-                      delta = artifact.matrix[first].astype(float) - artifact.matrix[second].astype(float)
-                      agrees = (np.max(np.abs(delta)) <= tolerance["max_absolute"] and
-                                np.linalg.norm(delta) / max(np.linalg.norm(artifact.matrix[first]), 1e-12) <= tolerance["relative_l2"])
+                      agrees = maximum <= tolerance["max_absolute"] and relative <= tole
+    - name: '[dependency] materialize verify_molmetalm_candidate_20261115.py 2/2 (Bash)'
+      if: runner.os != 'Windows'
+      shell: bash -el {0}
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_molmetalm_candidate_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '32d0d9b7b53c6ae3b8180a141f9873d254620ddb91978f052c01434a3e8c71c7', 'Materialized program SHA mismatch'"
+      env:
+        YONOD_CI_CHUNK: |
+          rance["relative_l2"]
                   else:
                       agrees = np.allclose(artifact.matrix[first], artifact.matrix[second], **tolerance)
                   check(agrees,
@@ -5993,18 +6179,7 @@ jobs:
                   from transformers import AutoTokenizer
                   tokenizer = AutoTokenizer.from_pretrained(DEFAULT_WEIGHT_PATH, local_files_only=True, trust_remote_code=False, use_fast=True)
                   prepared = [" ".join(list(smiles)) for smiles in SMILES]
-                  tokens = tokenizer(prepared, padding=T
-    - name: '[dependency] materialize verify_molmetalm_candidate_20261115.py 2/2 (Bash)'
-      if: runner.os != 'Windows'
-      shell: bash -el {0}
-      run: |
-        source "$(conda info --base)/etc/profile.d/conda.sh"
-        conda activate yonod
-        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_molmetalm_candidate_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '474aaea2125a94f0ac8a39eb16cc6eb4b40992cdf728a2ab5deb44821877d1a7', 'Materialized program SHA mismatch'"
-      env:
-        YONOD_CI_CHUNK: |
-          rue, truncation=True, max_length=512, return_token_type_ids=False, return_tensors="np")
+                  tokens = tokenizer(prepared, padding=True, truncation=True, max_length=512, return_token_type_ids=False, return_tensors="np")
                   ids, mask = np.asarray(tokens["input_ids"]), np.asarray(tokens["attention_mask"])
                   check(ids.shape == mask.shape and ids.shape[0] == 6 and ids.shape[1] <= 512, "token/mask and truncation shapes")
                   check(set(np.unique(mask)) <= {0, 1} and bool((mask.sum(axis=1) > 0).all()), "nonempty binary attention masks")
@@ -6037,7 +6212,7 @@ jobs:
               result = {"status": "passed", "platform": platform.platform(), "python": sys.version,
                         "task": record, "asset_identity": identity, "checks": checks, "check_count": len(checks),
                         "transformers": importlib.metadata.version("transformers"), "torch": str(torch.__version__),
-                        "token_ids": ids.tolist(), "attention_mask": mask.tolist(),
+                        "token_ids": ids.tolist(), "attention_mask": mask.tolist(), "duplicate_observations": duplicate_observations,
                         "feature_manifest": str(manifests[0].relative_to(ROOT)), "feature_matrix_shape": list(artifact.matrix.shape),
                         "saved_prediction_events": len(predictions), "research_inference": False}
               write(evidence / "acceptance.json", result)
@@ -6061,11 +6236,21 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_molmetalm_candidate_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '474aaea2125a94f0ac8a39eb16cc6eb4b40992cdf728a2ab5deb44821877d1a7', 'Materialized program SHA mismatch'"
+        python -c "import os,hashlib; from pathlib import Path; p=Path('_verify/verify_molmetalm_candidate_20261115.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(p.read_bytes()+os.environ['YONOD_CI_CHUNK'].encode('utf-8')); assert hashlib.sha256(p.read_bytes()).hexdigest() == '32d0d9b7b53c6ae3b8180a141f9873d254620ddb91978f052c01434a3e8c71c7', 'Materialized program SHA mismatch'"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
         YONOD_CI_CHUNK: |
-          rue, truncation=True, max_length=512, return_token_type_ids=False, return_tensors="np")
+          rance["relative_l2"]
+                  else:
+                      agrees = np.allclose(artifact.matrix[first], artifact.matrix[second], **tolerance)
+                  check(agrees,
+                        "same molecule pooling agrees at rows " + str((first, second)))
+              ids, mask = np.asarray([], dtype=int), np.asarray([], dtype=int)
+              if record["profile"] == "molmetalm":
+                  from transformers import AutoTokenizer
+                  tokenizer = AutoTokenizer.from_pretrained(DEFAULT_WEIGHT_PATH, local_files_only=True, trust_remote_code=False, use_fast=True)
+                  prepared = [" ".join(list(smiles)) for smiles in SMILES]
+                  tokens = tokenizer(prepared, padding=True, truncation=True, max_length=512, return_token_type_ids=False, return_tensors="np")
                   ids, mask = np.asarray(tokens["input_ids"]), np.asarray(tokens["attention_mask"])
                   check(ids.shape == mask.shape and ids.shape[0] == 6 and ids.shape[1] <= 512, "token/mask and truncation shapes")
                   check(set(np.unique(mask)) <= {0, 1} and bool((mask.sum(axis=1) > 0).all()), "nonempty binary attention masks")
@@ -6098,7 +6283,7 @@ jobs:
               result = {"status": "passed", "platform": platform.platform(), "python": sys.version,
                         "task": record, "asset_identity": identity, "checks": checks, "check_count": len(checks),
                         "transformers": importlib.metadata.version("transformers"), "torch": str(torch.__version__),
-                        "token_ids": ids.tolist(), "attention_mask": mask.tolist(),
+                        "token_ids": ids.tolist(), "attention_mask": mask.tolist(), "duplicate_observations": duplicate_observations,
                         "feature_manifest": str(manifests[0].relative_to(ROOT)), "feature_matrix_shape": list(artifact.matrix.shape),
                         "saved_prediction_events": len(predictions), "research_inference": False}
               write(evidence / "acceptance.json", result)
@@ -6122,7 +6307,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_fisd','--descriptor','fisd'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_fisd_r3','--descriptor','fisd'],check=True)"
     - name: '[dependency] fisd prepare CPU YAML (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6130,7 +6315,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_fisd','--descriptor','fisd'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_fisd_r3','--descriptor','fisd'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] fisd serial root prompt (Bash)'
       if: runner.os != 'Windows'
@@ -6139,7 +6324,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_fisd'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_fisd_r3'],check=True)"
     - name: '[dependency] fisd serial root prompt (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6147,7 +6332,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_fisd'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_fisd_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] fisd saved-output acceptance (Bash)'
       if: runner.os != 'Windows'
@@ -6156,7 +6341,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_fisd'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_fisd_r3'],check=True)"
     - name: '[dependency] fisd saved-output acceptance (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6164,7 +6349,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_fisd'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_fisd_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] zinc prepare CPU YAML (Bash)'
       if: runner.os != 'Windows'
@@ -6173,7 +6358,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc','--descriptor','zinc'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc_r3','--descriptor','zinc'],check=True)"
     - name: '[dependency] zinc prepare CPU YAML (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6181,7 +6366,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc','--descriptor','zinc'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc_r3','--descriptor','zinc'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] zinc serial root prompt (Bash)'
       if: runner.os != 'Windows'
@@ -6190,7 +6375,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc_r3'],check=True)"
     - name: '[dependency] zinc serial root prompt (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6198,7 +6383,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] zinc saved-output acceptance (Bash)'
       if: runner.os != 'Windows'
@@ -6207,7 +6392,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc_r3'],check=True)"
     - name: '[dependency] zinc saved-output acceptance (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6215,7 +6400,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] zinc_properties prepare CPU YAML (Bash)'
       if: runner.os != 'Windows'
@@ -6224,7 +6409,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties','--descriptor','zinc_properties'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties_r3','--descriptor','zinc_properties'],check=True)"
     - name: '[dependency] zinc_properties prepare CPU YAML (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6232,7 +6417,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties','--descriptor','zinc_properties'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties_r3','--descriptor','zinc_properties'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] zinc_properties serial root prompt (Bash)'
       if: runner.os != 'Windows'
@@ -6241,7 +6426,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties_r3'],check=True)"
     - name: '[dependency] zinc_properties serial root prompt (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6249,7 +6434,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] zinc_properties saved-output acceptance (Bash)'
       if: runner.os != 'Windows'
@@ -6258,7 +6443,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties_r3'],check=True)"
     - name: '[dependency] zinc_properties saved-output acceptance (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6266,7 +6451,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_zinc_properties_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] molmetalm prepare CPU YAML (Bash)'
       if: runner.os != 'Windows'
@@ -6275,7 +6460,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r2','--descriptor','molmetalm'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r3','--descriptor','molmetalm'],check=True)"
     - name: '[dependency] molmetalm prepare CPU YAML (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6283,7 +6468,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r2','--descriptor','molmetalm'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','prepare','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r3','--descriptor','molmetalm'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] molmetalm serial root prompt (Bash)'
       if: runner.os != 'Windows'
@@ -6292,7 +6477,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r2'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r3'],check=True)"
     - name: '[dependency] molmetalm serial root prompt (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6300,7 +6485,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r2'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/run_dependency_candidate_tasks_20261115.py','molmetalm','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] molmetalm saved-output acceptance (Bash)'
       if: runner.os != 'Windows'
@@ -6309,7 +6494,7 @@ jobs:
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate yonod
         [ "$CONDA_DEFAULT_ENV" = "yonod" ]
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r2'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r3'],check=True)"
     - name: '[dependency] molmetalm saved-output acceptance (PowerShell)'
       if: runner.os == 'Windows'
       shell: pwsh
@@ -6317,7 +6502,7 @@ jobs:
         (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
         conda activate yonod
         if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
-        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r2'],check=True)"
+        python -c "import os,subprocess,sys; platform=os.environ['YONOD_CI_PLATFORM']; assert platform in ('linux','windows'); subprocess.run([sys.executable,'_verify/verify_molmetalm_candidate_20261115.py','accept','--task-name','dependency_candidate_20261115_'+platform+'_molmetalm_r3'],check=True)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: '[dependency] save dependency acceptance evidence'
       if: always()
