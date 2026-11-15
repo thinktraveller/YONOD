@@ -6,7 +6,7 @@
 #
 #     pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 #
-# The Python 3.9 CPU family above is separate from frozen Torch 2.1.2 runs.
+# This CPU recipe is for new environments; retain each frozen run's own pins.
 # Do not upgrade a frozen research environment in place. GPU installations
 # require their own matched wheel/driver selection and runtime acceptance:
 # https://pytorch.org/get-started/previous-versions/
