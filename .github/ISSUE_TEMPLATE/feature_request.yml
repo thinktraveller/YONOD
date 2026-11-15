@@ -1,0 +1,18 @@
+name: Feature request
+description: Propose a focused improvement and its acceptance criteria.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and affected workflow
+      description: Describe the user need and current limitation without private data.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and acceptance
+      description: Include platform, input/output contracts, and how success can be checked.
+    validations:
+      required: true

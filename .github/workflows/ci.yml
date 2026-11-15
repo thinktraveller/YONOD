@@ -1,0 +1,235 @@
+# Generated verifier bodies are maintained here; _verify/ stays local.
+name: YONOD CI
+'on':
+  push:
+    branches:
+    - main
+    - codex/**
+  pull_request:
+    branches:
+    - main
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONUTF8: '1'
+  MPLBACKEND: Agg
+jobs:
+  static:
+    name: YONOD static (Python 3.9)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - name: Create Conda yonod / Python 3.9
+      uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167
+      with:
+        miniforge-version: latest
+        activate-environment: yonod
+        python-version: '3.9'
+        channels: conda-forge
+        channel-priority: strict
+        conda-remove-defaults: true
+        auto-activate: false
+    - name: Install explicit static-only dependencies
+      shell: bash -el {0}
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python -m pip install numpy==1.26.4 pandas==2.0.3 pyyaml==6.0.1
+    - name: Materialize verifier under _verify (Bash)
+      if: runner.os != 'Windows'
+      shell: bash -el {0}
+      env:
+        YONOD_CI_PROGRAM: |
+          """Public-clone static contract checks; no model construction or private docs."""
+          import ast
+          import copy
+          import csv
+          import hashlib
+          import importlib.util
+          from contextlib import redirect_stderr, redirect_stdout
+          from io import StringIO
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          import tempfile
+          from unittest.mock import patch
+
+          ROOT = Path.cwd().resolve()
+          sys.path.insert(0, str(ROOT))
+          from yonod.config.contracts import resolve_config_path
+          from yonod.config.loader import ConfigLoadError, load_run_config, load_yaml_mapping
+          import yaml
+
+          CHECKS = []
+          NAMES = ("random_split_test", "fixed_split_test", "external_test")
+          CONFIGS = [Path("example.yaml")] + [Path("config/example") / name / "run.yaml" for name in NAMES]
+
+
+          def check(condition, message):
+              if not condition:
+                  raise AssertionError(message)
+              CHECKS.append(message)
+
+
+          def fingerprint(path):
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+          def validate_config(relative):
+              loaded = load_run_config(ROOT / relative)
+              config = loaded.effective
+              source = resolve_config_path(loaded.path, config["dataset"]["path"])
+              output = resolve_config_path(loaded.path, config["outputs"]["root"])
+              artifacts = resolve_config_path(loaded.path, config["artifacts"]["output_dir"])
+              name = "yonod_schema2_smoke" if relative == Path("example.yaml") else relative.parent.name
+              check(source.is_file(), str(relative) + ": input exists")
+              check(output == ROOT / "result/example" / name, str(relative) + ": isolated output")
+              check(artifacts == output / "feature", str(relative) + ": feature child")
+              check(set(config["outputs"]["report_formats"]) == {"html", "markdown"}, str(relative) + ": dual reports")
+              check(set(config.get("model_params", {})) <= set(config["models"]), str(relative) + ": selected model parameters")
+              with source.open(encoding="utf-8-sig", newline="") as stream:
+                  rows = list(csv.DictReader(stream))
+              key = config["dataset"].get("sample_id_col")
+              if key:
+                  ids = [row[key] for row in rows]
+                  check(all(ids) and len(set(ids)) == len(ids), str(relative) + ": unique sample IDs")
+              external = config["evaluation"].get("external_test", {})
+              for field, digest in (("path", "expected_sha256"), ("audit_manifest", "audit_manifest_sha256")):
+                  if field in external:
+                      check(fingerprint(resolve_config_path(loaded.path, external[field])) == external[digest], str(relative) + ": " + field + " hash")
+              return loaded
+
+
+          def main():
+              check(os.environ.get("CONDA_DEFAULT_ENV") == "yonod", "Conda yonod active")
+              check(sys.version_info[:2] == (3, 9), "Python 3.9 baseline")
+              tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode("utf-8").split("\0")[:-1]
+              for name in tracked:
+                  if name.endswith(".py"):
+                      ast.parse((ROOT / name).read_text(encoding="utf-8-sig"), filename=name)
+                      CHECKS.append("Python syntax: " + name)
+              check(not any(Path(p).parts[0] in {"project-docs", "backup", "_verify", "reference-projects", "docs", "scripts"} for p in tracked), "private/support directories untracked")
+              check({p for p in tracked if p.startswith("config/")} == {str(p).replace(os.sep, "/") for p in CONFIGS[1:]}, "three tracked example YAMLs only")
+              check({p for p in tracked if p.startswith("result/")} == {"result/example/" + n + "/.gitkeep" for n in NAMES}, "three tracked result placeholders only")
+              check(len(set(p.casefold() for p in tracked)) == len(tracked), "no case-insensitive filename collision")
+              for relative in CONFIGS:
+                  validate_config(relative)
+              root_yaml = (ROOT / "example.yaml").read_text(encoding="utf-8")
+              for name in ("fixed_split_test", "external_test"):
+                  check("config/example/" + name + "/run.yaml" in root_yaml, "current root YAML navigation: " + name)
+              for probe in ("result/example/random_split_test/metrics.csv", "result/example/fixed_split_test/docs/predictions/a.parquet", "result/example/external_test/report/report.html", "result/example/yonod_schema2_smoke/runs/model.joblib", "config/private_ci_task.yaml", "result/private_ci_task/model.joblib"):
+                  result = subprocess.run(["git", "check-ignore", "--no-index", "-q", probe], cwd=ROOT)
+                  check(result.returncode == 0, "ignored runtime/private probe: " + probe)
+              before = {str(p.relative_to(ROOT)): fingerprint(p) for p in (ROOT / "result/example").rglob("*") if p.is_file()}
+              bad_arguments = [["--csv", "missing.csv"], ["--models", "rf"], ["--config", "example.yaml", "--csv=missing.csv"], ["--config", "example.yaml", "--rf-n-estimators=2"], ["--conf", "example.yaml"], ["--json", "missing.json"]]
+              spec = importlib.util.spec_from_file_location("yonod_ci_launcher", ROOT / "yonod.py")
+              launcher = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(launcher)
+              for arguments in bad_arguments:
+                  output = StringIO()
+                  with patch.object(launcher, "_run_schema2_config", side_effect=AssertionError("unexpected model dispatch")) as dispatch, redirect_stdout(output), redirect_stderr(output):
+                      try:
+                          code = launcher.main(arguments)
+                      except SystemExit as exc:
+                          code = exc.code
+                  check(code not in (None, 0), "CLI rejects " + " ".join(arguments))
+                  check(dispatch.call_count == 0, "rejected CLI never dispatches: " + " ".join(arguments))
+                  if "--conf" not in arguments:
+                      check("generate_yaml_config.py" in output.getvalue() or "JSON" in output.getvalue(), "actionable CLI migration message")
+              after = {str(p.relative_to(ROOT)): fingerprint(p) for p in (ROOT / "result/example").rglob("*") if p.is_file()}
+              check(before == after, "rejected CLI has no result side effects")
+              support = ROOT / "backup/ci-static"
+              support.mkdir(parents=True, exist_ok=True)
+              with tempfile.TemporaryDirectory(dir=support) as temporary:
+                  base = Path(temporary)
+                  for filename, text in (("duplicate.yaml", "a: 1\na: 2\n"), ("alias.yaml", "a: &x 1\nb: *x\n"), ("run.json", "{}")):
+                      candidate = base / filename
+                      candidate.write_text(text, encoding="utf-8")
+                      try:
+                          load_yaml_mapping(candidate)
+                      except ConfigLoadError:
+                          CHECKS.append("loader rejects " + filename)
+                      else:
+                          raise AssertionError("unsafe input accepted: " + filename)
+                  # Exercise the same path and digest assertions on deliberate bad inputs.
+                  raw = yaml.safe_load((ROOT / CONFIGS[3]).read_text(encoding="utf-8"))
+                  raw["dataset"]["path"] = str((ROOT / "example/external_test/dataset/train.csv").resolve())
+                  ext = raw["evaluation"]["external_test"]
+                  ext["path"] = str((ROOT / "example/external_test/dataset/external.csv").resolve())
+                  ext["audit_manifest"] = str((ROOT / "example/external_test/audit/external_audit.json").resolve())
+                  for kind in ("output", "hash"):
+                      bad = copy.deepcopy(raw)
+                      bad["outputs"]["root"] = str(ROOT / "result/ci-negative")
+                      bad["artifacts"]["output_dir"] = str(ROOT / "result/ci-negative/feature")
+                      if kind == "hash":
+                          bad["outputs"]["root"] = str(ROOT / "result/example" / base.name)
+                          bad["artifacts"]["output_dir"] = str(ROOT / "result/example" / base.name / "feature")
+                          bad["evaluation"]["external_test"]["expected_sha256"] = "0" * 64
+                      path = base / "run.yaml"
+                      path.write_text(yaml.safe_dump(bad), encoding="utf-8")
+                      try:
+                          validate_config(path.relative_to(ROOT))
+                      except AssertionError as exc:
+                          check(("isolated output" if kind == "output" else "path hash") in str(exc), "negative " + kind + " fails for intended reason")
+                      else:
+                          raise AssertionError("negative " + kind + " was accepted")
+                  try:
+                      ast.parse("def broken(:\n pass\n")
+                  except SyntaxError:
+                      CHECKS.append("negative syntax fails")
+                  else:
+                      raise AssertionError("invalid Python syntax accepted")
+              report = {"status": "passed", "kind": "public_clone_static_only", "checks": CHECKS, "check_count": len(CHECKS), "platform": sys.platform, "python": sys.version.split()[0], "private_docs_required": False, "modeling_executed": False}
+              (support / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+              print(json.dumps({k: v for k, v in report.items() if k != "checks"}, ensure_ascii=False))
+
+
+          if __name__ == "__main__":
+              main()
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python -c "import os; from pathlib import Path; p=Path('_verify/ci_static.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_text(os.environ['YONOD_CI_PROGRAM'],encoding='utf-8')"
+    - name: Validate public-clone contracts and deliberate negative cases
+      shell: bash -el {0}
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python _verify/ci_static.py
+    - name: Save validation evidence
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: yonod-static-${{ github.sha }}
+        path: |
+          backup/ci-static/
+        retention-days: 7
+        if-no-files-found: warn
+  smoke-linux:
+    name: Linux saved-output acceptance
+    needs: static
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/codex/github-remediation-20261115'
+    uses: ./.github/workflows/smoke.yml
+    with:
+      runner: ubuntu-22.04
+      platform: linux
+  smoke-windows:
+    name: Windows saved-output acceptance
+    needs: smoke-linux
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/codex/github-remediation-20261115'
+    uses: ./.github/workflows/smoke.yml
+    with:
+      runner: windows-2022
+      platform: windows

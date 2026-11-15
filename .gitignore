@@ -101,11 +101,19 @@ _verify
 /project-docs/
 /backup/
 /scripts/
-# Keep only example folders; ignore all other local outputs and configurations.
+# Keep only the three empty result placeholders; ignore every generated output.
 /result/*
 !/result/example/
-!/result/example/**
+/result/example/*
+!/result/example/random_split_test/
+!/result/example/fixed_split_test/
+!/result/example/external_test/
+/result/example/*/*
+!/result/example/random_split_test/.gitkeep
+!/result/example/fixed_split_test/.gitkeep
+!/result/example/external_test/.gitkeep
 docs
+# Prepared example configurations are the only tracked config exception.
 /config/*
 !/config/example/
 !/config/example/**

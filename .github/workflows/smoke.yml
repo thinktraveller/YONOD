@@ -1,0 +1,649 @@
+# Generated verifier bodies are maintained here; _verify/ stays local.
+name: YONOD sequential smoke
+'on':
+  workflow_call:
+    inputs:
+      runner:
+        required: true
+        type: string
+      platform:
+        required: true
+        type: string
+permissions:
+  contents: read
+env:
+  PYTHONUTF8: '1'
+  MPLBACKEND: Agg
+jobs:
+  acceptance:
+    name: Saved-output acceptance (${{ inputs.platform }})
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - name: Create Conda yonod / Python 3.9
+      uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167
+      with:
+        miniforge-version: latest
+        activate-environment: yonod
+        python-version: '3.9'
+        channels: conda-forge
+        channel-priority: strict
+        conda-remove-defaults: true
+        auto-activate: false
+    - name: Install documented CPU dependencies (Bash)
+      if: runner.os != 'Windows'
+      shell: bash -el {0}
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+        python -m pip install -r requirements.txt
+        python -m pip check
+    - name: Install documented CPU dependencies (PowerShell)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda activate yonod
+        if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
+        python -m pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python -m pip install -r requirements.txt
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python -m pip check
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Materialize verifier under _verify (Bash)
+      if: runner.os != 'Windows'
+      shell: bash -el {0}
+      env:
+        YONOD_CI_PROGRAM: |
+          """Sequential real runs and saved-output acceptance on the current OS."""
+          import hashlib
+          import json
+          import math
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+          from html.parser import HTMLParser
+          from urllib.parse import unquote, urlsplit
+
+          import numpy as np
+          import pandas as pd
+          import yaml
+
+          ROOT = Path.cwd().resolve()
+          SUPPORT = ROOT / "backup/ci-acceptance"
+          CHECKS, RUNS = [], []
+          NAMES = ("yonod_schema2_smoke", "random_split_test", "fixed_split_test", "external_test")
+
+
+          def check(condition, message):
+              if not condition:
+                  raise AssertionError(message)
+              CHECKS.append(message)
+
+
+          def sha(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+          def read(path):
+              return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+          def yread(path):
+              return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+
+          def metric(frame):
+              truth, predicted = frame.y_true.to_numpy(float), frame.y_pred.to_numpy(float)
+              check(len(truth) > 1 and np.isfinite(truth).all() and np.isfinite(predicted).all(), "finite saved predictions")
+              residual, sst = truth - predicted, np.square(truth - truth.mean()).sum()
+              return {"r2": float(1 - np.square(residual).sum() / sst) if sst else float("nan"), "mae": float(np.abs(residual).mean()), "rmse": float(np.sqrt(np.square(residual).mean()))}
+
+
+          def compare(values, saved, label):
+              for key, expected in values.items():
+                  actual = float(saved[key])
+                  check((math.isnan(actual) and math.isnan(expected)) or math.isclose(actual, expected, rel_tol=1e-10, abs_tol=1e-12), label + ": " + key)
+
+
+          class Tables(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.tables, self.images, self.table, self.row, self.cell = [], [], None, None, None
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "table": self.table = []
+                  elif tag == "tr" and self.table is not None: self.row = []
+                  elif tag in ("td", "th") and self.row is not None: self.cell = []
+                  elif tag == "img" and dict(attrs).get("src"): self.images.append(dict(attrs)["src"])
+
+              def handle_data(self, data):
+                  if self.cell is not None: self.cell.append(data)
+
+              def handle_endtag(self, tag):
+                  if tag in ("td", "th") and self.cell is not None:
+                      self.row.append(" ".join("".join(self.cell).split())); self.cell = None
+                  elif tag == "tr" and self.row is not None:
+                      self.table.append(self.row); self.row = None
+                  elif tag == "table" and self.table is not None:
+                      self.tables.append(self.table); self.table = None
+
+
+          def markdown_tables(text):
+              tables, table = [], []
+              for line in text.splitlines() + [""]:
+                  if line.strip().startswith("|") and line.strip().endswith("|"):
+                      values = [v.strip().replace("`", "") for v in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+                      if not all(re.fullmatch(r"[:\- ]+", v) for v in values): table.append(values)
+                  elif table:
+                      tables.append(table); table = []
+              return tables
+
+
+          def reports(output, stem, expected, identity):
+              for suffix in ("html", "md"):
+                  path = output / "report" / (stem + "." + suffix)
+                  check(path.is_file() and path.stat().st_size > 500, "nonempty " + path.name)
+                  text = path.read_text(encoding="utf-8")
+                  check(identity in text and "Traceback (most recent call last)" not in text, "report identity and no traceback")
+                  if suffix == "html":
+                      check("<html" in text.lower() and "</html>" in text.lower(), "complete HTML")
+                      parser = Tables(); parser.feed(text)
+                      tables, images = parser.tables, parser.images
+                  else:
+                      tables = markdown_tables(text)
+                      images = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", text)
+                  for target in images:
+                      parts = urlsplit(target)
+                      if not parts.scheme and parts.path:
+                          picture = (path.parent / unquote(parts.path)).resolve()
+                          check(output in picture.parents and picture.is_file() and picture.stat().st_size > 100, "local report image " + target)
+                  for model, values in expected.items():
+                      found = None
+                      for table in tables:
+                          if not table: continue
+                          header = table[0]
+                          model_col = next((i for i, h in enumerate(header) if h.lower() in ("model", "模型")), None)
+                          if model_col is None: continue
+                          columns = {}
+                          for i, h in enumerate(header):
+                              h = h.lower()
+                              if h.endswith("_std") or ("标准差" in h and "均值" not in h): continue
+                              for key, marker in (("r2", "r²"), ("rmse", "rmse"), ("mae", "mae")):
+                                  if h == key or marker in h: columns.setdefault(key, i)
+                          if len(columns) != 3: continue
+                          for row in table[1:]:
+                              if len(row) == len(header) and row[model_col].lower() == model:
+                                  found = {key: row[index] for key, index in columns.items()}; break
+                          if found: break
+                      check(found is not None, model + ": metric row in " + suffix)
+                      for key in ("r2", "rmse", "mae"):
+                          number = re.search(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", found[key])
+                          check(number is not None, "numeric report " + key)
+                          decimals = len(number.group(0).partition(".")[2].split("e")[0])
+                          check(abs(float(number.group(0)) - values[key]) <= 0.5 * 10 ** (-decimals) + 1e-12, "report rounding: " + model + "." + key)
+
+
+          def ordinary(config_path, output, name):
+              config = yread(config_path)
+              source_path = ROOT / "dataset/benchmark_smoke_fixture.csv" if name == NAMES[0] else ROOT / "example" / name / "dataset/reactions.csv"
+              source = pd.read_csv(source_path)
+              states = list((output / "feature/feature_runs").glob("*.yaml"))
+              check(len(states) == 1 and yread(states[0])["status"] == "ready", name + ": feature manifest ready")
+              order = np.arange(len(source)); np.random.RandomState(config["evaluation"]["seed"]).shuffle(order)
+              valid_sets = {fold: set(source.iloc[index].reaction_id) for fold, index in enumerate(np.array_split(order, 2), 1)}
+              expected = {}
+              for model in config["models"]:
+                  run = output / "runs" / ("run_morgan-" + model)
+                  manifest = yread(run / "run_manifest.yaml")
+                  check(manifest["status"] == "complete" and manifest["n_samples"] == len(source) and manifest["n_folds"] == 2, name + "/" + model + ": complete")
+                  check(manifest["source_config_sha256"] == sha(config_path) and (run / "source_config.yaml").read_bytes() == config_path.read_bytes(), "exact source configuration snapshot")
+                  points, folds = pd.read_csv(run / "predictions.csv"), pd.read_csv(run / "fold_metrics.csv")
+                  check(len(points) == len(source) and points.sample_id.is_unique and set(points.sample_id) == set(source.reaction_id), "exact complete OOF coverage")
+                  check(np.array_equal(source.set_index("reaction_id").loc[points.sample_id, "yield"].to_numpy(), points.y_true.to_numpy()), "OOF source labels")
+                  check(set(points["repeat"]) == {1} and set(points.fold) == {1, 2} and len(folds) == 2, "exact repeated fold coverage")
+                  for fold in (1, 2):
+                      current = points[points.fold == fold]
+                      check(set(current.sample_id) == valid_sets[fold], "exact seeded held-out fold")
+                      saved = folds[folds.fold == fold]
+                      check(len(saved) == 1 and int(saved.iloc[0].n_train) == int(saved.iloc[0].n_valid) == 6, "fold six training/six held-out")
+                      compare(metric(current), saved.iloc[0], name + "/" + model + "/fold" + str(fold))
+                      audit = json.loads(saved.iloc[0].model_audit)
+                      model_path = run / "models/repeat-01" / ("fold-{:02d}".format(fold)) / audit["model_file"]
+                      check(model_path.is_file() and sha(model_path) == audit["model_sha256"], "model file hash without model loading")
+                  expected[model] = metric(points)
+              reports(output, "report", expected, config["project_name"])
+              return len(source) * len(config["models"])
+
+
+          def fixed(config_path, output):
+              source = pd.read_csv(ROOT / "example/fixed_split_test/dataset/reactions.csv")
+              original = pd.read_csv(ROOT / "example/fixed_split_test/splits/fixed_split_manifest.csv")
+              plan = pd.read_parquet(output / "docs/manifests/split_manifest.parquet")
+              manifest = read(output / "docs/manifests/run_manifest.json")
+              folds = pd.read_parquet(output / "docs/metrics/fold_metrics.parquet")
+              summary = pd.read_parquet(output / "docs/metrics/combination_summary.parquet")
+              check(len(source) == 12 and len(plan) == len(original) == 24, "fixed manifest member count")
+              for column in original.columns.difference(["run_id"]):
+                  check(original.sort_values(["repeat", "fold", "sample_id"])[column].astype(str).tolist() == plan.sort_values(["repeat", "fold", "sample_id"])[column].astype(str).tolist(), "executed fixed membership: " + column)
+              computed, frames = [], []
+              for fold in (1, 2):
+                  part = plan[(plan["repeat"] == 1) & (plan.fold == fold)]
+                  train, valid = part[part.role == "train"], part[part.role == "valid"]
+                  check(len(train) == len(valid) == 6 and set(train.sample_id).isdisjoint(valid.sample_id) and set(train.group_id).isdisjoint(valid.group_id), "fixed disjoint six/six members and groups")
+                  points = pd.read_parquet(output / "docs/predictions" / ("morgan__rf__r01__f{:02d}.parquet".format(fold)))
+                  check(len(points) == 6 and set(points.sample_id) == set(valid.sample_id) and points.sample_id.is_unique, "fixed exact predicted fold members")
+                  check(np.array_equal(points.y_true.to_numpy(), source.set_index("reaction_id").loc[points.sample_id, "yield"].to_numpy()), "fixed source labels")
+                  values = metric(points); computed.append(values); frames.append(points)
+                  saved = folds[(folds["repeat"] == 1) & (folds.fold == fold)]
+                  check(len(saved) == 1, "one fixed score row per fold"); compare(values, saved.iloc[0], "fixed fold")
+              check(pd.concat(frames).sample_id.is_unique, "fixed OOF once per sample")
+              means = {key: float(np.mean([v[key] for v in computed])) for key in ("r2", "mae", "rmse")}
+              for key in means:
+                  row = summary[summary.metric == key]
+                  check(len(row) == 1 and row.iloc[0].n_folds == 2, "fixed complete summary")
+                  check(math.isclose(row.iloc[0]["mean"], means[key], rel_tol=1e-10, abs_tol=1e-12), "fixed mean " + key)
+                  check(math.isclose(row.iloc[0]["std"], float(np.std([v[key] for v in computed], ddof=0)), rel_tol=1e-10, abs_tol=1e-12), "fixed population SD " + key)
+              complete = pd.read_parquet(output / "docs/metrics/completeness.parquet")
+              check(len(complete) == 1 and bool(complete.iloc[0].is_complete), "fixed completeness")
+              check(not list(output.rglob("*.joblib")), "fixed adapter persistence boundary")
+              reports(output, "benchmark_report", {"rf": means}, manifest["run_id"])
+              return 12
+
+
+          def external(config_path, output):
+              config = yread(config_path); declaration = config["evaluation"]["external_test"]
+              train = pd.read_csv(ROOT / "example/external_test/dataset/train.csv")
+              source = pd.read_csv(ROOT / "example/external_test/dataset/external.csv")
+              points = pd.read_parquet(output / "docs/predictions/morgan__rf.parquet")
+              manifest = read(output / "docs/manifests/run_manifest.json")
+              meta = read(output / "docs/folds/morgan__rf.json")
+              saved = pd.read_csv(output / "docs/metrics/external_test_metrics.csv")
+              check(len(train) == 12 and len(source) == len(points) == 6 and points.sample_id.is_unique and set(points.sample_id) == set(source.external_id), "external exact 12 train/six external members")
+              reference = source.set_index("external_id").loc[points.sample_id]
+              check(np.array_equal(points.y_true.to_numpy(), reference.measured_yield.to_numpy()), "external source labels")
+              check(reference.source_record_id.tolist() == points.external_source_id.tolist() and reference.amine_group.tolist() == points.external_group_id.tolist() and points.external_group_id.nunique() == 3, "external source and group mapping")
+              check(sha(ROOT / "example/external_test/dataset/external.csv") == declaration["expected_sha256"] and sha(ROOT / "example/external_test/audit/external_audit.json") == declaration["audit_manifest_sha256"], "external immutable data/audit hashes")
+              check(meta["external_label_phase"] == "loaded_after_predict" and all(meta[k] is False for k in ("external_labels_used_for_fit", "external_labels_used_for_scaling", "external_labels_used_for_model_selection")), "external labels isolated in runtime evidence")
+              check(meta["n_train"] == 12 and meta["n_external"] == 6 and manifest["single_fit"] is True and manifest["cv_folds"] == 0, "external single fit and no invented CV")
+              check(len(saved) == 1, "one external metric row")
+              values = metric(points); compare(values, saved.iloc[0], "external saved metrics")
+              check(not list(output.rglob("*.joblib")), "external adapter persistence boundary")
+              reports(output, "external_test_report", {"rf": values}, manifest["run_id"])
+              return 6
+
+
+          def main():
+              SUPPORT.mkdir(parents=True, exist_ok=True)
+              check(os.environ.get("CONDA_DEFAULT_ENV") == "yonod" and sys.version_info[:2] == (3, 9), "yonod Python3.9 active")
+              immutable = {str(p.relative_to(ROOT)): sha(p) for base in (ROOT / "example", ROOT / "config/example") for p in base.rglob("*") if p.is_file()}
+              immutable["example.yaml"] = sha(ROOT / "example.yaml")
+              total = 0
+              for name in NAMES:
+                  config = ROOT / "example.yaml" if name == NAMES[0] else ROOT / "config/example" / name / "run.yaml"
+                  output = ROOT / "result/example" / name
+                  check(not output.exists() or all(p.name == ".gitkeep" and p.is_file() and p.stat().st_size == 0 for p in output.iterdir()), name + ": fresh isolated output")
+                  logs = ROOT / "logs"; logs.mkdir(exist_ok=True)
+                  command = [sys.executable, "-u", "yonod.py"]
+                  first_input = ""
+                  if name == NAMES[0]: command.extend(["--config", "example.yaml"])
+                  else: first_input = config.relative_to(ROOT).as_posix() + "\n"
+                  stdin_path = logs / (name + ".stdin.txt"); stdin_path.write_text(first_input, encoding="utf-8")
+                  start = datetime.now(timezone.utc).isoformat()
+                  with stdin_path.open(encoding="utf-8") as stdin, (logs / (name + ".log")).open("w", encoding="utf-8") as stdout, (logs / (name + ".stderr.log")).open("w", encoding="utf-8") as stderr:
+                      process = subprocess.Popen(command, cwd=ROOT, stdin=stdin, stdout=stdout, stderr=stderr)
+                      (logs / (name + ".pid")).write_text(str(process.pid) + "\n", encoding="ascii")
+                      try: code = process.wait(timeout=900)
+                      except subprocess.TimeoutExpired:
+                          process.kill(); process.wait(); raise
+                  entry = {"name": name, "command": command, "first_input": first_input.strip(), "started_at_utc": start, "completed_at_utc": datetime.now(timezone.utc).isoformat(), "return_code": code, "config_sha256": sha(config)}
+                  RUNS.append(entry)
+                  if code:
+                      print((logs / (name + ".log")).read_text(encoding="utf-8"))
+                      print((logs / (name + ".stderr.log")).read_text(encoding="utf-8"), file=sys.stderr)
+                  check(code == 0, name + ": modeling process succeeds")
+                  if name in NAMES[:2]: total += ordinary(config, output, name)
+                  elif name == NAMES[2]: total += fixed(config, output)
+                  else: total += external(config, output)
+                  for path in output.rglob("*"):
+                      if path.is_file(): check(path.suffix.lower() not in {".log", ".pid"}, "no operational log in result")
+                  print("Accepted " + name, flush=True)
+              for path, digest in immutable.items(): check(sha(ROOT / path) == digest, "immutable input " + path)
+              check(total == 66, "66 saved prediction events across four runs")
+              return {"status": "passed", "check_count": len(CHECKS), "checks": CHECKS, "platform": sys.platform, "python": sys.version.split()[0], "runs": RUNS, "prediction_events": total, "acceptance_loaded_models": False, "reports_checked": "HTML/Markdown tables, numeric rounding and local images; no browser visual claim"}
+
+
+          if __name__ == "__main__":
+              try:
+                  result = main()
+              except Exception as exc:
+                  result = {"status": "failed", "platform": sys.platform, "error": type(exc).__name__ + ": " + str(exc), "checks": CHECKS, "runs": RUNS}
+                  raise
+              finally:
+                  SUPPORT.mkdir(parents=True, exist_ok=True)
+                  (SUPPORT / "acceptance.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+                  print(json.dumps({k: v for k, v in result.items() if k not in {"checks", "runs"}}, ensure_ascii=False))
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python -c "import os; from pathlib import Path; p=Path('_verify/ci_smoke.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_text(os.environ['YONOD_CI_PROGRAM'],encoding='utf-8')"
+    - name: Materialize verifier under _verify (PowerShell)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        YONOD_CI_PROGRAM: |
+          """Sequential real runs and saved-output acceptance on the current OS."""
+          import hashlib
+          import json
+          import math
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+          from html.parser import HTMLParser
+          from urllib.parse import unquote, urlsplit
+
+          import numpy as np
+          import pandas as pd
+          import yaml
+
+          ROOT = Path.cwd().resolve()
+          SUPPORT = ROOT / "backup/ci-acceptance"
+          CHECKS, RUNS = [], []
+          NAMES = ("yonod_schema2_smoke", "random_split_test", "fixed_split_test", "external_test")
+
+
+          def check(condition, message):
+              if not condition:
+                  raise AssertionError(message)
+              CHECKS.append(message)
+
+
+          def sha(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+          def read(path):
+              return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+          def yread(path):
+              return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+
+          def metric(frame):
+              truth, predicted = frame.y_true.to_numpy(float), frame.y_pred.to_numpy(float)
+              check(len(truth) > 1 and np.isfinite(truth).all() and np.isfinite(predicted).all(), "finite saved predictions")
+              residual, sst = truth - predicted, np.square(truth - truth.mean()).sum()
+              return {"r2": float(1 - np.square(residual).sum() / sst) if sst else float("nan"), "mae": float(np.abs(residual).mean()), "rmse": float(np.sqrt(np.square(residual).mean()))}
+
+
+          def compare(values, saved, label):
+              for key, expected in values.items():
+                  actual = float(saved[key])
+                  check((math.isnan(actual) and math.isnan(expected)) or math.isclose(actual, expected, rel_tol=1e-10, abs_tol=1e-12), label + ": " + key)
+
+
+          class Tables(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.tables, self.images, self.table, self.row, self.cell = [], [], None, None, None
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "table": self.table = []
+                  elif tag == "tr" and self.table is not None: self.row = []
+                  elif tag in ("td", "th") and self.row is not None: self.cell = []
+                  elif tag == "img" and dict(attrs).get("src"): self.images.append(dict(attrs)["src"])
+
+              def handle_data(self, data):
+                  if self.cell is not None: self.cell.append(data)
+
+              def handle_endtag(self, tag):
+                  if tag in ("td", "th") and self.cell is not None:
+                      self.row.append(" ".join("".join(self.cell).split())); self.cell = None
+                  elif tag == "tr" and self.row is not None:
+                      self.table.append(self.row); self.row = None
+                  elif tag == "table" and self.table is not None:
+                      self.tables.append(self.table); self.table = None
+
+
+          def markdown_tables(text):
+              tables, table = [], []
+              for line in text.splitlines() + [""]:
+                  if line.strip().startswith("|") and line.strip().endswith("|"):
+                      values = [v.strip().replace("`", "") for v in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+                      if not all(re.fullmatch(r"[:\- ]+", v) for v in values): table.append(values)
+                  elif table:
+                      tables.append(table); table = []
+              return tables
+
+
+          def reports(output, stem, expected, identity):
+              for suffix in ("html", "md"):
+                  path = output / "report" / (stem + "." + suffix)
+                  check(path.is_file() and path.stat().st_size > 500, "nonempty " + path.name)
+                  text = path.read_text(encoding="utf-8")
+                  check(identity in text and "Traceback (most recent call last)" not in text, "report identity and no traceback")
+                  if suffix == "html":
+                      check("<html" in text.lower() and "</html>" in text.lower(), "complete HTML")
+                      parser = Tables(); parser.feed(text)
+                      tables, images = parser.tables, parser.images
+                  else:
+                      tables = markdown_tables(text)
+                      images = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", text)
+                  for target in images:
+                      parts = urlsplit(target)
+                      if not parts.scheme and parts.path:
+                          picture = (path.parent / unquote(parts.path)).resolve()
+                          check(output in picture.parents and picture.is_file() and picture.stat().st_size > 100, "local report image " + target)
+                  for model, values in expected.items():
+                      found = None
+                      for table in tables:
+                          if not table: continue
+                          header = table[0]
+                          model_col = next((i for i, h in enumerate(header) if h.lower() in ("model", "模型")), None)
+                          if model_col is None: continue
+                          columns = {}
+                          for i, h in enumerate(header):
+                              h = h.lower()
+                              if h.endswith("_std") or ("标准差" in h and "均值" not in h): continue
+                              for key, marker in (("r2", "r²"), ("rmse", "rmse"), ("mae", "mae")):
+                                  if h == key or marker in h: columns.setdefault(key, i)
+                          if len(columns) != 3: continue
+                          for row in table[1:]:
+                              if len(row) == len(header) and row[model_col].lower() == model:
+                                  found = {key: row[index] for key, index in columns.items()}; break
+                          if found: break
+                      check(found is not None, model + ": metric row in " + suffix)
+                      for key in ("r2", "rmse", "mae"):
+                          number = re.search(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", found[key])
+                          check(number is not None, "numeric report " + key)
+                          decimals = len(number.group(0).partition(".")[2].split("e")[0])
+                          check(abs(float(number.group(0)) - values[key]) <= 0.5 * 10 ** (-decimals) + 1e-12, "report rounding: " + model + "." + key)
+
+
+          def ordinary(config_path, output, name):
+              config = yread(config_path)
+              source_path = ROOT / "dataset/benchmark_smoke_fixture.csv" if name == NAMES[0] else ROOT / "example" / name / "dataset/reactions.csv"
+              source = pd.read_csv(source_path)
+              states = list((output / "feature/feature_runs").glob("*.yaml"))
+              check(len(states) == 1 and yread(states[0])["status"] == "ready", name + ": feature manifest ready")
+              order = np.arange(len(source)); np.random.RandomState(config["evaluation"]["seed"]).shuffle(order)
+              valid_sets = {fold: set(source.iloc[index].reaction_id) for fold, index in enumerate(np.array_split(order, 2), 1)}
+              expected = {}
+              for model in config["models"]:
+                  run = output / "runs" / ("run_morgan-" + model)
+                  manifest = yread(run / "run_manifest.yaml")
+                  check(manifest["status"] == "complete" and manifest["n_samples"] == len(source) and manifest["n_folds"] == 2, name + "/" + model + ": complete")
+                  check(manifest["source_config_sha256"] == sha(config_path) and (run / "source_config.yaml").read_bytes() == config_path.read_bytes(), "exact source configuration snapshot")
+                  points, folds = pd.read_csv(run / "predictions.csv"), pd.read_csv(run / "fold_metrics.csv")
+                  check(len(points) == len(source) and points.sample_id.is_unique and set(points.sample_id) == set(source.reaction_id), "exact complete OOF coverage")
+                  check(np.array_equal(source.set_index("reaction_id").loc[points.sample_id, "yield"].to_numpy(), points.y_true.to_numpy()), "OOF source labels")
+                  check(set(points["repeat"]) == {1} and set(points.fold) == {1, 2} and len(folds) == 2, "exact repeated fold coverage")
+                  for fold in (1, 2):
+                      current = points[points.fold == fold]
+                      check(set(current.sample_id) == valid_sets[fold], "exact seeded held-out fold")
+                      saved = folds[folds.fold == fold]
+                      check(len(saved) == 1 and int(saved.iloc[0].n_train) == int(saved.iloc[0].n_valid) == 6, "fold six training/six held-out")
+                      compare(metric(current), saved.iloc[0], name + "/" + model + "/fold" + str(fold))
+                      audit = json.loads(saved.iloc[0].model_audit)
+                      model_path = run / "models/repeat-01" / ("fold-{:02d}".format(fold)) / audit["model_file"]
+                      check(model_path.is_file() and sha(model_path) == audit["model_sha256"], "model file hash without model loading")
+                  expected[model] = metric(points)
+              reports(output, "report", expected, config["project_name"])
+              return len(source) * len(config["models"])
+
+
+          def fixed(config_path, output):
+              source = pd.read_csv(ROOT / "example/fixed_split_test/dataset/reactions.csv")
+              original = pd.read_csv(ROOT / "example/fixed_split_test/splits/fixed_split_manifest.csv")
+              plan = pd.read_parquet(output / "docs/manifests/split_manifest.parquet")
+              manifest = read(output / "docs/manifests/run_manifest.json")
+              folds = pd.read_parquet(output / "docs/metrics/fold_metrics.parquet")
+              summary = pd.read_parquet(output / "docs/metrics/combination_summary.parquet")
+              check(len(source) == 12 and len(plan) == len(original) == 24, "fixed manifest member count")
+              for column in original.columns.difference(["run_id"]):
+                  check(original.sort_values(["repeat", "fold", "sample_id"])[column].astype(str).tolist() == plan.sort_values(["repeat", "fold", "sample_id"])[column].astype(str).tolist(), "executed fixed membership: " + column)
+              computed, frames = [], []
+              for fold in (1, 2):
+                  part = plan[(plan["repeat"] == 1) & (plan.fold == fold)]
+                  train, valid = part[part.role == "train"], part[part.role == "valid"]
+                  check(len(train) == len(valid) == 6 and set(train.sample_id).isdisjoint(valid.sample_id) and set(train.group_id).isdisjoint(valid.group_id), "fixed disjoint six/six members and groups")
+                  points = pd.read_parquet(output / "docs/predictions" / ("morgan__rf__r01__f{:02d}.parquet".format(fold)))
+                  check(len(points) == 6 and set(points.sample_id) == set(valid.sample_id) and points.sample_id.is_unique, "fixed exact predicted fold members")
+                  check(np.array_equal(points.y_true.to_numpy(), source.set_index("reaction_id").loc[points.sample_id, "yield"].to_numpy()), "fixed source labels")
+                  values = metric(points); computed.append(values); frames.append(points)
+                  saved = folds[(folds["repeat"] == 1) & (folds.fold == fold)]
+                  check(len(saved) == 1, "one fixed score row per fold"); compare(values, saved.iloc[0], "fixed fold")
+              check(pd.concat(frames).sample_id.is_unique, "fixed OOF once per sample")
+              means = {key: float(np.mean([v[key] for v in computed])) for key in ("r2", "mae", "rmse")}
+              for key in means:
+                  row = summary[summary.metric == key]
+                  check(len(row) == 1 and row.iloc[0].n_folds == 2, "fixed complete summary")
+                  check(math.isclose(row.iloc[0]["mean"], means[key], rel_tol=1e-10, abs_tol=1e-12), "fixed mean " + key)
+                  check(math.isclose(row.iloc[0]["std"], float(np.std([v[key] for v in computed], ddof=0)), rel_tol=1e-10, abs_tol=1e-12), "fixed population SD " + key)
+              complete = pd.read_parquet(output / "docs/metrics/completeness.parquet")
+              check(len(complete) == 1 and bool(complete.iloc[0].is_complete), "fixed completeness")
+              check(not list(output.rglob("*.joblib")), "fixed adapter persistence boundary")
+              reports(output, "benchmark_report", {"rf": means}, manifest["run_id"])
+              return 12
+
+
+          def external(config_path, output):
+              config = yread(config_path); declaration = config["evaluation"]["external_test"]
+              train = pd.read_csv(ROOT / "example/external_test/dataset/train.csv")
+              source = pd.read_csv(ROOT / "example/external_test/dataset/external.csv")
+              points = pd.read_parquet(output / "docs/predictions/morgan__rf.parquet")
+              manifest = read(output / "docs/manifests/run_manifest.json")
+              meta = read(output / "docs/folds/morgan__rf.json")
+              saved = pd.read_csv(output / "docs/metrics/external_test_metrics.csv")
+              check(len(train) == 12 and len(source) == len(points) == 6 and points.sample_id.is_unique and set(points.sample_id) == set(source.external_id), "external exact 12 train/six external members")
+              reference = source.set_index("external_id").loc[points.sample_id]
+              check(np.array_equal(points.y_true.to_numpy(), reference.measured_yield.to_numpy()), "external source labels")
+              check(reference.source_record_id.tolist() == points.external_source_id.tolist() and reference.amine_group.tolist() == points.external_group_id.tolist() and points.external_group_id.nunique() == 3, "external source and group mapping")
+              check(sha(ROOT / "example/external_test/dataset/external.csv") == declaration["expected_sha256"] and sha(ROOT / "example/external_test/audit/external_audit.json") == declaration["audit_manifest_sha256"], "external immutable data/audit hashes")
+              check(meta["external_label_phase"] == "loaded_after_predict" and all(meta[k] is False for k in ("external_labels_used_for_fit", "external_labels_used_for_scaling", "external_labels_used_for_model_selection")), "external labels isolated in runtime evidence")
+              check(meta["n_train"] == 12 and meta["n_external"] == 6 and manifest["single_fit"] is True and manifest["cv_folds"] == 0, "external single fit and no invented CV")
+              check(len(saved) == 1, "one external metric row")
+              values = metric(points); compare(values, saved.iloc[0], "external saved metrics")
+              check(not list(output.rglob("*.joblib")), "external adapter persistence boundary")
+              reports(output, "external_test_report", {"rf": values}, manifest["run_id"])
+              return 6
+
+
+          def main():
+              SUPPORT.mkdir(parents=True, exist_ok=True)
+              check(os.environ.get("CONDA_DEFAULT_ENV") == "yonod" and sys.version_info[:2] == (3, 9), "yonod Python3.9 active")
+              immutable = {str(p.relative_to(ROOT)): sha(p) for base in (ROOT / "example", ROOT / "config/example") for p in base.rglob("*") if p.is_file()}
+              immutable["example.yaml"] = sha(ROOT / "example.yaml")
+              total = 0
+              for name in NAMES:
+                  config = ROOT / "example.yaml" if name == NAMES[0] else ROOT / "config/example" / name / "run.yaml"
+                  output = ROOT / "result/example" / name
+                  check(not output.exists() or all(p.name == ".gitkeep" and p.is_file() and p.stat().st_size == 0 for p in output.iterdir()), name + ": fresh isolated output")
+                  logs = ROOT / "logs"; logs.mkdir(exist_ok=True)
+                  command = [sys.executable, "-u", "yonod.py"]
+                  first_input = ""
+                  if name == NAMES[0]: command.extend(["--config", "example.yaml"])
+                  else: first_input = config.relative_to(ROOT).as_posix() + "\n"
+                  stdin_path = logs / (name + ".stdin.txt"); stdin_path.write_text(first_input, encoding="utf-8")
+                  start = datetime.now(timezone.utc).isoformat()
+                  with stdin_path.open(encoding="utf-8") as stdin, (logs / (name + ".log")).open("w", encoding="utf-8") as stdout, (logs / (name + ".stderr.log")).open("w", encoding="utf-8") as stderr:
+                      process = subprocess.Popen(command, cwd=ROOT, stdin=stdin, stdout=stdout, stderr=stderr)
+                      (logs / (name + ".pid")).write_text(str(process.pid) + "\n", encoding="ascii")
+                      try: code = process.wait(timeout=900)
+                      except subprocess.TimeoutExpired:
+                          process.kill(); process.wait(); raise
+                  entry = {"name": name, "command": command, "first_input": first_input.strip(), "started_at_utc": start, "completed_at_utc": datetime.now(timezone.utc).isoformat(), "return_code": code, "config_sha256": sha(config)}
+                  RUNS.append(entry)
+                  if code:
+                      print((logs / (name + ".log")).read_text(encoding="utf-8"))
+                      print((logs / (name + ".stderr.log")).read_text(encoding="utf-8"), file=sys.stderr)
+                  check(code == 0, name + ": modeling process succeeds")
+                  if name in NAMES[:2]: total += ordinary(config, output, name)
+                  elif name == NAMES[2]: total += fixed(config, output)
+                  else: total += external(config, output)
+                  for path in output.rglob("*"):
+                      if path.is_file(): check(path.suffix.lower() not in {".log", ".pid"}, "no operational log in result")
+                  print("Accepted " + name, flush=True)
+              for path, digest in immutable.items(): check(sha(ROOT / path) == digest, "immutable input " + path)
+              check(total == 66, "66 saved prediction events across four runs")
+              return {"status": "passed", "check_count": len(CHECKS), "checks": CHECKS, "platform": sys.platform, "python": sys.version.split()[0], "runs": RUNS, "prediction_events": total, "acceptance_loaded_models": False, "reports_checked": "HTML/Markdown tables, numeric rounding and local images; no browser visual claim"}
+
+
+          if __name__ == "__main__":
+              try:
+                  result = main()
+              except Exception as exc:
+                  result = {"status": "failed", "platform": sys.platform, "error": type(exc).__name__ + ": " + str(exc), "checks": CHECKS, "runs": RUNS}
+                  raise
+              finally:
+                  SUPPORT.mkdir(parents=True, exist_ok=True)
+                  (SUPPORT / "acceptance.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+                  print(json.dumps({k: v for k, v in result.items() if k not in {"checks", "runs"}}, ensure_ascii=False))
+      run: |
+        (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda activate yonod
+        if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
+        python -c "import os; from pathlib import Path; p=Path('_verify/ci_smoke.py'); p.parent.mkdir(parents=True,exist_ok=True); p.write_text(os.environ['YONOD_CI_PROGRAM'],encoding='utf-8')"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Run four tasks serially and accept saved outputs (Bash)
+      if: runner.os != 'Windows'
+      shell: bash -el {0}
+      run: |
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate yonod
+        [ "$CONDA_DEFAULT_ENV" = "yonod" ]
+        python _verify/ci_smoke.py
+    - name: Run four tasks serially and accept saved outputs (PowerShell)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        (& conda "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda activate yonod
+        if ($env:CONDA_DEFAULT_ENV -ne "yonod") { throw "Conda yonod activation failed" }
+        python _verify/ci_smoke.py
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Save validation evidence
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: yonod-smoke-${{ inputs.platform }}-${{ github.sha }}
+        path: |
+          backup/ci-acceptance/
+          logs/
+          result/example/
+        retention-days: 7
+        if-no-files-found: warn

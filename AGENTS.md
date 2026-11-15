@@ -293,6 +293,9 @@ Under `config/` and `result/`, only their `example/` subfolders are kept in
 the main repository; all other files and folders are ignored. Each contains
 the same three named test subfolders. The configuration subfolders ship
 their `run.yaml`; the result subfolders initially contain only `.gitkeep`.
+Only those three empty result `.gitkeep` files are tracked. All generated
+results, including files beneath `result/example/` and the engineering smoke
+directory, remain ignored; example configuration files stay tracked.
 
 ### Required directory locations
 

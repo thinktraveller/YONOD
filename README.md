@@ -992,7 +992,9 @@ python yonod.py --config example.yaml
 - A smoke pass verifies execution, not scientific validity or acceptance of an untested platform.
 
 - Keep engineering support and backups in `backup/`, operational logs/PIDs in root `logs/`, and maintained documentation in the independent `project-docs/` repository.
-- Explicitly stage task-owned files and commit each changed repository separately; do not commit `_verify/`, `config/`, `backup/` or external reference material.
+- Explicitly stage task-owned files and commit each changed repository separately; do not commit `_verify/`, non-example research configurations under `config/`, `backup/` or external reference material. The three prepared configurations under `config/example/` are tracked exceptions.
+- Direct CSV modeling flags are rejected, including when combined with `--config`. Prepare a saved YAML with `generate_yaml_config.py`, then provide it at the `yonod.py` prompt. `--config` remains the engineering smoke interface.
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution, automated checks and release requirements, and [SECURITY.md](SECURITY.md) for private vulnerability reports.
 
 ### Descriptor parameters and protocol support
 
@@ -1369,9 +1371,9 @@ These are the 18 names accepted under `model_params.rf.estimator` in the support
     - For non-sklearn models, implement fit-option routing and artifact loading explicitly; the generic runner may not be sufficient.
     - Add diagnostic support only after verifying the model's train/holdout prediction contract.
 
-5. Add discovery in `_MODEL_NAMES` in [yonod.py](yonod.py), the model menu and `_canonical_wizard_models` in [generate_yaml_config.py](generate_yaml_config.py).
+5. Add discovery in the model menu and `_canonical_wizard_models` in [generate_yaml_config.py](generate_yaml_config.py). `_MODEL_NAMES` in `yonod.py` belongs to the retained legacy argument definitions and does not register schema-2 models.
 
-    - The legacy `_make_model` and files under `yonod/models/` matter only if you also support that older direct-CSV interface; editing them alone does not register a schema-2 model.
+    - The legacy `_make_model` and files under `yonod/models/` remain implementation history; the public CLI rejects direct-CSV modeling. Editing these adapters alone does not register a schema-2 model.
 
 6. Add HPO support separately in [hpo/contracts.py](yonod/hpo/contracts.py), [hpo/spaces.py](yonod/hpo/spaces.py), [hpo/search.py](yonod/hpo/search.py) and finalization where needed.
 
@@ -1452,7 +1454,7 @@ YONOD/
 - For everyday use, start with the two root scripts, [example.yaml](example.yaml) and [example/](example/).
 - The [dataset notes](dataset/README.md) and [weight notes](WEIGHTS/README.md) explain the inputs and optional assets.
 
-- Under `config/` and `result/`, Git keeps only each `example/` subtree; all other files and folders are ignored. The root folders `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/` are also ignored.
+- Under `config/`, Git keeps the three prepared `example/` configurations. Under `result/`, only the three example directories' empty `.gitkeep` files are tracked; generated example and engineering-smoke outputs are ignored. All other local configurations and results, plus root `logs/`, `_verify/`, `backup/`, `reference-projects/` and `project-docs/`, are ignored.
 - `project-docs/` has its own Git history in [YONOD-docs](https://github.com/thinktraveller/YONOD-docs), which requires access permission.
 - Cloning YONOD does not fetch that repository; the first-use examples work without it.
 
@@ -1475,7 +1477,7 @@ result/<task_name>/
 - The files available depend on the selected protocol.
 
 - Example tasks save new outputs in the project-root `result/example/<task_name>/`, with one folder per task.
-- We recommend keeping your own configurations in `config/<task_name>.yaml` and results under `result/<task_name>/`; both are Git-ignored outside the example subfolders.
+- We recommend keeping your own configurations in `config/<task_name>.yaml` and results under `result/<task_name>/`; research configurations and all generated results are Git-ignored.
 
 ## Acknowledgments
 

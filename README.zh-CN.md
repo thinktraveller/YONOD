@@ -971,7 +971,9 @@ python yonod.py --config example.yaml
 - 冒烟测试通过说明本次示例流程能执行，不等于科学有效性或未测试平台的验收。
 
 - 工程支持与备份放 `backup/`，操作日志/PID放根 `logs/`，维护文档放独立 `project-docs/`。
-- 逐项暂存本任务修改的文件，两个发生改动的仓库分别提交；不提交 `_verify/`、`config/`、`backup/` 或外部参考材料。
+- 逐项暂存本任务修改的文件，两个发生改动的仓库分别提交；不提交 `_verify/`、`config/` 下的非示例研究配置、`backup/` 或外部参考材料。`config/example/` 下三份预建配置属于跟踪例外。
+- 直接 CSV 建模参数会被拒绝，与 `--config` 混用也会拒绝。新 CSV 先通过 `generate_yaml_config.py` 保存 YAML，再在 `yonod.py` 首提示提供路径；`--config` 继续作为工程冒烟接口。
+- 贡献、自动检查与发布要求见 [CONTRIBUTING.md](CONTRIBUTING.md)，私密漏洞报告方式见 [SECURITY.md](SECURITY.md)。
 
 ### 描述符参数与协议支持
 
@@ -1323,9 +1325,9 @@ python yonod.py --config example.yaml
    - 非sklearn模型需显式实现拟合选项路由和加载，不应假定通用runner已足够。
    - 需要训练诊断时，再验证训练/留出预测契约并加入支持。
 
-5. 在 [yonod.py](yonod.py) 的 `_MODEL_NAMES`、[generate_yaml_config.py](generate_yaml_config.py) 的模型菜单及 `_canonical_wizard_models` 中增加模型选项。
+5. 在 [generate_yaml_config.py](generate_yaml_config.py) 的模型菜单及 `_canonical_wizard_models` 中增加模型选项。`yonod.py` 中的 `_MODEL_NAMES` 仅属于保留的旧参数定义，不负责注册 schema-2 模型。
 
-   - 旧 `_make_model` 和 `yonod/models/` 只在同时支持旧直接CSV接口时需要更新，单独修改它们不能注册schema-2模型。
+   - 旧 `_make_model` 和 `yonod/models/` 保留为实现历史；公开 CLI 已拒绝直接 CSV 建模。单独修改这些适配器不能注册 schema-2 模型。
 
 6. HPO需另行更新 [hpo/contracts.py](yonod/hpo/contracts.py)、[hpo/spaces.py](yonod/hpo/spaces.py)、[hpo/search.py](yonod/hpo/search.py)及必要的最终模型流程。
 
@@ -1403,7 +1405,7 @@ YONOD/
 - 日常使用先看根目录的两个入口脚本、[example.yaml](example.yaml) 和 [example/](example/)。
 - [数据说明](dataset/README.md)与[权重说明](WEIGHTS/README.md)分别解释输入来源和可选资产。
 
-- `config/` 和 `result/` 都只保留各自的 `example/` 子目录，其余文件和文件夹全部由 Git 忽略。根目录的 `logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/` 也不由主仓 Git 跟踪。
+- `config/` 只跟踪 `example/` 下三份预建配置；`result/` 只跟踪三个示例目录的空 `.gitkeep`，生成的示例结果与工程冒烟结果都忽略。其他本地配置和结果，以及根目录 `logs/`、`_verify/`、`backup/`、`reference-projects/`、`project-docs/`，也不由主仓 Git 跟踪。
 - `project-docs/` 在独立的 [YONOD-docs](https://github.com/thinktraveller/YONOD-docs) 仓库中维护，访问需要权限，克隆主仓不会自动获取它。
 - 运行首次使用样例不需要该文档仓库。
 
@@ -1426,7 +1428,7 @@ result/<task_name>/
 - 具体文件取决于所选协议。
 
 - 示例的新结果统一位于项目根目录 `result/example/<task_name>/`，每个任务使用独立子目录。
-- 推荐自己的配置放在根 `config/<task_name>.yaml`，结果放在 `result/<task_name>/`；两个示例子目录之外的配置和结果均由 Git 忽略。
+- 推荐自己的配置放在根 `config/<task_name>.yaml`，结果放在 `result/<task_name>/`；研究配置及所有生成结果均由 Git 忽略。
 - 参与修改前请阅读 [AGENTS.md](AGENTS.md)，验证脚本放 `_verify/`，维护文档放独立文档仓库。
 
 ## 致谢

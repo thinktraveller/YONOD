@@ -86,7 +86,7 @@ hpo:
 evaluation:
   # 普通 all/train 按随机 KFold 轮换内测；固定种子不代表未见底物或独立外测。
   # 固定名单需 stage: benchmark + manifest_outer_cv 和 split_manifest，
-  # 见 example/fixed_split/run.yaml；固定设置的外测协议见 example/external_test/run.yaml。
+  # 见 config/example/fixed_split_test/run.yaml；固定设置的外测协议见 config/example/external_test/run.yaml。
   # 切换专用协议时须采用其完整字段，不能只改 protocol 字符串。
   protocol: outer_kfold
   n_splits: 2

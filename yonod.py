@@ -8,7 +8,7 @@ Use ``generate_yaml_config.py`` to prepare data and generate a standard YAML
 without running models. JSON run configurations are rejected; JSON audit,
 manifest, and recovery outputs remain legitimate modeling evidence.
 
-The legacy direct-CSV CLI remains available for compatibility.
+Legacy direct-CSV options are rejected with a YAML migration message.
 """
 
 from __future__ import annotations
@@ -740,6 +740,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="YONOD 建模入口：schema-2 YAML → 特征 / 训练 / 报告；无参数时提示输入已保存的 YAML 路径",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        allow_abbrev=False,
     )
     # Schema-2 YAML is the only executable configuration surface.  Retain a
     # hidden --json token solely to give old commands an actionable migration
@@ -750,7 +751,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--stage", choices=["features", "train", "all", "benchmark"], default=None,
                    help="可选一致性检查；必须与 YAML 的 stage 完全相同")
 
-    # Direct-CSV exploratory path only; durable configuration runs use YAML.
+    # Retain legacy argument definitions only to identify old commands and
+    # provide a migration error; they cannot execute a modeling task.
     p.add_argument("--csv", type=Path, default=None,
                    help="传统直接运行的输入 CSV 路径（schema-2 YAML 不接受此覆盖）")
     p.add_argument("--label-col", default=None, help="标签列名")
@@ -815,7 +817,26 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--output-format", choices=["html", "md", "both"], default="both",
         help="报告输出格式：html / md / both（默认 both，同时生成 HTML 和 Markdown）",
     )
-    return p.parse_args(argv)
+    public_options = {"-h", "--help", "--config", "--stage"}
+    legacy_options = set()
+    for action in p._actions:
+        if not public_options.intersection(action.option_strings):
+            action.help = argparse.SUPPRESS
+            if "--json" not in action.option_strings:
+                legacy_options.update(action.option_strings)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    supplied_legacy = sorted({
+        token.split("=", 1)[0] for token in arguments
+        if token.split("=", 1)[0] in legacy_options
+    })
+    if supplied_legacy:
+        p.error(
+            "不再支持直接 CSV/模型命令行参数（包括与 --config 混用）："
+            + ", ".join(supplied_legacy)
+            + "。请先运行 generate_yaml_config.py 保存 schema-2 YAML，"
+            "再运行 python yonod.py 并在首提示提供该 YAML 路径。"
+        )
+    return p.parse_args(arguments)
 
 
 # ────────────────────────────── 辅助函数 ──────────────────────────────────── #
@@ -883,7 +904,7 @@ def _log_path_in_docs(log_file: Optional[Path], docs_dir: Path) -> Path:
 # ─────────────────────────────────── main ─────────────────────────────────── #
 
 def main(argv: Optional[List[str]] = None) -> int:
-    """CLI pipeline 入口：解析参数 → 加载数据 → 描述符×模型 grid → 输出报告。"""
+    """Read an existing schema-2 YAML and dispatch its declared stage."""
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments:
         print("YONOD 建模入口：请输入已保存的标准 schema-2 YAML 配置。")
@@ -912,13 +933,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         return 1
     if args.config is not None:
+        if args.config.suffix.lower() not in {".yaml", ".yml"}:
+            print(
+                "[error] --config 仅接受已保存的 .yaml/.yml 配置；"
+                "CSV 请先使用 generate_yaml_config.py，JSON 不能作为运行配置。",
+                file=sys.stderr,
+            )
+            return 1
         return _run_schema2_config(args.config.resolve(), args.stage)
 
-    # Direct CSV flags remain an exploratory convenience path; all durable
-    # configuration-driven runs must enter through --config YAML above.
-    if args.csv is None:
-        print("[error] 请指定 --config <schema-2.yaml>，或提供传统 --csv 参数。", file=sys.stderr)
-        return 1
+    print(
+        "[error] 请通过 python yonod.py 的首提示提供已保存的 schema-2 YAML；"
+        "工程检查可使用 --config <schema-2.yaml>。",
+        file=sys.stderr,
+    )
+    return 1
+
+    # The old CSV implementation is retained below for a separate cleanup;
+    # all public execution paths have returned before reaching it.
     if args.label_col is None:
         print("[error] 请指定 --label-col 参数，或使用 --config YAML。", file=sys.stderr)
         return 1

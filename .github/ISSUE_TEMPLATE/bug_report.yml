@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible runtime or configuration problem.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities use the private Security reporting link. Remove credentials and private data from all examples."
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, YONOD commit, Python/Conda environment, relevant dependency versions.
+    validations:
+      required: true
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Workflow
+      options:
+        - YAML generation or validation
+        - Ordinary schema-2 modeling
+        - Fixed-membership benchmark
+        - Frozen external testing
+        - CI or installation
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: List steps, command, saved YAML path or redacted excerpt, and a small shareable input. Do not upload a full private dataset.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include the exact error and relevant redacted log lines.
+    validations:
+      required: true
