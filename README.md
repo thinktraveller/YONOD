@@ -877,7 +877,7 @@ The input folders no longer include the optional historical `provenance.json`, `
 
 #### Linux acceptance of the three tests
 
-All three saved configurations were run serially through `yonod.py` on Linux with Python 3.9.23. Each exited successfully, and independent acceptance of the saved outputs passed 557 checks. The checks covered record IDs, split membership, 54 prediction rows (36 random-split, 12 fixed-membership and 6 external), recomputed metrics and both report formats. The HTML reports were also opened in Chrome to check their tables and local figures.
+On 2026-11-14, all three saved configurations were run serially through `yonod.py` on Linux with Python 3.9.23. Each exited successfully, and independent acceptance of the saved outputs passed 557 checks. The checks covered record IDs, split membership, 54 prediction rows (36 random-split, 12 fixed-membership and 6 external), recomputed metrics and both report formats. The HTML reports were also opened in Chrome to check their tables and local figures.
 
 | Test / protocol | Output root during execution | HTML / Markdown reports, relative to that root | Saved predictions, relative to that root |
 | --- | --- | --- | --- |
@@ -885,7 +885,7 @@ All three saved configurations were run serially through `yonod.py` on Linux wit
 | `fixed_split_test` / `manifest_outer_cv` | `result/example/fixed_split_test/` | `report/benchmark_report.html`, `report/benchmark_report.md` | `docs/predictions/` for the two folds |
 | `external_test` / `frozen_train_external_test` | `result/example/external_test/` | `report/external_test_report.html`, `report/external_test_report.md` | `docs/predictions/morgan__rf.parquet` |
 
-After acceptance, the complete outputs were archived locally under `backup/three_examples_acceptance_20261114/completed_runs/<test_name>/`, and each source `result/example/<test_name>/` folder was restored to only `.gitkeep`. That local archive is not included in a source clone. Your next run creates results at the original output paths above. Windows commands are documented, but these tests have not been executed on Windows. This is workflow acceptance on artificial data, not evidence of chemical prediction quality.
+After acceptance, the complete outputs were archived locally under `backup/three_examples_acceptance_20261114/completed_runs/<test_name>/`, and each source `result/example/<test_name>/` folder was restored to only `.gitkeep`. That local archive is not included in a source clone. Your next run creates results at the original output paths above. That earlier acceptance documented Windows commands without running on Windows. Commit-specific Linux/Windows evidence is available in [YONOD CI](https://github.com/thinktraveller/YONOD/actions/workflows/ci.yml); use the completed successful saved-output job for the corresponding platform. Workflow acceptance on artificial data does not establish chemical prediction quality.
 
 #### Read a report after the run
 

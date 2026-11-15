@@ -846,7 +846,7 @@ Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding 
 
 #### 三个测试的 Linux 实际验收
 
-本轮在 Linux、Python 3.9.23 中，经 `yonod.py` 串行运行三份已保存配置，全部正常退出；保存结果的独立验收通过 557 项检查，覆盖记录编号、划分成员、54 行预测（随机划分 36 行、固定名单 12 行、外测 6 行）、指标重算和两种报告。另用 Chrome 打开 HTML，检查表格与本地图像。
+2026-11-14 的一轮验收在 Linux、Python 3.9.23 中，经 `yonod.py` 串行运行三份已保存配置，全部正常退出；保存结果的独立验收通过 557 项检查，覆盖记录编号、划分成员、54 行预测（随机划分 36 行、固定名单 12 行、外测 6 行）、指标重算和两种报告。另用 Chrome 打开 HTML，检查表格与本地图像。
 
 | 测试 / 协议 | 执行时的输出根目录 | HTML / Markdown 报告，相对该根目录 | 保存预测，相对该根目录 |
 | --- | --- | --- | --- |
@@ -854,7 +854,7 @@ Get-Content -LiteralPath (Join-Path $testLogs "$testName.stderr.log") -Encoding 
 | `fixed_split_test` / `manifest_outer_cv` | `result/example/fixed_split_test/` | `report/benchmark_report.html`、`report/benchmark_report.md` | 两折对应的 `docs/predictions/` |
 | `external_test` / `frozen_train_external_test` | `result/example/external_test/` | `report/external_test_report.html`、`report/external_test_report.md` | `docs/predictions/morgan__rf.parquet` |
 
-验收后，完整输出已在本地归档到 `backup/three_examples_acceptance_20261114/completed_runs/<测试名>/`，三个源码 `result/example/<测试名>/` 目录均恢复为仅含 `.gitkeep`。该本地归档不包含在源码克隆中；自己重新运行时，仍在上表的原输出位置生成结果。Windows 只提供命令说明，本轮没有 Windows 实机执行。本次验收证明人工数据流程能运行，不证明真实化学预测效果。
+验收后，完整输出已在本地归档到 `backup/three_examples_acceptance_20261114/completed_runs/<测试名>/`，三个源码 `result/example/<测试名>/` 目录均恢复为仅含 `.gitkeep`。该本地归档不包含在源码克隆中；自己重新运行时，仍在上表的原输出位置生成结果。该轮仅提供 Windows 命令说明，未在 Windows 执行。各提交的 Linux/Windows 运行证据见 [YONOD CI](https://github.com/thinktraveller/YONOD/actions/workflows/ci.yml)，以对应平台已完成且成功的保存结果验收任务为准。人工数据流程验收不证明真实化学预测效果。
 
 #### 运行后怎样阅读报告
 
