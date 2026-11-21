@@ -45,11 +45,15 @@ def metric_explanation_markdown() -> str:
     return "\n\n".join(paragraphs)
 
 
-def metric_explanation_html() -> str:
+def metric_explanation_html(*, mathjax: bool = False) -> str:
     paragraphs = [f"<p>{escape(_SYMBOLS)}</p>"]
-    for (name, _, description), formula in zip(_METRICS, _HTML_FORMULAS):
+    for (name, latex, description), formula in zip(_METRICS, _HTML_FORMULAS):
+        formula_block = (
+            f'<div class="formula-block">\\[{escape(latex)}\\]</div>' if mathjax
+            else f'<p class="formula-block">{escape(formula)}</p>'
+        )
         paragraphs.extend((f"<p><strong>{escape(name)}</strong>。{escape(description)}</p>",
-                           f'<p class="formula-block">{escape(formula)}</p>'))
+                           formula_block))
     paragraphs.append(f"<p>{escape(_UNITS)}</p>")
     return "\n".join(paragraphs)
 

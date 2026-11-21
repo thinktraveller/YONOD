@@ -648,9 +648,10 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
     return f"""
 <section>
 <h1>YONOD 通用建模报告 — {name}</h1>
-<p class="subtitle">生成时间：{now} &nbsp;|&nbsp; 评估组合数：{n_combo}</p>
 <table>
 <tr><th style="width:160px;text-align:left">任务名称</th><td style="text-align:left">{name}</td></tr>
+<tr><th style="text-align:left">生成时间</th><td style="text-align:left">{_esc(now)}</td></tr>
+<tr><th style="text-align:left">评估组合数</th><td style="text-align:left">{_esc(n_combo)}</td></tr>
 <tr><th style="text-align:left">运行 YAML</th><td style="text-align:left"><code>{_esc(task_info.get("config_path", "—"))}</code></td></tr>
 <tr><th style="text-align:left">结果目录</th><td style="text-align:left"><code>{_esc(task_info.get("project_folder", "—"))}</code></td></tr>
 <tr><th style="text-align:left">CSV 路径</th><td style="text-align:left"><code>{csv_p}</code></td></tr>
@@ -859,43 +860,12 @@ def _section_grid(df: pd.DataFrame) -> str:
 def _section_glossary(weights=None) -> str:
     ranking = ranking_formula(weights, html=True) if weights is not None else ""
     return ("<section><h2>2 · 指标解读与计算公式</h2>"
-            + metric_explanation_html() + ranking + "</section>")
-
-
-def _section_protocol_guard(metrics_df: pd.DataFrame) -> str:
-    guard = ranking_eligibility_table(metrics_df)
-    if guard.empty:
-        return """
-<section>
-<h2>3 · 协议与排名守卫</h2>
-<p class="note">没有可审计指标记录；推荐排名为空。</p>
-</section>"""
-    shown_columns = [
-        "desc_name", "model_name", "evaluation_protocol", "cv", "expected_folds",
-        "completed_folds", "folds", "oof_complete", "oof_n_observed", "oof_n_total",
-        "rmse", "rmse_std", "mae", "mae_std",
-        "autogluon_time_limit", "autogluon_presets", "autogluon_num_cpus",
-        "autogluon_seed_policy", "ranking_eligible", "ranking_exclusion_reason",
-    ]
-    shown = guard.loc[:, [column for column in shown_columns if column in guard.columns]].copy()
-    for column in ("oof_complete", "ranking_eligible"):
-        if column in shown.columns:
-            shown[column] = shown[column].map(lambda value: "是" if _truthy_bool(value) else "否")
-    for column in ("rmse", "rmse_std", "mae", "mae_std"):
-        if column in shown.columns:
-            shown[column] = shown[column].map(lambda value: _fmt(value, 4))
-    table_html = shown.to_html(index=False, escape=True)
-    return f"""
-<section>
-<h2>3 · 协议与排名守卫</h2>
-<p>推荐排名只纳入 <code>evaluation_protocol=outer_kfold</code>、<code>expected_folds=completed_folds=cv</code>、<code>oof_complete=True</code>，且 RMSE/MAE 均值与标准差均完整的条目。<code>autogluon_internal_holdout</code> 等旧 internal holdout 结果只展示，不参与排名。</p>
-{table_html}
-</section>"""
+            + metric_explanation_html(mathjax=True) + ranking + "</section>")
 
 
 def _section_ranking(ranked: pd.DataFrame) -> str:
     if ranked.empty:
-        return "<section><h2>4 · 推荐组合</h2><p>没有满足严格排名守卫的外层 CV 结果；请查看上一节的排除原因。</p></section>"
+        return "<section><h2>4 · 推荐组合</h2><p>没有符合排名条件的外层 CV 结果。</p></section>"
 
     has_time = "train_time_s" in ranked.columns and not pd.to_numeric(ranked["train_time_s"], errors="coerce").dropna().empty
 
@@ -1217,7 +1187,6 @@ def generate_report(
         + diagnostic_section
         + _section_grid(metrics_df)
         + _section_glossary(weights if not ranked.empty else None)
-        + _section_protocol_guard(metrics_df)
         + _section_ranking(ranked)
         + _section_column_mapping(task_info)
         + _section_descriptor_config(task_info)
@@ -1244,9 +1213,6 @@ MathJax = {{
 </head>
 <body>
 {body}
-<p class="note" style="text-align:center;margin-top:24px">
-由 YONOD report.py 自动生成 · {now}
-</p>
 </body>
 </html>"""
 
@@ -1317,11 +1283,6 @@ def generate_markdown_report(
     lines += [
         f"# YONOD 建模报告 — {task_name}",
         "",
-        f"> 生成时间：{now}  ",
-        f"> 评估组合数：{task_info.get('n_combinations', '—')}",
-        "",
-        "---",
-        "",
     ]
 
     # ── 任务信息 ─────────────────────────────────────────────────────────────
@@ -1331,6 +1292,8 @@ def generate_markdown_report(
         "| 项目 | 内容 |",
         "|---|---|",
         f"| 任务名称 | {task_name} |",
+        f"| 生成时间 | {now} |",
+        f"| 评估组合数 | {_md(task_info.get('n_combinations', '—'))} |",
         f"| 运行 YAML | `{_md(task_info.get('config_path', '—'))}` |",
         f"| 项目文件夹 | `{task_info.get('project_folder', '—')}` |",
         f"| CSV 路径 | `{task_info.get('csv_path', '—')}` |",
@@ -1439,37 +1402,6 @@ def generate_markdown_report(
             )
     lines.append("")
 
-    # ── 协议与排名守卫 ───────────────────────────────────────────────────────
-    guard = ranking_eligibility_table(metrics_df)
-    lines += [
-        "---", "", "## 协议与排名守卫", "",
-        "推荐排名只纳入 `evaluation_protocol=outer_kfold`、`expected_folds=completed_folds=cv`、`oof_complete=True`，且 RMSE/MAE 均值与标准差均完整的条目；`autogluon_internal_holdout` 只展示，不参与排名。",
-        "",
-    ]
-    if guard.empty:
-        lines.append("无可审计指标记录。")
-    else:
-        lines += [
-            "| 描述符 | 模型 | evaluation_protocol | cv | expected_folds | completed_folds | folds | oof_complete | OOF观测/总数 | RMSE | RMSE标准差 | MAE | MAE标准差 | autogluon_time_limit | autogluon_presets | autogluon_num_cpus | autogluon_seed_policy | 排名资格 | 排除原因 |",
-            "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
-        ]
-        for _, item in guard.iterrows():
-            observed = item.get("oof_n_observed")
-            total = item.get("oof_n_total")
-            oof_counts = "—" if pd.isna(observed) or pd.isna(total) else f"{int(observed)}/{int(total)}"
-            lines.append(
-                f"| {_md(item.get('desc_name'))} | {_md(item.get('model_name'))}"
-                f" | {_md(item.get('evaluation_protocol'))} | {_md(item.get('cv'))}"
-                f" | {_md(item.get('expected_folds'))} | {_md(item.get('completed_folds'))}"
-                f" | {_md(item.get('folds'))} | {_yes_no(item.get('oof_complete'))}"
-                f" | {oof_counts} | {_fv(item.get('rmse'))} | {_fv(item.get('rmse_std'))}"
-                f" | {_fv(item.get('mae'))} | {_fv(item.get('mae_std'))}"
-                f" | {_md(item.get('autogluon_time_limit'))} | {_md(item.get('autogluon_presets'))}"
-                f" | {_md(item.get('autogluon_num_cpus'))} | {_md(item.get('autogluon_seed_policy'))}"
-                f" | {_yes_no(item.get('ranking_eligible'))} | {_md(item.get('ranking_exclusion_reason'))} |"
-            )
-    lines.append("")
-
     # ── 推荐组合 ─────────────────────────────────────────────────────────────
     weights = ranking_weights((task_info.get("run_config") or {}).get("outputs"))
     ranked = rank_combinations(metrics_df, weights=weights)
@@ -1502,7 +1434,7 @@ def generate_markdown_report(
             )
         lines += ["", "</details>", ""]
     else:
-        lines += ["没有满足严格排名守卫的外层 CV 结果；请查看上一节的排除原因。", ""]
+        lines += ["没有符合排名条件的外层 CV 结果。", ""]
 
     # ── 建模耗时与成本对比 ───────────────────────────────────────────────────
     time_summary = _universal_time_summary(metrics_df)
@@ -1684,7 +1616,6 @@ def generate_markdown_report(
     lines += ["---", "", "## 指标说明", "", metric_explanation_markdown(), ""]
     if not ranked.empty:
         lines += [ranking_formula(weights), ""]
-    lines += ["---", "", f"*由 YONOD report.py 自动生成 · {now}*"]
 
     out_path = report_dir / filename
     out_path.write_text("\n".join(lines), encoding="utf-8")
