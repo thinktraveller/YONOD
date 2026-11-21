@@ -24,6 +24,10 @@ from .metrics import (
 )
 from .layout import BenchmarkOutputLayout, resolve_benchmark_output_layout
 from yonod.universal.report import _configure_chinese_matplotlib, _markdown_hpo, _section_hpo
+from yonod.universal.report_text import (
+    chart_time_unit, evaluation_rows, format_duration, metric_explanation_html,
+    metric_explanation_markdown, population_sd_note,
+)
 
 
 class BenchmarkReportError(RuntimeError):
@@ -322,20 +326,21 @@ def _format(value: Any, digits: int = 4) -> str:
     return str(value)
 
 
-def _format_duration(value: Any) -> str:
-    """Render a finite duration without changing the raw seconds in tables."""
-    try:
-        seconds = float(value)
-    except (TypeError, ValueError):
-        return "—"
-    if not np.isfinite(seconds) or seconds < 0.0:
-        return "—"
-    if seconds < 60.0:
-        return "{0:.2f}s".format(seconds)
-    return "{0}m {1:.1f}s".format(int(seconds // 60), seconds % 60)
+def _public_table(frame: pd.DataFrame) -> pd.DataFrame:
+    """Keep display tables focused on the run details and measured results."""
+    omitted = [
+        column for column in frame.columns
+        if column == "config_hash" or "sha256" in str(column).lower() or "audit_manifest" in str(column).lower()
+    ]
+    display = frame.drop(columns=omitted)
+    time_columns = [column for column in display.columns if str(column).endswith("_time_s")]
+    for column in time_columns:
+        display[column] = display[column].map(format_duration)
+    return display.rename(columns={column: column[:-2] for column in time_columns})
 
 
 def _table_html(frame: pd.DataFrame, *, max_rows: int = 150) -> str:
+    frame = _public_table(frame)
     if frame.empty:
         return "<p class='empty'>无可展示记录；请查看相应排除/完整性表。</p>"
     shown = frame.head(max_rows).copy()
@@ -349,6 +354,7 @@ def _table_html(frame: pd.DataFrame, *, max_rows: int = 150) -> str:
 
 
 def _table_markdown(frame: pd.DataFrame, *, max_rows: int = 150) -> str:
+    frame = _public_table(frame)
     if frame.empty:
         return "无可展示记录；请查看相应排除/完整性表。"
     shown = frame.head(max_rows).copy()
@@ -578,7 +584,7 @@ def _write_figures(layout: BenchmarkOutputLayout, fold_metrics: pd.DataFrame) ->
         residuals = predictions["y_pred"] - predictions["y_true"]
         axes[1].hist(residuals, bins=min(30, max(5, int(np.sqrt(len(residuals))))), color="#2563eb", alpha=0.8)
         axes[1].axvline(0, color="black", linestyle="--", linewidth=1)
-        axes[1].set(xlabel="y_pred − y_true", ylabel="count", title="Residual distribution")
+        axes[1].set(xlabel="y_pred - y_true", ylabel="count", title="Residual distribution")
         scatter = pictures_dir / "prediction_residuals.png"
         figure.savefig(scatter, dpi=150)
         plt.close(figure)
@@ -612,6 +618,8 @@ def _write_time_figure(
     noncomparable = summary.loc[~comparable_mask].copy()
     comparable = comparable.sort_values("total_model_time_s", ascending=False, kind="stable")
     display = pd.concat([comparable, noncomparable], ignore_index=True)
+    max_total = float(comparable["total_model_time_s"].max()) if not comparable.empty else 0.0
+    scale, cjk_unit, ascii_unit = chart_time_unit(max_total)
     height = max(3.8, 0.62 * max(1, len(display)) + 1.1)
     # Reserve a footer band for the run/CV comparability note.  Letting the
     # automatic layout use the full canvas makes that note collide with the
@@ -626,13 +634,13 @@ def _write_time_figure(
         labels = [str(label_for_row(row)) for _, row in display.iterrows()]
         for position, (_, row) in zip(positions, display.iterrows()):
             if bool(row["is_time_comparable"]):
-                train = float(row["total_train_time_s"])
-                predict = float(row["total_predict_time_s"])
+                train = float(row["total_train_time_s"]) * scale
+                predict = float(row["total_predict_time_s"]) * scale
                 total = float(row["total_model_time_s"])
                 axis.barh(position, train, color="#2563eb", label="累计 CV 训练" if position == 0 else None)
                 axis.barh(position, predict, left=train, color="#f59e0b", label="累计 CV 预测" if position == 0 else None)
                 axis.annotate(
-                    _format_duration(total), xy=(total, position), xytext=(5, 0), textcoords="offset points",
+                    format_duration(total), xy=(total * scale, position), xytext=(5, 0), textcoords="offset points",
                     va="center", fontsize=8,
                 )
             else:
@@ -643,14 +651,13 @@ def _write_time_figure(
                     completed, status, "; " + detail if detail else "",
                 )
                 axis.text(0.01, position, text, transform=axis.get_yaxis_transform(), va="center", color="#6b7280", fontsize=8)
-        max_total = float(comparable["total_model_time_s"].max()) if not comparable.empty else 0.0
-        # Keep very fast smoke runs legible instead of stretching a 0.09 s
-        # comparison across a one-second axis; the small floor still renders
-        # an all-zero, but valid, timing fixture safely.
-        axis.set_xlim(0.0, max(0.01, max_total * 1.20))
+        axis.set_xlim(0.0, max_total * scale * 1.20 if max_total > 0.0 else 1.0)
         axis.set_yticks(positions, labels)
         axis.invert_yaxis()
-        axis.set_xlabel("累计 CV 建模时间（秒，训练 + 预测）" if cjk_font else "Cumulative CV model time (s; train + predict)")
+        axis.set_xlabel(
+            f"累计 CV 建模时间（{cjk_unit}，训练 + 预测）"
+            if cjk_font else f"Cumulative CV model time ({ascii_unit}, train + predict)"
+        )
         ascii_titles = {
             "combination_modeling_time.png": "Descriptor x model: combination modeling time",
             "descriptor_modeling_time.png": "Descriptor: cumulative modeling time",
@@ -889,14 +896,20 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     time_figures = (combination_time_figure, descriptor_time_figure, model_time_figure)
     figures = stability_figures + time_figures
     config = run_manifest.get("benchmark_config", {})
+    evaluation = {
+        **config.get("cv", {}),
+        "protocol": config.get("evaluation_protocol", "manifest_outer_cv"),
+        "grouping": config.get("grouping", {}),
+    }
+    split_source = run_manifest.get("external_split_manifest", {}).get("source_path")
+    if split_source:
+        evaluation["split_manifest"] = split_source
+    evaluation_table = pd.DataFrame(evaluation_rows({"evaluation": evaluation}), columns=["参数", "值"])
     hpo_report = _strict_hpo_report_rows(layout, config)
     diagnostic_table = _strict_diagnostic_table(layout, split_manifest)
     diagnostic_samples, diagnostic_groups = _strict_diagnostic_trace_tables(layout, split_manifest)
-    from yonod.diagnostics import summarize_diagnostic_rows
-    diagnostic_summary = pd.DataFrame(summarize_diagnostic_rows(diagnostic_table.to_dict(orient="records")))
     traceability = pd.DataFrame([{
-        "run_id": run_id, "config_hash": run_manifest.get("config_hash"),
-        "dataset_sha256": run_manifest.get("dataset_sha256"), "code_git_commit": run_manifest.get("code_git_commit"),
+        "run_id": run_id, "code_git_commit": run_manifest.get("code_git_commit"),
         "dataset_path": run_manifest.get("dataset_path"), "grouping": json.dumps(config.get("grouping", {}), ensure_ascii=False),
         "cv": json.dumps(config.get("cv", {}), ensure_ascii=False),
         "derived_from": ", ".join(
@@ -932,10 +945,9 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
             layout.picture_relative_to_report, html.escape(path.name), html.escape(caption),
         )
     time_note_html = (
-        "<p>时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，"
-        "均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；"
-        "不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，"
-        "不应与组合图相加，也不把共享特征化时间重复归因给模型。</p>"
+        "<p>累计建模耗时是该组合全部有效外部交叉验证折中的训练和预测耗时之和。"
+        "表格按每项耗时选用单位。描述符特征化与 CLI 端到端墙钟时间不计入柱状图。"
+        "柱状图统计完整且时间可比较的模型组合。描述符图和建模方法图用不同方式汇总同一组耗时。</p>"
     )
     time_section_html = (
         time_note_html
@@ -951,10 +963,11 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
     conclusion_html = "<ul>" + "".join("<li>{0}</li>".format(html.escape(line)) for line in model_conclusions + descriptor_conclusions) + "</ul>"
     html_content = """<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>YONOD Benchmark {run}</title>{css}</head><body>
 <h1>YONOD 严谨模型比较报告</h1><p>生成时间：{now}；本报告只读取已保存 artefacts，不会重新训练模型。</p>
- {trace}{protocol}{descriptors}{split}{protocol_guard}{performance}{hpo}{diagnostics}{time}{figures}{statistics}{tukey}{costs}{limits}
+ {trace}{evaluation}{protocol}{descriptors}{split}{protocol_guard}{performance}{metric_explanation}{hpo}{diagnostics}{time}{figures}{statistics}{tukey}{costs}{limits}
 </body></html>""".format(
         run=html.escape(run_id), css=css, now=html.escape(now),
         trace=section("实验可追溯性", _table_html(traceability)),
+        evaluation=section("评估方法", _table_html(evaluation_table)),
         protocol=section(
             "论文协议对齐状态",
             "<p>此处记录特征、切分与随机种子的运行证据；即使参数匹配，仍需另行核对数据、RDKit/sklearn 版本与指标后才能讨论数值复现。</p>"
@@ -971,11 +984,14 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
             "<p>strict benchmark 的比较/排名只纳入 <code>evaluation_protocol=manifest_outer_cv</code> 且 expected/valid fold 完整的组合；旧 <code>autogluon_internal_holdout</code> 只展示并明确排除。</p>"
             + _table_html(protocol_inventory),
         ),
-        performance=section("性能矩阵与完成度", _table_html(performance) + _table_html(tables["completeness"])),
+        performance=section("性能矩阵与完成度",
+            "<p>先计算各留出折的指标，再跨折汇总。" + population_sd_note(html=True) + "</p>"
+            + _table_html(performance) + _table_html(tables["completeness"])),
+        metric_explanation=section("指标怎么算", metric_explanation_html()),
         hpo=_section_hpo({"hpo_report": hpo_report}) if hpo_report is not None else "",
         diagnostics=section("训练与外层评估诊断",
             "<p>训练分数是已见样本上的拟合诊断；基线为每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不参与外层排名。</p>"
-            + _table_html(diagnostic_table) + "<h3>按 repeat 折间汇总</h3><p>标准差使用 ddof=0，各指标分别披露有效折数。</p>" + _table_html(diagnostic_summary)
+            + _table_html(diagnostic_table)
             + "<h3>全量外层留出样本与组追溯</h3><p>逐样本残差为 y_true − y_pred；组表保留全部组与折。少于 2 个留出样本的组不宜解释为稳定规律；opaque 组键不能推断反应类型。完整数据见 <a href='diagnostic_sample_trace.csv'>逐样本 CSV</a> 与 <a href='diagnostic_group_trace.csv'>逐组 CSV</a>。</p>"
             + _table_html(diagnostic_groups) + _table_html(diagnostic_samples)),
         time=section("建模耗时与成本对比", time_section_html),
@@ -990,7 +1006,8 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "", "> 本报告只读取 `{0}/`、`{1}/`、`{2}/` 和 `{3}/`，不重新训练模型。".format(
             *(layout.artifact_reference(name) for name in ("manifests", "predictions", "folds", "metrics"))
         ), "",
-        "## 实验可追溯性", "", _table_markdown(traceability), "", "## 论文协议对齐状态", "",
+        "## 实验可追溯性", "", _table_markdown(traceability), "",
+        "## 评估方法", "", _table_markdown(evaluation_table), "", "## 论文协议对齐状态", "",
         "此处记录特征、切分与随机种子的运行证据；流程对齐不等同于论文数值复现，仍需核对数据和软件版本。", "",
         _table_markdown(protocol_alignment), "", "## 切分审计", "", _table_markdown(split_audit),
         "", "## 描述符预计算状态", "",
@@ -999,17 +1016,18 @@ def generate_benchmark_report(run_dir: Path | str) -> BenchmarkReportResult:
         "", "## 模型协议与严格排名守卫", "",
         "strict benchmark 的比较/排名只纳入 `evaluation_protocol=manifest_outer_cv` 且 expected/valid fold 完整的组合；旧 `autogluon_internal_holdout` 只展示并明确排除。", "",
         _table_markdown(protocol_inventory),
-        "", "## 性能矩阵与完成度", "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
+        "", "## 性能矩阵与完成度", "", "先计算各留出折的指标，再跨折汇总。" + population_sd_note(),
+        "", _table_markdown(performance), "", _table_markdown(tables["completeness"]),
+        "", "## 指标怎么算", "", metric_explanation_markdown(),
         "", *_markdown_hpo({"hpo_report": hpo_report}),
         "", "## 训练与外层评估诊断", "",
         "训练分数是已见样本上的拟合诊断；基线为每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不参与外层排名。", "",
-        _table_markdown(diagnostic_table), "", "### 按 repeat 折间汇总", "",
-        "标准差使用 ddof=0，各指标分别披露有效折数。", "", _table_markdown(diagnostic_summary), "",
+        _table_markdown(diagnostic_table), "",
         "### 全量外层留出样本与组追溯", "",
         "逐样本残差为 y_true − y_pred；组表保留全部组与折。少于 2 个留出样本的组不宜解释为稳定规律；opaque 组键不能推断反应类型。完整数据：[逐样本 CSV](diagnostic_sample_trace.csv)、[逐组 CSV](diagnostic_group_trace.csv)。", "",
         _table_markdown(diagnostic_groups), "", _table_markdown(diagnostic_samples), "",
         "", "## 建模耗时与成本对比", "",
-        "时间口径：`total_model_time_s = total_train_time_s + total_predict_time_s`，均为该组合全部有效外部 CV fold 的累计值。描述符特征化与 CLI 端到端墙钟时间不计入柱状图；不完整、缺失或非法时间的组合保留状态，但不进入耗时排序。描述符和建模方法图是组合成本的两种汇总视图，不应与组合图相加，也不把共享特征化时间重复归因给模型。",
+        "累计建模耗时是该组合全部有效外部交叉验证折中的训练和预测耗时之和。表格按每项耗时选用单位。描述符特征化与 CLI 端到端墙钟时间不计入柱状图。柱状图统计完整且时间可比较的模型组合。描述符图和建模方法图用不同方式汇总同一组耗时。",
         "", "### 描述符 × 建模方法组合", "", _table_markdown(tables["combination_time_summary"]),
         "", "![组合级建模耗时柱状图]({0}/{1})".format(layout.picture_relative_to_report, combination_time_figure.name),
         "", "### 按描述符汇总", "", "每根柱为该描述符下所有完整且时间可比较模型组合的累计时间。",

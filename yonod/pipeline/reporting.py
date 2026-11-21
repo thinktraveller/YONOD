@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from yonod.config.contracts import resolve_config_path
 from yonod.universal.report import generate_markdown_report, generate_report
 
 
@@ -103,13 +104,18 @@ def _metrics(predictions: pd.DataFrame, folds: pd.DataFrame, manifest: Mapping[s
         r2 = float(r2_score(truth, predicted)) if len(truth) >= 2 and np.unique(truth).size > 1 else float("nan")
         rows.append({"repeat": repeat, "r2": r2, "rmse": float(np.sqrt(mean_squared_error(truth, predicted))), "mae": float(mean_absolute_error(truth, predicted))})
     aggregate = pd.DataFrame(rows)
-    model_train_time = pd.to_numeric(folds.get("model_train_time_s"), errors="coerce") if "model_train_time_s" in folds else pd.Series(dtype=float)
+    def total_time(column: str) -> float:
+        if column not in folds:
+            return float("nan")
+        values = pd.to_numeric(folds[column], errors="coerce").to_numpy(dtype=float)
+        return float(values.sum()) if np.isfinite(values).all() and (values >= 0).all() else float("nan")
     return pd.DataFrame([{
         "descriptor": str(manifest["feature_id"]), "model": str(manifest["model"]),
         "r2": aggregate["r2"].mean(), "r2_std": aggregate["r2"].std(ddof=0),
         "rmse": aggregate["rmse"].mean(), "rmse_std": aggregate["rmse"].std(ddof=0),
         "mae": aggregate["mae"].mean(), "mae_std": aggregate["mae"].std(ddof=0),
-        "train_time_s": float(model_train_time.sum()) if not model_train_time.empty else float("nan"),
+        "train_time_s": total_time("model_train_time_s"),
+        "predict_time_s": total_time("model_predict_time_s"),
         "evaluation_protocol": str((manifest.get("evaluation") or {}).get("protocol", "outer_kfold")),
         "expected_folds": int(manifest.get("n_folds", len(folds))), "completed_folds": int(len(folds)),
         "cv": int(manifest.get("n_folds", len(folds))), "oof_complete": True,
@@ -340,6 +346,22 @@ def _diagnostic_rows(run_dir: Path, predictions: pd.DataFrame, folds: pd.DataFra
     return rows
 
 
+def _configuration_context(config, snapshot_path, config_path=None):
+    dataset = config.get("dataset") or {}
+    dataset_path = dataset.get("path", "—")
+    if config_path is not None and dataset_path != "—":
+        dataset_path = resolve_config_path(config_path, dataset_path)
+    roles = dataset.get("column_roles") or {}
+    return {
+        "run_config": config,
+        "config_path": str(config_path or snapshot_path),
+        "csv_path": str(dataset_path),
+        "smiles_cols": [column for role in ("reactants", "products", "others") for column in (roles.get(role) or [])],
+        "numeric_cols": list(roles.get("conditions") or []),
+        "ordinary_oof": True,
+    }
+
+
 def rebuild_schema2_report(run_dir: Path | str, *, output_root: Path | str | None = None, formats: Sequence[str] | None = None) -> ReportResult:
     run_dir = Path(run_dir).resolve()
     manifest_path = run_dir / "run_manifest.yaml"
@@ -378,6 +400,7 @@ def rebuild_schema2_report(run_dir: Path | str, *, output_root: Path | str | Non
             pictures.append(picture)
         metadata = source.get("metadata") if isinstance(source.get("metadata"), Mapping) else {}
         info = {"task_name": source.get("project_name", manifest["run_id"]), "project_folder": str(root), "csv_path": "<stored training result>", "n_samples": manifest.get("n_samples"), "label_col": manifest.get("label_column"), "n_combinations": 1, "run_id": manifest["run_id"], "artifact_id": manifest["artifact_id"], "split_identity": manifest["split_identity"], "model_request": manifest.get("model_request"), "dataset_citation": metadata.get("doi"), "dataset_url": metadata.get("source_url", metadata.get("repo_url")), "dataset_notes": metadata.get("notes", metadata.get("source_notes")), "numeric_audit_rows": _numeric_report_rows(run_dir, folds, manifest), "hpo_report": _hpo_report_rows(run_dir, predictions, folds, manifest), "diagnostic_rows": _diagnostic_rows(run_dir, predictions, folds, manifest)}
+        info.update(_configuration_context(source, source_path))
         metrics = _metrics(predictions, folds, manifest)
         html_path = generate_report(metrics, info, staging, scatter_paths=pictures) if "html" in selected else None
         markdown_path = generate_markdown_report(metrics, info, staging, scatter_paths=pictures) if "markdown" in selected else None
@@ -405,6 +428,8 @@ def rebuild_schema2_report(run_dir: Path | str, *, output_root: Path | str | Non
 def rebuild_schema2_summary_report(
     run_dirs: Sequence[Path | str], *, output_root: Path | str,
     formats: Sequence[str] | None = None,
+    report_config: Mapping[str, Any] | None = None,
+    config_path: Path | None = None,
 ) -> ReportResult:
     """Atomically render one task-level report spanning completed combinations.
 
@@ -418,6 +443,7 @@ def rebuild_schema2_summary_report(
         raise ReportServiceError("没有完成的训练组合可用于生成最终报告")
     records: list[tuple[Mapping[str, Any], pd.DataFrame, pd.DataFrame]] = []
     source: Mapping[str, Any] | None = None
+    first_snapshot = None
     for run_dir in directories:
         manifest = _load_yaml(run_dir / "run_manifest.yaml")
         if manifest.get("kind") != "yonod_training_run" or manifest.get("schema_version") != "1.0" or manifest.get("status") != "complete":
@@ -438,8 +464,11 @@ def rebuild_schema2_summary_report(
         candidate_source = _load_yaml(source_path)
         if source is None:
             source = candidate_source
+            first_snapshot = source_path
         records.append((manifest, predictions, folds))
     assert source is not None
+    if report_config is not None:
+        source = report_config
     selected = [str(v).strip().lower() for v in (formats if formats is not None else ((source.get("outputs") or {}).get("report_formats", ["html", "markdown"]))) ]
     aliases = {"html": "html", "markdown": "markdown", "md": "markdown"}
     try:
@@ -477,6 +506,7 @@ def rebuild_schema2_summary_report(
             "numeric_audit_rows": [row for (manifest, _, folds), run_dir in zip(records, directories) for row in _numeric_report_rows(run_dir, folds, manifest)],
             "diagnostic_rows": [row for (manifest, predictions, folds), run_dir in zip(records, directories) for row in _diagnostic_rows(run_dir, predictions, folds, manifest)],
         }
+        info.update(_configuration_context(source, first_snapshot, config_path))
         hpo_sections = [section for (manifest, predictions, folds), run_dir in zip(records, directories)
                         if (section := _hpo_report_rows(run_dir, predictions, folds, manifest)) is not None]
         if hpo_sections:

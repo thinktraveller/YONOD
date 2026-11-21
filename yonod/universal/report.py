@@ -30,10 +30,15 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from yonod.config.contracts import ranking_weights
+from yonod.universal.report_text import (
+    chart_time_unit, evaluation_rows, format_duration, metric_explanation_html,
+    metric_explanation_markdown, population_sd_note, ranking_formula,
+)
 
 # ─────────────────────────────── 加权排名 ───────────────────────────────────── #
 
-def rank_combinations(metrics_df: pd.DataFrame) -> pd.DataFrame:
+def rank_combinations(metrics_df: pd.DataFrame, *, weights=None) -> pd.DataFrame:
     """按 §14.5.3 公式对可审计外层 CV 组合加权排名。
 
     当输入表包含协议/折数/OOF 守卫字段时，只有同时满足
@@ -57,13 +62,14 @@ def rank_combinations(metrics_df: pd.DataFrame) -> pd.DataFrame:
 
     max_rmse = float(df["rmse"].max())
     max_mae = float(df["mae"].max())
+    weights = ranking_weights(None) if weights is None else weights
     df["score"] = (
-        df["r2"] * 0.5
-        + (1 - df["rmse"] / max(max_rmse, 1e-9)) * 0.3
-        + (1 - df["mae"] / max(max_mae, 1e-9)) * 0.2
+        df["r2"] * weights["r2"]
+        + (1 - df["rmse"] / max(max_rmse, 1e-9)) * weights["rmse"]
+        + (1 - df["mae"] / max(max_mae, 1e-9)) * weights["mae"]
     )
 
-    df = df.sort_values("score", ascending=False).reset_index(drop=True)
+    df = df.sort_values("score", ascending=False, kind="stable").reset_index(drop=True)
     df["rank"] = df.index + 1
     df["folds"] = df.apply(_folds_display, axis=1)
     df["reason"] = ""
@@ -111,16 +117,7 @@ def _fmt(v: Any, digits: int = 4) -> str:
 
 
 def _fmt_time(v: Any) -> str:
-    """将秒数格式化为人类可读字符串，如 '3.2s' 或 '1m 23s'。"""
-    try:
-        s = float(v)
-    except (TypeError, ValueError):
-        return "—"
-    if not math.isfinite(s) or s < 0.0:
-        return "—"
-    if s < 60:
-        return f"{s:.1f}s"
-    return f"{int(s)//60}m {int(s)%60}s"
+    return format_duration(v)
 
 
 def _fmt_metric_with_std(mean: Any, std: Any, digits: int = 4) -> str:
@@ -499,17 +496,18 @@ def _write_universal_time_figure(
     figure, axis = plt.subplots(figsize=(10, max(3.6, 0.62 * len(comparable) + 1.0)), constrained_layout=True)
     positions = list(range(len(comparable)))
     totals = comparable["total_train_time_s"].to_numpy(dtype=float)
-    axis.barh(positions, totals, color="#2563eb")
+    multiplier, unit, _ = chart_time_unit(float(totals.max()))
+    displayed = totals * multiplier
+    axis.barh(positions, displayed, color="#2563eb")
     axis.set_yticks(positions, labels)
     axis.invert_yaxis()
-    axis.set_xlabel("累计训练时间（秒）")
+    axis.set_xlabel(f"累计训练时间（{unit}）")
     axis.set_title(title)
     axis.grid(axis="x", alpha=0.2)
-    max_total = float(totals.max()) if len(totals) else 0.0
-    axis.set_xlim(0.0, max(0.01, max_total * 1.18))
-    for position, total in zip(positions, totals):
-        axis.annotate(_fmt_time(total), xy=(total, position), xytext=(5, 0), textcoords="offset points", va="center", fontsize=8)
-    figure.text(0.01, 0.01, "仅含 metrics_df.train_time_s；未提供预测时间，不能解释为端到端墙钟时间。", fontsize=7, color="#56657a")
+    axis.set_xlim(0.0, max(0.01, float(displayed.max()) * 1.18))
+    for position, total, value in zip(positions, totals, displayed):
+        axis.annotate(_fmt_time(total), xy=(value, position), xytext=(5, 0), textcoords="offset points", va="center", fontsize=8)
+    figure.text(0.01, 0.01, "图表汇总模型训练时间。", fontsize=7, color="#56657a")
     pictures_dir = out_dir / "pictures"
     pictures_dir.mkdir(parents=True, exist_ok=True)
     path = pictures_dir / filename
@@ -547,18 +545,36 @@ def _section_modeling_time(metrics_df: pd.DataFrame, out_dir: Path) -> str:
         if not image:
             return "<p class='note'>没有可比较的有限非负训练时间，因此未生成零高柱状图。</p>"
         return "<figure style='text-align:center'><img src='data:image/png;base64,{0}' alt='{1}' style='max-width:100%'/><figcaption class='note'>{1}；同一 PNG 由 Markdown 报告相对引用。</figcaption></figure>".format(image, _esc(caption))
+    prediction_rows = _prediction_time_rows(metrics_df)
+    prediction_section = ""
+    if prediction_rows:
+        prediction_section = (
+            "<h3>模型预测耗时</h3>"
+            + pd.DataFrame(prediction_rows, columns=["描述符", "模型", "预测耗时"]).to_html(index=False, escape=True)
+        )
     return """
 <section>
 <h2>5 · 建模耗时与成本对比</h2>
-<p class="note">本路径仅汇总输入 <code>metrics_df.train_time_s</code>，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。描述符和建模方法图是组合时间的两种汇总视图，不与组合图相加；共享描述符特征化时间未提供，因此不重复归因。异常或缺失时间标为不可比较，不以零秒显示。</p>
+<p class="note">三张图按不同方式汇总同一组模型训练时间。预测耗时来自保存的模型计时，单独列出。</p>
 <h3>描述符 × 建模方法组合</h3>{combination_table}{combination_figure}
 <h3>按描述符汇总</h3><p class="note">每根柱为该描述符下所有完整且时间可比较模型组合的累计训练时间。</p>{descriptor_table}{descriptor_figure}
 <h3>按建模方法汇总</h3><p class="note">每根柱为该建模方法在所有描述符下完整且时间可比较组合的累计训练时间。</p>{model_table}{model_figure}
+{prediction_section}
 </section>""".format(
         combination_table=table_for(summary), combination_figure=figure_for("combination", "组合训练时间柱状图"),
         descriptor_table=table_for(dimension_summaries["descriptor"]), descriptor_figure=figure_for("descriptor", "描述符累计训练时间柱状图"),
         model_table=table_for(dimension_summaries["model"]), model_figure=figure_for("model", "建模方法累计训练时间柱状图"),
+        prediction_section=prediction_section,
     )
+
+
+def _prediction_time_rows(metrics_df):
+    if "predict_time_s" not in metrics_df.columns:
+        return []
+    descriptor = _first_existing_column(metrics_df, ["descriptor", "desc_name"])
+    model = _first_existing_column(metrics_df, ["model", "model_name"])
+    return [(str(row[descriptor]), str(row[model]), _fmt_time(row["predict_time_s"]))
+            for _, row in metrics_df.iterrows()]
 
 
 # ─────────────────────────────── HTML 段落 ──────────────────────────────────── #
@@ -635,6 +651,8 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
 <p class="subtitle">生成时间：{now} &nbsp;|&nbsp; 评估组合数：{n_combo}</p>
 <table>
 <tr><th style="width:160px;text-align:left">任务名称</th><td style="text-align:left">{name}</td></tr>
+<tr><th style="text-align:left">运行 YAML</th><td style="text-align:left"><code>{_esc(task_info.get("config_path", "—"))}</code></td></tr>
+<tr><th style="text-align:left">结果目录</th><td style="text-align:left"><code>{_esc(task_info.get("project_folder", "—"))}</code></td></tr>
 <tr><th style="text-align:left">CSV 路径</th><td style="text-align:left"><code>{csv_p}</code></td></tr>
 <tr><th style="text-align:left">有效样本量</th><td style="text-align:left">{n_rows}</td></tr>
 <tr><th style="text-align:left">SMILES 列</th><td style="text-align:left"><code>{smi_c}</code></td></tr>
@@ -642,6 +660,24 @@ def _section_intro(task_info: Dict[str, Any], now: str) -> str:
 <tr><th style="text-align:left">标签列</th><td style="text-align:left"><code>{lbl}</code></td></tr>
 </table>{dataset_section}
 </section>"""
+
+
+def _evaluation_context(task_info):
+    rows = evaluation_rows(task_info.get("run_config") or {})
+    scope = ""
+    if task_info.get("ordinary_oof"):
+        scope = "每轮先合并所有折外预测再算指标，随后跨轮计算均值和总体标准差。"
+    return rows, scope
+
+
+def _section_evaluation(task_info):
+    rows, scope = _evaluation_context(task_info)
+    if not rows and not scope:
+        return ""
+    content = pd.DataFrame(rows, columns=["参数", "值"]).to_html(index=False, escape=True) if rows else ""
+    if scope:
+        content += f"<p>{scope}</p><p>{population_sd_note(html=True)}</p>"
+    return f"<section><h2>评估方法</h2>{content}</section>"
 
 
 def _section_numeric_audit(task_info: Dict[str, Any]) -> str:
@@ -820,48 +856,10 @@ def _section_grid(df: pd.DataFrame) -> str:
 </section>"""
 
 
-def _section_glossary() -> str:
-    """§14.5.2 固定指标解释文字（含 MathJax LaTeX 公式）。"""
-    return r"""
-<section>
-<h2>2 · 指标解读与计算公式</h2>
-
-<p><b>R²（决定系数）</b>：衡量模型预测方差占真实方差的比例，取值上限为 1。</p>
-<div class="formula-block">
-  \[R^2 = 1 - \frac{\displaystyle\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{\displaystyle\sum_{i=1}^{n}(y_i - \bar{y})^2}\]
-  <span style="font-size:0.82rem;color:#4b5563">\(y_i\)：真实值 &ensp; \(\hat{y}_i\)：预测值 &ensp; \(\bar{y}\)：真实值均值</span>
-</div>
-<ul style="margin:4px 0 12px 20px;line-height:1.8">
-  <li>R² &gt; 0.85：预测可靠性较强，可用于辅助筛选实验条件</li>
-  <li>R² 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎</li>
-  <li>R² &lt; 0.7 或负值：拟合效果弱；样本量极少时（如 5 折 CV 每折仅 2 个测试样本）负值属正常现象</li>
-</ul>
-
-<p><b>RMSE（均方根误差）</b>：对大误差样本更敏感，平方项会放大异常值。标签归一化到 [0,1] 时，单位等同于产率百分点。</p>
-<div class="formula-block">
-  \[\mathrm{RMSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}\]
-  <span style="font-size:0.82rem;color:#4b5563">\(n\)：样本量</span>
-</div>
-<ul style="margin:4px 0 12px 20px;line-height:1.8">
-  <li>RMSE &lt; 0.05：平均误差约 5 个百分点，接近实验重复性误差范围</li>
-  <li>RMSE 0.05～0.10：中等误差，可区分高产率和低产率区间</li>
-  <li>RMSE &gt; 0.10：误差偏大，不建议用于定量预测</li>
-</ul>
-
-<p><b>MAE（平均绝对误差）</b>：对每个样本的预测偏差取绝对值后平均，不受极端样本干扰，反映"典型单次预测"误差。</p>
-<div class="formula-block">
-  \[\mathrm{MAE} = \frac{1}{n}\sum_{i=1}^{n}\left|y_i - \hat{y}_i\right|\]
-</div>
-<ul style="margin:4px 0 12px 20px;line-height:1.8">
-  <li>MAE &lt; 0.04：典型偏差极小，预测稳定性好</li>
-  <li>MAE 0.04～0.08：中等偏差，结合 R² 综合评估</li>
-  <li>MAE &gt; 0.08：典型偏差较大，预测结果存在系统性偏移风险</li>
-</ul>
-
-<p class="note">综合排名权重：
-  \(S = R^2 \times 0.5 \;+\; \left(1 - \dfrac{\mathrm{RMSE}}{\mathrm{RMSE}_{\max}}\right) \times 0.3 \;+\; \left(1 - \dfrac{\mathrm{MAE}}{\mathrm{MAE}_{\max}}\right) \times 0.2\)
-</p>
-</section>"""
+def _section_glossary(weights=None) -> str:
+    ranking = ranking_formula(weights, html=True) if weights is not None else ""
+    return ("<section><h2>2 · 指标解读与计算公式</h2>"
+            + metric_explanation_html() + ranking + "</section>")
 
 
 def _section_protocol_guard(metrics_df: pd.DataFrame) -> str:
@@ -1204,23 +1202,21 @@ def generate_report(
     report_dir.mkdir(parents=True, exist_ok=True)
 
     now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ranked = rank_combinations(metrics_df)
+    weights = ranking_weights((task_info.get("run_config") or {}).get("outputs"))
+    ranked = rank_combinations(metrics_df, weights=weights)
 
-    from yonod.diagnostics import summarize_diagnostic_rows
     diagnostic_rows = task_info.get("diagnostic_rows") or []
-    diagnostic_summary = summarize_diagnostic_rows(diagnostic_rows)
     diagnostic_section = "<section><h2>训练与外层评估诊断</h2><p>训练分数是已见样本上的拟合诊断，不代表泛化；基线常数取每折 outer-train 标签均值。R² 差距为训练减外层，RMSE/MAE 差距为外层减训练。缺失状态不会参与外层排名。</p>"
     diagnostic_section += (pd.DataFrame(diagnostic_rows).to_html(index=False, escape=True, classes="data-table")
                            if diagnostic_rows else "<p>未记录训练诊断。</p>") + "</section>"
-    if diagnostic_summary:
-        diagnostic_section += "<section><h2>训练诊断折间汇总</h2><p>按 repeat 单列；标准差使用 ddof=0，各指标分别披露有效折数。原普通 OOF 仍按每个 repeat 汇总。</p>" + pd.DataFrame(diagnostic_summary).to_html(index=False, escape=True, classes="data-table") + "</section>"
     body = (
         _section_intro(task_info, now)
+        + _section_evaluation(task_info)
         + _section_numeric_audit(task_info)
         + _section_hpo(task_info)
         + diagnostic_section
         + _section_grid(metrics_df)
-        + _section_glossary()
+        + _section_glossary(weights if not ranked.empty else None)
         + _section_protocol_guard(metrics_df)
         + _section_ranking(ranked)
         + _section_column_mapping(task_info)
@@ -1328,6 +1324,33 @@ def generate_markdown_report(
         "",
     ]
 
+    # ── 任务信息 ─────────────────────────────────────────────────────────────
+    lines += [
+        "## 任务信息",
+        "",
+        "| 项目 | 内容 |",
+        "|---|---|",
+        f"| 任务名称 | {task_name} |",
+        f"| 运行 YAML | `{_md(task_info.get('config_path', '—'))}` |",
+        f"| 项目文件夹 | `{task_info.get('project_folder', '—')}` |",
+        f"| CSV 路径 | `{task_info.get('csv_path', '—')}` |",
+        f"| 有效样本量 | {task_info.get('n_samples', '—')} |",
+        f"| SMILES 列 | `{task_info.get('smiles_cols', '—')}` |",
+        f"| 数值辅助列 | `{task_info.get('numeric_cols', '（无）')}` |",
+        f"| 标签列 | `{task_info.get('label_col', '—')}` |",
+        "",
+    ]
+
+    evaluation, scope = _evaluation_context(task_info)
+    if evaluation or scope:
+        lines += ["## 评估方法", ""]
+        if evaluation:
+            lines += ["| 参数 | 值 |", "|---|---|"]
+            lines += [f"| {label} | {_md(value)} |" for label, value in evaluation]
+            lines.append("")
+        if scope:
+            lines += [scope, "", population_sd_note(), ""]
+
     numeric_rows = task_info.get("numeric_audit_rows") or []
     if numeric_rows:
         lines += [
@@ -1351,32 +1374,8 @@ def generate_markdown_report(
         for row in diagnostic_rows:
             lines.append("| " + " | ".join(_md(row.get(key)) for key in columns) + " |")
         lines.append("")
-        from yonod.diagnostics import summarize_diagnostic_rows
-        summaries = summarize_diagnostic_rows(diagnostic_rows)
-        summary_columns = list(summaries[0])
-        lines += ["### 折间汇总", "", "按 repeat 单列；标准差使用 ddof=0，各指标分别披露有效折数。原普通 OOF 仍按每个 repeat 汇总。", "",
-                  "| " + " | ".join(summary_columns) + " |", "|" + "|".join("---" for _ in summary_columns) + "|"]
-        for row in summaries:
-            lines.append("| " + " | ".join(_md(row.get(key)) for key in summary_columns) + " |")
-        lines.append("")
     else:
         lines += ["未记录训练诊断。", ""]
-
-    # ── 任务信息 ─────────────────────────────────────────────────────────────
-    lines += [
-        "## 任务信息",
-        "",
-        "| 项目 | 内容 |",
-        "|---|---|",
-        f"| 任务名称 | {task_name} |",
-        f"| 项目文件夹 | `{task_info.get('project_folder', '—')}` |",
-        f"| CSV 路径 | `{task_info.get('csv_path', '—')}` |",
-        f"| 有效样本量 | {task_info.get('n_samples', '—')} |",
-        f"| SMILES 列 | `{task_info.get('smiles_cols', '—')}` |",
-        f"| 数值辅助列 | `{task_info.get('numeric_cols', '（无）')}` |",
-        f"| 标签列 | `{task_info.get('label_col', '—')}` |",
-        "",
-    ]
 
     # ── 数据集来源（可选）───────────────────────────────────────────────────
     citation = task_info.get("dataset_citation")
@@ -1472,7 +1471,8 @@ def generate_markdown_report(
     lines.append("")
 
     # ── 推荐组合 ─────────────────────────────────────────────────────────────
-    ranked = rank_combinations(metrics_df)
+    weights = ranking_weights((task_info.get("run_config") or {}).get("outputs"))
+    ranked = rank_combinations(metrics_df, weights=weights)
     lines += ["---", "", "## 推荐组合（严格外层 CV 加权排名）", ""]
     if not ranked.empty:
         has_rk_time = "train_time_s" in ranked.columns and not pd.to_numeric(ranked["train_time_s"], errors="coerce").dropna().empty
@@ -1518,7 +1518,7 @@ def generate_markdown_report(
         lines += ["未提供组合级 `train_time_s`，无法绘制建模耗时图；报告未使用空值或零值代替耗时。", ""]
     else:
         lines += [
-            "本路径仅汇总输入 `metrics_df.train_time_s`，未提供预测时间，故图表仅表示训练时间，不表示训练加预测时间或 CLI 端到端墙钟时间。描述符和建模方法图是组合时间的两种汇总视图，不与组合图相加；共享描述符特征化时间未提供，因此不重复归因。异常或缺失时间标为不可比较，不以零秒显示。",
+            "三张图按不同方式汇总同一组模型训练时间。预测耗时来自保存的模型计时，单独列出。",
             "",
             "### 描述符 × 建模方法组合",
             "",
@@ -1566,6 +1566,12 @@ def generate_markdown_report(
                 lines += ["", "![{0}](../pictures/{1})".format(label, figure.name)]
             else:
                 lines += ["", "> 没有可比较的有限非负训练时间，因此未生成零高柱状图。"]
+        lines.append("")
+
+    prediction_rows = _prediction_time_rows(metrics_df)
+    if prediction_rows:
+        lines += ["", "### 模型预测耗时", "", "| 描述符 | 模型 | 预测耗时 |", "|---|---|---|"]
+        lines += [f"| {_md(descriptor)} | {_md(model)} | {duration} |" for descriptor, model, duration in prediction_rows]
         lines.append("")
 
     # ── 列映射与分类 ─────────────────────────────────────────────────────────
@@ -1675,36 +1681,10 @@ def generate_markdown_report(
             label = _md(picture.stem.replace("scatter_", "").replace("_", " × "))
             lines += [f"### {label}", "", f"![{label}]({relative.as_posix()})", ""]
 
-    # ── 指标说明 ─────────────────────────────────────────────────────────────
-    lines += [
-        "---",
-        "",
-        "## 指标说明",
-        "",
-        "**R²（决定系数）**：衡量模型预测方差占真实方差的比例，取值上限为 1。",
-        "",
-        "- R² > 0.85：预测可靠性较强，可用于辅助筛选实验条件",
-        "- R² 0.7～0.85：中等预测能力，趋势判断可参考，具体数值需谨慎",
-        "- R² < 0.7 或负值：拟合效果弱；样本量极少时负值属正常现象",
-        "",
-        "**RMSE（均方根误差）**：对大误差样本更敏感。标签归一化到 [0,1] 时，单位等同于产率百分点。",
-        "",
-        "- RMSE < 0.05：平均误差约 5 个百分点，接近实验重复性误差范围",
-        "- RMSE 0.05～0.10：中等误差，可区分高产率和低产率区间",
-        "- RMSE > 0.10：误差偏大，不建议用于定量预测",
-        "",
-        "**MAE（平均绝对误差）**：对每个样本的预测偏差取绝对值后平均。",
-        "",
-        "- MAE < 0.04：典型偏差极小，预测稳定性好",
-        "- MAE 0.04～0.08：中等偏差，结合 R² 综合评估",
-        "- MAE > 0.08：典型偏差较大",
-        "",
-        "**综合评分**：S = R² × 0.5 + (1 − RMSE / RMSE_max) × 0.3 + (1 − MAE / MAE_max) × 0.2",
-        "",
-        "---",
-        "",
-        f"*由 YONOD report.py 自动生成 · {now}*",
-    ]
+    lines += ["---", "", "## 指标说明", "", metric_explanation_markdown(), ""]
+    if not ranked.empty:
+        lines += [ranking_formula(weights), ""]
+    lines += ["---", "", f"*由 YONOD report.py 自动生成 · {now}*"]
 
     out_path = report_dir / filename
     out_path.write_text("\n".join(lines), encoding="utf-8")

@@ -30,6 +30,9 @@ from ..config.contracts import ConfigContractError, resolve_config_path
 from ..config.loader import ConfigLoadError, load_run_config
 from ..model_factory import ModelConfigurationError, ResolvedModelConfig, construct_estimator, resolve_model_config
 from ..universal.feature_builder import build_universal_features
+from ..universal.report_text import (
+    evaluation_rows, format_duration, metric_explanation_html, metric_explanation_markdown,
+)
 from ..runtime_identity import runtime_identity, require_runtime_identity
 
 
@@ -580,7 +583,13 @@ def _markdown_table(frame: pd.DataFrame) -> str:
 
 def _render_reports(contract: FrozenExternalContract, metrics: pd.DataFrame, paths: Mapping[str, Path]) -> None:
     population = contract.population
-    table = _markdown_table(metrics)
+    display_metrics = metrics.drop(columns=["config_hash"], errors="ignore")
+    time_columns = [column for column in ("train_time_s", "predict_time_s") if column in display_metrics]
+    for column in time_columns:
+        display_metrics[column] = display_metrics[column].map(format_duration)
+    display_metrics = display_metrics.rename(columns={column: column[:-2] for column in time_columns})
+    evaluation = pd.DataFrame(evaluation_rows(contract.config.raw), columns=["参数", "值"])
+    table = _markdown_table(display_metrics)
     markdown = "\n".join([
         "# Frozen development → external test report",
         "",
@@ -596,30 +605,35 @@ def _render_reports(contract: FrozenExternalContract, metrics: pd.DataFrame, pat
         "- train/external sample-ID intersection: 0 (validated before descriptors or fit)",
         "- external labels were loaded only after each prediction was generated in memory.",
         "",
+        "## 评估方法",
+        "",
+        _markdown_table(evaluation),
+        "",
         "## Single external-test metrics",
         "",
         table,
         "",
         "No confidence interval, hypothesis test, or equivalence conclusion is produced here. Those require the pre-specified grouped analysis over the saved external prediction records.",
         "",
-        "## Audit fingerprints",
+        "## 指标怎么算",
         "",
-        "- external standardized data SHA-256: `{0}`".format(contract.config.external_expected_sha256),
-        "- audit manifest SHA-256: `{0}`".format(contract.config.audit_manifest_sha256),
-        "- train sample-ID SHA-256: `{0}`".format(population["train_sample_id_sha256"]),
-        "- external sample-ID SHA-256: `{0}`".format(population["external_sample_id_sha256"]),
+        metric_explanation_markdown(),
     ]) + "\n"
-    html_table = metrics.to_html(index=False, float_format=lambda value: "{0:.6f}".format(value))
+    html_table = display_metrics.to_html(index=False, float_format=lambda value: "{0:.6f}".format(value))
     html_report = """<!doctype html><html><head><meta charset=\"utf-8\"><title>Frozen external test</title></head><body>
 <h1>Frozen development → external test report</h1>
 <p><strong>Protocol:</strong> {protocol}. One frozen development fit and one external prediction; not CV and not eligible for strict-CV ranking.</p>
 <ul><li>run ID: <code>{run_id}</code></li><li>train rows: {n_train}</li><li>external rows: {n_external}</li><li>external groups: {n_groups}</li><li>train/external sample-ID intersection: 0</li><li>external labels loaded after prediction</li></ul>
+<h2>评估方法</h2>{evaluation}
 <h2>Single external-test metrics</h2>{table}
 <p>No interval, hypothesis test, or equivalence conclusion is produced by this single-fit adapter.</p>
+<h2>指标怎么算</h2>{metric_explanation}
 </body></html>""".format(
         protocol=html.escape(EXTERNAL_PROTOCOL), run_id=html.escape(contract.run_id),
         n_train=population["n_train"], n_external=population["n_external"],
         n_groups=population["n_external_groups"], table=html_table,
+        evaluation=evaluation.to_html(index=False, escape=True),
+        metric_explanation=metric_explanation_html(),
     )
     _atomic_text(markdown, paths["report"] / "external_test_report.md")
     _atomic_text(html_report, paths["report"] / "external_test_report.html")

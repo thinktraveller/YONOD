@@ -97,6 +97,10 @@ evaluation:
 outputs:
   root: ./result/example/yonod_schema2_smoke
   report_formats: [html, markdown]
+  # 可选。普通外层交叉验证报告按下列权重计算综合分，训练配置与划分照常使用。
+  # 三项均为 0 到 1 的有限数值且合计为 1。省略时使用以下权重。
+  # ranking:
+  #   weights: {r2: 0.5, rmse: 0.3, mae: 0.2}
   diagnostics:
     enabled: true
     save_train_predictions: false

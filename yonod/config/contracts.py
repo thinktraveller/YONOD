@@ -8,6 +8,7 @@ module before any data, descriptor, or model dependency is loaded.
 from __future__ import annotations
 
 import copy
+from math import fsum, isclose
 from pathlib import Path
 from typing import Any, Dict, Mapping, Sequence
 
@@ -45,7 +46,8 @@ _DESCRIPTOR_KEYS = frozenset({
     "id", "descriptor", "lifecycle", "mode", "columns", "extra_reactants", "params",
 })
 _ARTIFACT_KEYS = frozenset({"output_dir", "input_manifest"})
-_OUTPUT_KEYS = frozenset({"root", "report_formats", "diagnostics"})
+_OUTPUT_KEYS = frozenset({"root", "report_formats", "diagnostics", "ranking"})
+_DEFAULT_RANKING_WEIGHTS = {"r2": 0.5, "rmse": 0.3, "mae": 0.2}
 _DIAGNOSTIC_KEYS = frozenset({"enabled", "save_train_predictions"})
 _EVALUATION_KEYS = frozenset({
     "protocol", "n_splits", "n_repeats", "shuffle", "seed", "grouping",
@@ -303,6 +305,28 @@ def _validate_frozen_external_evaluation(value: Any) -> None:
         )
 
 
+def ranking_weights(outputs: Mapping[str, Any] | None) -> dict[str, float]:
+    """Resolve report scoring weights without modifying the modeling configuration."""
+    if outputs is None or "ranking" not in outputs:
+        return dict(_DEFAULT_RANKING_WEIGHTS)
+
+    ranking = _as_mapping(outputs["ranking"], "outputs.ranking")
+    _reject_unknown(ranking, frozenset({"weights"}), "outputs.ranking")
+    values = _as_mapping(ranking.get("weights"), "outputs.ranking.weights")
+    _reject_unknown(values, frozenset(_DEFAULT_RANKING_WEIGHTS), "outputs.ranking.weights")
+    if values.keys() != _DEFAULT_RANKING_WEIGHTS.keys():
+        raise ConfigContractError("outputs.ranking.weights 必须同时声明 r2、rmse 和 mae")
+
+    weights = {}
+    for metric, value in values.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            raise ConfigContractError(f"outputs.ranking.weights.{metric} 必须是 0 到 1 之间的有限数值")
+        weights[metric] = float(value)
+    if not isclose(fsum(weights.values()), 1.0, rel_tol=0, abs_tol=1e-9):
+        raise ConfigContractError("outputs.ranking.weights 三项之和必须为 1")
+    return weights
+
+
 def _validate_outputs(value: Any) -> None:
     if value is None:
         return
@@ -310,6 +334,7 @@ def _validate_outputs(value: Any) -> None:
     _reject_unknown(mapping, _OUTPUT_KEYS, "outputs")
     if "root" in mapping:
         _require_string(mapping["root"], "outputs.root")
+    ranking_weights(mapping)
     if "diagnostics" in mapping:
         diagnostics = _as_mapping(mapping["diagnostics"], "outputs.diagnostics")
         _reject_unknown(diagnostics, _DIAGNOSTIC_KEYS, "outputs.diagnostics")

@@ -68,7 +68,12 @@ def _run_schema2_config(config_path: Path, requested_stage: Optional[str]) -> in
         if not completed:
             return
         try:
-            report = rebuild_schema2_summary_report(completed, output_root=_result_root(loaded, loaded.effective))
+            report = rebuild_schema2_summary_report(
+                completed,
+                output_root=_result_root(loaded, loaded.effective),
+                report_config=loaded.effective,
+                config_path=loaded.path,
+            )
             rendered = [str(path) for path in (report.html_path, report.markdown_path) if path]
             print(f"[report] 最终汇总（{len(completed)} 个组合）: {', '.join(rendered) or 'disabled by outputs.report_formats'}")
         except ReportServiceError as exc:
